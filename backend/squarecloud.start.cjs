@@ -90,23 +90,23 @@ if (fs.existsSync(bundlePath)) {
     const content = fs.readFileSync(bundlePath, 'utf8');
     const certs = content.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g);
     const keys = content.match(/-----BEGIN (?:RSA )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA )?PRIVATE KEY-----/g);
-    
+
     if (keys && !fs.existsSync(clientKeyPath)) {
       fs.writeFileSync(clientKeyPath, keys[0]);
       console.log('✅ Chave extraída do bundle.');
     }
-    
+
     if (certs) {
-       if (!fs.existsSync(clientCertPath)) {
-         fs.writeFileSync(clientCertPath, certs[0]);
-         console.log('✅ Certificado extraído do bundle.');
-       }
-       extractedFromBundle = true;
-       
-       if (certs.length > 1 && !fs.existsSync(caCertPath)) {
-         fs.writeFileSync(caCertPath, certs[1]);
-         console.log('✅ CA Root extraída do bundle.');
-       }
+      if (!fs.existsSync(clientCertPath)) {
+        fs.writeFileSync(clientCertPath, certs[0]);
+        console.log('✅ Certificado extraído do bundle.');
+      }
+      extractedFromBundle = true;
+
+      if (certs.length > 1 && !fs.existsSync(caCertPath)) {
+        fs.writeFileSync(caCertPath, certs[1]);
+        console.log('✅ CA Root extraída do bundle.');
+      }
     }
   } catch (e) {
     console.warn('⚠️ Erro ao processar bundle:', e.message);
@@ -130,7 +130,7 @@ if (!isRealClientCert) {
           isRealClientCert = true;
           break;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
   }
 }
@@ -163,7 +163,7 @@ if (currentDbName && currentDbName !== 'postgres') {
 // 🔥 [v86] Triple-Probe Master (Cloudflare Shield Mode)
 async function probeAndStart() {
   console.log('🧪 [v86] Iniciando Cloudflare-Armor Probe...');
-  
+
   const connectionString = process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/['"]/g, "") : undefined;
   if (!connectionString) {
     console.error('🚨 ERRO: DATABASE_URL não definida.');
@@ -186,7 +186,7 @@ async function probeAndStart() {
   for (const url of candidates) {
     const masked = url.replace(/(:\/\/.*?:)(.*)(@.*)/, '$1****$3');
     console.log(`📡 Testando candidato: ${masked}`);
-    
+
     // Configuração TLS relaxada para o Probe
     const probePool = new Pool({
       connectionString: cleanUrlForProbe(url),
@@ -199,12 +199,12 @@ async function probeAndStart() {
       const res = await client.query('SELECT current_database()');
       const dbName = res.rows[0].current_database;
       console.log(`✅ SUCESSO! Banco detectado: ${dbName}`);
-      
+
       finalUrl = url;
       success = true;
       client.release();
       await probePool.end();
-      
+
       if (dbName === 'squarecloud') break;
     } catch (err) {
       console.log(`❌ Falha: ${err.message}`);
@@ -216,7 +216,7 @@ async function probeAndStart() {
   const absCert = path.join(__dirname, 'client.crt');
   const absKey = path.join(__dirname, 'client.key');
   const absCA = path.join(__dirname, 'ca.crt');
-  
+
   try {
     if (fs.existsSync(clientCertPath)) fs.copyFileSync(clientCertPath, absCert);
     if (fs.existsSync(clientKeyPath)) fs.copyFileSync(clientKeyPath, absKey);
@@ -247,7 +247,7 @@ async function probeAndStart() {
   console.log('📝 [V86] Ambiente Master Ativo (Cloudflare Armor + Shield Mode)...');
   try {
     // v86: Otimizado para Cloudflare + Square Cloud (Shield Active)
-    const nextAuthUrl = process.env.NEXTAUTH_URL || 'https://api.gestaovirtual.com';
+    const nextAuthUrl = process.env.NEXTAUTH_URL || 'https://gestao-api.squareweb.app';
     fs.writeFileSync('.env', `DATABASE_URL="${finalAppUrl}"\nPGHOST="${pgEnvs.PGHOST}"\nPGPORT="${pgEnvs.PGPORT}"\nPGUSER="${pgEnvs.PGUSER}"\nPGPASSWORD="${pgEnvs.PGPASSWORD}"\nPGDATABASE="${pgEnvs.PGDATABASE}"\nPRISMA_CLIENT_ENGINE_TYPE="library"\nPRISMA_CLI_QUERY_ENGINE_TYPE="library"\nPRISMA_SCHEMA_DISABLE_ADVISORY_LOCK="1"\nPRISMA_SCHEMA_DISABLE_SEARCH_PATH_CHECK="1"\nPRISMA_SCHEMA_DISABLE_DATABASE_CREATION="1"\nAUTH_TRUST_HOST="1"\nNEXTAUTH_URL="${nextAuthUrl}"\nTRUST_PROXY="1"\n`);
   } catch (err) {
     console.warn('⚠️ Erro env v86:', err.message);
@@ -277,13 +277,13 @@ async function probeAndStart() {
 
   // 🔥 SINCRONIZAÇÃO DE SCHEMA
   const shouldSync = success && (process.env.RUN_SEEDS === 'true' || process.env.FORCE_DB_PUSH === 'true' || process.env.FORCE_SEED === 'true');
-  
+
   if (shouldSync) {
     console.log(`🏗️ [SERVICE] Criando tabelas (v86 - Cloudflare Armor Mode)...`);
-    
+
     try {
       console.log('⚒️  Gerando script SQL da estrutura...');
-      const sqlStructure = execSync(`npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script`, { 
+      const sqlStructure = execSync(`npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script`, {
         env: commonEnv,
         encoding: 'utf8'
       });

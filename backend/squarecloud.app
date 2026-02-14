@@ -1,9 +1,9 @@
-DISPLAY_NAME=Orion Backend
+DISPLAY_NAME=Gestao Virtual API
 DESCRIPTION=API do Sistema Gestão Virtual (Next.js)
 MAIN=squarecloud.start.cjs
 MEMORY=1024
 VERSION=recommended
 START=node squarecloud.start.cjs
 AUTORESTART=true
-SUBDOMAIN=orion-api-prod
+SUBDOMAIN=gestao-api
 WEBSITE=true

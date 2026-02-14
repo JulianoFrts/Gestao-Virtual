@@ -14,6 +14,6 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Frontend Orion ONLINE (Modo Zero Processamento)`);
+  console.log(`✅ Frontend Gestão Virtual ONLINE (Modo Zero Processamento)`);
   console.log(`🚀 Porta: ${PORT}`);
 });
