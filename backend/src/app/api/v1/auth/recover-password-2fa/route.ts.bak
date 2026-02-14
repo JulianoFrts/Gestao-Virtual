@@ -1,0 +1,70 @@
+import { NextRequest } from "next/server";
+import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
+import { AuthService } from "@/modules/auth/application/auth.service";
+import { UserService } from "@/modules/users/application/user.service";
+import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
+
+// Instanciação de Serviços (DI Manual)
+// Idealmente isso seria feito em um container de injeção de dependência
+const userRepository = new PrismaUserRepository();
+const userService = new UserService(userRepository);
+const authService = new AuthService(userService);
+
+/**
+ * @swagger
+ * /api/v1/auth/recover-password-2fa:
+ *   post:
+ *     summary: Recupera senha usando código MFA
+ *     description: Permite recuperação direta de senha para usuários com MFA habilitado
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - mfaCode
+ *               - newPassword
+ *             properties:
+ *               email:
+ *                 type: string
+ *               mfaCode:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Senha alterada com sucesso
+ *       400:
+ *         description: Dados inválidos ou código MFA incorreto
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { email, mfaCode, newPassword } = body;
+
+    // Validações básicas de entrada
+    if (!email || !mfaCode || !newPassword) {
+      return ApiResponse.badRequest("Todos os campos são obrigatórios");
+    }
+
+    const result = await authService.recoverPasswordWith2FA(
+      email,
+      mfaCode,
+      newPassword,
+    );
+
+    if (!result.success) {
+      return ApiResponse.badRequest(result.error || "Falha na recuperação");
+    }
+
+    return ApiResponse.success(null, "Senha alterada com sucesso");
+  } catch (error) {
+    return handleApiError(
+      error,
+      "src/app/api/v1/auth/recover-password-2fa/route.ts#POST",
+    );
+  }
+}

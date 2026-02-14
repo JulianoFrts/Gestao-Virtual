@@ -1,0 +1,209 @@
+import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import pg from "pg";
+import fs from "fs";
+import path from "path";
+
+// Estender o tipo do PrismaClient para incluir os novos modelos se o gerador falhar no reconhecimento
+export type ExtendedPrismaClient = PrismaClient & {
+  governanceAuditHistory: any;
+  routeHealthHistory: any;
+  projectPermissionDelegation: any;
+  permissionMatrix: any;
+  permissionLevel: any;
+  permissionModule: any;
+  taskQueue: any;
+};
+
+declare global {
+  var prisma: ExtendedPrismaClient | undefined;
+}
+
+/**
+ * Instância singleton do Prisma Client
+ */
+// Instância singleton do Prisma Client
+const createPrismaClient = () => {
+  // v50: Proxy robusto para fase de build (evita ReferenceError)
+  if (process.env.PRISMA_IGNORE_CONNECTION === 'true') {
+     console.log('🛡️ [Prisma] Modo Build: Ativando Proxy de Segurança (Bypass de Conexão).');
+     return new Proxy({}, {
+       get: () => {
+         return new Proxy(() => {}, {
+           get: () => () => Promise.resolve([]),
+           apply: () => new Proxy({}, { get: () => () => Promise.resolve([]) })
+         });
+       }
+     }) as any;
+  }
+
+  const connectionString = process.env.DATABASE_URL?.replace(/['"]/g, "");
+
+  if (!connectionString) {
+    console.warn("⚠️ DATABASE_URL não definida. Retornando cliente vazio para fase de build.");
+    return {} as any;
+  }
+
+  // A função createPrismaClient agora é um wrapper para lidar com fallbacks
+  return buildPrismaWithFallback(connectionString);
+};
+
+const buildPrismaWithFallback = (url: string) => {
+  const maskedOriginal = url.split('@')[1] || 'oculta';
+  console.log(`[Prisma] Inicializando cliente com URL: ${maskedOriginal}`);
+
+  // v57: Configuração SSL simplificada v79
+  const sslConfig = getSSLConfig(url);
+  
+  // v79: Conexão Atômica - Campos separados para máxima robustez na Square Cloud
+  const poolConfig = {
+    host: process.env.PGHOST || 'square-cloud-db-968c164fe7f54e8495348c391f1f1afd.squareweb.app',
+    port: parseInt(process.env.PGPORT || '7135', 10),
+    user: process.env.PGUSER || 'squarecloud',
+    password: process.env.PGPASSWORD || 'XiDQiHYRqbA6eOPEABlOD40j',
+    database: process.env.PGDATABASE || url.split('/').pop()?.split('?')[0] || 'squarecloud',
+    ssl: sslConfig,
+    // Configurações de timeout para evitar 408
+    connectionTimeoutMillis: 10000,
+    idleTimeoutMillis: 30000,
+    max: 10
+  };
+
+  console.log(`[Prisma/v79] Pool Atômico configurado para HOST: ${poolConfig.host}`);
+  const pool = new pg.Pool(poolConfig);
+
+  const adapter = new PrismaPg(pool);
+  const client = new PrismaClient({
+    adapter,
+    log: ["error"],
+  }) as ExtendedPrismaClient;
+
+  // Adiciona interceptor para fallback se for erro de banco inexistente
+  // Infelizmente o Prisma não nos deixa trocar a URL do adapter facilmente após instanciado
+  // sem recriar o adapter. Mas o erro de conexão acontece no primeiro query.
+
+  return client;
+};
+
+const getPrisma = () => {
+  // Memoização robusta para evitar múltiplas instâncias
+  if (!(globalThis as any).prismaInstance) {
+    (globalThis as any).prismaInstance = createPrismaClient();
+    console.log('💎 [Prisma/v59] Instância Singleton Criada.');
+  }
+  return (globalThis as any).prismaInstance;
+};
+
+// v59: Singleton Proxy Totalmente Lazy
+export const prisma = new Proxy({} as any, {
+  get: (target, prop) => {
+    if (prop === '$$typeof' || prop === 'constructor' || prop === 'toJSON' || prop === 'then') return undefined;
+    
+    const instance = getPrisma();
+    const value = (instance as any)[prop];
+    return typeof value === 'function' ? value.bind(instance) : value;
+  }
+}) as ExtendedPrismaClient;
+
+export default prisma;
+
+const getSSLConfig = (connectionString: string) => {
+  let sslConfig: any = false;
+  
+  // v65: Suporte expandido para verify-ca e verify-full
+  if (connectionString.includes('sslmode=require') || 
+      connectionString.includes('sslmode=verify-full') || 
+      connectionString.includes('sslmode=verify-ca')) {
+    
+    sslConfig = {
+      rejectUnauthorized: false,
+    };
+
+    const certsRoot = process.env.CERT_PATH_ROOT || '/application';
+    console.log(`🔍 [Prisma/v78] Configurando mTLS Master. Path: ${certsRoot}`);
+
+    // v72: Busca simplificada e robusta na raiz
+    const paths = {
+      ca: [path.join(certsRoot, 'ca.crt'), process.env.PGSSLROOTCERT],
+      cert: [path.join(certsRoot, 'client.crt'), process.env.PGSSLCERT],
+      key: [path.join(certsRoot, 'client.key'), process.env.PGSSLKEY]
+    };
+
+    const findFirst = (list: (string | undefined)[], label: string) => {
+       const found = list.find(p => {
+         if (!p) return false;
+         const exists = fs.existsSync(p);
+         if (exists) {
+             console.log(`📍 [Prisma/v65] ${label} encontrado: ${p}`);
+         }
+         return exists;
+       });
+       return found;
+    };
+
+    const caPath = findFirst(paths.ca, 'CA');
+    const certPath = findFirst(paths.cert, 'Cert');
+    const keyPath = findFirst(paths.key, 'Key');
+
+    if (caPath) {
+      sslConfig.ca = fs.readFileSync(caPath, 'utf8');
+      console.log('📦 [Prisma/mTLS] CA Root carregada.');
+    }
+    
+    if (certPath && keyPath) {
+      sslConfig.cert = fs.readFileSync(certPath, 'utf8');
+      sslConfig.key = fs.readFileSync(keyPath, 'utf8');
+      console.log('🛡️ [Prisma/mTLS] Cert + Key carregados.');
+    } else {
+      console.warn('⚠️ [Prisma/mTLS] Identidade incompleta nos caminhos verificados.');
+    }
+  }
+  return sslConfig;
+}
+
+/**
+ * Verificação robusta com fallback
+ */
+export async function checkDatabaseConnection(): Promise<{
+  connected: boolean;
+  latency?: number;
+  error?: string;
+  dbName?: string;
+}> {
+  const startTime = Date.now();
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return { connected: true, latency: Date.now() - startTime };
+  } catch (error: any) {
+    // Se o erro for "database not available" e tivermos fallback
+    if ((error.message.includes('not available') || error.code === '3D000') && process.env.DATABASE_URL_FALLBACK) {
+       console.warn(`⚠️ Banco principal indisponível. Tentando fallback para 'postgres'...`);
+       try {
+         // Tentativa bruta via pool direta (já que o Prisma está amarrado ao adapter original)
+         const fallbackPool = new pg.Pool({ 
+            connectionString: process.env.DATABASE_URL_FALLBACK,
+            ssl: getSSLConfig(process.env.DATABASE_URL_FALLBACK)
+         });
+         const res = await fallbackPool.query('SELECT current_database()');
+         return { 
+           connected: true, 
+           error: `Conectado via FALLBACK. Banco original falhou: ${error.message}`,
+           dbName: res.rows[0].current_database
+         };
+       } catch (fallbackErr: any) {
+         return { connected: false, error: `Falha no banco e no fallback: ${fallbackErr.message}` };
+       }
+    }
+    return {
+      connected: false,
+      error: error instanceof Error ? error.message : "Erro desconhecido",
+    };
+  }
+}
+
+/**
+ * Função para desconectar do banco de dados
+ */
+export async function disconnectDatabase(): Promise<void> {
+  await prisma.$disconnect();
+}

@@ -1,0 +1,9 @@
+DISPLAY_NAME=Orion Backend
+DESCRIPTION=API do Sistema Gestão Virtual (Next.js)
+MAIN=squarecloud.start.cjs
+MEMORY=1024
+VERSION=recommended
+START=node squarecloud.start.cjs
+AUTORESTART=true
+SUBDOMAIN=orion-api-prod
+WEBSITE=true

@@ -1,0 +1,73 @@
+import { prisma } from "@/lib/prisma/client";
+import { TimeRecordRepository } from "../domain/time-record.repository";
+
+export class PrismaTimeRecordRepository implements TimeRecordRepository {
+  async findAll(
+    where: any,
+    skip: number,
+    take: number,
+    orderBy: any,
+  ): Promise<any[]> {
+    return prisma.timeRecord.findMany({
+      where,
+      skip,
+      take,
+      orderBy,
+      include: {
+        user: { select: { id: true, name: true, image: true } },
+        team: { select: { id: true, name: true } },
+      },
+    });
+  }
+
+  async count(where: any): Promise<number> {
+    return prisma.timeRecord.count({ where });
+  }
+
+  async create(data: any): Promise<any> {
+    return prisma.timeRecord.create({
+      data,
+      include: {
+        user: { select: { id: true, name: true } },
+      },
+    });
+  }
+
+  async findById(id: string): Promise<any | null> {
+    return prisma.timeRecord.findUnique({
+      where: { id },
+      include: {
+        user: { select: { id: true, name: true } },
+      },
+    });
+  }
+
+  async findUserCompanyId(userId: string): Promise<string | null> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { 
+        affiliation: {
+          select: { companyId: true }
+        }
+      },
+    });
+    return user?.affiliation?.companyId || null;
+  }
+
+  async update(id: string, data: any): Promise<any> {
+    const { id: _, user: __, ...updateData } = data;
+    return prisma.timeRecord.update({
+      where: { id },
+      data: updateData,
+      include: {
+        user: { select: { id: true, name: true } },
+      },
+    });
+  }
+
+  async delete(id: string): Promise<void> {
+    await prisma.timeRecord.delete({
+      where: { id },
+    });
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./frontend/src/*"]
+    }
+  },
+  "references": [{ "path": "./frontend/tsconfig.json" }],
+  "exclude": ["node_modules", "frontend/node_modules"]
+}
