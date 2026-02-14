@@ -338,7 +338,7 @@ function SidebarGroupItem({
               to={item.path}
               onClick={(e) => handleNavClick(e, item)}
               className={cn(
-                "flex items-center gap-3 px-4 py-2.5 rounded-xl font-medium transition-all duration-300 group/nav relative overflow-hidden mx-1",
+                "flex items-center gap-3 px-4 py-2 rounded-xl font-medium transition-all duration-300 group/nav relative overflow-hidden mx-1",
                 isActive
                   ? "gradient-primary text-primary-foreground shadow-premium scale-[1.02]"
                   : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground hover:translate-x-1",
@@ -435,7 +435,7 @@ export function Sidebar({ isOpen, onClose, desktopOpen = true }: SidebarProps) {
         className={cn(
           "fixed inset-y-0 left-0 z-50 bg-sidebar-background/60 backdrop-blur-2xl shadow-premium transform transition-all duration-300 ease-in-out lg:z-auto border-r border-white/5 overflow-hidden",
           isOpen ? "translate-x-0" : "-translate-x-full",
-          desktopOpen ? "lg:translate-x-0 lg:w-80 lg:static" : "lg:-translate-x-full lg:w-0 lg:absolute"
+          desktopOpen ? "lg:translate-x-0 lg:w-72 lg:static" : "lg:-translate-x-full lg:w-0 lg:absolute"
         )}
       >
         <div className="flex h-full flex-col">
