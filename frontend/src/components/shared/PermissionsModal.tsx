@@ -1,12 +1,10 @@
-/// <reference types="react" />
-import React from 'react'; 
+import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Camera, MapPin, Mic, Bell, X, Loader2 } from 'lucide-react';
 import { storageService } from '@/services/storageService';
 import { useToast } from '@/hooks/use-toast';
-import { useSignal } from '@preact/signals-react';
 
 
 interface PermissionItemProps {
@@ -19,8 +17,6 @@ interface PermissionItemProps {
 }
 
 const PermissionItem = ({ icon, title, description, onToggle, checked, loading }: PermissionItemProps) => {
-    const checkedSignal = useSignal(checked);
-
     return (
         <div className="flex items-start gap-4 py-4">
             <div className="p-2 rounded-xl bg-primary/10 text-primary">
@@ -78,49 +74,49 @@ export function PermissionsModal() {
     }, []);
 
     React.useEffect(() => {
-      const check = async () => {
-        const acknowledged = await storageService.getItem(
-          "permissions_acknowledged",
-        );
-        if (!acknowledged) {
-          setOpen(true);
-        }
-        // Check permissions inline to avoid dependency issues
-        if (navigator.permissions && navigator.permissions.query) {
-          try {
-            const [cam, loc, mic, notif] = await Promise.all([
-              navigator.permissions
-                .query({ name: "camera" as any })
-                .catch(() => ({ state: "prompt" })),
-              navigator.permissions
-                .query({ name: "geolocation" as any })
-                .catch(() => ({ state: "prompt" })),
-              navigator.permissions
-                .query({ name: "microphone" as any })
-                .catch(() => ({ state: "prompt" })),
-              navigator.permissions
-                .query({ name: "notifications" as any })
-                .catch(() => ({ state: "prompt" })),
-            ]);
-            setPerms({
-              camera: (cam as any).state === "granted",
-              location: (loc as any).state === "granted",
-              mic: (mic as any).state === "granted",
-              notifications: (notif as any).state === "granted",
-            });
-          } catch (e) {
-            // Silenciosamente ignora falhas na query de permissões (alguns navegadores não suportam todas)
-          }
-        }
-      };
-      check();
+        const check = async () => {
+            const acknowledged = await storageService.getItem(
+                "permissions_acknowledged",
+            );
+            if (!acknowledged) {
+                setOpen(true);
+            }
+            // Check permissions inline to avoid dependency issues
+            if (navigator.permissions && navigator.permissions.query) {
+                try {
+                    const [cam, loc, mic, notif] = await Promise.all([
+                        navigator.permissions
+                            .query({ name: "camera" as any })
+                            .catch(() => ({ state: "prompt" })),
+                        navigator.permissions
+                            .query({ name: "geolocation" as any })
+                            .catch(() => ({ state: "prompt" })),
+                        navigator.permissions
+                            .query({ name: "microphone" as any })
+                            .catch(() => ({ state: "prompt" })),
+                        navigator.permissions
+                            .query({ name: "notifications" as any })
+                            .catch(() => ({ state: "prompt" })),
+                    ]);
+                    setPerms({
+                        camera: (cam as any).state === "granted",
+                        location: (loc as any).state === "granted",
+                        mic: (mic as any).state === "granted",
+                        notifications: (notif as any).state === "granted",
+                    });
+                } catch (e) {
+                    // Silenciosamente ignora falhas na query de permissões (alguns navegadores não suportam todas)
+                }
+            }
+        };
+        check();
 
-      // Listen for global trigger
-      const handleForceOpen = () => setOpen(true);
-      window.addEventListener("open-permissions-modal", handleForceOpen);
-      return () =>
-        window.removeEventListener("open-permissions-modal", handleForceOpen);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+        // Listen for global trigger
+        const handleForceOpen = () => setOpen(true);
+        window.addEventListener("open-permissions-modal", handleForceOpen);
+        return () =>
+            window.removeEventListener("open-permissions-modal", handleForceOpen);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleToggle = async (type: keyof typeof perms) => {
@@ -165,8 +161,8 @@ export function PermissionsModal() {
                     throw new Error('DENIED');
                 }
             }
-    } catch (err: any) {
-            console.error(`Error requesting ${type} permission:`, err);
+        } catch (err: any) {
+            console.error(`Error requesting ${String(type)} permission:`, err);
             let message = 'Não foi possível autorizar a permissão.';
 
             if (type === 'location' && err.code === 1) {
@@ -179,7 +175,7 @@ export function PermissionsModal() {
             }
 
             toast({
-                title: `Acesso negado: ${type === 'location' ? 'Localização' : type}`,
+                title: `Acesso negado: ${type === 'location' ? 'Localização' : String(type)}`,
                 description: message,
                 variant: 'destructive'
             });

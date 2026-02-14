@@ -83,7 +83,7 @@ function getClientIp(request: NextRequest): string {
  */
 function isOriginAllowed(origin: string | null): boolean {
   if (!origin) return true;
-  
+
   // Normaliza origens removendo barra final para comparação justa
   const normalizedOrigin = origin.replace(/\/$/, "").toLowerCase();
   const normalizedAllowed = ALLOWED_ORIGINS.map(o => o.replace(/\/$/, "").toLowerCase());
@@ -101,11 +101,11 @@ function isOriginAllowed(origin: string | null): boolean {
     normalizedOrigin.includes("gestaovirtual.com") ||
     normalizedOrigin.includes("www.gestaovirtual.com")
   ) {
-     return true;
+    return true;
   }
 
   const isAllowed = false;
-  
+
   if (!isAllowed) {
     console.warn(`[CORS/v76] ⚠️ Origem bloqueada: ${origin}`);
   }
@@ -145,37 +145,44 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
   // 0. CLOUDFLARE ARMOR & PROTOCOL ENFORCEMENT
   if (process.env.NODE_ENV === "production") {
-      // Bloqueio de acesso direto (sem passar pelo Cloudflare)
-      if (!cfRay || cfRay === "none") {
-          console.warn(`[SECURITY/v89] 🚫 Bloqueando acesso direto sem Cloudflare Ray. Host: ${request.headers.get("host")}`);
-          return new NextResponse(
-            JSON.stringify({ 
-              success: false, 
-              message: "Acesso restrito: Por favor, use o domínio oficial da aplicação.",
-              error: "Direct access blocked by CF Armor" 
-            }),
-            { status: 403, headers: { 'Content-Type': 'application/json' } }
-          );
-      }
+    // Bloqueio de acesso direto (sem passar pelo Cloudflare)
+    if (!cfRay || cfRay === "none") {
+      console.warn(`[SECURITY/v89] 🚫 Bloqueando acesso direto sem Cloudflare Ray. Host: ${request.headers.get("host")}`);
+      return new NextResponse(
+        JSON.stringify({
+          success: false,
+          message: "Acesso restrito: Por favor, use o domínio oficial da aplicação.",
+          error: "Direct access blocked by CF Armor"
+        }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
 
-      const proto = request.headers.get("x-forwarded-proto");
-      const forwardHost = request.headers.get("x-forwarded-host") || request.headers.get("host");
-      
-      // Se o Cloudflare estiver mandando HTTP (ou redirecionamento mal configurado na borda), forçamos o upgrade
-      if (proto === "http") {
-          console.log(`[SECURITY/v89] Protocolo HTTP detectado via ray: ${cfRay}. Redirecionando...`);
-          const httpsUrl = new URL(request.url);
-          httpsUrl.protocol = "https:";
-          if (forwardHost) httpsUrl.host = forwardHost;
-          return NextResponse.redirect(httpsUrl, 301);
-      }
+    const proto = request.headers.get("x-forwarded-proto");
+    const forwardHost = request.headers.get("x-forwarded-host") || request.headers.get("host");
+
+    // Se o Cloudflare estiver mandando HTTP (ou redirecionamento mal configurado na borda), forçamos o upgrade
+    if (proto === "http") {
+      console.log(`[SECURITY/v89] Protocolo HTTP detectado via ray: ${cfRay}. Redirecionando...`);
+      const httpsUrl = new URL(request.url);
+      httpsUrl.protocol = "https:";
+      if (forwardHost) httpsUrl.host = forwardHost;
+      return NextResponse.redirect(httpsUrl, 301);
+    }
   }
 
-  // 1. Normalização do caminho para verificação (remove /api/v1 se presente apenas para o check)
+  // 1. Normalização do caminho para verificação (v96 - Absolute Support)
+  // Remove o prefixo /api/v1 ou a URL absoluta se presente para permitir o check de compatibilidade
   let internalPath = pathname;
-  if (pathname.startsWith("/api/v1/")) {
-    internalPath = "/" + pathname.substring(8);
-  } else if (pathname === "/api/v1") {
+  const apiPrefix = "/api/v1/";
+  const absolutePrefix = "api.gestaovirtual.com/api/v1/";
+
+  if (pathname.startsWith(apiPrefix)) {
+    internalPath = "/" + pathname.substring(apiPrefix.length);
+  } else if (pathname.includes(absolutePrefix)) {
+    const parts = pathname.split(absolutePrefix);
+    internalPath = "/" + parts[1];
+  } else if (pathname === "/api/v1" || pathname.endsWith("api.gestaovirtual.com/api/v1")) {
     internalPath = "/";
   }
 
@@ -192,16 +199,16 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   if (pathname.includes("/db/query") && process.env.NODE_ENV === "production") {
     const host = request.headers.get("host") || "";
     const hasCfHeader = !!request.headers.get("cf-connecting-ip");
-    
+
     // Se o host for o da SquareCloud ou não tiver o header do Cloudflare, bloqueia
     if (host.includes("squareweb.app") || !hasCfHeader) {
       console.warn(`[SECURITY] Acesso direto bloqueado ao endpoint sensível: ${pathname} vindo do host ${host}`);
       const response = NextResponse.json(
-        { 
-          success: false, 
+        {
+          success: false,
           message: "Acesso restrito. Este recurso deve ser acessado via domínio oficial (Cloudflare).",
           code: "DIRECT_ACCESS_FORBIDDEN"
-        }, 
+        },
         { status: 403 }
       );
       applyHeaders(response, origin);

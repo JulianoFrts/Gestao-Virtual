@@ -5,32 +5,32 @@
  * Implementa interface compatível com o db JS SDK para facilitar a migração.
  */
 
-const API_URL = import.meta.env.VITE_API_URL || "/api/v1";
+const API_URL = import.meta.env.VITE_API_URL || "https://api.gestaovirtual.com/api/v1";
 const DB_MODE = import.meta.env.VITE_DB_MODE || 'orion_db';
 
 export const isLocalMode = DB_MODE === 'local';
 
 interface ApiResponse<T> {
-    data: T | null;
-    error: { message: string; code?: string } | null;
-    count?: number;
+  data: T | null;
+  error: { message: string; code?: string } | null;
+  count?: number;
 }
 
 interface QueryBuilder<T = any> {
-    select: (columns?: string) => QueryBuilder<T>;
-    insert: (data: Partial<T> | Partial<T>[]) => QueryBuilder<T>;
-    update: (data: Partial<T>) => QueryBuilder<T>;
-    upsert: (data: Partial<T> | Partial<T>[], options?: { onConflict?: string }) => QueryBuilder<T>;
-    delete: () => QueryBuilder<T>;
-    eq: (column: string, value: any) => QueryBuilder<T>;
-    neq: (column: string, value: any) => QueryBuilder<T>;
-    is: (column: string, value: any) => QueryBuilder<T>;
-    in: (column: string, values: any[]) => QueryBuilder<T>;
-    order: (column: string, options?: { ascending?: boolean }) => QueryBuilder<T>;
-    limit: (count: number) => QueryBuilder<T>;
-    single: () => Promise<ApiResponse<T>>;
-    maybeSingle: () => Promise<ApiResponse<T | null>>;
-    then: (resolve: (value: ApiResponse<T[]>) => void) => Promise<void>;
+  select: (columns?: string) => QueryBuilder<T>;
+  insert: (data: Partial<T> | Partial<T>[]) => QueryBuilder<T>;
+  update: (data: Partial<T>) => QueryBuilder<T>;
+  upsert: (data: Partial<T> | Partial<T>[], options?: { onConflict?: string }) => QueryBuilder<T>;
+  delete: () => QueryBuilder<T>;
+  eq: (column: string, value: any) => QueryBuilder<T>;
+  neq: (column: string, value: any) => QueryBuilder<T>;
+  is: (column: string, value: any) => QueryBuilder<T>;
+  in: (column: string, values: any[]) => QueryBuilder<T>;
+  order: (column: string, options?: { ascending?: boolean }) => QueryBuilder<T>;
+  limit: (count: number) => QueryBuilder<T>;
+  single: () => Promise<ApiResponse<T>>;
+  maybeSingle: () => Promise<ApiResponse<T | null>>;
+  then: (resolve: (value: ApiResponse<T[]>) => void) => Promise<void>;
 }
 
 import { signal, effect } from "@preact/signals-react";
@@ -156,18 +156,18 @@ export class OrionApiClient {
       // Throttle: Se recebemos 401 recentemente, não tenta novamente por AUTH_THROTTLE_MS
       // Exceto para endpoints de login/auth que precisam funcionar
       const isAuthEndpoint = endpoint.includes("/auth/") || endpoint.includes("/health");
-      
+
       // 1. Verificar se temos token para rotas protegidas
       // Rotas públicas que não precisam de token:
       const publicEndpoints = ["/auth/login", "/auth/register", "/health", "/api/health"];
       const isPublic = publicEndpoints.some(p => endpoint.includes(p));
 
       if (!isPublic && !this.token) {
-           console.warn(`[ORION API] Aborted request to protected endpoint ${endpoint} without token.`);
-           return {
-             data: null,
-             error: { message: "Não autenticado: Token ausente", code: "401" },
-           };
+        console.warn(`[ORION API] Aborted request to protected endpoint ${endpoint} without token.`);
+        return {
+          data: null,
+          error: { message: "Não autenticado: Token ausente", code: "401" },
+        };
       }
 
       if (!isAuthEndpoint && this.last401Time > 0) {
@@ -279,9 +279,9 @@ export class OrionApiClient {
       while (response.status === 429 && retries < MAX_RETRIES) {
         retries++;
         console.warn(`[ORION API] 429 Too Many Requests detected. Retrying in ${backoff}ms... (Attempt ${retries}/${MAX_RETRIES})`);
-        
+
         await new Promise(resolve => setTimeout(resolve, backoff));
-        
+
         // Tenta novamente
         response = await fetch(url.toString(), options);
         backoff *= 2; // Exponecial backoff
@@ -370,16 +370,16 @@ export class OrionApiClient {
       // para não sujar o console com erros vermelhos durante o Modo Offline Premium.
       const isConnectionError = err instanceof TypeError && err.message === 'Failed to fetch';
       if (!navigator.onLine || isConnectionError) {
-          console.warn(
-            `[ORION API] ${isConnectionError ? 'Connection failed' : 'Offline'}: ${method} ${endpoint}`
-          );
+        console.warn(
+          `[ORION API] ${isConnectionError ? 'Connection failed' : 'Offline'}: ${method} ${endpoint}`
+        );
       } else {
-          console.error(
-            `[ORION API] Fetch error on ${method} ${this.baseUrl}${endpoint}:`,
-            err,
-          );
+        console.error(
+          `[ORION API] Fetch error on ${method} ${this.baseUrl}${endpoint}:`,
+          err,
+        );
       }
-      
+
       return {
         data: null,
         error: {
@@ -794,15 +794,15 @@ export class OrionApiClient {
       const sessionData = res.data?.user || res.data;
       const session =
         sessionData &&
-        Object.keys(sessionData).length > 0 &&
-        (sessionData.id || sessionData.userId)
+          Object.keys(sessionData).length > 0 &&
+          (sessionData.id || sessionData.userId)
           ? {
-              access_token: this.token,
-              token_type: "bearer",
-              expires_in: 3600,
-              refresh_token: "local-mock-refresh",
-              user: sessionData,
-            }
+            access_token: this.token,
+            token_type: "bearer",
+            expires_in: 3600,
+            refresh_token: "local-mock-refresh",
+            user: sessionData,
+          }
           : null;
       return { data: { session }, error: res.error };
     },

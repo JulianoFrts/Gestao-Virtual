@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       return ApiResponse.badRequest(parseResult.error, parseResult.issues);
 
     const { email, password } = parseResult.data!;
-    
+
     logger.info("Tentativa de login recebida", { email: email.substring(0, 3) + "..." });
 
     try {
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       });
 
       logger.info("Login realizado com sucesso", { email: email.substring(0, 3) + "...", userId: user.id });
-      
+
       // 3. Calcular permissões efetivas para o frontend
       const permissions = await userService.getPermissionsMap(
         user.role!,
@@ -79,16 +79,16 @@ export async function POST(request: NextRequest) {
         expires_in: 7 * 24 * 60 * 60, // 7 dias em segundos
       });
     } catch (dbError: any) {
-      logger.error("ERRO CRÍTICO NO BANCO/TOKEN DURANTE LOGIN", { 
+      logger.error("ERRO CRÍTICO NO BANCO/TOKEN DURANTE LOGIN", {
         message: dbError.message,
         stack: dbError.stack,
-        code: dbError.code 
+        code: dbError.code
       });
       throw dbError; // Será capturado pelo catch externo e handled pelo handleApiError
     }
   } catch (error: any) {
     logger.error("Erro no endpoint de login legado", { error });
-    return  handleApiError(error, "src/app/api/v1/auth/login/route.ts#POST");
+    return handleApiError(error, "src/app/api/v1/auth/login/route.ts#POST");
   }
 }
 

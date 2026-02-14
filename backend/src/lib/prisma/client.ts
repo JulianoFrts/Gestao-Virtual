@@ -26,15 +26,15 @@ declare global {
 const createPrismaClient = () => {
   // v50: Proxy robusto para fase de build (evita ReferenceError)
   if (process.env.PRISMA_IGNORE_CONNECTION === 'true') {
-     console.log('🛡️ [Prisma] Modo Build: Ativando Proxy de Segurança (Bypass de Conexão).');
-     return new Proxy({}, {
-       get: () => {
-         return new Proxy(() => {}, {
-           get: () => () => Promise.resolve([]),
-           apply: () => new Proxy({}, { get: () => () => Promise.resolve([]) })
-         });
-       }
-     }) as any;
+    console.log('🛡️ [Prisma] Modo Build: Ativando Proxy de Segurança (Bypass de Conexão).');
+    return new Proxy({}, {
+      get: () => {
+        return new Proxy(() => { }, {
+          get: () => () => Promise.resolve([]),
+          apply: () => new Proxy({}, { get: () => () => Promise.resolve([]) })
+        });
+      }
+    }) as any;
   }
 
   const connectionString = process.env.DATABASE_URL?.replace(/['"]/g, "");
@@ -54,14 +54,19 @@ const buildPrismaWithFallback = (url: string) => {
 
   // v57: Configuração SSL simplificada v79
   const sslConfig = getSSLConfig(url);
-  
+
   // v79: Conexão Atômica - Campos separados para máxima robustez na Square Cloud
+  const getEnv = (key: string) => {
+    const val = process.env[key];
+    return (val && val !== 'undefined' && val !== 'null') ? val : null;
+  };
+
   const poolConfig = {
-    host: process.env.PGHOST || 'square-cloud-db-968c164fe7f54e8495348c391f1f1afd.squareweb.app',
-    port: parseInt(process.env.PGPORT || '7135', 10),
-    user: process.env.PGUSER || 'squarecloud',
-    password: process.env.PGPASSWORD || 'XiDQiHYRqbA6eOPEABlOD40j',
-    database: process.env.PGDATABASE || url.split('/').pop()?.split('?')[0] || 'squarecloud',
+    host: getEnv('PGHOST') || 'square-cloud-db-968c164fe7f54e8495348c391f1f1afd.squareweb.app',
+    port: parseInt(getEnv('PGPORT') || '7135', 10) || 7135,
+    user: getEnv('PGUSER') || 'squarecloud',
+    password: getEnv('PGPASSWORD') || 'XiDQiHYRqbA6eOPEABlOD40j',
+    database: getEnv('PGDATABASE') || url.split('/').pop()?.split('?')[0] || 'squarecloud',
     ssl: sslConfig,
     // Configurações de timeout para evitar 408
     connectionTimeoutMillis: 10000,
@@ -98,7 +103,7 @@ const getPrisma = () => {
 export const prisma = new Proxy({} as any, {
   get: (target, prop) => {
     if (prop === '$$typeof' || prop === 'constructor' || prop === 'toJSON' || prop === 'then') return undefined;
-    
+
     const instance = getPrisma();
     const value = (instance as any)[prop];
     return typeof value === 'function' ? value.bind(instance) : value;
@@ -109,12 +114,12 @@ export default prisma;
 
 const getSSLConfig = (connectionString: string) => {
   let sslConfig: any = false;
-  
+
   // v65: Suporte expandido para verify-ca e verify-full
-  if (connectionString.includes('sslmode=require') || 
-      connectionString.includes('sslmode=verify-full') || 
-      connectionString.includes('sslmode=verify-ca')) {
-    
+  if (connectionString.includes('sslmode=require') ||
+    connectionString.includes('sslmode=verify-full') ||
+    connectionString.includes('sslmode=verify-ca')) {
+
     sslConfig = {
       rejectUnauthorized: false,
     };
@@ -130,15 +135,15 @@ const getSSLConfig = (connectionString: string) => {
     };
 
     const findFirst = (list: (string | undefined)[], label: string) => {
-       const found = list.find(p => {
-         if (!p) return false;
-         const exists = fs.existsSync(p);
-         if (exists) {
-             console.log(`📍 [Prisma/v65] ${label} encontrado: ${p}`);
-         }
-         return exists;
-       });
-       return found;
+      const found = list.find(p => {
+        if (!p) return false;
+        const exists = fs.existsSync(p);
+        if (exists) {
+          console.log(`📍 [Prisma/v65] ${label} encontrado: ${p}`);
+        }
+        return exists;
+      });
+      return found;
     };
 
     const caPath = findFirst(paths.ca, 'CA');
@@ -149,7 +154,7 @@ const getSSLConfig = (connectionString: string) => {
       sslConfig.ca = fs.readFileSync(caPath, 'utf8');
       console.log('📦 [Prisma/mTLS] CA Root carregada.');
     }
-    
+
     if (certPath && keyPath) {
       sslConfig.cert = fs.readFileSync(certPath, 'utf8');
       sslConfig.key = fs.readFileSync(keyPath, 'utf8');
@@ -177,22 +182,22 @@ export async function checkDatabaseConnection(): Promise<{
   } catch (error: any) {
     // Se o erro for "database not available" e tivermos fallback
     if ((error.message.includes('not available') || error.code === '3D000') && process.env.DATABASE_URL_FALLBACK) {
-       console.warn(`⚠️ Banco principal indisponível. Tentando fallback para 'postgres'...`);
-       try {
-         // Tentativa bruta via pool direta (já que o Prisma está amarrado ao adapter original)
-         const fallbackPool = new pg.Pool({ 
-            connectionString: process.env.DATABASE_URL_FALLBACK,
-            ssl: getSSLConfig(process.env.DATABASE_URL_FALLBACK)
-         });
-         const res = await fallbackPool.query('SELECT current_database()');
-         return { 
-           connected: true, 
-           error: `Conectado via FALLBACK. Banco original falhou: ${error.message}`,
-           dbName: res.rows[0].current_database
-         };
-       } catch (fallbackErr: any) {
-         return { connected: false, error: `Falha no banco e no fallback: ${fallbackErr.message}` };
-       }
+      console.warn(`⚠️ Banco principal indisponível. Tentando fallback para 'postgres'...`);
+      try {
+        // Tentativa bruta via pool direta (já que o Prisma está amarrado ao adapter original)
+        const fallbackPool = new pg.Pool({
+          connectionString: process.env.DATABASE_URL_FALLBACK,
+          ssl: getSSLConfig(process.env.DATABASE_URL_FALLBACK)
+        });
+        const res = await fallbackPool.query('SELECT current_database()');
+        return {
+          connected: true,
+          error: `Conectado via FALLBACK. Banco original falhou: ${error.message}`,
+          dbName: res.rows[0].current_database
+        };
+      } catch (fallbackErr: any) {
+        return { connected: false, error: `Falha no banco e no fallback: ${fallbackErr.message}` };
+      }
     }
     return {
       connected: false,

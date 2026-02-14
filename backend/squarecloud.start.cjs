@@ -36,6 +36,9 @@ if (!fs.existsSync(buildSentinel)) {
   console.log('🏗️ [v86] Build não encontrado ou versão atualizada. Iniciando "next build" na Square Cloud...');
   try {
     // Garante que temos as dependências para o build
+    console.log('🔧 Gerando Prisma Client...');
+    execSync('npx prisma@6 generate', { stdio: 'inherit', env: { ...process.env, NODE_ENV: 'production' } });
+    console.log('✅ Prisma Client gerado!');
     execSync('npx next build', { stdio: 'inherit', env: { ...process.env, NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1' } });
     fs.writeFileSync(buildSentinel, 'Build finalizado com sucesso em ' + new Date().toISOString());
     console.log('✅ Build concluído com sucesso!');
@@ -43,6 +46,9 @@ if (!fs.existsSync(buildSentinel)) {
     console.warn('⚠️ Falha no build automático. Verifique se o comando "next" está no path ou se falta memória.');
   }
 }
+
+// 🔥 [v90] SEEDING CENTRALIZADO NO FINAL DO FLUXO (PROBE-AWARE)
+// O seeding v88 foi removido daqui para ser executado após a injeção do schema mTLS no final do script.
 
 // 🔥 TRATAMENTO DE URL (v51: Auto-Probe e Sanitização)
 let dbUrl = process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/['"]/g, "") : undefined;
@@ -234,15 +240,27 @@ async function probeAndStart() {
   const cleanBaseUrl = finalUrl.split('?')[0];
   const finalAppUrl = `${cleanBaseUrl}?${sslParams.substring(1)}`;
 
-  // Re-extração para variáveis separadas (Atomic Bridge)
-  const urlParts = finalUrl.match(/postgresql:\/\/([^:]+):([^@]+)@([^:]+):([^/]+)\/(.+)/);
-  const pgEnvs = urlParts ? {
-    PGUSER: urlParts[1],
-    PGPASSWORD: urlParts[2],
-    PGHOST: urlParts[3],
-    PGPORT: urlParts[4],
-    PGDATABASE: urlParts[5].split('?')[0]
-  } : {};
+  // Re-extração para variáveis separadas (Atomic Bridge) usando URL API para máxima robustez
+  let pgEnvs = {};
+  try {
+    const urlObj = new URL(finalUrl);
+    pgEnvs = {
+      PGUSER: urlObj.username || 'squarecloud',
+      PGPASSWORD: urlObj.password || 'XiDQiHYRqbA6eOPEABlOD40j',
+      PGHOST: urlObj.hostname || 'square-cloud-db-968c164fe7f54e8495348c391f1f1afd.squareweb.app',
+      PGPORT: urlObj.port || '7135',
+      PGDATABASE: urlObj.pathname.split('/')[1] || 'squarecloud'
+    };
+  } catch (e) {
+    console.warn('⚠️ Falha no parsing da URL via API. Usando fallbacks fixos.');
+    pgEnvs = {
+      PGUSER: 'squarecloud',
+      PGPASSWORD: 'XiDQiHYRqbA6eOPEABlOD40j',
+      PGHOST: 'square-cloud-db-968c164fe7f54e8495348c391f1f1afd.squareweb.app',
+      PGPORT: '7135',
+      PGDATABASE: 'squarecloud'
+    };
+  }
 
   console.log('📝 [V86] Ambiente Master Ativo (Cloudflare Armor + Shield Mode)...');
   try {
@@ -309,14 +327,15 @@ async function probeAndStart() {
     }
   }
 
-  // 🔥 EXECUÇÃO DE SEEDS
+  // 🔥 EXECUÇÃO DE SEEDS (MASTER SEED v90)
   if (process.env.RUN_SEEDS === 'true' || process.env.FORCE_SEED === 'true') {
-    console.log('🌱 [STARTUP] Populando banco...');
+    console.log('🌟 [STARTUP] Executando Master Seed (População Completa)...');
     try {
-      execSync('npx yarn seed', { stdio: 'inherit', env: commonEnv });
-      console.log('✅ Seeds finalizadas!');
+      // Rodamos o master-seed que agora centraliza InitialData + Permissions + Production
+      execSync('npx tsx src/scripts/master-seed.ts', { stdio: 'inherit', env: commonEnv });
+      console.log('✅ Master Seed finalizado com sucesso!');
     } catch (e) {
-      console.warn('⚠️ Erro seeds.');
+      console.warn('⚠️ Erro no processo de seeding:', e.message);
     }
   }
 
