@@ -60,8 +60,8 @@ try {
   createProxyMiddleware = require('http-proxy-middleware').createProxyMiddleware;
 }
 
-// 🔥 PROXY REVERSO (v94 - Absolute URL Fix)
-// Forçamos o uso do subdomínio da API para evitar os 404s no domínio base.
+// 🔥 PROXY REVERSO (v97 - Absolute URL Fix)
+// Mantemos a URL completa para evitar que o Express remova o prefixo /api/v1
 let targetApi = process.env.VITE_API_URL || 'https://api.gestaovirtual.com/api/v1';
 
 if (!targetApi.startsWith('http')) {
@@ -71,10 +71,10 @@ if (!targetApi.startsWith('http')) {
 console.log(`🔧 Proxy Ativo: /api/v1 -> ${targetApi}`);
 
 app.use('/api/v1', createProxyMiddleware({
-  target: targetApi.endsWith('/v1') ? targetApi.replace('/v1', '') : targetApi.replace('/api/v1', ''),
+  target: targetApi, // Usar a URL completa (com /api/v1)
   changeOrigin: true,
   pathRewrite: {
-    '^/api/v1': '/api/v1',
+    '^/api/v1': '', // Remove o prefixo da requisição pois o target já possui
   },
   onProxyReq: (proxyReq, req, res) => {
     // Garantir que headers de auth passem

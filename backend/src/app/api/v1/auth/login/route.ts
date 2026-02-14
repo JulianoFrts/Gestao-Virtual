@@ -7,8 +7,8 @@
  * que tenta fazer login diretamente via POST ao invés de usar NextAuth hooks.
  */
 
-import { NextRequest } from "next/server";
-import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
+import { NextRequest, NextResponse } from "next/server";
+import { handleApiError } from "@/lib/utils/api/response";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { generateToken } from "@/lib/auth/token";
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
   try {
     const parseResult = await parseLoginRequest(request);
     if (parseResult.error)
-      return ApiResponse.badRequest(parseResult.error, parseResult.issues);
+      return NextResponse.json({ error: parseResult.error, issues: parseResult.issues }, { status: 400 });
 
     const { email, password } = parseResult.data!;
 
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       const user = await authService.verifyCredentials(email, password);
       if (!user) {
         logger.warn("Credenciais inválidas", { email: email.substring(0, 3) + "..." });
-        return ApiResponse.unauthorized("Credenciais inválidas");
+        return NextResponse.json({ error: "Credenciais inválidas" }, { status: 401 });
       }
 
       logger.info("Usuário verificado no banco. Gerando token...", { userId: user.id });
@@ -63,7 +63,8 @@ export async function POST(request: NextRequest) {
         undefined // Token não deve ser passado aqui
       );
       // 5. Retornar dados no formato esperado pelo frontend legado + novas permissões
-      return ApiResponse.json({
+      // 5. Retornar dados no formato direto (plano) esperado pelo frontend legado
+      return NextResponse.json({
         user: {
           id: user.id,
           email: user.email,
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
           companyId: undefined,
           projectId: undefined,
         },
-        permissions, // NOVO: Frontend usará isso via Signals
+        permissions, // Frontend usará isso via Signals
         access_token: token,
         token_type: "bearer",
         expires_in: 7 * 24 * 60 * 60, // 7 dias em segundos
