@@ -24,10 +24,10 @@ declare global {
  */
 export class OrionPgAdapter {
   readonly provider = 'postgres';
-  readonly adapterName = 'orion-pg-adapter-v98.6';
+  readonly adapterName = 'orion-pg-adapter-v98.7';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v98.6] Bridge forensic iniciada.`);
+    console.log(`[Adapter/v98.7] Bridge forensic iniciada.`);
   }
 
   /**
@@ -91,20 +91,20 @@ export class OrionPgAdapter {
 
     // Interceptação Forense (v98.6)
     if (typeof val === 'string' && val.trim().length === 1) {
-      console.log(`[Adapter/v98.6] 🛡️ INTERCEPT: [${fieldName}] Raw='${val}' OID=${oid}`);
+      console.log(`[Adapter/v98.7] 🛡️ INTERCEPT: [${fieldName}] Raw='${val}' OID=${oid}`);
     }
 
     // Tradução Universal
     const translated = this.translateEnum(fieldName, val);
 
-    // Inspeção Profunda (v98.6)
+    // Inspeção Profunda (v98.7)
     if (typeof translated === 'string' && (translated === 'S' || translated === 'A')) {
-      console.log(`[Adapter/v98.6] 🔍 Result [${fieldName}]: Value='${translated}' OID=${oid}`);
+      console.log(`[Adapter/v98.7] 🔍 Result [${fieldName}]: Value='${translated}' OID=${oid}`);
     }
 
     // Diagnóstico de Alerta
     if (typeof translated === 'string' && translated.length === 1 && /[A-Z]/.test(translated)) {
-      console.log(`[Adapter/v98.6] ⚠️ Alerta Crítico: Valor bruto escapou em '${fieldName}': '${translated}' (OID: ${oid})`);
+      console.log(`[Adapter/v98.7] ⚠️ Alerta Crítico: Valor bruto escapou em '${fieldName}': '${translated}' (OID: ${oid})`);
     }
 
     // Serialização Quaint (Prisma 6)
@@ -115,12 +115,12 @@ export class OrionPgAdapter {
     try {
       const res = await this.pool.query(params.sql, params.args);
 
-      // Diagnóstico de Estrutura (v98.6)
+      // Diagnóstico de Estrutura (v98.7)
       if (params.sql.toLowerCase().includes('auth_credentials') || params.sql.toLowerCase().includes('select')) {
         const fieldDesc = res.fields.map(f => `${f.name}(${f.dataTypeID})`).join(', ');
-        console.log(`[Adapter/v98.6] 📡 Query [${res.rowCount} rows]: ${fieldDesc}`);
+        console.log(`[Adapter/v98.7] 📡 Query [${res.rowCount} rows]: ${fieldDesc}`);
         if (res.rows.length > 0) {
-          console.log(`[Adapter/v98.6] 🧪 Sample Raw: ${JSON.stringify(res.rows[0]).substring(0, 150)}`);
+          console.log(`[Adapter/v98.7] 🧪 Sample Raw: ${JSON.stringify(res.rows[0]).substring(0, 150)}`);
         }
       }
 
@@ -140,7 +140,7 @@ export class OrionPgAdapter {
         }),
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v98.6] Query Error:`, err.message);
+      console.error(`❌ [Adapter/v98.7] Query Error:`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -149,13 +149,13 @@ export class OrionPgAdapter {
     try {
       // v98.2: Schema Context Shield
       if (params.sql.trim().toUpperCase().startsWith('CREATE') || params.sql.trim().toUpperCase().startsWith('DROP')) {
-        console.log(`[Adapter/v98.6] 🛡️ DDL Detectado. Executando em contexto seguro.`);
+        console.log(`[Adapter/v98.7] 🛡️ DDL Detectado. Executando em contexto seguro.`);
       }
 
       const res = await this.pool.query(params.sql, params.args);
       return { ok: true, value: res.rowCount || 0 };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v98.6] Execute Error:`, err.message);
+      console.error(`❌ [Adapter/v98.7] Execute Error:`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -172,7 +172,7 @@ export class OrionPgAdapter {
             const processed = this.serializeValue(raw, f.dataTypeID, f.name);
             // Log extra para transações
             if (typeof processed === 'string' && processed.length === 1) {
-              console.log(`[Adapter/v98.6] (TX) 🔍 Inspect [${f.name}]: Value='${processed}' OID=${f.dataTypeID}`);
+              console.log(`[Adapter/v98.7] (TX) 🔍 Inspect [${f.name}]: Value='${processed}' OID=${f.dataTypeID}`);
             }
             return processed;
           }));
@@ -196,102 +196,59 @@ export class OrionPgAdapter {
   }
 }
 
-const buildPrismaWithFallback = (url: string) => {
-  const sslConfig = getSSLConfig(url);
-  const getEnv = (key: string) => {
-    const val = process.env[key];
-    return (val && val !== 'undefined' && val !== 'null') ? val : null;
-  };
-
-  const poolConfig: any = {
-    connectionString: url,
-    ssl: sslConfig,
-    connectionTimeoutMillis: 15000,
-    idleTimeoutMillis: 30000,
-    max: 15
-  };
-
-  if (getEnv('PGHOST')) poolConfig.host = getEnv('PGHOST');
-  if (getEnv('PGUSER')) poolConfig.user = getEnv('PGUSER');
-  if (getEnv('PGPASSWORD')) poolConfig.password = getEnv('PGPASSWORD');
-  if (getEnv('PGPORT')) poolConfig.port = parseInt(getEnv('PGPORT')!, 10);
-  if (getEnv('PGDATABASE')) poolConfig.database = getEnv('PGDATABASE');
-
-  try {
-    const pool = new pg.Pool(poolConfig);
-    const adapter = new OrionPgAdapter(pool);
-    return new PrismaClient({
-      adapter: adapter as any,
-      log: ["error"],
-    } as any) as ExtendedPrismaClient;
-  } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v98.5] Falha Crítica. Usando Modo Nativo.`);
-    return new PrismaClient({ datasources: { db: { url } } }) as ExtendedPrismaClient;
-  }
-};
-
-const getPrisma = () => {
-  if (!(globalThis as any).prismaInstance) {
-    const url = (process.env.DATABASE_URL || '').replace(/['"]/g, "");
-    if (!url) return {} as any;
-    (globalThis as any).prismaInstance = buildPrismaWithFallback(url);
-  }
-  return (globalThis as any).prismaInstance;
-};
-
-export const prisma = new Proxy({} as any, {
-  get: (target, prop) => {
-    if (typeof prop === 'symbol') return (target as any)[prop];
-    const p = prop as string;
-    if (p === '$state') return { v: "97.0", status: (globalThis as any).prismaInstance ? 'active' : 'idle' };
-    if (['$$typeof', 'constructor', 'toJSON', 'then', 'inspect'].includes(p)) return undefined;
-
-    try {
-      const instance = getPrisma();
-      if (!instance) return undefined;
-      const value = (instance as any)[p];
-      if (typeof value === 'function') {
-        return (...args: any[]) => value.apply(instance, args);
-      }
-      return value;
-    } catch (err: any) {
-      console.error(`❌ [Prisma/v98.5] Proxy Error '${p}':`, err.message);
-      return undefined;
-    }
-  }
-}) as ExtendedPrismaClient;
-
-export default prisma;
-
-const getSSLConfig = (connectionString: string) => {
+// Helper Hoisted
+function getSSLConfig(connectionString: string) {
   let sslConfig: any = false;
-  if (connectionString.includes('sslmode')) {
+  if (connectionString && connectionString.includes('sslmode')) {
     sslConfig = { rejectUnauthorized: false };
     const certsRoot = '/application/backend';
-    const findPath = (f: string) => [path.join(certsRoot, f), path.join('/application', f)].find(p => fs.existsSync(p));
+    const findPath = (f: string) => {
+      const p1 = path.join(certsRoot, f);
+      const p2 = path.join('/application', f);
+      return fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : null);
+    };
+
     const ca = findPath('ca.crt');
     if (ca) sslConfig.ca = fs.readFileSync(ca, 'utf8');
+
     const cert = findPath('client.crt');
     const key = findPath('client.key');
     if (cert && key) {
       sslConfig.cert = fs.readFileSync(cert, 'utf8');
       sslConfig.key = fs.readFileSync(key, 'utf8');
-      console.log('🛡️ [Prisma/v98.6] mTLS v98.6 Ativo.');
+      console.log('🛡️ [Prisma/v98.7] mTLS v98.7 Ativo.');
     }
   }
   return sslConfig;
 }
 
-export async function checkDatabaseConnection() {
+const createExtendedClient = (url: string) => {
   try {
-    const res = await (prisma as any).$queryRaw`SELECT 1`;
-    return { connected: !!res };
-  } catch (error: any) {
-    return { connected: false, error: error.message };
-  }
-}
+    const pool = new pg.Pool({
+      connectionString: url,
+      ssl: getSSLConfig(url)
+    });
 
-export async function disconnectDatabase() {
-  const inst = (globalThis as any).prismaInstance;
-  if (inst) await inst.$disconnect();
-}
+    const adapter = new OrionPgAdapter(pool);
+    console.log('🔌 [Prisma/v98.7] Adaptador Orion ativado com sucesso.');
+
+    return new PrismaClient({
+      adapter,
+      log: ["error"],
+    } as any) as ExtendedPrismaClient;
+  } catch (err: any) {
+    console.warn(`⚠️ [Prisma/v98.7] Falha Crítica na inicialização do Adapter:`, err.message);
+    console.warn(`⚠️ [Prisma/v98.7] Stack:`, err.stack);
+    console.warn(`⚠️ [Prisma/v98.7] Caindo para Modo Nativo.`);
+    return new PrismaClient({ datasources: { db: { url } } }) as ExtendedPrismaClient;
+  }
+};
+
+const globalForPrisma = global as unknown as { prisma: ExtendedPrismaClient };
+
+// v98.7: Inicialização (Pós-Hoisting)
+const dbUrl = process.env.DATABASE_URL;
+
+export const prisma = globalForPrisma.prisma || (dbUrl ? createExtendedClient(dbUrl) : new PrismaClient());
+
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;

@@ -3,7 +3,7 @@ import { Pool } from "pg";
 
 /**
  * PANIC RESET API - GESTÃO VIRTUAL
- * v98.6: Schema Aligned & Connection Specialist Restore Protocol
+ * v98.7: Permission Grant & Logger Fix Protocol
  */
 export async function POST(request: NextRequest) {
     const secret = process.env.APP_SECRET || "temp_secret_123";
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const finalDbUrl = fixDatabaseUrl(dbUrl);
     const action = request.nextUrl.searchParams.get("action") || "sync";
 
-    console.log(`💣 [PANIC/v98.6] Ação: ${action}`);
+    console.log(`💣 [PANIC/v98.7] Ação: ${action}`);
 
     const pool = new Pool({
         connectionString: finalDbUrl,
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
         const client = await pool.connect();
         try {
             if (action === "nuke") {
-                console.log("💣 [PANIC] Executando Nuke de Emergência (v98.6)...");
+                console.log("💣 [PANIC] Executando Nuke de Emergência (v98.7)...");
                 await client.query('DROP SCHEMA IF EXISTS public CASCADE;');
                 await client.query('CREATE SCHEMA public;');
                 await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
@@ -100,10 +100,17 @@ export async function POST(request: NextRequest) {
                             maxBuffer: 20 * 1024 * 1024
                         });
 
+                        // Resilient Block Execution
                         console.log("⚒️ Aplicando DDL como bloco único resiliente...");
                         // Prisma DDL script costuma vir com 'SET search_path...' e outras diretivas.
                         // Executamos tudo de uma vez.
                         await client.query(ddl);
+
+                        // v98.7: Permission Grant Protocol
+                        console.log("🛡️ [v98.7] Aplicando permissões explícitas...");
+                        await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
+                        await client.query('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO squarecloud;');
+                        await client.query('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO squarecloud;');
 
                         console.log("✅ Sincronização via Bloco SQL concluída!");
                     } catch (fallbackError: any) {
@@ -134,7 +141,7 @@ export async function POST(request: NextRequest) {
                 }
 
                 return NextResponse.json({
-                    message: "Sync and Restore finished successfully (v98.6)! 🏆",
+                    message: "Sync and Restore finished successfully (v98.7)! 🏆",
                     tablesCreated: rowCount,
                     status: "STABLE_RECONSTRUCTED"
                 });
