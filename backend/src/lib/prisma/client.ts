@@ -19,60 +19,86 @@ declare global {
 }
 
 /**
- * v91: Pure-Handmade Adapter Bridge
- * Desenvolvido para bypassar falhas de binding do @prisma/adapter-pg em ambientes restritos.
+ * v92: Pure-Handmade Adapter Bridge (Deep Fixed)
+ * Correção da assinatura de argumentos (args vs values) e formato de linhas (array vs object).
  */
 class OrionPgAdapter {
   readonly provider = 'postgres';
-  readonly adapterName = 'orion-pg-adapter-v91';
+  readonly adapterName = 'orion-pg-adapter-v92';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v91] Bridge Handmade Inicializada.`);
+    console.log(`[Adapter/v92] Bridge Handmade Inicializada.`);
   }
 
-  async queryRaw(params: { sql: string; values: any[] }) {
+  // Mapeamento de OID do Postgres para Type IDs da Prisma
+  // Simplificado para garantir compatibilidade
+  private mapColumnType(oid: number): number {
+    switch (oid) {
+      case 16: return 1; // bool
+      case 17: return 2; // bytea
+      case 20:
+      case 21:
+      case 23: return 3; // int
+      case 700:
+      case 701: return 4; // float
+      case 1700: return 5; // numeric
+      case 1082: return 6; // date
+      case 1114:
+      case 1184: return 7; // time/timestamp
+      case 114:
+      case 3802: return 8; // json
+      default: return 0; // string/text
+    }
+  }
+
+  async queryRaw(params: { sql: string; args: any[] }) {
     try {
-      const res = await this.pool.query(params.sql, params.values);
-      // Prisma espera ResultSet: { columnNames, columnTypes, rows }
+      // FIX v92: Prisma passa 'args', pg espera 'values'
+      const res = await this.pool.query(params.sql, params.args);
+
+      // FIX v92: Prisma espera 'rows' como Array de Arrays [ [val1, val2], [val1, val2] ]
+      // e não como Array de Objetos [ {col1: val1}, ... ]
+      const rows = res.rows.map(row => res.fields.map(field => row[field.name]));
+
       return {
         ok: true,
         value: {
           columnNames: res.fields.map(f => f.name),
-          columnTypes: res.fields.map(f => f.dataTypeID),
-          rows: res.rows
+          columnTypes: res.fields.map(f => this.mapColumnType(f.dataTypeID)),
+          rows: rows
         }
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v91] Erro em QueryRaw:`, err.message);
+      console.error(`❌ [Adapter/v92] Query Error:`, err.message);
       return { ok: false, error: err };
     }
   }
 
-  async executeRaw(params: { sql: string; values: any[] }) {
+  async executeRaw(params: { sql: string; args: any[] }) {
     try {
-      const res = await this.pool.query(params.sql, params.values);
+      const res = await this.pool.query(params.sql, params.args);
       return {
         ok: true,
         value: res.rowCount || 0
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v91] Erro em ExecuteRaw:`, err.message);
+      console.error(`❌ [Adapter/v92] Execute Error:`, err.message);
       return { ok: false, error: err };
     }
   }
 
   async transactionContext() {
-    // Suporte básico a contexto de transação para evitar erros de bind
     const client = await this.pool.connect();
     return {
       ok: true,
       value: {
         queryRaw: async (p: any) => {
-          const r = await client.query(p.sql, p.values);
-          return { ok: true, value: { columnNames: r.fields.map(f => f.name), columnTypes: r.fields.map(f => f.dataTypeID), rows: r.rows } };
+          const r = await client.query(p.sql, p.args);
+          const rows = r.rows.map(row => r.fields.map(f => row[f.name]));
+          return { ok: true, value: { columnNames: r.fields.map(f => f.name), columnTypes: r.fields.map(f => this.mapColumnType(f.dataTypeID)), rows: rows } };
         },
         executeRaw: async (p: any) => {
-          const r = await client.query(p.sql, p.values);
+          const r = await client.query(p.sql, p.args);
           return { ok: true, value: r.rowCount || 0 };
         },
         commit: async () => { await client.query('COMMIT'); client.release(); },
@@ -84,7 +110,7 @@ class OrionPgAdapter {
 
 const buildPrismaWithFallback = (url: string) => {
   const maskedOriginal = url.split('@')[1] || 'oculta';
-  console.log(`[Prisma/v91] 🚀 Inicializando v91. Target: ${maskedOriginal.split('?')[0]}`);
+  console.log(`[Prisma/v92] 🚀 Inicializando v92. Target: ${maskedOriginal.split('?')[0]}`);
 
   const sslConfig = getSSLConfig(url);
   const getEnv = (key: string) => {
@@ -106,18 +132,17 @@ const buildPrismaWithFallback = (url: string) => {
   if (getEnv('PGPORT')) poolConfig.port = parseInt(getEnv('PGPORT')!, 10);
   if (getEnv('PGDATABASE')) poolConfig.database = getEnv('PGDATABASE');
 
-  // MODO ADAPTER HANDMADE (v91 - Máxima Estabilidade)
   try {
     const pool = new pg.Pool(poolConfig);
     const adapter = new OrionPgAdapter(pool);
 
-    console.log(`[Prisma/v91] 🔋 Ativando Modo ADAPTER HANDMADE.`);
+    console.log(`[Prisma/v92] 🔋 Ativando Modo ADAPTER HANDMADE.`);
     return new PrismaClient({
       adapter: adapter as any,
       log: ["error"],
     } as any) as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v91] Erro no Modo Adapter: ${err.message}. Ativando Fallback...`);
+    console.warn(`⚠️ [Prisma/v92] Erro no Modo Adapter. Ativando Fallback...`);
 
     let nativeUrl = url;
     try {
@@ -157,7 +182,7 @@ export const prisma = new Proxy({} as any, {
 
     if (p === '$state') {
       const inst = (globalThis as any).prismaInstance;
-      return { v: "91", init: !!inst, type: 'handmade' };
+      return { v: "92", init: !!inst, type: 'handmade' };
     }
 
     if (['$$typeof', 'constructor', 'toJSON', 'then', 'inspect'].includes(p)) return undefined;
@@ -176,7 +201,7 @@ export const prisma = new Proxy({} as any, {
       }
       return value;
     } catch (err: any) {
-      console.error(`❌ [Prisma/v91] Proxy Error '${p}':`, err.message);
+      console.error(`❌ [Prisma/v92] Proxy Error '${p}':`, err.message);
       return undefined;
     }
   }
@@ -202,7 +227,7 @@ const getSSLConfig = (connectionString: string) => {
     if (cert && key) {
       sslConfig.cert = fs.readFileSync(cert, 'utf8');
       sslConfig.key = fs.readFileSync(key, 'utf8');
-      console.log('🛡️ [Prisma/v91] mTLS v91 OK.');
+      console.log('🛡️ [Prisma/v92] mTLS v92 OK.');
     }
   }
   return sslConfig;
