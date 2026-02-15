@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 
 // --- SQL Console Component ---
 const SqlConsole = () => {
-    const [query, setQuery] = useState('SELECT * FROM "users" LIMIT 10;');
+    const [query, setQuery] = useState('SELECT * FROM "users" LIMIT 100;');
     const [results, setResults] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
