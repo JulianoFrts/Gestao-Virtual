@@ -46,17 +46,31 @@ export async function POST(request: NextRequest) {
         } catch (e) { return url; }
     };
 
-    const finalDbUrl = fixDatabaseUrl(dbUrl);
-    const action = request.nextUrl.searchParams.get("action") || "sync";
-
-    console.log(`💣 [PANIC/v99] Ação: ${action}`);
-
-    const pool = new Pool({
-        connectionString: finalDbUrl,
-        ssl: {
-            rejectUnauthorized: false // v99: Bypass de CA inválido
+    // v99.2: Brute Force Config Builder
+    // Ignoramos a string de conexão direta para evitar que o pg driver priorize params de mTLS injetados automaticamente.
+    const buildPoolConfig = (url: string) => {
+        try {
+            const u = new URL(url.replace(/['"]/g, ""));
+            console.log(`[PANIC/v99.2] 🔧 Parsing URL: Host=${u.hostname} Port=${u.port} User=${u.username}`);
+            return {
+                user: u.username,
+                password: u.password,
+                host: u.hostname,
+                port: parseInt(u.port) || 5432,
+                database: 'squarecloud', // Force correct DB name
+                ssl: {
+                    rejectUnauthorized: false
+                },
+                connectionTimeoutMillis: 5000
+            };
+        } catch (e) {
+            console.error("URL Parse Error", e);
+            return { connectionString: url, ssl: { rejectUnauthorized: false } };
         }
-    });
+    };
+
+    const poolConfig = buildPoolConfig(dbUrl);
+    const pool = new Pool(poolConfig);
 
     try {
         const client = await pool.connect();
