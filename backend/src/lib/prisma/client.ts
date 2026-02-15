@@ -8,15 +8,7 @@ import path from "path";
 const { Pool } = pg;
 
 // Tipagem estendida
-export type ExtendedPrismaClient = PrismaClient & {
-  governanceAuditHistory: any;
-  routeHealthHistory: any;
-  projectPermissionDelegation: any;
-  permissionMatrix: any;
-  permissionLevel: any;
-  permissionModule: any;
-  taskQueue: any;
-};
+export type ExtendedPrismaClient = PrismaClient;
 
 declare global {
   var prisma: ExtendedPrismaClient | undefined;
@@ -116,9 +108,9 @@ const fixDatabaseUrl = (url: string) => {
     const u = new URL(cleanUrl);
 
     // 1. Database Name Normalizer
-    if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres") {
+    if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres" || u.pathname.toLowerCase() === "/gestao_db") {
       u.pathname = "/squarecloud";
-      console.log(`[Prisma/v99] 🔄 URL Ajustada: Banco alvo definido para '/squarecloud'.`);
+      console.log(`[Prisma/v103] 🔄 URL Ajustada: Banco alvo definido para '/squarecloud'.`);
     }
 
     // v99.18: No Downgrade. mTLS is mandatory for 'squarecloud' user identification.
