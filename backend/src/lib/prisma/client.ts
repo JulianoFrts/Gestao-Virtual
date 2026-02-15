@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import pg from "pg";
+import { Pool } from "pg";
 import fs from "fs";
 import path from "path";
 
@@ -10,115 +10,112 @@ declare global {
   var prisma: ExtendedPrismaClient | undefined;
 }
 
-// v111: Definitive Fix (Bind Resolution + search_path Force)
+// v113: Isolation Mode (No Proxy + ESM Secure Imports)
 export class PrismaClientBuilder {
   private static instance: ExtendedPrismaClient;
 
   /**
-   * Extrai e valida credenciais brutas das variáveis de ambiente
+   * Resolve caminhos de certificados mTLS (Idêntico ao startup script)
    */
-  private static getEnvCredentials() {
-    let dbName = process.env.PGDATABASE || "squarecloud";
-    if (dbName === "postgres" || dbName === "gestao_db") dbName = "squarecloud";
+  private static resolveCerts() {
+    const certDirs = [
+      '/application/backend/certificates',
+      '/application/backend',
+      process.cwd(),
+      path.join(process.cwd(), 'certificates'),
+      path.join(process.cwd(), 'backend/certificates')
+    ];
 
+    const files = {
+      cert: ['certificate.pem', 'client.crt', 'client-cert.pem'],
+      key: ['private-key.key', 'client.key', 'client-key.pem'],
+      ca: ['ca-certificate.crt', 'ca.crt', 'ca.pem']
+    };
+
+    for (const dir of certDirs) {
+      if (!fs.existsSync(dir)) continue;
+
+      const certFile = files.cert.find(f => fs.existsSync(path.join(dir, f)));
+      const keyFile = files.key.find(f => fs.existsSync(path.join(dir, f)));
+      const caFile = files.ca.find(f => fs.existsSync(path.join(dir, f)));
+
+      if (certFile && keyFile) {
+        return {
+          certPath: path.join(dir, certFile),
+          keyPath: path.join(dir, keyFile),
+          caPath: caFile ? path.join(dir, caFile) : undefined,
+          dir
+        };
+      }
+    }
+    return null;
+  }
+
+  private static getEnvCredentials() {
     return {
       host: process.env.PGHOST,
       user: process.env.PGUSER,
       password: process.env.PGPASSWORD,
       port: parseInt(process.env.PGPORT || "7135"),
-      database: dbName,
+      database: process.env.PGDATABASE || "squarecloud",
     };
   }
 
-  /**
-   * Normaliza a DATABASE_URL para garantir schema=public
-   */
-  private static normalizeUrl(url: string): string {
+  private static normalizeUrl(url: string, certs: any): string {
     try {
       let cleanUrl = url.replace(/['"]/g, "");
       const u = new URL(cleanUrl);
 
-      // Forçar Banco 'squarecloud'
-      if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres" || u.pathname.toLowerCase() === "/gestao_db") {
+      // Forçar Database squarecloud se estiver genérico
+      if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres") {
         u.pathname = "/squarecloud";
       }
 
+      // Forçar Params críticos
       u.searchParams.set('schema', 'public');
+      u.searchParams.set('sslmode', 'verify-ca');
+
+      if (certs) {
+        u.searchParams.set('sslcert', certs.certPath);
+        u.searchParams.set('sslkey', certs.keyPath);
+        if (certs.caPath) u.searchParams.set('sslrootcert', certs.caPath);
+      }
+
       return u.toString();
     } catch {
       return url;
     }
   }
 
-  /**
-   * Prepara mTLS com SNI
-   */
-  private static getSSLConfig(url: string) {
-    let sslConfig: any = { rejectUnauthorized: false };
-    try {
-      const u = new URL(url);
-      sslConfig.servername = u.hostname;
-
-      const certDirs = [
-        '/application/backend/certificates',
-        '/application/backend',
-        process.cwd()
-      ];
-
-      for (const dir of certDirs) {
-        const cert = path.join(dir, 'certificate.pem');
-        const key = path.join(dir, 'private-key.key');
-        const ca = path.join(dir, 'ca-certificate.crt');
-
-        // Fallback names
-        const cert2 = path.join(dir, 'client.crt');
-        const key2 = path.join(dir, 'client.key');
-        const ca2 = path.join(dir, 'ca.crt');
-
-        if (fs.existsSync(cert) && fs.existsSync(key)) {
-          sslConfig.cert = fs.readFileSync(cert);
-          sslConfig.key = fs.readFileSync(key);
-          if (fs.existsSync(ca)) sslConfig.ca = fs.readFileSync(ca);
-          console.log(`🛡️ [v111] mTLS Bound from: ${dir}`);
-          break;
-        } else if (fs.existsSync(cert2) && fs.existsSync(key2)) {
-          sslConfig.cert = fs.readFileSync(cert2);
-          sslConfig.key = fs.readFileSync(key2);
-          if (fs.existsSync(ca2)) sslConfig.ca = fs.readFileSync(ca2);
-          console.log(`🛡️ [v111] mTLS Bound (Client Names) from: ${dir}`);
-          break;
-        }
-      }
-    } catch (e: any) {
-      console.warn(`⚠️ [v111] SSL Config Error:`, e.message);
-    }
-    return sslConfig;
-  }
-
   public static build(): ExtendedPrismaClient {
     if (this.instance) return this.instance;
 
+    const certs = this.resolveCerts();
     const rawUrl = process.env.DATABASE_URL || "";
-    const url = this.normalizeUrl(rawUrl);
+    const url = this.normalizeUrl(rawUrl, certs);
     const creds = this.getEnvCredentials();
 
     try {
-      console.log(`🔌 [Prisma/v111] Initializing Secure Adapter...`);
+      console.log(`🔌 [Prisma/v113] Buildando Cliente (Isolamento Ativo)...`);
 
-      const PoolConstructor = (pg as any).Pool || (pg as any).default?.Pool || pg;
-      const ssl = this.getSSLConfig(url);
+      const ssl: any = { rejectUnauthorized: false };
+      if (certs) {
+        ssl.servername = new URL(url).hostname;
+        ssl.cert = fs.readFileSync(certs.certPath);
+        ssl.key = fs.readFileSync(certs.keyPath);
+        if (certs.caPath) ssl.ca = fs.readFileSync(certs.caPath);
+        console.log(`🛡️ [v113] mTLS Detetado em: ${certs.dir}`);
+      }
 
       const poolConfig: any = {
         max: 20,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 20000,
-        ssl,
-        // 🔥 v111: Forçar search_path diretamente no driver PG para matar o P1010
-        options: "-c search_path=public"
+        ssl
       };
 
       if (creds.host && creds.user) {
-        console.log(`📡 [v111] Mode: Atomic Envs (${creds.host})`);
+        console.log(`📡 [v113] Usando Credenciais Atômicas (DB: ${creds.database})`);
         Object.assign(poolConfig, {
           user: creds.user,
           password: creds.password,
@@ -127,65 +124,32 @@ export class PrismaClientBuilder {
           database: creds.database
         });
       } else {
-        console.log(`📡 [v111] Mode: Integrated URL`);
+        console.log(`📡 [v113] Usando URL de Conexão.`);
         poolConfig.connectionString = url;
       }
 
-      const pool = new PoolConstructor(poolConfig);
+      console.log(`🔨 [v113] Criando Pool com driver 'pg'...`);
+      const pool = new Pool(poolConfig);
+
+      console.log(`🔨 [v113] Criando Adaptador PrismaPg...`);
       const adapter = new PrismaPg(pool);
 
+      console.log(`🔨 [v113] Instanciando PrismaClient...`);
       const client = new PrismaClient({
         adapter: adapter as any,
         log: ["error"]
       });
 
-      this.instance = createPrismaProxyV111(client);
+      // v113: RETORNANDO CLIENTE PURO PARA ISOLAR O ERRO 'BIND'
+      console.log(`✅ [v113] Cliente Buildado com Sucesso (Sem Proxy).`);
+      this.instance = client as any;
       return this.instance;
     } catch (err: any) {
-      console.error(`🚨 [Prisma/v111] Critical Failure during build:`, err.message);
+      console.error(`🚨 [Prisma/v113] Falha no Builder:`, err.message);
+      // Fallback nativo com mTLS na URL
       return new PrismaClient({ datasources: { db: { url } } }) as any;
     }
   }
-}
-
-/**
- * Proxy v111: Resolves 'bind' issues by being non-intrusive on internal symbols
- */
-function createPrismaProxyV111(client: any): any {
-  return new Proxy(client, {
-    get(target, prop) {
-      const value = target[prop];
-
-      // Proteção v111: Deixa passar tudo que for interno do Prisma ou não for objeto/fn
-      if (typeof prop === 'symbol' || prop.toString().startsWith('$') || prop.toString().startsWith('_')) {
-        return value;
-      }
-
-      // Se for um modelo do Prisma (ex: client.user), criamos um sub-proxy para as operações
-      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-        return new Proxy(value, {
-          get(modelTarget, modelProp) {
-            const modelValue = modelTarget[modelProp];
-
-            if (typeof modelValue === 'function') {
-              return async (...args: any[]) => {
-                try {
-                  // v111: Executa a operação com contexto original (sem mexer em bind se não necessário)
-                  return await modelValue.apply(modelTarget, args);
-                } catch (err: any) {
-                  console.error(`❌ [PrismaProxy/v111] Operation Error (${prop.toString()}.${modelProp.toString()}):`, err.message);
-                  throw err;
-                }
-              };
-            }
-            return modelValue;
-          }
-        });
-      }
-
-      return value;
-    }
-  });
 }
 
 const globalForPrisma = global as unknown as {
