@@ -59,8 +59,8 @@ function getSSLConfig(connectionString: string) {
 // v99.3: Factory com Configuração Híbrida
 const createExtendedClient = (url: string) => {
   try {
-    // v101: Official PrismaPg Adapter (Definitive)
-    console.log('🔌 [Prisma/v101] Inicializando Prisma Client...');
+    // v102: Official PrismaPg Adapter (Stable)
+    console.log('🔌 [Prisma/v102] Inicializando Prisma Client com Adapter...');
 
     const ssl = getSSLConfig(url);
     const pool = new Pool({
@@ -78,9 +78,21 @@ const createExtendedClient = (url: string) => {
       log: ["error"]
     }) as unknown as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v100] Factory Error:`, err.message);
+    console.warn(`⚠️ [Prisma/v102] Factory FALLBACK:`, err.message);
+
+    // v102: Ghost Strategy - Inject mTLS params into URL for native engine fallback
+    const cert = "/application/backend/certificates/certificate.pem";
+    const key = "/application/backend/certificates/private-key.key";
+    const ca = "/application/backend/certificates/ca-certificate.crt";
+
+    const u = new URL(url);
+    u.searchParams.set('sslmode', 'verify-ca');
+    u.searchParams.set('sslcert', cert);
+    u.searchParams.set('sslkey', key);
+    u.searchParams.set('sslrootcert', ca);
+
     return new PrismaClient({
-      datasources: { db: { url } }
+      datasources: { db: { url: u.toString() } }
     }) as unknown as ExtendedPrismaClient;
   }
 };

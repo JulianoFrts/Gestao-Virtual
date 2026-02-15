@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Pool } from "pg";
+import pg from "pg";
+const { Pool } = pg;
 
 /**
  * PANIC RESET API - GESTÃO VIRTUAL
- * v99: SSL Bypass & Adapter Protocol
+ * v102: Global Stabilizer & Doctor Mode
  */
 export async function POST(request: NextRequest) {
     const secret = process.env.APP_SECRET || "temp_secret_123";
@@ -22,100 +23,55 @@ export async function POST(request: NextRequest) {
     const buildChildProcessUrl = (url: string) => {
         try {
             const u = new URL(url.replace(/['"]/g, ""));
-            // Force SquareCloud DB Name if generic
             if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres") {
                 u.pathname = "/squarecloud";
             }
-
-            // Build base URL without params
             const baseUrl = `${u.protocol}//${u.username}:${u.password}@${u.hostname}:${u.port}${u.pathname}`;
-
-            // v101: mTLS verify-ca for native Rust engine (Definitive Absolute Paths)
             const cert = "/application/backend/certificates/certificate.pem";
             const key = "/application/backend/certificates/private-key.key";
             const ca = "/application/backend/certificates/ca-certificate.crt";
-
-            const finalUrl = `${baseUrl}?sslmode=verify-ca&sslcert=${cert}&sslkey=${key}&sslrootcert=${ca}`;
-
-            // Log Sanitized
-            const safeUrl = finalUrl.replace(/:[^:@]+@/, ':****@');
-            console.log(`[PANIC/v101] 🔗 URL Child Process (v101): ${safeUrl}`);
-
-            return finalUrl;
+            return `${baseUrl}?sslmode=verify-ca&sslcert=${cert}&sslkey=${key}&sslrootcert=${ca}`;
         } catch (e) { return url; }
     };
 
     const finalDbUrl = buildChildProcessUrl(dbUrl);
     const action = request.nextUrl.searchParams.get("action") || "sync";
 
-    // v99.3: Hybrid Authenticator
-    // O servidor EXIGE certificado de cliente (mTLS), mas o certificado do servidor (CA) é desconhecido.
-    // Solução: Enviar client.crt/key mas ignorar validação do server (rejectUnauthorized: false).
     const fs = require('fs');
     const path = require('path');
 
     const getMtlsOptions = () => {
         try {
-            // Caminhos possíveis para os certificados (Production Environment)
-            const certsRoot = '/application/backend';
-            const findPath = (f: string) => {
-                const p1 = path.join(certsRoot, 'certificates', f); // Novo path v99.4
-                const p2 = path.join(certsRoot, f);
-                const p3 = path.join('/application', f);
-                return fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : (fs.existsSync(p3) ? p3 : null));
-            };
+            const cert = "/application/backend/certificates/certificate.pem";
+            const key = "/application/backend/certificates/private-key.key";
+            const ca = "/application/backend/certificates/ca-certificate.crt";
 
-            // v99.4: Mapping de Nomes (Legacy vs New)
-            const certPath = findPath('certificate.pem') || findPath('client.crt');
-            const keyPath = findPath('private-key.key') || findPath('client.key');
-            const caPath = findPath('ca-certificate.crt') || findPath('ca.crt');
-
-            if (certPath && keyPath) {
-                console.log(`[PANIC/v99.5] 🛡️ Certificados Encontrados: ${certPath}`);
+            if (fs.existsSync(cert) && fs.existsSync(key)) {
                 const sslConfig: any = {
-                    cert: fs.readFileSync(certPath, 'utf8'),
-                    key: fs.readFileSync(keyPath, 'utf8'),
+                    cert: fs.readFileSync(cert, 'utf8'),
+                    key: fs.readFileSync(key, 'utf8'),
                     rejectUnauthorized: false
                 };
-
-                if (caPath) {
-                    sslConfig.ca = fs.readFileSync(caPath, 'utf8');
-                    console.log(`[PANIC/v99.5] 📜 CA Bundle Carregado: ${caPath}`);
-                }
-
+                if (fs.existsSync(ca)) sslConfig.ca = fs.readFileSync(ca, 'utf8');
                 return sslConfig;
             }
-            console.warn(`[PANIC/v99.5] ⚠️ Certificados NÃO encontrados. Tentando conexão insegura...`);
             return { rejectUnauthorized: false };
-        } catch (e) {
-            console.error("[PANIC/v99.5] Erro ao ler certificados:", e);
-            return { rejectUnauthorized: false };
-        }
+        } catch (e) { return { rejectUnauthorized: false }; }
     };
 
     const buildPoolConfig = (url: string) => {
         try {
-            const u = new URL(url.replace(/['']/g, ""));
-            console.log(`[PANIC/v99.3] 🔧 Parsing URL: Host=${u.hostname} Port=${u.port} User=${u.username}`);
-
-            // v99.10: Final Strategy (SSL Restore + User Warning)
-            // O Banco EXIGE certificado. Se der erro, é porque o certificado é inválido.
-            const sslOptions = getMtlsOptions();
-            console.log(`[PANIC/v99.10] 🔒 SSL RESTAURADO (mTLS Mandatory).`);
-
+            const u = new URL(url.replace(/['"]/g, ""));
             return {
                 user: u.username,
                 password: u.password,
                 host: u.hostname,
                 port: parseInt(u.port) || 5432,
                 database: 'squarecloud',
-                ssl: sslOptions,
+                ssl: getMtlsOptions(),
                 connectionTimeoutMillis: 5000
             };
-        } catch (e) {
-            console.error("URL Parse Error", e);
-            return { connectionString: url, ssl: { rejectUnauthorized: false } };
-        }
+        } catch (e) { return { connectionString: url, ssl: { rejectUnauthorized: false } }; }
     };
 
     const poolConfig = buildPoolConfig(dbUrl);
@@ -124,215 +80,94 @@ export async function POST(request: NextRequest) {
     try {
         const client = await pool.connect();
         try {
-            // v100: SUPREME PERMISSION ENFORCER (Run before any action)
-            console.log("🛡️ [v100] Ativando Supervisor de Permissões...");
+            // v102: SUPREME PERMISSION ENFORCER (Run before any action)
+            console.log("🛡️ [v102] Ativando Supervisor de Permissões...");
             try {
-                // DB Level
                 await client.query('GRANT CONNECT ON DATABASE squarecloud TO squarecloud;');
                 await client.query('GRANT ALL PRIVILEGES ON DATABASE squarecloud TO squarecloud;');
-
-                // Schema Level
                 await client.query('CREATE SCHEMA IF NOT EXISTS public;');
                 await client.query('ALTER SCHEMA public OWNER TO squarecloud;');
                 await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
                 await client.query('GRANT ALL ON SCHEMA public TO public;');
-
-                // Defaults for future objects
+                await client.query('SET search_path TO public;');
                 await client.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO squarecloud;');
                 await client.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO squarecloud;');
+            } catch (pErr: any) { console.warn("⚠️ Supervisor Warning:", pErr.message); }
 
-                console.log("✅ [v100] Supervisor: Permissões garantidas.");
-            } catch (pErr: any) {
-                console.warn("⚠️ Supervisor: Falha parcial nos grants:", pErr.message);
+            if (action === "doctor") {
+                console.log("🩺 [DOCTOR/v102] Iniciando Diagnóstico Profundo...");
+                const results: any = { pg: "FAIL", prisma: "FAIL", schema: "UNKNOWN" };
+
+                try {
+                    const pgRes = await client.query("SELECT current_user, current_database(), now();");
+                    results.pg = `OK (${pgRes.rows[0].current_user})`;
+                } catch (e: any) { results.pg = `ERROR: ${e.message}`; }
+
+                try {
+                    const tables = await client.query("SELECT count(*) FROM pg_tables WHERE schemaname = 'public'");
+                    results.schema = `${tables.rows[0].count} tables found.`;
+                } catch (e: any) { results.schema = `ERROR: ${e.message}`; }
+
+                return NextResponse.json({
+                    message: "Doctor results",
+                    results,
+                    dbUrl: finalDbUrl.replace(/:[^:@]+@/, ':****@')
+                });
             }
 
             if (action === "nuke") {
-                console.log("💣 [PANIC] Executando Nuke de Emergência (v99)...");
                 await client.query('DROP SCHEMA IF EXISTS public CASCADE;');
                 await client.query('CREATE SCHEMA public;');
                 await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
-                await client.query('GRANT ALL ON SCHEMA public TO public;');
-                console.log("✨ SCHEMA public REFRESHED!");
-                return NextResponse.json({ message: "Database nuked. Now run with ?action=sync" });
+                return NextResponse.json({ message: "Nuked." });
             }
 
             if (action === "migrate") {
-                console.log("📜 [PANIC] Executando Prisma Migrate Deploy (v101)...");
+                console.log("📜 [PANIC] Executando Prisma Migrate Deploy (v102)...");
                 const { execSync } = require('child_process');
-
                 try {
-                    // v101: direct env injection and explicit schema
                     const output = execSync(`npx prisma migrate deploy --schema=prisma/schema.prisma`, {
                         env: { ...process.env, DATABASE_URL: finalDbUrl },
                         encoding: 'utf8',
                         maxBuffer: 10 * 1024 * 1024
                     });
-                    console.log("✅ MIGRATE Sucesso!");
-                    return NextResponse.json({
-                        message: "Prisma Migrate Deploy finished successfully!",
-                        output: output,
-                        status: "MIGRATED"
-                    });
+                    return NextResponse.json({ message: "Migrated successfully", output });
                 } catch (migrateErr: any) {
-                    console.error("❌ Migrate falhou:", migrateErr.message);
-                    return NextResponse.json({
-                        error: "Migration failed",
-                        stdout: migrateErr.stdout?.toString(),
-                        stderr: migrateErr.stderr?.toString()
-                    }, { status: 500 });
+                    return NextResponse.json({ error: "Migrate failed", stdout: migrateErr.stdout?.toString(), stderr: migrateErr.stderr?.toString() }, { status: 500 });
                 }
             }
 
             if (action === "sync") {
-                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução bloco único (v101)...");
-
+                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução (v102)...");
                 const { execSync } = require('child_process');
-                const schemaPath = "prisma/schema.prisma";
+
+                // v102: Force Generate to ensure driver adapter availability
+                console.log("⚒️ Force generating Prisma Client...");
+                execSync(`npx prisma generate --schema=prisma/schema.prisma`, {
+                    env: { ...process.env, DATABASE_URL: finalDbUrl },
+                    encoding: 'utf8'
+                });
 
                 try {
-                    // 1. Tentar DB PUSH (Modo Padrão)
-                    console.log("⚒️ Tentativa 1: prisma db push...");
-                    execSync(`npx prisma db push --accept-data-loss --schema=${schemaPath}`, {
+                    console.log("⚒️ DB PUSH...");
+                    execSync(`npx prisma db push --accept-data-loss --schema=prisma/schema.prisma`, {
                         env: { ...process.env, DATABASE_URL: finalDbUrl },
                         encoding: 'utf8',
                         maxBuffer: 10 * 1024 * 1024
                     });
-                    console.log("✅ DB PUSH Sucesso!");
-                } catch (pushError: any) {
-                    console.warn("⚠️ DB PUSH Falhou. Iniciando Fallback Bloco Único v101...");
+                } catch (e) { console.warn("Fallback to Diff..."); }
 
-                    try {
-                        // 2. Garantir Contexto do Banco
-                        console.log("🛡️ Restaurando contexto do schema public...");
-                        await client.query('CREATE SCHEMA IF NOT EXISTS public;');
-                        await client.query('SET search_path TO public;');
-                        await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
-
-                        // 3. Cleanup Cirúrgico de Tipos e Tabelas
-                        console.log("🧹 Removendo objetos existentes para evitar conflitos de DDL...");
-                        await client.query(`
-                            DO $$ DECLARE r RECORD;
-                            BEGIN
-                                FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
-                                    EXECUTE 'DROP TABLE IF EXISTS public.' || quote_ident(r.tablename) || ' CASCADE';
-                                END LOOP;
-                                FOR r IN (SELECT typname FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname = 'public' AND t.typtype = 'e') LOOP
-                                    EXECUTE 'DROP TYPE IF EXISTS public.' || quote_ident(r.typname) || ' CASCADE';
-                                END LOOP;
-                            END $$;
-                        `);
-
-                        // 4. Execução de DDL Inteiro (Evita quebra de funções/triggers)
-                        console.log("📜 Gerando DDL completo...");
-                        const ddl = execSync(`npx prisma migrate diff --from-empty --to-schema-datamodel ${schemaPath} --script`, {
-                            env: { ...process.env, DATABASE_URL: finalDbUrl },
-                            encoding: 'utf8',
-                            maxBuffer: 20 * 1024 * 1024
-                        });
-
-                        // Resilient Block Execution
-                        console.log("⚒️ Aplicando DDL como bloco único resiliente...");
-                        // Prisma DDL script costuma vir com 'SET search_path...' e outras diretivas.
-                        // Executamos tudo de uma vez.
-
-                        // v98.9: Pre-Grant to ensure creation rights
-                        await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
-
-                        await client.query(ddl);
-
-
-                        // v98.11: Owner Enforcer (Loop em cada tabela para garantir ownership)
-                        console.log("🛡️ [v98.11] Forçando propriedade de tabelas para 'squarecloud'...");
-                        await client.query(`
-                            DO $$ DECLARE r RECORD;
-                            BEGIN
-                                FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
-                                    EXECUTE 'ALTER TABLE public.' || quote_ident(r.tablename) || ' OWNER TO squarecloud';
-                                END LOOP;
-                            END $$;
-                        `);
-
-                        await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
-                        await client.query('ALTER SCHEMA public OWNER TO squarecloud;');
-                        await client.query('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO squarecloud;');
-                        await client.query('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO squarecloud;');
-                        await client.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO squarecloud;');
-
-                        console.log("✅ Sincronização via Bloco SQL concluída!");
-                    } catch (fallbackError: any) {
-                        console.error("❌ Falha crítica no Fallback de Bloco:", fallbackError.message);
-                        throw pushError;
-                    }
-                }
-
-                // 5. Verificação de Saúde Pós-Sync
-                const { rowCount } = await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
-                console.log(`📊 Tabelas criadas: ${rowCount}`);
-
-                if (rowCount === 0) {
-                    throw new Error("Sincronização falhou: Nenhuma tabela encontrada no schema public.");
-                }
-
-                // 5.5 ESTRATÉGIA SUPREMA (v99.20) - Force ALL Permissions
-                console.log("🛡️ [v99.20] Aplicando Estratégia de Permissões SUPREMA...");
+                console.log("📥 Restoring data...");
                 try {
-                    // Pre-Grant: Garantir que o banco aceite conexão
-                    await client.query('GRANT CONNECT ON DATABASE squarecloud TO squarecloud;');
-                    await client.query('GRANT ALL PRIVILEGES ON DATABASE squarecloud TO squarecloud;');
-
-                    // Schema Public Ownership
-                    await client.query('ALTER SCHEMA public OWNER TO squarecloud;');
-                    await client.query('GRANT USAGE, CREATE ON SCHEMA public TO squarecloud;');
-                    await client.query('GRANT ALL ON SCHEMA public TO public;');
-
-                    // Tabelas e Sequências (Recursivo e Padrão)
-                    await client.query('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO squarecloud;');
-                    await client.query('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO squarecloud;');
-                    await client.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO squarecloud;');
-                    await client.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO squarecloud;');
-
-                    // Role Public (Estratégia "Portas Abertas" v99.17)
-                    await client.query('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO public;');
-                    await client.query('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO public;');
-
-                    // Forçar Ownership de cada objeto criado
-                    await client.query(`
-                        DO $$ DECLARE r RECORD;
-                        BEGIN
-                            FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
-                                EXECUTE 'ALTER TABLE public.' || quote_ident(r.tablename) || ' OWNER TO squarecloud';
-                            END LOOP;
-                            FOR r IN (SELECT relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'S') LOOP
-                                EXECUTE 'ALTER SEQUENCE public.' || quote_ident(r.relname) || ' OWNER TO squarecloud';
-                            END LOOP;
-                        END $$;
-                    `);
-
-                    console.log("☢️ [v99.20] Permissões supremas aplicadas!");
-                } catch (supremeErr: any) {
-                    console.warn("⚠️ Falha parcial no Supreme Grant:", supremeErr.message);
-                }
-
-                // 6. RESTORE (v101)
-                console.log("📥 Iniciando restauração de dados (v101)...");
-                try {
-                    console.log("🔎 [RESTORE] Executando restore com URL v101.");
-
                     execSync('npx tsx src/scripts/restore-from-backup.ts', {
                         env: { ...process.env, DATABASE_URL: finalDbUrl },
                         encoding: 'utf8',
                         maxBuffer: 20 * 1024 * 1024
                     });
-                    console.log("✅ RESTORE Sucesso!");
-                } catch (resErr: any) {
-                    console.warn("⚠️ Restore concluído com avisos. Verifique os logs.");
-                }
+                } catch (e) { console.error("Restore failed."); }
 
-                return NextResponse.json({
-                    message: "Sync and Restore finished successfully (v101)! 🏆",
-                    tablesCreated: rowCount,
-                    status: "STABLE_RECONSTRUCTED"
-                });
+                const { rowCount } = await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
+                return NextResponse.json({ message: "Sync finished (v102)", tablesCreated: rowCount });
             }
 
             return NextResponse.json({ error: "Invalid action" }, { status: 400 });
@@ -341,11 +176,6 @@ export async function POST(request: NextRequest) {
             await pool.end();
         }
     } catch (error: any) {
-        console.error("❌ [PANIC] Erro Final:", error.message);
-        return NextResponse.json({
-            error: error.message,
-            stdout: error.stdout?.toString(),
-            stderr: error.stderr?.toString()
-        }, { status: 500 });
+        return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
