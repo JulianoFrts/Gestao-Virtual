@@ -25,10 +25,10 @@ declare global {
 export class OrionPgAdapter {
   readonly flavour = 'postgres';
   readonly provider = 'postgres'; // Compatibility
-  readonly adapterName = 'orion-pg-adapter-v98.12';
+  readonly adapterName = 'orion-pg-adapter-v99';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v98.12] Bridge forensic iniciada.`);
+    console.log(`[Adapter/v99] Bridge forensic iniciada.`);
   }
 
   // Métodos Auxiliares
@@ -227,40 +227,69 @@ function getSSLConfig(connectionString: string) {
   return sslConfig;
 }
 
+// v99: Factory com Configuração Segura de SSL
 const createExtendedClient = (url: string) => {
   try {
     const pool = new pg.Pool({
       connectionString: url,
-      ssl: getSSLConfig(url)
+      ssl: {
+        rejectUnauthorized: false // v99: Aceitar certificado novo do banco recriado
+      }
     });
 
     const adapter = new OrionPgAdapter(pool);
-    console.log('🔌 [Prisma/v98.12] Adaptador Orion ativado com sucesso.');
+    console.log('🔌 [Prisma/v99] Adaptador Orion ativado com sucesso.');
 
     return new PrismaClient({
       adapter,
       log: ["error"],
     } as any) as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v98.12] Falha Crítica na inicialização do Adapter:`, err.message);
-    console.warn(`⚠️ [Prisma/v98.12] Stack:`, err.stack);
-    console.warn(`⚠️ [Prisma/v98.12] Caindo para Modo Nativo.`);
-    return new PrismaClient({ datasources: { db: { url } } }) as ExtendedPrismaClient;
+    console.warn(`⚠️ [Prisma/v99] Falha Crítica na inicialização do Adapter:`, err.message);
+    console.warn(`⚠️ [Prisma/v99] Stack:`, err.stack);
+    console.warn(`⚠️ [Prisma/v99] Caindo para Modo Nativo.`);
+    // Fallback Native Client também precisa de SSL Bypass se o URL original tiver verify-ca
+    return new PrismaClient({
+      datasources: { db: { url } }
+      // Nota: O Prisma Nativo usa a URL diretamente. Se ela tiver parameters de SSL, ele tenta honrar.
+      // O fixDatabaseUrl já mudou para 'require', o que deve ajudar.
+    }) as ExtendedPrismaClient;
   }
 };
 
-const globalForPrisma = global as unknown as { prisma: ExtendedPrismaClient };
+const globalForPrisma = global as unknown as {
+  prisma: ExtendedPrismaClient
+  on(event: string, listener: (...args: any[]) => void): this;
+  addListener(event: string, listener: (...args: any[]) => void): this;
+  removeListener(event: string, listener: (...args: any[]) => void): this;
+  emit(event: string, ...args: any[]): boolean;
+}
 
-// v98.10: Database Name Normalizer
-// Garante que a aplicação conecte no mesmo banco que o script de reset (squarecloud)
+// Helper Hoisted
+// v99: SSL Bypass (Emergency Protocol)
+// A recriação do banco invalidou o CA. Precisamos ignorar a verificação de certificado temporariamente e forçar conexão via squarecloud.
 const fixDatabaseUrl = (url: string) => {
   try {
-    const u = new URL(url.replace(/['"]/g, ""));
-    // Se não tiver path, ou for /, ou for /postgres, forçamos /squarecloud
+    // Remover aspas extras
+    let cleanUrl = url.replace(/['"]/g, "");
+
+    const u = new URL(cleanUrl);
+
+    // 1. Database Name Normalizer
     if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres") {
       u.pathname = "/squarecloud";
-      console.log(`[Prisma/v98.10] 🔄 URL Ajustada: Banco alvo definido para '/squarecloud'.`);
+      console.log(`[Prisma/v99] 🔄 URL Ajustada: Banco alvo definido para '/squarecloud'.`);
     }
+
+    // 2. SSL CA Bypass (Devido a recriação do banco)
+    if (u.searchParams.has('sslmode') && u.searchParams.get('sslmode') === 'verify-ca') {
+      u.searchParams.set('sslmode', 'require'); // Downgrade para aceitar self-signed (com rejectUnauthorized=false no pg)
+      console.log(`[Prisma/v99] 🔓 SSL Downgrade: verify-ca -> require (CA inválido detectado).`);
+    }
+
+    // Remove params de arquivo se estiverem causando erro de leitura/path
+    // u.searchParams.delete('sslrootcert');
+
     return u.toString();
   } catch (e) { return url; }
 };

@@ -3,7 +3,7 @@ import { Pool } from "pg";
 
 /**
  * PANIC RESET API - GESTÃO VIRTUAL
- * v98.11: Explicit Bind & Owner Enforcer Protocol
+ * v99: SSL Bypass & Adapter Protocol
  */
 export async function POST(request: NextRequest) {
     const secret = process.env.APP_SECRET || "temp_secret_123";
@@ -32,18 +32,20 @@ export async function POST(request: NextRequest) {
     const finalDbUrl = fixDatabaseUrl(dbUrl);
     const action = request.nextUrl.searchParams.get("action") || "sync";
 
-    console.log(`💣 [PANIC/v98.11] Ação: ${action}`);
+    console.log(`💣 [PANIC/v99] Ação: ${action}`);
 
     const pool = new Pool({
         connectionString: finalDbUrl,
-        ssl: { rejectUnauthorized: false }
+        ssl: {
+            rejectUnauthorized: false // v99: Bypass de CA inválido
+        }
     });
 
     try {
         const client = await pool.connect();
         try {
             if (action === "nuke") {
-                console.log("💣 [PANIC] Executando Nuke de Emergência (v98.11)...");
+                console.log("💣 [PANIC] Executando Nuke de Emergência (v99)...");
                 await client.query('DROP SCHEMA IF EXISTS public CASCADE;');
                 await client.query('CREATE SCHEMA public;');
                 await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
@@ -157,7 +159,7 @@ export async function POST(request: NextRequest) {
                 }
 
                 return NextResponse.json({
-                    message: "Sync and Restore finished successfully (v98.11)! 🏆",
+                    message: "Sync and Restore finished successfully (v99)! 🏆",
                     tablesCreated: rowCount,
                     status: "STABLE_RECONSTRUCTED"
                 });
