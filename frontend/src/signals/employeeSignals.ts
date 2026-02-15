@@ -168,7 +168,7 @@ export const fetchEmployees = async (force = false) => {
       cpfOrRegistration,
     } = employeeFilters.value;
     // Usando db.from() que já inclui o token de autenticação
-    let query = db.from("users").select("*, jobFunction:job_functions(*)");
+    let query = db.from("users").select("*, jobFunction:job_functions(name, hierarchyLevel, canLeadTeam)");
 
     // Aplicar filtros via eq()
     query = query.eq("role", "WORKER");

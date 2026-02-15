@@ -12,9 +12,9 @@ import {
   DragStartEvent,
   DragOverEvent,
   DragEndEvent,
-  defaultDropAnimationSideEffects,
   useDroppable,
   rectIntersection,
+  pointerWithin,
   MeasuringStrategy
 } from '@dnd-kit/core'
 import { snapCenterToCursor } from '@dnd-kit/modifiers'
@@ -106,9 +106,8 @@ function EmployeeCardStatic({
       style={style}
       className={cn(
         'group relative flex cursor-grab items-center gap-3 rounded-xl border p-3',
-        !isOverlay && 'mb-2 transition-all duration-300',
         'glass-card bg-white/5 border-white/5 hover:bg-white/10 hover:border-primary/30 active:cursor-grabbing',
-        isOverlay && 'border-amber-500 bg-amber-500/10 shadow-glow z-[1000] ring-2 ring-amber-500/20 cursor-grabbing w-[288px]',
+        isOverlay && 'border-amber-500 bg-amber-500/10 shadow-glow z-[1000] ring-2 ring-amber-500/20 cursor-grabbing',
         !isOverlay && isDragging && 'opacity-30 scale-[0.98] grayscale-[0.5] border-dashed border-white/20'
       )}
     >
@@ -130,8 +129,8 @@ function EmployeeCardStatic({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="h-4 border-white/5 bg-white/5 px-1.5 text-[8px] font-black tracking-widest text-muted-foreground/80 uppercase">
-            {employee.functionName || 'Colaborador'}
+          <Badge variant="outline" className="h-4 border-white/5 bg-white/5 px-1.5 text-[8px] font-black tracking-widest text-muted-foreground/80">
+            {employee.functionName || 'COLABORADOR'}
           </Badge>
         </div>
       </div>
@@ -179,7 +178,7 @@ function EmployeeCard({ employee }: DraggableEmployeeProps) {
       style={style}
       {...attributes}
       {...listeners}
-      className={cn("touch-none outline-none", isDragging && "z-50")}
+      className={cn("touch-none outline-none mb-2", isDragging && "z-50")}
     >
       <EmployeeCardStatic employee={employee} isDragging={isDragging} />
     </div>
@@ -410,7 +409,7 @@ export default function TeamComposition() {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 5
+        distance: 3
       }
     }),
     useSensor(KeyboardSensor, {
@@ -522,6 +521,7 @@ export default function TeamComposition() {
     const employeeId = active.id as string
     const employeeData = active.data.current?.employee as Employee
     const overId = over.id as string
+    const overData = over.data.current
 
     // Determinar se o destino é uma equipe válida
     // Pode ser o ID da equipe ou o ID de qualquer membro/líder nela
@@ -841,7 +841,7 @@ export default function TeamComposition() {
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={pointerWithin}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
@@ -1063,22 +1063,10 @@ export default function TeamComposition() {
           </div>
         </div>
 
-        {/* Drag Overlay - ALWAYS use Portal, adjustScale=true, and snapCenterToCursor */}
+        {/* Drag Overlay - Standardized for precision */}
         {activeId && createPortal(
-          <DragOverlay
-            dropAnimation={{
-              sideEffects: defaultDropAnimationSideEffects({
-                styles: {
-                  active: {
-                    opacity: '0.4',
-                  },
-                },
-              }),
-            }}
-            adjustScale={true}
-            modifiers={[snapCenterToCursor]}
-          >
-            <div className="pointer-events-none z-[9999] w-[288px] opacity-90 drop-shadow-2xl">
+          <DragOverlay adjustScale={true}>
+            <div className="pointer-events-none z-[9999] opacity-90 drop-shadow-2xl" style={{ width: '280px' }}>
               {activeEmployee && <EmployeeCardStatic employee={activeEmployee} isOverlay />}
             </div>
           </DragOverlay>,
