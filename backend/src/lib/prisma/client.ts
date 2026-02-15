@@ -256,14 +256,6 @@ const createExtendedClient = (url: string) => {
     return new PrismaClient() as ExtendedPrismaClient;
   }
 };
-// Fallback Native Client também precisa de SSL Bypass se o URL original tiver verify-ca
-return new PrismaClient({
-  datasources: { db: { url } }
-  // Nota: O Prisma Nativo usa a URL diretamente. Se ela tiver parameters de SSL, ele tenta honrar.
-  // O fixDatabaseUrl já mudou para 'require', o que deve ajudar.
-}) as ExtendedPrismaClient;
-  }
-};
 
 const globalForPrisma = global as unknown as {
   prisma: ExtendedPrismaClient
