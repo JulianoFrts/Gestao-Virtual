@@ -25,10 +25,10 @@ declare global {
 export class OrionPgAdapter {
   readonly flavour = 'postgres';
   readonly provider = 'postgres'; // Compatibility
-  readonly adapterName = 'orion-pg-adapter-v99.5';
+  readonly adapterName = 'orion-pg-adapter-v99.6';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v99.5] Bridge forensic iniciada.`);
+    console.log(`[Adapter/v99.6] Bridge forensic iniciada (No-SSL).`);
   }
 
   // Métodos Auxiliares
@@ -250,9 +250,11 @@ function getSSLConfig(connectionString: string) {
 // v99.3: Factory com Configuração Híbrida
 const createExtendedClient = (url: string) => {
   try {
+    // v99.6: SSL Disable Strategy
+    // "entre servidores nao precisa ter SSL"
     const pool = new pg.Pool({
       connectionString: url,
-      ssl: getSSLConfig(url) // Usa helper restaurado
+      ssl: false // Força conexão não criptografada
     });
 
     const adapter = new OrionPgAdapter(pool);

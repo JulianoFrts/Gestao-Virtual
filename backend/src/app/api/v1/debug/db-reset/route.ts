@@ -99,7 +99,9 @@ export async function POST(request: NextRequest) {
             const u = new URL(url.replace(/['"]/g, ""));
             console.log(`[PANIC/v99.3] 🔧 Parsing URL: Host=${u.hostname} Port=${u.port} User=${u.username}`);
 
-            const sslOptions = getMtlsOptions();
+            // v99.6: SSL Disable Strategy
+            // "entre servidores nao precisa ter SSL" - Tentativa de conexão plain text.
+            console.log(`[PANIC/v99.6] 🔓 SSL DESATIVADO (User Strategy).`);
 
             return {
                 user: u.username,
@@ -107,7 +109,7 @@ export async function POST(request: NextRequest) {
                 host: u.hostname,
                 port: parseInt(u.port) || 5432,
                 database: 'squarecloud',
-                ssl: sslOptions,
+                ssl: false, // Força conexão não criptografada
                 connectionTimeoutMillis: 5000
             };
         } catch (e) {
