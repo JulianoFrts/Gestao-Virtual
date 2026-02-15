@@ -102,7 +102,7 @@ export class OrionPgAdapter {
           name: field.name,
           columnType: this.mapColumnType(field.dataTypeID, field.name),
         })),
-        rows: res.rows.map((row) => {
+        rows: res.rows.map((row: any) => {
           const serializedRow: any[] = [];
           for (const field of res.fields) {
             const val = row[field.name];
@@ -153,7 +153,7 @@ export class OrionPgAdapter {
               name: field.name,
               columnType: adapter.mapColumnType(field.dataTypeID, field.name),
             })),
-            rows: res.rows.map((row) => {
+            rows: res.rows.map((row: any) => {
               const serializedRow: any[] = [];
               for (const field of res.fields) {
                 const val = row[field.name];
@@ -242,14 +242,24 @@ function getSSLConfig(connectionString: string) {
 // v99.3: Factory com Configuração Híbrida
 const createExtendedClient = (url: string) => {
   try {
-    // v99.10: Adapter Disabled (Native Mode Only)
-    // O driver adapter customizado está causando conflitos de versão com o Prisma.
-    // Usaremos conexão nativa do Prisma, mas precisamos garantir que a URL suporte os certificados.
-    console.log('🔌 [Prisma/v99.10] Modo Nativo Forçado (Adapter Desativado).');
+    // v99.18: Re-enable Adapter with mTLS Pool
+    console.log('🔌 [Prisma/v99.18] Reativando OrionPgAdapter (mTLS Bridge).');
+
+    // Criar Pool com SSL robusto
+    const ssl = getSSLConfig(url);
+    const pool = new pg.Pool({
+      connectionString: url,
+      ssl,
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 5000
+    });
+
+    const adapter = new OrionPgAdapter(pool);
 
     return new PrismaClient({
-      datasources: { db: { url } },
-      log: ["error"],
+      adapter: adapter as any,
+      log: ["error"]
     }) as ExtendedPrismaClient;
   } catch (err: any) {
     console.warn(`⚠️ [Prisma/v99] Erro fatal na factory:`, err.message);
@@ -259,9 +269,9 @@ const createExtendedClient = (url: string) => {
 
 const globalForPrisma = global as unknown as {
   prisma: ExtendedPrismaClient
-  on(event: string, listener: (...args: any[]) => void): this;
-  addListener(event: string, listener: (...args: any[]) => void): this;
-  removeListener(event: string, listener: (...args: any[]) => void): this;
+  on(event: string, listener: (...args: any[]) => void): any;
+  addListener(event: string, listener: (...args: any[]) => void): any;
+  removeListener(event: string, listener: (...args: any[]) => void): any;
   emit(event: string, ...args: any[]): boolean;
 }
 
@@ -281,10 +291,9 @@ const fixDatabaseUrl = (url: string) => {
       console.log(`[Prisma/v99] 🔄 URL Ajustada: Banco alvo definido para '/squarecloud'.`);
     }
 
-    // 2. SSL CA Bypass (Devido a recriação do banco)
+    // v99.18: No Downgrade. mTLS is mandatory for 'squarecloud' user identification.
     if (u.searchParams.has('sslmode') && u.searchParams.get('sslmode') === 'verify-ca') {
-      u.searchParams.set('sslmode', 'require'); // Downgrade para aceitar self-signed (com rejectUnauthorized=false no pg)
-      console.log(`[Prisma/v99.3] 🔓 SSL Downgrade: verify-ca -> require (CA inválido detectado).`);
+      console.log(`[Prisma/v99.18] 🛡️ Mantendo mTLS na URL: verify-ca.`);
     }
 
     // v99.3: Killswitch Removido (mTLS é obrigatório)
