@@ -100,7 +100,7 @@ export class PrismaProductionRepository
     const results = await prisma.mapElementProductionProgress.findMany({
       where: { projectId, activityId },
     });
-    return results.map(res => new ProductionProgress(res as any));
+    return results.map((res: any) => new ProductionProgress(res as any));
   }
 
   async findElementsWithProgress(
