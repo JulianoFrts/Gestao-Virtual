@@ -42,10 +42,7 @@ const createPrismaClient = () => {
 
 const buildPrismaWithFallback = (url: string) => {
   const maskedOriginal = url.split('@')[1] || 'oculta';
-  console.log(`[Prisma/v84] 🚀 Inicializando v84. URL: ${maskedOriginal}`);
-
-  // Diagnóstico de dependências
-  console.log(`📦 [Prisma/v84] Deps Status: Client=${typeof PrismaClient}, PgAdapter=${typeof PrismaPg}, Pg=${typeof pg}`);
+  console.log(`[Prisma/v85] 🚀 Inicializando v85. URL: ${maskedOriginal}`);
 
   const sslConfig = getSSLConfig(url);
 
@@ -62,46 +59,63 @@ const buildPrismaWithFallback = (url: string) => {
     return (val && val !== 'undefined' && val !== 'null') ? val : null;
   };
 
-  // Aplica overrides de env vars se existirem
   if (getEnv('PGHOST')) poolConfig.host = getEnv('PGHOST');
   if (getEnv('PGUSER')) poolConfig.user = getEnv('PGUSER');
   if (getEnv('PGPASSWORD')) poolConfig.password = getEnv('PGPASSWORD');
   if (getEnv('PGPORT')) poolConfig.port = parseInt(getEnv('PGPORT')!, 10);
   if (getEnv('PGDATABASE')) poolConfig.database = getEnv('PGDATABASE');
 
-  console.log(`[Prisma/v84] 🔋 Pool configurado (Host: ${poolConfig.host || 'url-base'}).`);
-
+  // TENTA PRIMEIRO COM ADAPTER (MODO RESILIENTE)
   try {
+    console.log(`[Prisma/v85] 🔋 Tentando modo ADAPTER (pg pool)...`);
     const pool = new pg.Pool(poolConfig);
     const adapter = new PrismaPg(pool);
+
     const client = new PrismaClient({
       adapter,
       log: ["error"],
-    } as any) as ExtendedPrismaClient;
+    } as any);
 
-    return client;
+    // TESTE DE SANIDADE (se falhar aqui, o catch pega)
+    // Acessar uma propriedade qualquer para disparar bindings internos
+    const _test = (client as any).$connect;
+
+    return client as ExtendedPrismaClient;
   } catch (err: any) {
-    console.error(`❌ [Prisma/v84] Erro FATAL no construtor:`, err.stack || err.message);
-    throw err;
+    console.error(`⚠️ [Prisma/v85] Falha no Modo Adapter (Binding Error). Alternando para MODO NATIVO...`);
+    console.error(`🔍 [Prisma/v85] Motivo: ${err.message}`);
+
+    // FALLBACK PARA MODO NATIVO (Prisma gerencia mTLS via URL)
+    try {
+      const client = new PrismaClient({
+        datasources: {
+          db: { url: url }
+        },
+        log: ["error"],
+      } as any);
+      return client as ExtendedPrismaClient;
+    } catch (nativeErr: any) {
+      console.error(`❌ [Prisma/v85] Falha CRÍTICA em ambos os modos:`, nativeErr.message);
+      throw nativeErr;
+    }
   }
 };
 
 const getPrisma = () => {
   if (!(globalThis as any).prismaInstance) {
-    console.log('💎 [Prisma/v84] Criando Singleton...');
+    console.log('💎 [Prisma/v85] Criando Singleton...');
     try {
       const inst = createPrismaClient();
       (globalThis as any).prismaInstance = inst;
-      console.log('✅ [Prisma/v84] Singleton Pronto.');
+      console.log('✅ [Prisma/v85] Singleton Pronto.');
     } catch (e: any) {
-      console.error('❌ [Prisma/v84] Falha na criação do Singleton:', e.message);
+      console.error('❌ [Prisma/v85] Falha na criação do Singleton:', e.message);
       return null;
     }
   }
   return (globalThis as any).prismaInstance;
 };
 
-// Singleton Proxy Defensivo v84
 export const prisma = new Proxy({} as any, {
   get: (target, prop) => {
     if (typeof prop === 'symbol') return (target as any)[prop];
@@ -109,7 +123,7 @@ export const prisma = new Proxy({} as any, {
 
     if (p === '$state') {
       const inst = (globalThis as any).prismaInstance;
-      return { v: "84", init: !!inst, models: inst ? Object.keys(inst).filter(k => !k.startsWith('$')) : [] };
+      return { v: "85", init: !!inst, models: inst ? Object.keys(inst).filter(k => !k.startsWith('$')) : [] };
     }
 
     if (['$$typeof', 'constructor', 'toJSON', 'then', 'inspect'].includes(p)) return undefined;
@@ -117,31 +131,25 @@ export const prisma = new Proxy({} as any, {
     try {
       let instance = getPrisma();
 
-      // Auto-Healing: Se a instância existe mas o modelo não está acessível (bind error avoidance)
-      if (instance && !p.startsWith('$') && !instance[p]) {
-        console.warn(`🔄 [Prisma/v84] Modelo '${p}' indisponível. Resetando instância...`);
+      // Se a instância falhou ou está vazia, tenta reinicializar
+      if (!instance || (Object.keys(instance).length === 0 && !p.startsWith('$'))) {
+        console.warn(`🔄 [Prisma/v85] Instância inválida detectada para '${p}'. Forçando reinicialização...`);
         (globalThis as any).prismaInstance = createPrismaClient();
         instance = (globalThis as any).prismaInstance;
       }
-
-      if (!instance) return undefined;
 
       const value = (instance as any)[p];
 
       if (typeof value === 'function') {
         return (...args: any[]) => {
-          try {
-            return value.apply(instance, args);
-          } catch (err: any) {
-            console.error(`❌ [Prisma/v84] Erro ao executar ${p}:`, err.message);
-            throw err;
-          }
+          if (!instance) throw new Error("Prisma Instance not available");
+          return value.apply(instance, args);
         };
       }
 
       return value;
     } catch (err: any) {
-      console.error(`❌ [Prisma/v84] Exceção no Proxy ao acessar '${p}':`, err.message);
+      console.error(`❌ [Prisma/v85] Erro no Proxy (${p}):`, err.message);
       return undefined;
     }
   }
@@ -159,39 +167,34 @@ const getSSLConfig = (connectionString: string) => {
     sslConfig = { rejectUnauthorized: false };
 
     const certsRoot = process.env.CERT_PATH_ROOT || '/application/backend';
-    console.log(`🔍 [Prisma/v84] Lendo mTLS de: ${certsRoot}`);
+    console.log(`🔍 [Prisma/v85] Verificando SSL em: ${certsRoot}`);
 
     const paths = {
-      ca: [path.join(certsRoot, 'ca.crt'), process.env.PGSSLROOTCERT, '/application/ca.crt'],
-      cert: [path.join(certsRoot, 'client.crt'), process.env.PGSSLCERT, '/application/client.crt'],
-      key: [path.join(certsRoot, 'client.key'), process.env.PGSSLKEY, '/application/client.key']
+      ca: [path.join(certsRoot, 'ca.crt'), '/application/ca.crt'],
+      cert: [path.join(certsRoot, 'client.crt'), '/application/client.crt'],
+      key: [path.join(certsRoot, 'client.key'), '/application/client.key']
     };
 
-    const findFirst = (list: (string | undefined)[], label: string) => {
-      const found = list.find(p => p && fs.existsSync(p));
-      if (found) console.log(`📍 [Prisma/v84] ${label} OK: ${found}`);
-      return found;
-    };
+    const findFirst = (list: (string | undefined)[]) => list.find(p => p && fs.existsSync(p));
 
-    const caPath = findFirst(paths.ca, 'CA');
-    const certPath = findFirst(paths.cert, 'Cert');
-    const keyPath = findFirst(paths.key, 'Key');
-
+    const caPath = findFirst(paths.ca);
     if (caPath) sslConfig.ca = fs.readFileSync(caPath, 'utf8');
+
+    const certPath = findFirst(paths.cert);
+    const keyPath = findFirst(paths.key);
     if (certPath && keyPath) {
       sslConfig.cert = fs.readFileSync(certPath, 'utf8');
       sslConfig.key = fs.readFileSync(keyPath, 'utf8');
-      console.log('🛡️ [Prisma/v84] mTLS Completo.');
+      console.log('🛡️ [Prisma/v85] SSL v85 configurado.');
     }
   }
   return sslConfig;
 }
 
 export async function checkDatabaseConnection() {
-  const startTime = Date.now();
   try {
     await prisma.$queryRaw`SELECT 1`;
-    return { connected: true, latency: Date.now() - startTime };
+    return { connected: true };
   } catch (error: any) {
     return { connected: false, error: error.message };
   }
