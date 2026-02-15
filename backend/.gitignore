@@ -52,8 +52,6 @@ prisma/migrations/
 # Privado
 Melhorias/
 
-certificates
-
 #BACKUPS
 ./backups
 ./docs
