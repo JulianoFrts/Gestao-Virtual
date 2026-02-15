@@ -434,11 +434,33 @@ function setupEnvironment(finalUrl) {
 // ==========================================
 
 async function syncSchemaAndSeeds(commonEnv, finalAppUrl, success) {
+    const shouldNuke = success && process.env.FORCE_NUKE_DB === 'true';
     const shouldSync = success && (
+        shouldNuke ||
         process.env.RUN_SEEDS === 'true' ||
         process.env.FORCE_DB_PUSH === 'true' ||
         process.env.FORCE_SEED === 'true'
     );
+
+    if (shouldNuke) {
+        console.log('💣 [NUKE] Limpeza bruta solicitada...');
+        const nukePool = new Pool({
+            connectionString: finalAppUrl,
+            ssl: { rejectUnauthorized: false, ...sslConfig },
+            connectionTimeoutMillis: 10000
+        });
+        const client = await nukePool.connect();
+        try {
+            console.log('💣 Executando DROP SCHEMA public CASCADE...');
+            await client.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;');
+            console.log('✨ SCHEMA REFRESHED!');
+        } catch (e) {
+            console.warn(`⚠️ Falha no NUKE: ${e.message}`);
+        } finally {
+            client.release();
+            await nukePool.end();
+        }
+    }
 
     if (shouldSync) {
         console.log('🏗️ Criando tabelas (modo unificado)...');
@@ -467,6 +489,16 @@ async function syncSchemaAndSeeds(commonEnv, finalAppUrl, success) {
             }
         } catch (e) {
             console.warn(`⚠️ Falha na injeção: ${e.message}`);
+        }
+    }
+
+    if (process.env.RESTORE_BACKUP === 'true') {
+        console.log('📥 Restaurando dados do backup de 08/02...');
+        try {
+            execSync('npx tsx src/scripts/restore-from-backup.ts', { stdio: 'inherit', env: commonEnv, cwd: backendDir });
+            console.log('✅ Restauração de backup concluída!');
+        } catch (e) {
+            console.warn('⚠️ Erro no restore:', e.message);
         }
     }
 

@@ -1,9 +1,7 @@
 import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
 import * as fs from "fs";
 import * as path from "path";
-
-const prisma = new PrismaClient();
+import { prisma } from "../lib/prisma/client";
 
 async function importSeedFile(filePath: string, modelName: string) {
   const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
