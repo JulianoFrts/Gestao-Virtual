@@ -22,6 +22,26 @@ process.env.INTERNAL_PROXY_KEY = INTERNAL_PROXY_KEY;
 const backendDir = path.join(__dirname, 'backend');
 const frontendDistDir = path.join(__dirname, 'frontend_dist');
 
+// v201: Loader manual de .env para garantir que DATABASE_URL seja lida mesmo se não estiver no dashboard
+function loadEnv() {
+    const envPath = path.join(backendDir, '.env');
+    if (fs.existsSync(envPath)) {
+        console.log('📖 Carregando .env manual de:', envPath);
+        const content = fs.readFileSync(envPath, 'utf8');
+        content.split('\n').forEach(line => {
+            const match = line.match(/^([^=]+)=(.*)$/);
+            if (match) {
+                const key = match[1].trim();
+                const value = match[2].trim().replace(/^["']|["']$/g, '');
+                if (!process.env[key] || process.env[key] === '') {
+                    process.env[key] = value;
+                }
+            }
+        });
+    }
+}
+loadEnv();
+
 // v153: Função auxiliar para executar SQL usando o motor do Prisma (resiliente ao mTLS)
 function runSqlViaPrisma(sql, url, env) {
     try {
