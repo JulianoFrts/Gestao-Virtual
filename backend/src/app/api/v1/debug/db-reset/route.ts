@@ -20,11 +20,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "DATABASE_URL missing" }, { status: 500 });
     }
 
-    // Helper para garantir banco correto (v96.9.4)
+    // Helper para garantir banco correto (v96.9.6)
     const fixDatabaseUrl = (url: string) => {
         try {
             const u = new URL(url.replace(/['"]/g, ""));
-            if (!u.pathname || u.pathname === "/" || u.pathname === "/postgres") {
+            // Se o path for /postgres ou vazio, forçamos /squarecloud
+            if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres") {
                 console.log(`[PANIC] Redirecionando banco de ${u.pathname || 'default'} para /squarecloud`);
                 u.pathname = "/squarecloud";
             }
@@ -47,26 +48,30 @@ export async function POST(request: NextRequest) {
         const client = await pool.connect();
         try {
             if (action === "nuke") {
-                console.log("💣 [PANIC RESET] Executando Nuke de Soberania (v96.9.5)...");
+                console.log("💣 [PANIC RESET] Executando Nuke Sovereign (v96.9.6)...");
                 await client.query('DROP SCHEMA IF EXISTS public CASCADE;');
                 await client.query('CREATE SCHEMA public;');
+                await client.query('ALTER SCHEMA public OWNER TO squarecloud;');
                 await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
                 await client.query('GRANT ALL ON SCHEMA public TO public;');
-                console.log("✨ SCHEMA REFRESHED & GRANTS APPLIED!");
+                console.log("✨ SCHEMA REFRESHED & OWNER ASSIGNED!");
                 return NextResponse.json({ message: "Database nuked. Now run with ?action=sync" });
             }
 
             if (action === "sync") {
-                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução e restore (v96.9.5)...");
+                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução e restore (v96.9.6)...");
 
-                // 0. Reforçar Permissões (v96.9.5)
-                console.log("🔐 Reforçando USAGE/CREATE no schema public...");
+                // 0. Reforçar Soberania Total (v96.9.6)
+                console.log("🔐 Aplicando Sovereign Schema Protocol...");
                 try {
+                    await client.query('ALTER SCHEMA public OWNER TO squarecloud;');
+                    await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
                     await client.query('GRANT USAGE, CREATE ON SCHEMA public TO squarecloud;');
-                    await client.query('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO squarecloud;');
-                    console.log("✅ Permissões Reforçadas!");
+                    // Tentativa de garantir soberania na database
+                    try { await client.query('GRANT ALL ON DATABASE squarecloud TO squarecloud;'); } catch (e) { }
+                    console.log("✅ Soberania Confirmada!");
                 } catch (pErr: any) {
-                    console.warn("⚠️ Aviso de permissão:", pErr.message);
+                    console.warn("⚠️ Aviso de soberania:", pErr.message);
                 }
 
                 const { execSync } = require('child_process');
