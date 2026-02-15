@@ -1,31 +1,4 @@
-import React from 'react'
-import { createPortal } from 'react-dom'
-
-import {
-  DndContext,
-  DragOverlay,
-  closestCorners,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragStartEvent,
-  DragOverEvent,
-  DragEndEvent,
-  useDroppable,
-  rectIntersection,
-  pointerWithin,
-  MeasuringStrategy
-} from '@dnd-kit/core'
-import { snapCenterToCursor } from '@dnd-kit/modifiers'
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
+import React, { useState, useMemo } from 'react'
 import { useTeams, Team } from '@/hooks/useTeams'
 import { useEmployees, Employee } from '@/hooks/useEmployees'
 import { useSites } from '@/hooks/useSites'
@@ -85,30 +58,36 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-// --- Components ---
+// --- Componentes ---
 
 interface DraggableEmployeeProps {
   employee: Employee
-  isOverlay?: boolean
   isDragging?: boolean
-  style?: React.CSSProperties
+  onDragStart?: (e: React.DragEvent) => void
+  onDragEnd?: () => void
+  onDragOver?: (e: React.DragEvent) => void
+  onDrop?: (e: React.DragEvent) => void
 }
 
-// Versão puramente visual do card (usada no overlay e dentro do wrapper draggable)
-function EmployeeCardStatic({
+function EmployeeCard({
   employee,
-  isOverlay,
   isDragging,
-  style
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop
 }: DraggableEmployeeProps) {
   return (
     <div
-      style={style}
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
       className={cn(
-        'group relative flex cursor-grab items-center gap-3 rounded-xl border p-3',
-        'glass-card bg-white/5 border-white/5 hover:bg-white/10 hover:border-primary/30 active:cursor-grabbing',
-        isOverlay && 'border-amber-500 bg-amber-500/10 shadow-glow z-[1000] ring-2 ring-amber-500/20 cursor-grabbing',
-        !isOverlay && isDragging && 'opacity-30 scale-[0.98] grayscale-[0.5] border-dashed border-white/20'
+        'group relative flex cursor-grab items-center gap-3 rounded-xl border p-3 transition-all duration-300 mb-2',
+        'glass-card bg-white/5 border-white/5 hover:bg-white/10 hover:border-primary/30 active:cursor-grabbing active:scale-[0.98]',
+        isDragging && 'opacity-30 grayscale-[0.5] border-dashed border-white/20'
       )}
     >
       <div className="absolute left-1 opacity-0 transition-all duration-300 group-hover:left-2 group-hover:opacity-40">
@@ -149,88 +128,48 @@ function EmployeeCardStatic({
   )
 }
 
-// Wrapper que adiciona as capacidades de Drag & Drop
-function EmployeeCard({ employee }: DraggableEmployeeProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
-  } = useSortable({
-    id: employee.id,
-    data: {
-      type: 'Employee',
-      employee
-    }
-  })
-
-  const style = {
-    transition: isDragging ? 'none' : transition,
-    transform: CSS.Transform.toString(transform),
-    visibility: isDragging ? ('hidden' as const) : ('visible' as const)
-  }
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className={cn("touch-none outline-none mb-2", isDragging && "z-50")}
-    >
-      <EmployeeCardStatic employee={employee} isDragging={isDragging} />
-    </div>
-  )
-}
-
 interface TeamColumnProps {
   team: Team
   members: Employee[]
   supervisorEmployee?: Employee
+  draggedId: string | null
+  dragOverId: string | null
   onEdit: (team: Team) => void
   onDelete: (id: string) => void
   onClearMembers: (teamId: string) => void
-  onSetLeader: (teamId: string, employeeId: string) => void
+  onDragStart: (e: React.DragEvent, id: string, sourceTeamId?: string) => void
+  onDragEnd: () => void
+  onDragOver: (e: React.DragEvent, id: string) => void
+  onDrop: (e: React.DragEvent, targetId: string) => void
 }
 
 function TeamColumn({
   team,
   members,
   supervisorEmployee,
+  draggedId,
+  dragOverId,
   onEdit,
   onDelete,
   onClearMembers,
-  onSetLeader
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop
 }: TeamColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: team.id,
-    data: {
-      type: 'Team',
-      team
-    }
-  })
+  const isOver = dragOverId === team.id || dragOverId === `leader-${team.id}`
+  const isOverLeader = dragOverId === `leader-${team.id}`
 
-  // Drop zone específica para o líder
-  const { setNodeRef: setLeaderRef, isOver: isOverLeader } = useDroppable({
-    id: `leader-${team.id}`,
-    data: {
-      type: 'LeaderSlot',
-      teamId: team.id
-    }
-  })
-
-  const isIncomplete = !team.supervisorId
-  const isHealthy = members.length >= 5 && team.supervisorId
+  const isHealthy = members.length >= 5 && !!team.supervisorId
 
   return (
     <div
-      ref={setNodeRef}
+      onDragOver={(e) => onDragOver(e, team.id)}
+      onDrop={(e) => onDrop(e, team.id)}
       className={cn(
         'flex w-80 flex-col rounded-3xl border transition-all duration-500',
         'glass-panel bg-black/40 backdrop-blur-2xl border-white/5 shadow-2xl',
-        isOver
+        isOver && !isOverLeader
           ? 'bg-amber-500/5 border-amber-500 ring-2 ring-amber-500/20 shadow-glow-sm'
           : 'hover:border-white/10'
       )}
@@ -291,17 +230,23 @@ function TeamColumn({
             Líder da Equipe
           </p>
           <div
-            ref={setLeaderRef}
+            onDragOver={(e) => onDragOver(e, `leader-${team.id}`)}
+            onDrop={(e) => onDrop(e, `leader-${team.id}`)}
             className={cn(
               'rounded-2xl transition-all duration-500 p-1',
               isOverLeader
-                ? 'bg-emerald-500/10 ring-2 ring-emerald-500 ring-offset-4 ring-offset-black/50'
+                ? 'bg-emerald-500/10 ring-2 ring-emerald-500 ring-offset-4 ring-offset-black/50 scale-[1.02]'
                 : 'bg-white/5'
             )}
           >
             {supervisorEmployee ? (
               <div className="rounded-xl border-l-[6px] border-emerald-500 shadow-glow-sm overflow-hidden">
-                <EmployeeCard employee={supervisorEmployee} />
+                <EmployeeCard
+                  employee={supervisorEmployee}
+                  isDragging={draggedId === supervisorEmployee.id}
+                  onDragStart={(e) => onDragStart(e, supervisorEmployee.id)}
+                  onDragEnd={onDragEnd}
+                />
               </div>
             ) : (
               <div
@@ -322,34 +267,28 @@ function TeamColumn({
         </div>
       </div>
 
-      {/* Members List - só exibe área expandida se tiver membros */}
-      {members.length > 0 ? (
-        <ScrollArea className="max-h-[50vh] flex-1 p-3">
-          <SortableContext
-            id={team.id}
-            items={members.map(m => m.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div>
-              {members.map(emp => (
-                <EmployeeCard key={emp.id} employee={emp} />
-              ))}
-            </div>
-          </SortableContext>
-        </ScrollArea>
-      ) : (
-        <div className="p-3">
-          <SortableContext
-            id={team.id}
-            items={[]}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="text-muted-foreground/40 rounded-xl border border-dashed border-white/5 py-4 text-center text-xs">
-              Arraste membros para cá
-            </div>
-          </SortableContext>
-        </div>
-      )}
+      {/* Members List */}
+      <ScrollArea className="max-h-[50vh] flex-1 p-3">
+        {members.length > 0 ? (
+          <div className="space-y-0">
+            {members.map(emp => (
+              <EmployeeCard
+                key={emp.id}
+                employee={emp}
+                isDragging={draggedId === emp.id}
+                onDragStart={(e) => onDragStart(e, emp.id, team.id)}
+                onDragEnd={onDragEnd}
+                onDragOver={(e) => onDragOver(e, emp.id)}
+                onDrop={(e) => onDrop(e, emp.id)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-muted-foreground/40 rounded-xl border border-dashed border-white/5 py-8 text-center text-xs">
+            Arraste membros para cá
+          </div>
+        )}
+      </ScrollArea>
     </div>
   )
 }
@@ -371,57 +310,42 @@ export default function TeamComposition() {
   const { profile } = useAuth()
   const { toast } = useToast()
 
-  const [selectedProjectId, setSelectedProjectId] =
-    React.useState<string>('all')
-  const [selectedSiteId, setSelectedSiteId] = React.useState<string>('all')
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
+  const [selectedSiteId, setSelectedSiteId] = useState<string>('all')
 
   const { employees, isLoading: loadingEmployees } = useEmployees({
     projectId: selectedProjectId === 'all' ? undefined : selectedProjectId,
     siteId: selectedSiteId === 'all' ? undefined : selectedSiteId
   })
 
-  const [activeId, setActiveId] = React.useState<string | null>(null)
-  const [activeEmployee, setActiveEmployee] = React.useState<Employee | null>(
-    null
-  )
-  const [searchTerm, setSearchTerm] = React.useState('')
+  const [searchTerm, setSearchTerm] = useState('')
 
-  const { setNodeRef: setPoolRef } = useDroppable({
-    id: 'talent-pool'
-  })
+  // New Native DND State
+  const [draggedId, setDraggedId] = useState<string | null>(null)
+  const [sourceTeamId, setSourceTeamId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
 
   // Team Creation State
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = React.useState(false)
-  const [newTeamName, setNewTeamName] = React.useState('')
-  const [selectedFunctionId, setSelectedFunctionId] =
-    React.useState<string>('all')
-  const [newTeamSupervisorId, setNewTeamSupervisorId] =
-    React.useState<string>('none')
-  const [isCreating, setIsCreating] = React.useState(false)
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [newTeamName, setNewTeamName] = useState('')
+  const [selectedFunctionId, setSelectedFunctionId] = useState<string>('all')
+  const [newTeamSupervisorId, setNewTeamSupervisorId] = useState<string>('none')
+  const [isCreating, setIsCreating] = useState(false)
 
   // Team Editing State
-  const [editingTeam, setEditingTeam] = React.useState<Team | null>(null)
-  const [editTeamName, setEditTeamName] = React.useState('')
-  const [editTeamSupervisorId, setEditTeamSupervisorId] =
-    React.useState<string>('none')
-  const [isUpdating, setIsUpdating] = React.useState(false)
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 3
-      }
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates
-    })
-  )
+  const [editingTeam, setEditingTeam] = useState<Team | null>(null)
+  const [editTeamName, setEditTeamName] = useState('')
+  const [editTeamSupervisorId, setEditTeamSupervisorId] = useState<string>('none')
+  const [isUpdating, setIsUpdating] = useState(false)
 
   const handleReorderMembers = async (teamId: string, oldIndex: number, newIndex: number) => {
     const team = teams.find(t => t.id === teamId);
     if (!team) return;
 
-    const newMembers = arrayMove(team.members, oldIndex, newIndex);
+    const newMembers = [...team.members];
+    const [removed] = newMembers.splice(oldIndex, 1);
+    newMembers.splice(newIndex, 0, removed);
+
     await updateTeam(teamId, {
       name: team.name,
       members: newMembers,
@@ -433,8 +357,7 @@ export default function TeamComposition() {
   }
 
   // Filter talent pool (only employees with current Site/Project)
-  const talentPool = React.useMemo(() => {
-    // IDs de quem já está em alguma equipe (como membro ou como líder)
+  const talentPool = useMemo(() => {
     const assignedIds = new Set([
       ...teams.flatMap(t => t.members),
       ...(teams.map(t => t.supervisorId).filter(Boolean) as string[])
@@ -452,18 +375,15 @@ export default function TeamComposition() {
             (!searchTerm ||
               emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()))
         )
-        // Ordenar por nível hierárquico (maior primeiro)
         .sort((a, b) => {
-          // Primeiro por Nível Individual
           if (b.level !== a.level) return b.level - a.level
-          // Depois por Nível Profissional
           return b.professionalLevel - a.professionalLevel
         })
     )
   }, [employees, teams, selectedSiteId, selectedProjectId, searchTerm, sites])
 
   // Filter teams for the site AND deduplicate members
-  const siteTeams = React.useMemo(() => {
+  const siteTeams = useMemo(() => {
     const usedEmployeeIds = new Set<string>()
 
     return teams
@@ -475,15 +395,13 @@ export default function TeamComposition() {
       )
       .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
       .map(team => {
-        // Marcar o supervisor como usado
         if (team.supervisorId) {
           usedEmployeeIds.add(team.supervisorId)
         }
 
-        // Filtrar membros para não incluir duplicatas nem o próprio supervisor
         const uniqueMembers = team.members.filter(memberId => {
           if (usedEmployeeIds.has(memberId)) {
-            return false // Já foi usado em outra equipe
+            return false
           }
           usedEmployeeIds.add(memberId)
           return true
@@ -496,92 +414,43 @@ export default function TeamComposition() {
       })
   }, [teams, selectedSiteId, selectedProjectId, sites])
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string)
-    const emp = employees.find(e => e.id === event.active.id)
-    if (emp) setActiveEmployee(emp)
+  // --- Native DND Handlers ---
+
+  const handleDragStart = (e: React.DragEvent, id: string, originTeamId?: string) => {
+    setDraggedId(id)
+    setSourceTeamId(originTeamId || null)
+
+    // Custom drag image could be set here if needed
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', id)
   }
 
-  const handleDragOver = (event: DragOverEvent) => {
-    const { over } = event
-    if (!over) return
-
-    // Futura expansão: Adicionar lógica visual de "abrir espaço" 
-    // entre diferentes containers se decidirmos gerenciar estado local 
-    // durante o arraste para uma experiência ainda mais fluida.
+  const handleDragEnd = () => {
+    setDraggedId(null)
+    setSourceTeamId(null)
+    setDragOverId(null)
   }
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event
-    setActiveId(null)
-    setActiveEmployee(null)
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragOverId(id)
+  }
 
-    if (!over) return
+  const handleDrop = async (e: React.DragEvent, targetId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
 
-    const employeeId = active.id as string
-    const employeeData = active.data.current?.employee as Employee
-    const overId = over.id as string
-    const overData = over.data.current
+    const employeeId = draggedId
+    if (!employeeId) return
 
-    // Determinar se o destino é uma equipe válida
-    // Pode ser o ID da equipe ou o ID de qualquer membro/líder nela
-    const targetTeam = teams.find(
-      t =>
-        t.id === overId ||
-        t.members.includes(overId) ||
-        t.supervisorId === overId
-    )
+    const employeeData = employees.find(emp => emp.id === employeeId)
+    setDragOverId(null)
 
-    const sourceTeam = teams.find(
-      t => t.members.includes(employeeId) || t.supervisorId === employeeId
-    )
-
-    const isOverPool =
-      overId === 'talent-pool' || talentPool.some(e => e.id === overId)
-
-    // Verificar se está soltando no slot de líder
-    const isOverLeaderSlot = overId.startsWith('leader-')
-    if (isOverLeaderSlot) {
-      const teamId = overId.replace('leader-', '')
-      await handleSetLeader(teamId, employeeId)
-      return
-    }
-
-    // Ação: Mover para Equipe (ou mudar ordem na mesma equipe)
-    if (targetTeam) {
-      if (sourceTeam?.id === targetTeam.id) {
-        // Reordenamento na mesma equipe
-        const oldIndex = targetTeam.members.indexOf(employeeId);
-        const newIndex = targetTeam.members.indexOf(overId);
-
-        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-          handleReorderMembers(targetTeam.id, oldIndex, newIndex);
-        } else if (newIndex === -1 && overId === targetTeam.id) {
-          // Se soltou no container vazio ou no header, move para o final
-          handleReorderMembers(targetTeam.id, oldIndex, targetTeam.members.length - 1);
-        }
-      } else {
-        // Mover para equipe diferente
-        const success = await moveMember(
-          employeeId,
-          sourceTeam?.id || null,
-          targetTeam.id
-        )
-        if (success && employeeData) {
-          toast({
-            title: 'Escala Atualizada',
-            description: `${employeeData.fullName} foi movido para ${targetTeam.name}`,
-            className: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
-          })
-        }
-      }
-    }
-    // Ação: Retornar para Disponíveis
-    else if (isOverPool) {
-      // Verificar se é um líder sendo removido
+    // Ação: Retornar para Talent Pool
+    if (targetId === 'talent-pool') {
       const leaderTeam = teams.find(t => t.supervisorId === employeeId)
       if (leaderTeam) {
-        // Remover da posição de líder
         await updateTeam(leaderTeam.id, {
           name: leaderTeam.name,
           supervisorId: undefined,
@@ -593,13 +462,53 @@ export default function TeamComposition() {
           title: 'Líder Removido',
           description: `${employeeData?.fullName || 'Funcionário'} não é mais líder de ${leaderTeam.name}`
         })
-      } else if (sourceTeam) {
-        // É um membro normal
-        const success = await moveMember(employeeId, sourceTeam.id, null)
+      } else if (sourceTeamId) {
+        const success = await moveMember(employeeId, sourceTeamId, null)
         if (success && employeeData) {
           toast({
             title: 'Removido da Equipe',
             description: `${employeeData.fullName} voltou para a lista de disponíveis`
+          })
+        }
+      }
+      return
+    }
+
+    // Ação: Definir como Líder
+    if (targetId.startsWith('leader-')) {
+      const teamId = targetId.replace('leader-', '')
+      await handleSetLeader(teamId, employeeId)
+      return
+    }
+
+    // Ação: Mover para Equipe (ou mudar ordem)
+    const targetTeam = teams.find(t => t.id === targetId || t.members.includes(targetId) || t.supervisorId === targetId)
+
+    if (targetTeam) {
+      if (sourceTeamId === targetTeam.id) {
+        // Reordenamento interno
+        const oldIndex = targetTeam.members.indexOf(employeeId)
+        let newIndex = targetTeam.members.indexOf(targetId)
+
+        if (newIndex === -1 && targetId === targetTeam.id) {
+          newIndex = targetTeam.members.length - 1
+        }
+
+        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+          handleReorderMembers(targetTeam.id, oldIndex, newIndex)
+        }
+      } else {
+        // Movimentação entre equipes ou do pool para equipe
+        const success = await moveMember(
+          employeeId,
+          sourceTeamId,
+          targetTeam.id
+        )
+        if (success && employeeData) {
+          toast({
+            title: 'Escala Atualizada',
+            description: `${employeeData.fullName} foi movido para ${targetTeam.name}`,
+            className: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
           })
         }
       }
@@ -614,27 +523,17 @@ export default function TeamComposition() {
     const teamName = team.name
     const memberIds = [...team.members]
 
-    if (
-      !confirm(
-        `Tem certeza que deseja remover todos os ${memberCount} membros da equipe "${teamName}"?`
-      )
-    ) {
+    if (!confirm(`Tem certeza que deseja remover todos os ${memberCount} membros da equipe "${teamName}"?`)) {
       return
     }
 
-    // Feedback imediato
-    toast({
-      title: 'Processando...',
-      description: `Removendo ${memberCount} membros de ${teamName}`
-    })
+    toast({ title: 'Processando...', description: `Removendo ${memberCount} membros de ${teamName}` })
 
-    // Dispara todas as remoções sequencialmente com delay para blindagem contra 429
     for (const memberId of memberIds) {
       await moveMember(memberId, teamId, null);
-      await new Promise(resolve => setTimeout(resolve, 150));
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
-    // Toast de confirmação final
     toast({
       title: 'Equipe Limpa!',
       description: `${memberCount} membros foram removidos de ${teamName}`,
@@ -647,13 +546,11 @@ export default function TeamComposition() {
     const employee = employees.find(e => e.id === employeeId)
     if (!team || !employee) return
 
-    // Remover o funcionário de qualquer equipe onde ele esteja como membro
     const currentTeam = teams.find(t => t.members.includes(employeeId))
     if (currentTeam) {
       await moveMember(employeeId, currentTeam.id, null)
     }
 
-    // Definir como supervisor da equipe
     await updateTeam(teamId, {
       name: team.name,
       supervisorId: employeeId,
@@ -671,20 +568,12 @@ export default function TeamComposition() {
 
   const handleCreateTeam = async () => {
     if (!newTeamName.trim()) {
-      toast({
-        title: 'Nome obrigatório',
-        description: 'Dê um nome para a equipe',
-        variant: 'destructive'
-      })
+      toast({ title: 'Nome obrigatório', variant: 'destructive' })
       return
     }
 
     if (selectedSiteId === 'all') {
-      toast({
-        title: 'Selecione um canteiro',
-        description: 'É necessário filtrar um canteiro antes de criar a equipe',
-        variant: 'destructive'
-      })
+      toast({ title: 'Selecione um canteiro', variant: 'destructive' })
       return
     }
 
@@ -692,18 +581,14 @@ export default function TeamComposition() {
     try {
       const result = await createTeam({
         name: newTeamName,
-        supervisorId:
-          newTeamSupervisorId === 'none' ? undefined : newTeamSupervisorId,
+        supervisorId: newTeamSupervisorId === 'none' ? undefined : newTeamSupervisorId,
         siteId: selectedSiteId,
         companyId: profile?.companyId || undefined,
         members: []
       })
 
       if (result.success) {
-        toast({
-          title: 'Equipe criada!',
-          description: 'Agora você pode arrastar membros para ela.'
-        })
+        toast({ title: 'Equipe criada!' })
         setNewTeamName('')
         setSelectedFunctionId('all')
         setNewTeamSupervisorId('none')
@@ -721,8 +606,7 @@ export default function TeamComposition() {
     try {
       const result = await updateTeam(editingTeam.id, {
         name: editTeamName,
-        supervisorId:
-          editTeamSupervisorId === 'none' ? undefined : editTeamSupervisorId,
+        supervisorId: editTeamSupervisorId === 'none' ? undefined : editTeamSupervisorId,
         members: editingTeam.members,
         siteId: editingTeam.siteId || undefined,
         companyId: editingTeam.companyId || undefined
@@ -738,11 +622,7 @@ export default function TeamComposition() {
   }
 
   const handleDeleteTeam = async (id: string) => {
-    if (
-      confirm(
-        'Tem certeza que deseja excluir esta equipe? Os membros voltarão para a lista de disponíveis.'
-      )
-    ) {
+    if (confirm('Tem certeza? Os membros voltarão para a lista de disponíveis.')) {
       await deleteTeam(id)
       toast({ title: 'Equipe excluída' })
     }
@@ -758,7 +638,7 @@ export default function TeamComposition() {
 
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col gap-8 overflow-hidden px-2 pt-2">
-      {/* Header com Filtro */}
+      {/* Header com Filtros */}
       <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3">
@@ -811,11 +691,7 @@ export default function TeamComposition() {
               <SelectContent>
                 <SelectItem value="all">Todos os Canteiros</SelectItem>
                 {sites
-                  .filter(
-                    s =>
-                      selectedProjectId === 'all' ||
-                      s.projectId === selectedProjectId
-                  )
+                  .filter(s => selectedProjectId === 'all' || s.projectId === selectedProjectId)
                   .map(s => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.name}
@@ -839,306 +715,224 @@ export default function TeamComposition() {
         </div>
       </div>
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={pointerWithin}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-        measuring={{
-          droppable: {
-            strategy: MeasuringStrategy.Always
-          }
-        }}
-      >
-        <div className="flex flex-1 gap-6 overflow-hidden">
-          {/* Sidebar: Talent Pool */}
-          <div className="premium-blur relative flex w-85 flex-col overflow-hidden rounded-3xl border border-white/10 bg-black/60 shadow-strong">
-            <div className="relative border-b border-white/5 bg-linear-to-b from-white/5 to-transparent p-6 pb-4">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="flex items-center gap-3 text-lg font-black tracking-tight text-white">
-                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
-                    <UserPlus className="h-4 w-4" />
-                  </div>
-                  Disponíveis
-                </h3>
-                <Badge
-                  variant="outline"
-                  className="bg-primary/10 text-primary border-primary/20 px-3 py-1 font-black"
-                >
-                  {talentPool.length}
-                </Badge>
-              </div>
-              <p className="text-muted-foreground/60 px-1 text-[11px] leading-relaxed">
-                Colaboradores aguardando alocação estratégica em frentes de serviço.
-              </p>
+      <div className="flex flex-1 gap-6 overflow-hidden">
+        {/* Sidebar: Talent Pool */}
+        <div
+          onDragOver={(e) => handleDragOver(e, 'talent-pool')}
+          onDrop={(e) => handleDrop(e, 'talent-pool')}
+          className={cn(
+            "premium-blur relative flex w-85 flex-col overflow-hidden rounded-3xl border transition-all duration-300 bg-black/60 shadow-strong",
+            dragOverId === 'talent-pool' ? "border-amber-500 ring-2 ring-amber-500/20" : "border-white/10"
+          )}
+        >
+          <div className="relative border-b border-white/5 bg-linear-to-b from-white/5 to-transparent p-6 pb-4">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="flex items-center gap-3 text-lg font-black tracking-tight text-white">
+                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                  <UserPlus className="h-4 w-4" />
+                </div>
+                Disponíveis
+              </h3>
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 px-3 py-1 font-black">
+                {talentPool.length}
+              </Badge>
             </div>
-
-            <ScrollArea className="flex-1 p-4" id="talent-pool-scroll">
-              <div
-                ref={setPoolRef}
-                id="talent-pool"
-                className="min-h-full pb-20"
-              >
-                <SortableContext
-                  id="talent-pool"
-                  items={talentPool.map(m => m.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {talentPool.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-10 text-center opacity-30">
-                      <Users className="mb-2 h-10 w-10" />
-                      <p className="text-xs">Nenhum disponível</p>
-                    </div>
-                  ) : (
-                    talentPool.map(emp => (
-                      <EmployeeCard key={emp.id} employee={emp} />
-                    ))
-                  )}
-                </SortableContext>
-              </div>
-            </ScrollArea>
+            <p className="text-muted-foreground/60 px-1 text-[11px] leading-relaxed">
+              Colaboradores aguardando alocação estratégica em frentes de serviço.
+            </p>
           </div>
 
-          {/* Main Area: Teams Horizontal Scroller */}
-          <div className="custom-scrollbar flex-1 overflow-x-auto pb-4">
-            <div className="flex h-full items-start gap-6">
-              {siteTeams.map(team => (
-                <TeamColumn
-                  key={team.id}
-                  team={team}
-                  members={employees
-                    .filter(e => team.members.includes(e.id))
-                    .sort((a, b) => {
-                      if (b.level !== a.level) return b.level - a.level
-                      return b.professionalLevel - a.professionalLevel
-                    })}
-                  supervisorEmployee={employees.find(
-                    e => e.id === team.supervisorId
-                  )}
-                  onEdit={t => {
-                    setEditingTeam(t)
-                    setEditTeamName(t.name)
-                    setEditTeamSupervisorId(t.supervisorId || 'none')
-                  }}
-                  onDelete={handleDeleteTeam}
-                  onClearMembers={handleClearTeamMembers}
-                  onSetLeader={handleSetLeader}
-                />
-              ))}
-
-              {/* Botão de Criação com Dialog */}
-              <Dialog
-                open={isCreateDialogOpen}
-                onOpenChange={setIsCreateDialogOpen}
-              >
-                <DialogTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="hover:border-primary/50 hover:bg-primary/5 group mt-0 h-32 w-80 rounded-2xl border-dashed border-white/10"
-                  >
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="group-hover:bg-primary/20 flex h-10 w-10 items-center justify-center rounded-full bg-white/5 transition-colors">
-                        <Users className="text-muted-foreground group-hover:text-primary h-5 w-5" />
-                      </div>
-                      <span className="text-sm font-bold opacity-40 transition-all group-hover:opacity-100">
-                        Criar Nova Equipe
-                      </span>
-                    </div>
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="glass-card text-foreground border-white/10">
-                  <DialogHeader>
-                    <DialogTitle className="font-display text-2xl font-bold">
-                      Nova Equipe
-                    </DialogTitle>
-                    <DialogDescription className="text-muted-foreground">
-                      Defina o nome e o líder para a nova frente de serviço.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-6 py-4">
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="name"
-                        className="text-xs font-bold tracking-widest uppercase opacity-60"
-                      >
-                        Nome da Equipe
-                      </Label>
-                      <Input
-                        id="name"
-                        placeholder="Ex: Equipe de Alvenaria L1"
-                        className="industrial-input h-12"
-                        value={newTeamName}
-                        onChange={e => setNewTeamName(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="function"
-                        className="text-xs font-bold tracking-widest uppercase opacity-60"
-                      >
-                        Filtrar por Cargo
-                      </Label>
-                      <Select
-                        value={selectedFunctionId}
-                        onValueChange={val => {
-                          setSelectedFunctionId(val)
-                          setNewTeamSupervisorId('none')
-                        }}
-                      >
-                        <SelectTrigger className="industrial-input h-12">
-                          <SelectValue placeholder="Todos os cargos" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Todos os cargos</SelectItem>
-                          <SelectItem value="leaders">
-                            Líderes Qualificados (Com Coroa)
-                          </SelectItem>
-                          {functions.map(f => (
-                            <SelectItem key={f.id} value={f.id}>
-                              {f.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="supervisor"
-                        className="text-xs font-bold tracking-widest uppercase opacity-60"
-                      >
-                        Líder / Supervisor
-                      </Label>
-                      <Select
-                        value={newTeamSupervisorId}
-                        onValueChange={setNewTeamSupervisorId}
-                      >
-                        <SelectTrigger className="industrial-input h-12">
-                          <SelectValue placeholder="Selecione um líder" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">
-                            Sem Supervisor (Definir depois)
-                          </SelectItem>
-                          {employees
-                            .filter(
-                              e =>
-                                e.isActive &&
-                                (selectedFunctionId === 'all' ||
-                                  (selectedFunctionId === 'leaders'
-                                    ? e.canLeadTeam
-                                    : e.functionId === selectedFunctionId))
-                            )
-                            .map(emp => (
-                              <SelectItem key={emp.id} value={emp.id}>
-                                <div className="flex items-center gap-2">
-                                  {emp.fullName}
-                                  {emp.canLeadTeam && (
-                                    <Crown className="h-3 w-3 fill-amber-500/20 text-amber-500" />
-                                  )}
-                                </div>
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                    </div>{' '}
-                  </div>
-                  <DialogFooter>
-                    <Button
-                      className="gradient-primary hover:shadow-glow h-12 w-full font-bold transition-all"
-                      onClick={handleCreateTeam}
-                      disabled={isCreating}
-                    >
-                      {isCreating ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Users className="mr-2 h-4 w-4" />
-                      )}
-                      Confirmar Criação
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+          <ScrollArea className="flex-1 p-4">
+            <div className="min-h-full pb-20">
+              {talentPool.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center opacity-30">
+                  <Users className="mb-2 h-10 w-10" />
+                  <p className="text-xs">Nenhum disponível</p>
+                </div>
+              ) : (
+                talentPool.map(emp => (
+                  <EmployeeCard
+                    key={emp.id}
+                    employee={emp}
+                    isDragging={draggedId === emp.id}
+                    onDragStart={(e) => handleDragStart(e, emp.id)}
+                    onDragEnd={handleDragEnd}
+                  />
+                ))
+              )}
             </div>
-          </div>
+          </ScrollArea>
         </div>
 
-        {/* Drag Overlay - Standardized for precision */}
-        {activeId && createPortal(
-          <DragOverlay adjustScale={true}>
-            <div className="pointer-events-none z-[9999] opacity-90 drop-shadow-2xl" style={{ width: '280px' }}>
-              {activeEmployee && <EmployeeCardStatic employee={activeEmployee} isOverlay />}
-            </div>
-          </DragOverlay>,
-          document.body
-        )}
+        {/* Main Area: Teams Scroller */}
+        <div className="custom-scrollbar flex-1 overflow-x-auto pb-4">
+          <div className="flex h-full items-start gap-6">
+            {siteTeams.map(team => (
+              <TeamColumn
+                key={team.id}
+                team={team}
+                draggedId={draggedId}
+                dragOverId={dragOverId}
+                members={employees
+                  .filter(e => team.members.includes(e.id))
+                  .sort((a, b) => {
+                    if (b.level !== a.level) return b.level - a.level
+                    return b.professionalLevel - a.professionalLevel
+                  })}
+                supervisorEmployee={employees.find(e => e.id === team.supervisorId)}
+                onEdit={t => {
+                  setEditingTeam(t)
+                  setEditTeamName(t.name)
+                  setEditTeamSupervisorId(t.supervisorId || 'none')
+                }}
+                onDelete={handleDeleteTeam}
+                onClearMembers={handleClearTeamMembers}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+              />
+            ))}
 
-        {/* Edit Team Dialog */}
-        <Dialog
-          open={!!editingTeam}
-          onOpenChange={open => !open && setEditingTeam(null)}
-        >
-          <DialogContent className="glass-card text-foreground border-white/10">
-            <DialogHeader>
-              <DialogTitle className="font-display text-2xl font-bold">
-                Editar Equipe
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-6 py-4">
-              <div className="space-y-2">
-                <Label className="text-xs font-bold tracking-widest uppercase opacity-60">
-                  Nome da Equipe
-                </Label>
-                <Input
-                  className="industrial-input h-12"
-                  value={editTeamName}
-                  onChange={e => setEditTeamName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-bold tracking-widest uppercase opacity-60">
-                  Líder / Supervisor
-                </Label>
-                <Select
-                  value={editTeamSupervisorId}
-                  onValueChange={setEditTeamSupervisorId}
+            {/* Criar Equipe */}
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="hover:border-primary/50 hover:bg-primary/5 group mt-0 h-32 w-80 rounded-2xl border-dashed border-white/10"
                 >
-                  <SelectTrigger className="industrial-input h-12">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sem Supervisor</SelectItem>
-                    {employees
-                      .filter(e => e.isActive)
-                      .map(emp => (
-                        <SelectItem key={emp.id} value={emp.id}>
-                          <div className="flex items-center gap-2">
-                            {emp.fullName}
-                            {emp.canLeadTeam && (
-                              <Crown className="h-3 w-3 fill-amber-500/20 text-amber-500" />
-                            )}
-                          </div>
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="group-hover:bg-primary/20 flex h-10 w-10 items-center justify-center rounded-full bg-white/5 transition-colors">
+                      <Users className="text-muted-foreground group-hover:text-primary h-5 w-5" />
+                    </div>
+                    <span className="text-sm font-bold opacity-40 transition-all group-hover:opacity-100">
+                      Criar Nova Equipe
+                    </span>
+                  </div>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="glass-card text-foreground border-white/10">
+                <DialogHeader>
+                  <DialogTitle className="font-display text-2xl font-bold">Nova Equipe</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-6 py-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold tracking-widest uppercase opacity-60">Nome da Equipe</Label>
+                    <Input
+                      placeholder="Ex: Equipe de Alvenaria L1"
+                      className="industrial-input h-12"
+                      value={newTeamName}
+                      onChange={e => setNewTeamName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold tracking-widest uppercase opacity-60">Filtrar por Cargo</Label>
+                    <Select
+                      value={selectedFunctionId}
+                      onValueChange={val => {
+                        setSelectedFunctionId(val)
+                        setNewTeamSupervisorId('none')
+                      }}
+                    >
+                      <SelectTrigger className="industrial-input h-12">
+                        <SelectValue placeholder="Todos os cargos" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os cargos</SelectItem>
+                        <SelectItem value="leaders">Líderes Qualificados</SelectItem>
+                        {functions.map(f => (
+                          <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold tracking-widest uppercase opacity-60">Líder / Supervisor</Label>
+                    <Select value={newTeamSupervisorId} onValueChange={setNewTeamSupervisorId}>
+                      <SelectTrigger className="industrial-input h-12">
+                        <SelectValue placeholder="Selecione um líder" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sem Supervisor (Definir depois)</SelectItem>
+                        {employees
+                          .filter(e => e.isActive && (selectedFunctionId === 'all' || (selectedFunctionId === 'leaders' ? e.canLeadTeam : e.functionId === selectedFunctionId)))
+                          .map(emp => (
+                            <SelectItem key={emp.id} value={emp.id}>
+                              <div className="flex items-center gap-2">
+                                {emp.fullName}
+                                {emp.canLeadTeam && <Crown className="h-3 w-3 fill-amber-500/20 text-amber-500" />}
+                              </div>
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    className="gradient-primary h-12 w-full font-bold"
+                    onClick={handleCreateTeam}
+                    disabled={isCreating}
+                  >
+                    {isCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Users className="mr-2 h-4 w-4" />}
+                    Confirmar Criação
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+      </div>
+
+      {/* Editar Equipe Dialog */}
+      <Dialog open={!!editingTeam} onOpenChange={open => !open && setEditingTeam(null)}>
+        <DialogContent className="glass-card text-foreground border-white/10">
+          <DialogHeader>
+            <DialogTitle className="font-display text-2xl font-bold">Editar Equipe</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-bold tracking-widest uppercase opacity-60">Nome da Equipe</Label>
+              <Input
+                className="industrial-input h-12"
+                value={editTeamName}
+                onChange={e => setEditTeamName(e.target.value)}
+              />
             </div>
-            <DialogFooter>
-              <Button
-                className="gradient-primary h-12 w-full font-bold"
-                onClick={handleUpdateTeam}
-                disabled={isUpdating}
-              >
-                {isUpdating && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Salvar Alterações
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </DndContext>
+            <div className="space-y-2">
+              <Label className="text-xs font-bold tracking-widest uppercase opacity-60">Líder / Supervisor</Label>
+              <Select value={editTeamSupervisorId} onValueChange={setEditTeamSupervisorId}>
+                <SelectTrigger className="industrial-input h-12">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem Supervisor</SelectItem>
+                  {employees
+                    .filter(e => e.isActive)
+                    .map(emp => (
+                      <SelectItem key={emp.id} value={emp.id}>
+                        <div className="flex items-center gap-2">
+                          {emp.fullName}
+                          {emp.canLeadTeam && <Crown className="h-3 w-3 fill-amber-500/20 text-amber-500" />}
+                        </div>
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              className="gradient-primary h-12 w-full font-bold"
+              onClick={handleUpdateTeam}
+              disabled={isUpdating}
+            >
+              {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Salvar Alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
