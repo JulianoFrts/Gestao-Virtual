@@ -1,8 +1,11 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
+import pkg from "pg";
 import fs from "fs";
 import path from "path";
+
+// v114: Resilient PG Import for ESM
+const { Pool } = pkg;
 
 export type ExtendedPrismaClient = PrismaClient;
 
@@ -10,26 +13,26 @@ declare global {
   var prisma: ExtendedPrismaClient | undefined;
 }
 
-// v113: Isolation Mode (No Proxy + ESM Secure Imports)
+// v114: Production Architecture (Resilient Imports + Direct Certs + Proxy)
 export class PrismaClientBuilder {
   private static instance: ExtendedPrismaClient;
 
   /**
-   * Resolve caminhos de certificados mTLS (Idêntico ao startup script)
+   * Resolve certificados mTLS priorizando os nomes usados no probe da SquareCloud
    */
   private static resolveCerts() {
     const certDirs = [
-      '/application/backend/certificates',
       '/application/backend',
+      '/application/backend/certificates',
       process.cwd(),
-      path.join(process.cwd(), 'certificates'),
-      path.join(process.cwd(), 'backend/certificates')
+      path.join(process.cwd(), 'certificates')
     ];
 
+    // v114: Nomes priorizados conforme logs do probe com sucesso
     const files = {
-      cert: ['certificate.pem', 'client.crt', 'client-cert.pem'],
-      key: ['private-key.key', 'client.key', 'client-key.pem'],
-      ca: ['ca-certificate.crt', 'ca.crt', 'ca.pem']
+      cert: ['client.crt', 'certificate.pem', 'client-cert.pem'],
+      key: ['client.key', 'private-key.key', 'client-key.pem'],
+      ca: ['ca.crt', 'ca-certificate.crt', 'ca.pem']
     };
 
     for (const dir of certDirs) {
@@ -66,13 +69,11 @@ export class PrismaClientBuilder {
       let cleanUrl = url.replace(/['"]/g, "");
       const u = new URL(cleanUrl);
 
-      // Forçar Database squarecloud se estiver genérico
       if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres") {
         u.pathname = "/squarecloud";
       }
 
-      // Forçar Params críticos
-      u.searchParams.set('schema', 'public');
+      // v114: NÃO forçar schema=public se não vier na URL original (evita squarecloud.public confusion)
       u.searchParams.set('sslmode', 'verify-ca');
 
       if (certs) {
@@ -96,7 +97,7 @@ export class PrismaClientBuilder {
     const creds = this.getEnvCredentials();
 
     try {
-      console.log(`🔌 [Prisma/v113] Buildando Cliente (Isolamento Ativo)...`);
+      console.log(`🔌 [Prisma/v114] Iniciando Builder (mTLS: ${certs ? 'DETECTADO' : 'NÃO'})`);
 
       const ssl: any = { rejectUnauthorized: false };
       if (certs) {
@@ -104,7 +105,7 @@ export class PrismaClientBuilder {
         ssl.cert = fs.readFileSync(certs.certPath);
         ssl.key = fs.readFileSync(certs.keyPath);
         if (certs.caPath) ssl.ca = fs.readFileSync(certs.caPath);
-        console.log(`🛡️ [v113] mTLS Detetado em: ${certs.dir}`);
+        console.log(`🛡️ [v114] Certificados Ativos: ${path.basename(certs.certPath)}`);
       }
 
       const poolConfig: any = {
@@ -115,7 +116,7 @@ export class PrismaClientBuilder {
       };
 
       if (creds.host && creds.user) {
-        console.log(`📡 [v113] Usando Credenciais Atômicas (DB: ${creds.database})`);
+        console.log(`📡 [v114] Conectando via Envs (Host: ${creds.host})`);
         Object.assign(poolConfig, {
           user: creds.user,
           password: creds.password,
@@ -124,38 +125,58 @@ export class PrismaClientBuilder {
           database: creds.database
         });
       } else {
-        console.log(`📡 [v113] Usando URL de Conexão.`);
+        console.log(`📡 [v114] Conectando via URL.`);
         poolConfig.connectionString = url;
       }
 
-      console.log(`🔨 [v113] Criando Pool com driver 'pg'...`);
+      // v114: Uso ultra-seguro do construtor Pool (importante para evitar erro de bind)
       const pool = new Pool(poolConfig);
 
-      console.log(`🔨 [v113] Criando Adaptador PrismaPg...`);
       const adapter = new PrismaPg(pool);
+      const client = new PrismaClient({ adapter: adapter as any, log: ["error"] });
 
-      console.log(`🔨 [v113] Instanciando PrismaClient...`);
-      const client = new PrismaClient({
-        adapter: adapter as any,
-        log: ["error"]
-      });
-
-      // v113: RETORNANDO CLIENTE PURO PARA ISOLAR O ERRO 'BIND'
-      console.log(`✅ [v113] Cliente Buildado com Sucesso (Sem Proxy).`);
-      this.instance = client as any;
+      this.instance = createPrismaProxyV114(client);
+      console.log(`✅ [v114] Adaptador PrismaPg Ativo.`);
       return this.instance;
     } catch (err: any) {
-      console.error(`🚨 [Prisma/v113] Falha no Builder:`, err.message);
-      // Fallback nativo com mTLS na URL
+      console.error(`🚨 [Prisma/v114] Falha no Builder (Fallback Ativado):`, err.message);
       return new PrismaClient({ datasources: { db: { url } } }) as any;
     }
   }
 }
 
-const globalForPrisma = global as unknown as {
-  prisma: ExtendedPrismaClient
+/**
+ * Proxy v114: Wrappers de segurança resilientes
+ */
+function createPrismaProxyV114(client: any): any {
+  return new Proxy(client, {
+    get(target, prop) {
+      const value = target[prop];
+      if (typeof prop === 'symbol' || prop.toString().startsWith('$') || prop.toString().startsWith('_')) return value;
+
+      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+        return new Proxy(value, {
+          get(modelTarget, modelProp) {
+            const modelValue = modelTarget[modelProp];
+            if (typeof modelValue === 'function') {
+              return async (...args: any[]) => {
+                try {
+                  return await modelValue.apply(modelTarget, args);
+                } catch (err: any) {
+                  console.error(`❌ [PrismaProxy/v114] Erro em ${prop.toString()}.${modelProp.toString()}:`, err.message);
+                  throw err;
+                }
+              };
+            }
+            return modelValue;
+          }
+        });
+      }
+      return value;
+    }
+  });
 }
 
+const globalForPrisma = global as unknown as { prisma: ExtendedPrismaClient }
 export const prisma = globalForPrisma.prisma || PrismaClientBuilder.build();
-
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
