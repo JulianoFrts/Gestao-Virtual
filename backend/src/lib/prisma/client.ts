@@ -25,16 +25,10 @@ declare global {
 export class OrionPgAdapter {
   readonly flavour = 'postgres';
   readonly provider = 'postgres'; // Compatibility
-  readonly adapterName = 'orion-pg-adapter-v99.7';
+  readonly adapterName = 'orion-pg-adapter-v99.8';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v99.7] Bridge forensic iniciada (SSL Restored).`);
-    // Bind methods to this instance
-    this.query = this.query.bind(this);
-    this.execute = this.execute.bind(this);
-    this.startTransaction = this.startTransaction.bind(this);
-    this.close = this.close.bind(this);
-    this.dispose = this.dispose.bind(this);
+    console.log(`[Adapter/v99.8] Bridge forensic iniciada.`);
   }
 
   // Métodos Auxiliares
@@ -93,8 +87,8 @@ export class OrionPgAdapter {
     return translated;
   }
 
-  // v99.7: Refatoração para Método de Classe (Binding Fix)
-  async query(params: any): Promise<any> {
+  // v99.8: Refatoração para Arrow Functions (Binding Fix)
+  query = async (params: any): Promise<any> => {
     try {
       const res = await this.pool.query(params.sql, params.args);
 
@@ -118,25 +112,25 @@ export class OrionPgAdapter {
         }),
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v99.7] Query Error:`, err.message);
+      console.error(`❌ [Adapter/v99.8] Query Error:`, err.message);
       return { ok: false, error: err };
     }
   }
 
-  async execute(params: any): Promise<any> {
+  execute = async (params: any): Promise<any> => {
     try {
       if (params.sql.trim().toUpperCase().startsWith('CREATE') || params.sql.trim().toUpperCase().startsWith('DROP')) {
-        console.log(`[Adapter/v99.7] 🛡️ DDL Detectado.`);
+        console.log(`[Adapter/v99.8] 🛡️ DDL Detectado.`);
       }
       const res = await this.pool.query(params.sql, params.args);
       return { ok: true, value: res.rowCount || 0 };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v99.7] Execute Error:`, err.message);
+      console.error(`❌ [Adapter/v99.8] Execute Error:`, err.message);
       return { ok: false, error: err };
     }
   }
 
-  async startTransaction() {
+  startTransaction = async () => {
     const client = await this.pool.connect();
     const adapter = this;
 
@@ -206,10 +200,10 @@ export class OrionPgAdapter {
   }
 
   // Métodos de EventEmitter (Stubbing para Prisma)
-  on(event: string, listener: (...args: any[]) => void): this { return this; }
-  addListener(event: string, listener: (...args: any[]) => void): this { return this; }
-  removeListener(event: string, listener: (...args: any[]) => void): this { return this; }
-  emit(event: string, ...args: any[]): boolean { return true; }
+  on = (event: string, listener: (...args: any[]) => void): this => { return this; }
+  addListener = (event: string, listener: (...args: any[]) => void): this => { return this; }
+  removeListener = (event: string, listener: (...args: any[]) => void): this => { return this; }
+  emit = (event: string, ...args: any[]): boolean => { return true; }
 }
 
 // Helper Hoisted
