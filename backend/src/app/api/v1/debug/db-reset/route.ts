@@ -22,9 +22,26 @@ export async function POST(request: NextRequest) {
     const fixDatabaseUrl = (url: string) => {
         try {
             const u = new URL(url.replace(/['"]/g, ""));
+
+            // 1. Database Name Normalizer
             if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres") {
                 u.pathname = "/squarecloud";
             }
+
+            // 2. SSL CA Bypass (Devido a recriação do banco)
+            if (u.searchParams.has('sslmode') && u.searchParams.get('sslmode') === 'verify-ca') {
+                u.searchParams.set('sslmode', 'require');
+                console.log(`[PANIC/v99.1] 🔓 SSL Downgrade: verify-ca -> require.`);
+            }
+
+            // v99.1: Killswitch mTLS
+            if (u.searchParams.has('sslcert')) {
+                u.searchParams.delete('sslcert');
+                u.searchParams.delete('sslkey');
+                u.searchParams.delete('sslrootcert');
+                console.log(`[PANIC/v99.1] ✂️ mTLS Removido.`);
+            }
+
             return u.toString();
         } catch (e) { return url; }
     };

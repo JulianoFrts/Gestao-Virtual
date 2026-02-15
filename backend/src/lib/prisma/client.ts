@@ -25,10 +25,10 @@ declare global {
 export class OrionPgAdapter {
   readonly flavour = 'postgres';
   readonly provider = 'postgres'; // Compatibility
-  readonly adapterName = 'orion-pg-adapter-v99';
+  readonly adapterName = 'orion-pg-adapter-v99.1';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v99] Bridge forensic iniciada.`);
+    console.log(`[Adapter/v99.1] Bridge forensic iniciada.`);
   }
 
   // Métodos Auxiliares
@@ -284,11 +284,16 @@ const fixDatabaseUrl = (url: string) => {
     // 2. SSL CA Bypass (Devido a recriação do banco)
     if (u.searchParams.has('sslmode') && u.searchParams.get('sslmode') === 'verify-ca') {
       u.searchParams.set('sslmode', 'require'); // Downgrade para aceitar self-signed (com rejectUnauthorized=false no pg)
-      console.log(`[Prisma/v99] 🔓 SSL Downgrade: verify-ca -> require (CA inválido detectado).`);
+      console.log(`[Prisma/v99.1] 🔓 SSL Downgrade: verify-ca -> require (CA inválido detectado).`);
     }
 
-    // Remove params de arquivo se estiverem causando erro de leitura/path
-    // u.searchParams.delete('sslrootcert');
+    // v99.1: Killswitch mTLS (Certificados antigos são inválidos no novo banco)
+    if (u.searchParams.has('sslcert')) {
+      u.searchParams.delete('sslcert');
+      u.searchParams.delete('sslkey');
+      u.searchParams.delete('sslrootcert');
+      console.log(`[Prisma/v99.1] ✂️ mTLS Removido: Certificados de cliente ignorados para evitar 'unknown ca'.`);
+    }
 
     return u.toString();
   } catch (e) { return url; }
