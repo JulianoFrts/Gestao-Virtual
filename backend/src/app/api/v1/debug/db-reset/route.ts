@@ -20,27 +20,16 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "DATABASE_URL missing" }, { status: 500 });
     }
 
-    // Helper para garantir banco correto (v97.1)
+    // Helper para garantir banco correto (v97.2)
     const fixDatabaseUrl = (url: string) => {
         try {
             const u = new URL(url.replace(/['"]/g, ""));
-            const invert = request.nextUrl.searchParams.get("invert") === "true";
-
             // Forçamos squarecloud em vez de postgres por padrão
             if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres") {
                 console.log(`[PANIC] Redirecionando banco de ${u.pathname || 'default'} para /squarecloud`);
                 u.pathname = "/squarecloud";
             }
-
-            if (invert) {
-                console.log("🔄 [PANIC] Aplicando Modo Invertido (Database=public, Schema=squarecloud)");
-                u.pathname = "/public";
-                u.searchParams.set("schema", "squarecloud");
-            } else {
-                u.searchParams.set("schema", "public");
-                u.searchParams.set("search_path", "public");
-            }
-
+            u.searchParams.set("schema", "public");
             return u.toString();
         } catch (e) { return url; }
     };
