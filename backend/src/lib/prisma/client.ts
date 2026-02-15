@@ -50,7 +50,7 @@ const createPrismaClient = () => {
 
 const buildPrismaWithFallback = (url: string) => {
   const maskedOriginal = url.split('@')[1] || 'oculta';
-  console.log(`[Prisma/v81] Inicializando cliente com URL: ${maskedOriginal}`);
+  console.log(`[Prisma/v83] Inicializando cliente com URL: ${maskedOriginal}`);
 
   const sslConfig = getSSLConfig(url);
 
@@ -75,7 +75,7 @@ const buildPrismaWithFallback = (url: string) => {
   if (getEnv('PGPORT')) poolConfig.port = parseInt(getEnv('PGPORT')!, 10);
   if (getEnv('PGDATABASE')) poolConfig.database = getEnv('PGDATABASE');
 
-  console.log(`[Prisma/v81] Pool Atômico configurado via connectionString.`);
+  console.log(`[Prisma/v83] Pool Atômico configurado para HOST: ${poolConfig.host || 'url'}`);
   const pool = new pg.Pool(poolConfig);
 
   const adapter = new PrismaPg(pool);
@@ -91,27 +91,25 @@ const getPrisma = () => {
   // Memoização robusta para evitar múltiplas instâncias
   if (!(globalThis as any).prismaInstance) {
     (globalThis as any).prismaInstance = createPrismaClient();
-    console.log('💎 [Prisma/v59] Instância Singleton Criada.');
+    console.log('💎 [Prisma/v83] Instância Singleton Criada.');
   }
   return (globalThis as any).prismaInstance;
 };
 
-// v82: Singleton Proxy Totalmente Lazy, Robusto e com Auto-Healing
+// v83: Singleton Proxy Ultra-Resiliente com Auto-Check de Modelos
 export const prisma = new Proxy({} as any, {
   get: (target, prop) => {
     if (typeof prop === 'symbol') return (target as any)[prop];
     const p = prop as string;
 
-    // Propriedade especial para diagnóstico
+    // Diagnóstico
     if (p === '$state') {
       const inst = (globalThis as any).prismaInstance;
       return {
-        initialized: !!inst,
-        models: inst ? Object.keys(inst).filter(key => !key.startsWith('$')) : [],
-        env: {
-          hasUrl: !!process.env.DATABASE_URL,
-          hasHost: !!process.env.PGHOST
-        }
+        v: "83",
+        init: !!inst,
+        keys: inst ? Object.keys(inst).length : 0,
+        models: inst ? Object.keys(inst).filter(k => !k.startsWith('$') && !k.startsWith('_')) : []
       };
     }
 
@@ -120,20 +118,23 @@ export const prisma = new Proxy({} as any, {
     try {
       let instance = getPrisma();
 
-      // Auto-healing: se a instância for um objeto vazio, tenta recriar
-      if (instance && Object.keys(instance).length === 0 && process.env.DATABASE_URL) {
-        console.warn(`🔄 [PrismaProxy] Instância vazia detectada para '${p}'. Tentando reinicializar...`);
+      // 1. Verificação de Saúde: Se o modelo não existe na instância
+      if (instance && !instance[p as keyof typeof instance] && !p.startsWith('$')) {
+        console.warn(`⚠️ [Prisma/v83] Model '${p}' não detectado. Tentando reinicialização bruta...`);
         (globalThis as any).prismaInstance = createPrismaClient();
         instance = (globalThis as any).prismaInstance;
       }
 
       if (!instance) return undefined;
 
+      // 2. Acesso Defensivo: Evita disparar getters se o objeto for nulo/indefinido
       const value = (instance as any)[p];
 
-      if (value === undefined && !p.startsWith('$')) {
-        console.error(`❌ [PrismaProxy] Model '${p}' não encontrado na instância. Disponíveis:`,
-          Object.keys(instance).filter(k => !k.startsWith('$')).join(', '));
+      if (value === undefined || value === null) {
+        if (!p.startsWith('$')) {
+          console.error(`❌ [Prisma/v83] Falha crítica: '${p}' é undefined na instância.`);
+        }
+        return undefined;
       }
 
       if (typeof value === 'function') {
@@ -142,7 +143,7 @@ export const prisma = new Proxy({} as any, {
 
       return value;
     } catch (err: any) {
-      console.error(`❌ [PrismaProxy] Erro de acesso em '${p}':`, err.message);
+      console.error(`❌ [Prisma/v83] Erro capturado pelo Proxy ao acessar '${p}':`, err.message);
       return undefined;
     }
   }
