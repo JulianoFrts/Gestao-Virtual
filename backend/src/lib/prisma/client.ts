@@ -199,6 +199,12 @@ export class OrionPgAdapter {
   dispose = async () => {
     return { ok: true, value: undefined };
   }
+
+  // Métodos de EventEmitter (Stubbing para Prisma)
+  on(event: string, listener: (...args: any[]) => void): this { return this; }
+  addListener(event: string, listener: (...args: any[]) => void): this { return this; }
+  removeListener(event: string, listener: (...args: any[]) => void): this { return this; }
+  emit(event: string, ...args: any[]): boolean { return true; }
 }
 
 // Helper Hoisted
