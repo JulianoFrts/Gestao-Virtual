@@ -4,8 +4,8 @@ import pg from "pg";
 import fs from "fs";
 import path from "path";
 
-// v100: Definitive ESM Pool Destructuring
-const { Pool } = pg;
+// v105: Robust ESM Pool Import
+const Pool = pg.Pool || (pg as any).default?.Pool;
 
 // Tipagem estendida
 export type ExtendedPrismaClient = PrismaClient;
@@ -71,6 +71,8 @@ const createExtendedClient = (url: string) => {
     });
 
     const adapter = new PrismaPg(pool);
+
+    if (!adapter) throw new Error("Falha ao criar PrismaPg Adapter");
 
     return new PrismaClient({
       adapter: adapter as any,

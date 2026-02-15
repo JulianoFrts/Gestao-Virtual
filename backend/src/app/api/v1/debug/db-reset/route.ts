@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import pg from "pg";
-const { Pool } = pg;
+const Pool = pg.Pool || (pg as any).default?.Pool;
 
 /**
  * PANIC RESET API - GESTÃO VIRTUAL
@@ -23,14 +23,30 @@ export async function POST(request: NextRequest) {
     const buildChildProcessUrl = (url: string) => {
         try {
             const u = new URL(url.replace(/['"]/g, ""));
-            if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres") {
+
+            // 1. Normalização (P1010 Fix)
+            if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres" || u.pathname.toLowerCase() === "/gestao_db") {
                 u.pathname = "/squarecloud";
+                u.searchParams.set('schema', 'public');
             }
-            const baseUrl = `${u.protocol}//${u.username}:${u.password}@${u.hostname}:${u.port}${u.pathname}`;
-            const cert = "/application/backend/certificates/certificate.pem";
-            const key = "/application/backend/certificates/private-key.key";
-            const ca = "/application/backend/certificates/ca-certificate.crt";
-            return `${baseUrl}?sslmode=verify-ca&sslcert=${cert}&sslkey=${key}&sslrootcert=${ca}`;
+
+            // 2. SSL/Cert Fallback Pattern
+            const paths = [
+                { cert: "/application/backend/certificates/certificate.pem", key: "/application/backend/certificates/private-key.key", ca: "/application/backend/certificates/ca-certificate.crt" },
+                { cert: "/application/backend/client.crt", key: "/application/backend/client.key", ca: "/application/backend/ca.crt" }
+            ];
+
+            let activePath = paths[0];
+            for (const p of paths) {
+                if (fs.existsSync(p.cert)) { activePath = p; break; }
+            }
+
+            u.searchParams.set('sslmode', 'verify-ca');
+            u.searchParams.set('sslcert', activePath.cert);
+            u.searchParams.set('sslkey', activePath.key);
+            u.searchParams.set('sslrootcert', activePath.ca);
+
+            return u.toString();
         } catch (e) { return url; }
     };
 
