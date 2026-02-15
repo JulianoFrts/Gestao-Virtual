@@ -25,10 +25,10 @@ declare global {
 export class OrionPgAdapter {
   readonly flavour = 'postgres';
   readonly provider = 'postgres'; // Compatibility
-  readonly adapterName = 'orion-pg-adapter-v99.8';
+  readonly adapterName = 'orion-pg-adapter-v99.9';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v99.8] Bridge forensic iniciada.`);
+    console.log(`[Adapter/v99.9] Bridge forensic iniciada.`);
   }
 
   // Métodos Auxiliares
@@ -87,8 +87,8 @@ export class OrionPgAdapter {
     return translated;
   }
 
-  // v99.8: Refatoração para Arrow Functions (Binding Fix)
-  query = async (params: any): Promise<any> => {
+  // v99.9: Standard Methods (KISS)
+  async query(params: any): Promise<any> {
     try {
       const res = await this.pool.query(params.sql, params.args);
 
@@ -112,25 +112,25 @@ export class OrionPgAdapter {
         }),
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v99.8] Query Error:`, err.message);
+      console.error(`❌ [Adapter/v99.9] Query Error:`, err.message);
       return { ok: false, error: err };
     }
   }
 
-  execute = async (params: any): Promise<any> => {
+  async execute(params: any): Promise<any> {
     try {
       if (params.sql.trim().toUpperCase().startsWith('CREATE') || params.sql.trim().toUpperCase().startsWith('DROP')) {
-        console.log(`[Adapter/v99.8] 🛡️ DDL Detectado.`);
+        console.log(`[Adapter/v99.9] 🛡️ DDL Detectado.`);
       }
       const res = await this.pool.query(params.sql, params.args);
       return { ok: true, value: res.rowCount || 0 };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v99.8] Execute Error:`, err.message);
+      console.error(`❌ [Adapter/v99.9] Execute Error:`, err.message);
       return { ok: false, error: err };
     }
   }
 
-  startTransaction = async () => {
+  async startTransaction() {
     const client = await this.pool.connect();
     const adapter = this;
 
@@ -209,41 +209,10 @@ export class OrionPgAdapter {
 // Helper Hoisted
 // v99.3: Helper SSL Robusto
 function getSSLConfig(connectionString: string) {
-  // Sempre começa aceitando certificados inválidos (Servidor Recriado = CA Novo/Desconhecido)
-  let sslConfig: any = { rejectUnauthorized: false };
-
-  // Tenta carregar mTLS se existirem arquivos (Environment Square Cloud)
-  try {
-    const certsRoot = '/application/backend';
-    const findPath = (f: string) => {
-      const p1 = path.join(certsRoot, 'certificates', f); // Novo path v99.4
-      const p2 = path.join(certsRoot, f);
-      const p3 = path.join('/application', f);
-      return fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : (fs.existsSync(p3) ? p3 : null));
-    };
-
-    // v99.4: Mapping de Nomes (Legacy vs New)
-    const certPath = findPath('certificate.pem') || findPath('client.crt');
-    const keyPath = findPath('private-key.key') || findPath('client.key');
-    const caPath = findPath('ca-certificate.crt') || findPath('ca.crt');
-
-    if (certPath && keyPath) {
-      sslConfig.cert = fs.readFileSync(certPath, 'utf8');
-      sslConfig.key = fs.readFileSync(keyPath, 'utf8');
-      console.log(`🛡️ [Prisma/v99.5] mTLS Carregado: ${certPath}`);
-
-      if (caPath) {
-        sslConfig.ca = fs.readFileSync(caPath, 'utf8');
-        console.log(`📜 [Prisma/v99.5] CA Bundle Carregado: ${caPath}`);
-      }
-    } else {
-      console.log(`⚠️ [Prisma/v99.5] mTLS Não encontrado. Usando SSL Simples.`);
-    }
-  } catch (e) {
-    console.warn(`⚠️ [Prisma/v99.5] Erro lendo certificados:`, e);
-  }
-
-  return sslConfig;
+  // v99.9: Ghost Mode - Ignora todos os arquivos de cert
+  // Motivo: Os arquivos atuais são do DB antigo e causam 'unknown ca' no DB novo.
+  console.log(`[Prisma/v99.9] 👻 SSL Config: One-Way (No Client Certs).`);
+  return { rejectUnauthorized: false };
 }
 
 // v99.3: Factory com Configuração Híbrida
