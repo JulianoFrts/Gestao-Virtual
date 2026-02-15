@@ -3,7 +3,7 @@ import pg from "pg";
 import fs from "fs";
 import path from "path";
 
-// Tipagem estendida para modelos não detectados
+// Tipagem estendida
 export type ExtendedPrismaClient = PrismaClient & {
   governanceAuditHistory: any;
   routeHealthHistory: any;
@@ -19,70 +19,86 @@ declare global {
 }
 
 /**
- * v95: Pure-Handmade Adapter Bridge (Final Type Map)
- * Correção do mapeamento de Booleanos (ID 5) e Numerics/BigInts. 
- * Resolvendo "expected a string-encoded number ... found false".
+ * v96: Orion PG Adapter - Deep Debug & Enum Bridge
+ * Adiciona tradução de roles legadas (S, A, U) para Enums do Prisma.
+ * Adiciona diagnóstico de OID nos logs para resolver conflitos de tipos.
  */
 export class OrionPgAdapter {
   readonly provider = 'postgres';
-  readonly adapterName = 'orion-pg-adapter-v95';
+  readonly adapterName = 'orion-pg-adapter-v96';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v95] Bridge Handmade Inicializada.`);
+    console.log(`[Adapter/v96] Bridge v96 Iniciada.`);
   }
 
   /**
-   * Mapeamento de Tipos para o Motor Quaint (Prisma 6)
-   * ID 0: Int32
-   * ID 1: Int64 (BigInt)
-   * ID 2: Float
-   * ID 3: Double
-   * ID 4: Numeric (Decimal) -> Espera String-encoded
-   * ID 5: Boolean
-   * ID 6: Char/Text
-   * ID 10: DateTime
-   * ID 11: Json
+   * Mapeamento Quaint (Prisma 6)
+   * ID 0: Int32, 1: Int64, 2: Float, 3: Double, 4: Numeric, 5: Boolean, 6: Text, 11: Json
    */
-  private mapColumnType(oid: number): number {
+  private mapColumnType(oid: number, fieldName?: string): number {
     switch (oid) {
-      case 16: return 5; // Boolean (OID 16) -> ID 5
+      case 16: return 5; // Bool
       case 21:
-      case 23: return 0; // Int32 (int2, int4) -> ID 0
-      case 20: return 1; // Int64 (int8) -> ID 1
-      case 700: return 2; // Float4 -> ID 2
-      case 701: return 3; // Float8 -> ID 3
-      case 1700: return 4; // Numeric -> ID 4 (String-encoded)
-      case 1082: return 6; // Date -> ID 6 (Text-fallback)
-      case 1114:
-      case 1184: return 6; // DateTime -> ID 6 (Text-fallback para evitar found {})
+      case 23: return 0; // Int32
+      case 20: return 1; // Int64
+      case 700: return 2; // Float
+      case 701: return 3; // Double
+      case 1700: return 4; // Numeric
       case 114:
-      case 3802: return 11; // Json/JsonB -> ID 11
-      case 2950: return 6; // UUID -> ID 6 (Text)
-      default: return 6; // Default a Text
+      case 3802: return 11; // Json
+      case 1082:
+      case 1114:
+      case 1184:
+      case 2950:
+      case 18:
+      case 25:
+      case 1043: return 6; // Text/UUID/Date
+      default:
+        // Debug para novos OIDs (como Enums customizados)
+        if (fieldName === 'role' || fieldName === 'status') {
+          // console.log(`[Adapter/v96] Enum detectado: ${fieldName} (OID: ${oid})`);
+        }
+        return 6;
     }
   }
 
   /**
-   * Serializador para garantir que o Prisma receba o formato exato.
+   * Tradutor de Roles Legadas: Se o banco retornar letras, convertemos para o Enum do Prisma.
    */
-  private serializeValue(val: any, oid: number): any {
+  private translateEnum(fieldName: string, val: any): any {
+    if (fieldName === 'role') {
+      const roleMap: Record<string, string> = {
+        'S': 'SUPER_ADMIN',
+        'A': 'ADMIN',
+        'U': 'USER',
+        'W': 'WORKER',
+        'T': 'TECHNICIAN',
+        'G': 'GUEST',
+        'M': 'MANAGER'
+      };
+      // Se for uma letra só, tenta mapear, senão retorna o original
+      if (typeof val === 'string' && val.length === 1) {
+        return roleMap[val.toUpperCase()] || val;
+      }
+    }
+    return val;
+  }
+
+  private serializeValue(val: any, oid: number, fieldName: string): any {
     if (val === null || val === undefined) return null;
 
-    // Numerics/BigInts devem ser Strings para o Prisma quando o Adapter é usado
-    if (oid === 20 || oid === 1700) return val.toString();
+    // Tratamento de Enums
+    const translated = this.translateEnum(fieldName, val);
 
-    // Datas devem ser ISOStrings para o Prisma 6 via Adapter manual
-    if (val instanceof Date) return val.toISOString();
-
-    // Booleans devem ser literais true/false (mas o log indicou que o tipo 4 é numérico, então mantemos true/false se o tipo for 5)
-    if (oid === 16) return !!val;
-
-    // JSON deve ser stringificado se for o tipo 11 ou fallback 6
+    // Serialização Quaint
+    if (oid === 20 || oid === 1700) return translated.toString();
+    if (translated instanceof Date) return translated.toISOString();
+    if (oid === 16) return !!translated;
     if (oid === 114 || oid === 3802) {
-      return typeof val === 'string' ? val : JSON.stringify(val);
+      return typeof translated === 'string' ? translated : JSON.stringify(translated);
     }
 
-    return val;
+    return translated;
   }
 
   async queryRaw(params: { sql: string; args: any[] }) {
@@ -92,7 +108,7 @@ export class OrionPgAdapter {
       const rows = res.rows.map(row =>
         res.fields.map(field => {
           const rawValue = (row as any)[field.name];
-          return this.serializeValue(rawValue, field.dataTypeID);
+          return this.serializeValue(rawValue, field.dataTypeID, field.name);
         })
       );
 
@@ -100,13 +116,12 @@ export class OrionPgAdapter {
         ok: true,
         value: {
           columnNames: res.fields.map(f => f.name),
-          columnTypes: res.fields.map(f => this.mapColumnType(f.dataTypeID)),
-          rows: rows,
-          _raw_fields: res.fields // Apenas para diagnóstico v95
+          columnTypes: res.fields.map(f => this.mapColumnType(f.dataTypeID, f.name)),
+          rows: rows
         }
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v95] Query Error:`, err.message);
+      console.error(`❌ [Adapter/v96] Query Error:`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -114,12 +129,9 @@ export class OrionPgAdapter {
   async executeRaw(params: { sql: string; args: any[] }) {
     try {
       const res = await this.pool.query(params.sql, params.args);
-      return {
-        ok: true,
-        value: res.rowCount || 0
-      };
+      return { ok: true, value: res.rowCount || 0 };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v95] Execute Error:`, err.message);
+      console.error(`❌ [Adapter/v96] Execute Error:`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -131,14 +143,13 @@ export class OrionPgAdapter {
       value: {
         queryRaw: async (p: any) => {
           const r = await client.query(p.sql, p.args);
-          const rows = r.rows.map(row => r.fields.map(f => this.serializeValue((row as any)[f.name], f.dataTypeID)));
+          const rows = r.rows.map(row => r.fields.map(f => this.serializeValue((row as any)[f.name], f.dataTypeID, f.name)));
           return {
             ok: true,
             value: {
               columnNames: r.fields.map(f => f.name),
-              columnTypes: r.fields.map(f => this.mapColumnType(f.dataTypeID)),
-              rows: rows,
-              _raw_fields: r.fields // Apenas para diagnóstico v95
+              columnTypes: r.fields.map(f => this.mapColumnType(f.dataTypeID, f.name)),
+              rows: rows
             }
           };
         },
@@ -154,9 +165,6 @@ export class OrionPgAdapter {
 }
 
 const buildPrismaWithFallback = (url: string) => {
-  const maskedOriginal = url.split('@')[1] || 'oculta';
-  console.log(`[Prisma/v95] 🚀 Inicializando v95. Target: ${maskedOriginal.split('?')[0]}`);
-
   const sslConfig = getSSLConfig(url);
   const getEnv = (key: string) => {
     const val = process.env[key];
@@ -180,18 +188,13 @@ const buildPrismaWithFallback = (url: string) => {
   try {
     const pool = new pg.Pool(poolConfig);
     const adapter = new OrionPgAdapter(pool);
-
-    console.log(`[Prisma/v95] 🔋 Ativando Modo ADAPTER HANDMADE (Final Type Map).`);
     return new PrismaClient({
       adapter: adapter as any,
       log: ["error"],
     } as any) as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v95] Falha Crítica. Ativando Modo Nativo...`);
-    return new PrismaClient({
-      datasources: { db: { url: url } },
-      log: ["error"],
-    } as any) as ExtendedPrismaClient;
+    console.warn(`⚠️ [Prisma/v96] Falha Crítica. Usando Modo Nativo.`);
+    return new PrismaClient({ datasources: { db: { url } } }) as ExtendedPrismaClient;
   }
 };
 
@@ -208,29 +211,19 @@ export const prisma = new Proxy({} as any, {
   get: (target, prop) => {
     if (typeof prop === 'symbol') return (target as any)[prop];
     const p = prop as string;
-
-    if (p === '$state') {
-      const inst = (globalThis as any).prismaInstance;
-      return { v: "95", status: inst ? 'online' : 'offline' };
-    }
-
+    if (p === '$state') return { v: "96", status: (globalThis as any).prismaInstance ? 'active' : 'idle' };
     if (['$$typeof', 'constructor', 'toJSON', 'then', 'inspect'].includes(p)) return undefined;
 
     try {
-      let instance = getPrisma();
-      if (!instance || (Object.keys(instance).length === 0 && !p.startsWith('$'))) {
-        (globalThis as any).prismaInstance = undefined;
-        instance = getPrisma();
-      }
+      const instance = getPrisma();
       if (!instance) return undefined;
-
       const value = (instance as any)[p];
       if (typeof value === 'function') {
         return (...args: any[]) => value.apply(instance, args);
       }
       return value;
     } catch (err: any) {
-      console.error(`❌ [Prisma/v95] Proxy Error '${p}':`, err.message);
+      console.error(`❌ [Prisma/v96] Proxy Error '${p}':`, err.message);
       return undefined;
     }
   }
@@ -244,16 +237,14 @@ const getSSLConfig = (connectionString: string) => {
     sslConfig = { rejectUnauthorized: false };
     const certsRoot = '/application/backend';
     const findPath = (f: string) => [path.join(certsRoot, f), path.join('/application', f)].find(p => fs.existsSync(p));
-
     const ca = findPath('ca.crt');
     if (ca) sslConfig.ca = fs.readFileSync(ca, 'utf8');
-
     const cert = findPath('client.crt');
     const key = findPath('client.key');
     if (cert && key) {
       sslConfig.cert = fs.readFileSync(cert, 'utf8');
       sslConfig.key = fs.readFileSync(key, 'utf8');
-      console.log('🛡️ [Prisma/v95] mTLS v95 Ativo.');
+      console.log('🛡️ [Prisma/v96] mTLS v96 Ativo.');
     }
   }
   return sslConfig;
@@ -269,7 +260,6 @@ export async function checkDatabaseConnection() {
 }
 
 export async function disconnectDatabase() {
-  if ((globalThis as any).prismaInstance) {
-    await (globalThis as any).prismaInstance.$disconnect();
-  }
+  const inst = (globalThis as any).prismaInstance;
+  if (inst) await inst.$disconnect();
 }
