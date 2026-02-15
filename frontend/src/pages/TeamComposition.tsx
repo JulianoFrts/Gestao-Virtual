@@ -463,8 +463,8 @@ export default function TeamComposition() {
           description: `${employeeData?.fullName || 'Funcionário'} não é mais líder de ${leaderTeam.name}`
         })
       } else if (sourceTeamId) {
-        const success = await moveMember(employeeId, sourceTeamId, null)
-        if (success && employeeData) {
+        const result = await moveMember(employeeId, sourceTeamId, null)
+        if (result.success && employeeData) {
           toast({
             title: 'Removido da Equipe',
             description: `${employeeData.fullName} voltou para a lista de disponíveis`
@@ -499,12 +499,12 @@ export default function TeamComposition() {
         }
       } else {
         // Movimentação entre equipes ou do pool para equipe
-        const success = await moveMember(
+        const result = await moveMember(
           employeeId,
           sourceTeamId,
           targetTeam.id
         )
-        if (success && employeeData) {
+        if (result.success && employeeData) {
           toast({
             title: 'Escala Atualizada',
             description: `${employeeData.fullName} foi movido para ${targetTeam.name}`,

@@ -1,7 +1,8 @@
 import { TeamRepository, FindAllTeamsParams } from "../domain/team.repository";
+import { getLaborClassification } from "@/lib/utils/laborUtils";
 
 export class TeamService {
-  constructor(private readonly repository: TeamRepository) {}
+  constructor(private readonly repository: TeamRepository) { }
 
   private get prisma() {
     return (this.repository as any).prisma;
@@ -31,12 +32,45 @@ export class TeamService {
   }
 
   async createTeam(data: any) {
+    if (data.supervisorId) {
+      return this.prisma.$transaction(async (tx: any) => {
+        // 1. Remove from all memberships
+        await tx.teamMember.deleteMany({ where: { userId: data.supervisorId } });
+
+        // 2. Remove from any other leadership
+        await tx.team.updateMany({
+          where: { supervisorId: data.supervisorId },
+          data: { supervisorId: null }
+        });
+
+        // 3. Create the team
+        return tx.team.create({ data });
+      });
+    }
     return this.repository.create(data);
   }
 
   async updateTeam(id: string, data: any) {
-    // Verify existence
-    await this.getTeamById(id);
+    const team = await this.getTeamById(id);
+
+    if (data.supervisorId && data.supervisorId !== team.supervisorId) {
+      return this.prisma.$transaction(async (tx: any) => {
+        // 1. Remove from all memberships
+        await tx.teamMember.deleteMany({ where: { userId: data.supervisorId } });
+
+        // 2. Remove from any other leadership
+        await tx.team.updateMany({
+          where: { supervisorId: data.supervisorId },
+          data: { supervisorId: null }
+        });
+
+        // 3. Update the team
+        return tx.team.update({
+          where: { id },
+          data
+        });
+      });
+    }
     return this.repository.update(id, data);
   }
 
@@ -104,14 +138,11 @@ export class TeamService {
     const results: any[] = [];
 
     await this.prisma.$transaction(async (tx: any) => {
-      const { getLaborClassification } = await import("@/lib/utils/laborUtils");
-
       for (const item of items) {
         const member = await this.validateAndCreateMember(
           tx,
           item.teamId,
-          item.userId,
-          getLaborClassification,
+          item.userId
         );
         if (member) results.push(member);
       }
@@ -124,7 +155,6 @@ export class TeamService {
     tx: any,
     teamId: string,
     userId: string,
-    getLaborClassification: (name?: string) => string,
   ) {
     if (!teamId || !userId) throw new Error("teamId and userId are required");
 
@@ -147,6 +177,15 @@ export class TeamService {
         `O funcionário ${user.name} é ${userLaborType}, mas a equipe ${team.name} é ${(team as any).laborType}`,
       );
     }
+
+    // Regra: Remover de qualquer outra equipe onde seja membro
+    await tx.teamMember.deleteMany({ where: { userId } });
+
+    // Regra: Remover de qualquer liderança
+    await tx.team.updateMany({
+      where: { supervisorId: userId },
+      data: { supervisorId: null },
+    });
 
     const existing = await tx.teamMember.findFirst({
       where: { teamId, userId },
@@ -196,17 +235,22 @@ export class TeamService {
 
       if (!employee) throw new Error("Funcionário não encontrado");
 
-      const { getLaborClassification } = await import("@/lib/utils/laborUtils");
       const employeeLaborType = getLaborClassification(
         employee.jobFunction?.name,
       );
 
-      // 1. Remove from all teams
+      // 1. Remove from all team member lists
       await tx.teamMember.deleteMany({
         where: { userId: employeeId },
       });
 
-      // 2. Add to new team if provided
+      // 2. Remove from any leadership
+      await tx.team.updateMany({
+        where: { supervisorId: employeeId },
+        data: { supervisorId: null },
+      });
+
+      // 3. Add to new team as member if toTeamId provided
       if (toTeamId && toTeamId !== "null") {
         const targetTeam = await tx.team.findUnique({
           where: { id: toTeamId },
