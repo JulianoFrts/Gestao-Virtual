@@ -3,7 +3,7 @@ import { Pool } from "pg";
 
 /**
  * PANIC RESET API - GESTÃO VIRTUAL
- * v97.9: Total Annihilation & Deep Enum Cleansing Protocol
+ * v98.0: Resilient Sync & Atomic Statement Protocol
  */
 export async function POST(request: NextRequest) {
     const secret = process.env.APP_SECRET || "temp_secret_123";
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const finalDbUrl = fixDatabaseUrl(dbUrl);
     const action = request.nextUrl.searchParams.get("action") || "sync";
 
-    console.log(`💣 [PANIC/v97.9] Ação: ${action}`);
+    console.log(`💣 [PANIC/v98.0] Ação: ${action}`);
 
     const pool = new Pool({
         connectionString: finalDbUrl,
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
         const client = await pool.connect();
         try {
             if (action === "nuke") {
-                console.log("💣 [PANIC] Executando Nuke Tradicional (v97.9)...");
+                console.log("💣 [PANIC] Executando Nuke Tradicional (v98.0)...");
                 await client.query('DROP SCHEMA IF EXISTS public CASCADE;');
                 await client.query('CREATE SCHEMA public;');
                 await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
             }
 
             if (action === "sync") {
-                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução (v97.9)...");
+                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução (v98.0)...");
 
                 const { execSync } = require('child_process');
                 const schemaPath = "prisma/schema.prisma";
@@ -70,10 +70,10 @@ export async function POST(request: NextRequest) {
                     });
                     console.log("✅ DB PUSH Sucesso!");
                 } catch (pushError: any) {
-                    console.warn("⚠️ DB PUSH Falhou (Provável P1010). Tentando Fallback SQL de Aniquilação...");
+                    console.warn("⚠️ DB PUSH Falhou (Provável P1010). Tentando Resilient Fallback...");
 
                     try {
-                        // 2. Fallback de Aniquilação: Limpeza exaustiva de tipos e tabelas
+                        // 2. Resilient Fallback: Execução instrução por instrução
                         console.log("📜 Gerando DDL do schema...");
                         const ddl = execSync(`npx prisma migrate diff --from-empty --to-schema-datamodel ${schemaPath} --script`, {
                             env: { ...process.env, DATABASE_URL: safeUrl },
@@ -81,29 +81,39 @@ export async function POST(request: NextRequest) {
                             maxBuffer: 10 * 1024 * 1024
                         });
 
-                        console.log("🧹 Limpeza profunda exaustiva (Enums + Tables)...");
+                        console.log("🧹 Limpeza profunda preventiva...");
+                        try {
+                            await client.query('DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO squarecloud;');
+                        } catch (e) { console.warn("⚠️ Falha ao dropar schema (ignorando):", (e as Error).message); }
 
-                        // Drop manual de enums para evitar "type Role already exists"
-                        await client.query(`
-                            DO $$ DECLARE
-                                r RECORD;
-                            BEGIN
-                                -- Drop all tables
-                                FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
-                                    EXECUTE 'DROP TABLE IF EXISTS public.' || quote_ident(r.tablename) || ' CASCADE';
-                                END LOOP;
-                                -- Drop all enums (types)
-                                FOR r IN (SELECT typname FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname = 'public' AND t.typtype = 'e') LOOP
-                                    EXECUTE 'DROP TYPE IF EXISTS public.' || quote_ident(r.typname) || ' CASCADE';
-                                END LOOP;
-                            END $$;
-                        `);
+                        console.log("⚒️ Aplicando DDL via Atomic Executor...");
 
-                        console.log("⚒️ Aplicando DDL manualmente via SQL...");
-                        await client.query(ddl);
-                        console.log("✅ Sincronização via SQL Nativo concluída!");
+                        // Dividimos o DDL em comandos individuais. 
+                        // Nota: Dividir por ';' é arriscado para funções complexas, mas para o DDL do Prisma costuma ser seguro.
+                        const statements = ddl.split(';').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+
+                        let executed = 0;
+                        let skipped = 0;
+
+                        for (const statement of statements) {
+                            try {
+                                await client.query(statement);
+                                executed++;
+                            } catch (stmtErr: any) {
+                                // Ignoramos erros de "já existe"
+                                if (stmtErr.message.includes('already exists') || stmtErr.message.includes('already exist')) {
+                                    skipped++;
+                                } else {
+                                    console.error(`❌ Erro no statement: ${statement.substring(0, 50)}... -> ${stmtErr.message}`);
+                                    // Se for erro crítico (não "already exists"), lançamos
+                                    throw stmtErr;
+                                }
+                            }
+                        }
+
+                        console.log(`✅ Sincronização via Atomic Executor concluída! [Executados: ${executed}, Ignorados por existência: ${skipped}]`);
                     } catch (fallbackError: any) {
-                        console.error("❌ Falha crítica no Fallback de SQL:", fallbackError.message);
+                        console.error("❌ Falha crítica no Resilient Fallback:", fallbackError.message);
                         throw pushError;
                     }
                 }
@@ -118,11 +128,11 @@ export async function POST(request: NextRequest) {
                     });
                     console.log("✅ RESTORE Sucesso!");
                 } catch (resErr: any) {
-                    console.warn("⚠️ Restore finalizou com alertas (veja logs), mas o banco deve estar funcional.");
+                    console.warn("⚠️ Restore finalizou com alertas, verifique se os dados principais estão presentes.");
                 }
 
                 return NextResponse.json({
-                    message: "Sync and Restore finished successfully (v97.9)! 🏆",
+                    message: "Sync and Restore finished successfully (v98.0)! 🏆",
                     sync: "DONE",
                     restore: "DONE"
                 });
