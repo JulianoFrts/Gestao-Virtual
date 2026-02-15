@@ -20,6 +20,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "DATABASE_URL missing" }, { status: 500 });
     }
 
+    // Helper para garantir banco correto (v96.9.2)
+    const fixDatabaseUrl = (url: string) => {
+        try {
+            const u = new URL(url.replace(/['"]/g, ""));
+            if (!u.pathname || u.pathname === "/" || u.pathname === "/postgres") {
+                console.log(`[PANIC] Redirecionando banco de ${u.pathname || 'default'} para /squarecloud`);
+                u.pathname = "/squarecloud";
+            }
+            return u.toString();
+        } catch (e) { return url; }
+    };
+
+    const finalDbUrl = fixDatabaseUrl(dbUrl);
+
     const action = request.nextUrl.searchParams.get("action") || "nuke";
 
     console.log("💣 [PANIC RESET] Instando limpeza bruta via API...");
@@ -43,21 +57,43 @@ export async function POST(request: NextRequest) {
                 console.log("🏗️ [PANIC SYNC] Iniciando reconstrução e restore...");
                 const { execSync } = require('child_process');
 
-                // 1. DB PUSH
-                console.log("⚒️ Rodando prisma db push...");
-                execSync('npx prisma db push --accept-data-loss', {
-                    stdio: 'inherit',
-                    env: { ...process.env, DATABASE_URL: dbUrl }
-                });
+                const currentCwd = process.cwd();
+                console.log(`📂 CWD Atual: ${currentCwd}`);
+                console.log(`📡 Usando DB URL: ${finalDbUrl.replace(/(:\/\/.*?:)(.*)(@.*)/, '$1****$3')}`);
 
-                // 2. RESTORE
-                console.log("📥 Rodando restore-from-backup...");
-                execSync('npx tsx src/scripts/restore-from-backup.ts', {
-                    stdio: 'inherit',
-                    env: { ...process.env, DATABASE_URL: dbUrl }
-                });
+                try {
+                    // 1. DB PUSH
+                    console.log("⚒️ Rodando prisma db push...");
+                    const schemaPath = "prisma/schema.prisma";
 
-                return NextResponse.json({ message: "Sync and Restore finished successfully! 🏆" });
+                    const pushOutput = execSync(`npx prisma db push --accept-data-loss --schema=${schemaPath}`, {
+                        env: { ...process.env, DATABASE_URL: finalDbUrl },
+                        encoding: 'utf8'
+                    });
+                    console.log("✅ DB PUSH Output:", pushOutput);
+
+                    // 2. RESTORE
+                    console.log("📥 Rodando restore-from-backup...");
+                    const restoreOutput = execSync('npx tsx src/scripts/restore-from-backup.ts', {
+                        env: { ...process.env, DATABASE_URL: finalDbUrl },
+                        encoding: 'utf8'
+                    });
+                    console.log("✅ RESTORE Output:", restoreOutput);
+
+                    return NextResponse.json({
+                        message: "Sync and Restore finished successfully! 🏆",
+                        push: pushOutput.substring(0, 500),
+                        restore: restoreOutput.substring(0, 500)
+                    });
+                } catch (execError: any) {
+                    console.error("❌ [PANIC SYNC] Falha detalhada:", execError.message);
+                    return NextResponse.json({
+                        error: "Command failed",
+                        message: execError.message,
+                        stdout: execError.stdout?.toString(),
+                        stderr: execError.stderr?.toString()
+                    }, { status: 500 });
+                }
             }
 
             return NextResponse.json({ error: "Invalid action" }, { status: 400 });
