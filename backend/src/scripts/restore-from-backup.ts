@@ -93,6 +93,10 @@ async function main() {
     return;
   }
 
+  // v99.17: Diagnostic Log
+  const currentUrl = process.env.DATABASE_URL || "";
+  console.log(`🔎 [RESTORE SCRIPT] DATABASE_URL visível: ${currentUrl.replace(/:[^:@]+@/, ':****@')}`);
+
   const files = fs.readdirSync(backupDir).filter((f) => f.endsWith(".json"));
 
   // v98.5: Corrected Import Order
