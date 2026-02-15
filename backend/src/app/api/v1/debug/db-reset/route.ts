@@ -3,7 +3,7 @@ import { Pool } from "pg";
 
 /**
  * PANIC RESET API - GESTÃO VIRTUAL
- * v97.6: Pure URL & SQL Fallback Protocol
+ * v97.7: Pure URL & SQL Fallback Protocol
  */
 export async function POST(request: NextRequest) {
     const secret = process.env.APP_SECRET || "temp_secret_123";
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "DATABASE_URL missing" }, { status: 500 });
     }
 
-    // v97.6: Voltando ao básico que funcionava no startup script
+    // v97.7: Voltando ao básico que funcionava no startup script
     const fixDatabaseUrl = (url: string) => {
         try {
             const u = new URL(url.replace(/['"]/g, ""));
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     const finalDbUrl = fixDatabaseUrl(dbUrl);
     const action = request.nextUrl.searchParams.get("action") || "nuke";
 
-    console.log(`💣 [PANIC/v97.6] Ação: ${action}`);
+    console.log(`💣 [PANIC/v97.7] Ação: ${action}`);
 
     const pool = new Pool({
         connectionString: finalDbUrl,
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
         const client = await pool.connect();
         try {
             if (action === "nuke") {
-                console.log("💣 [PANIC] Executando Nuke Tradicional (v97.6)...");
+                console.log("💣 [PANIC] Executando Nuke Tradicional (v97.7)...");
                 await client.query('DROP SCHEMA IF EXISTS public CASCADE;');
                 await client.query('CREATE SCHEMA public;');
                 await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
             }
 
             if (action === "sync") {
-                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução (v97.6)...");
+                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução (v97.7)...");
 
                 const { execSync } = require('child_process');
                 const schemaPath = "prisma/schema.prisma";
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
                 console.log("✅ RESTORE Sucesso!");
 
                 return NextResponse.json({
-                    message: "Sync and Restore finished successfully (v97.6)! 🏆",
+                    message: "Sync and Restore finished successfully (v97.7)! 🏆",
                     sync: "DONE",
                     restore: "DONE"
                 });

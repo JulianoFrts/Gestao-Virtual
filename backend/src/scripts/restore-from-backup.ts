@@ -9,14 +9,23 @@ async function importSeedFile(filePath: string, modelName: string) {
 
   for (const item of data) {
     try {
-      // Usar upsert para evitar duplicatas e permitir atualizações
-      // Nota: o modelo exato no prisma pode variar (ex: company vs companies em JSON)
       const model = (prisma as any)[modelName];
       if (model) {
+        // v97.7: Sanitização de item (Remover relações aninhadas para evitar PrismaClientValidationError)
+        const cleanItem: any = {};
+        for (const [key, value] of Object.entries(item)) {
+          // Mantemos apenas tipos primitivos ou datas (como strings ISO)
+          // Se for objeto ou array (relação), ignoramos nesta fase escalar
+          if (value !== null && typeof value === "object" && !(value instanceof Date)) {
+            continue;
+          }
+          cleanItem[key] = value;
+        }
+
         await model.upsert({
           where: { id: item.id },
-          update: item,
-          create: item,
+          update: cleanItem,
+          create: cleanItem,
         });
       }
     } catch (error) {
