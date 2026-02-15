@@ -69,19 +69,27 @@ export async function POST(request: NextRequest) {
             // v99.4: Mapping de Nomes (Legacy vs New)
             const certPath = findPath('certificate.pem') || findPath('client.crt');
             const keyPath = findPath('private-key.key') || findPath('client.key');
+            const caPath = findPath('ca-certificate.crt') || findPath('ca.crt');
 
             if (certPath && keyPath) {
-                console.log(`[PANIC/v99.4] 🛡️ Certificados Encontrados: ${certPath}`);
-                return {
+                console.log(`[PANIC/v99.5] 🛡️ Certificados Encontrados: ${certPath}`);
+                const sslConfig: any = {
                     cert: fs.readFileSync(certPath, 'utf8'),
                     key: fs.readFileSync(keyPath, 'utf8'),
-                    rejectUnauthorized: false // Ignora CA do servidor
+                    rejectUnauthorized: false
                 };
+
+                if (caPath) {
+                    sslConfig.ca = fs.readFileSync(caPath, 'utf8');
+                    console.log(`[PANIC/v99.5] 📜 CA Bundle Carregado: ${caPath}`);
+                }
+
+                return sslConfig;
             }
-            console.warn(`[PANIC/v99.4] ⚠️ Certificados NÃO encontrados. Tentando conexão insegura...`);
+            console.warn(`[PANIC/v99.5] ⚠️ Certificados NÃO encontrados. Tentando conexão insegura...`);
             return { rejectUnauthorized: false };
         } catch (e) {
-            console.error("[PANIC/v99.4] Erro ao ler certificados:", e);
+            console.error("[PANIC/v99.5] Erro ao ler certificados:", e);
             return { rejectUnauthorized: false };
         }
     };

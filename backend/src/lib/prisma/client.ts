@@ -25,10 +25,10 @@ declare global {
 export class OrionPgAdapter {
   readonly flavour = 'postgres';
   readonly provider = 'postgres'; // Compatibility
-  readonly adapterName = 'orion-pg-adapter-v99.4';
+  readonly adapterName = 'orion-pg-adapter-v99.5';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v99.4] Bridge forensic iniciada.`);
+    console.log(`[Adapter/v99.5] Bridge forensic iniciada.`);
   }
 
   // Métodos Auxiliares
@@ -226,16 +226,22 @@ function getSSLConfig(connectionString: string) {
     // v99.4: Mapping de Nomes (Legacy vs New)
     const certPath = findPath('certificate.pem') || findPath('client.crt');
     const keyPath = findPath('private-key.key') || findPath('client.key');
+    const caPath = findPath('ca-certificate.crt') || findPath('ca.crt');
 
     if (certPath && keyPath) {
       sslConfig.cert = fs.readFileSync(certPath, 'utf8');
       sslConfig.key = fs.readFileSync(keyPath, 'utf8');
-      console.log(`🛡️ [Prisma/v99.4] mTLS Carregado: ${certPath}`);
+      console.log(`🛡️ [Prisma/v99.5] mTLS Carregado: ${certPath}`);
+
+      if (caPath) {
+        sslConfig.ca = fs.readFileSync(caPath, 'utf8');
+        console.log(`📜 [Prisma/v99.5] CA Bundle Carregado: ${caPath}`);
+      }
     } else {
-      console.log(`⚠️ [Prisma/v99.4] mTLS Não encontrado. Usando SSL Simples.`);
+      console.log(`⚠️ [Prisma/v99.5] mTLS Não encontrado. Usando SSL Simples.`);
     }
   } catch (e) {
-    console.warn(`⚠️ [Prisma/v99.4] Erro lendo certificados:`, e);
+    console.warn(`⚠️ [Prisma/v99.5] Erro lendo certificados:`, e);
   }
 
   return sslConfig;
