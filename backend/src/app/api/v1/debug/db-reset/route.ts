@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "DATABASE_URL missing" }, { status: 500 });
     }
 
-    // Helper para garantir banco correto (v96.9.2)
+    // Helper para garantir banco correto (v96.9.4)
     const fixDatabaseUrl = (url: string) => {
         try {
             const u = new URL(url.replace(/['"]/g, ""));
@@ -47,30 +47,40 @@ export async function POST(request: NextRequest) {
         const client = await pool.connect();
         try {
             if (action === "nuke") {
-                console.log("💣 [PANIC RESET] Executando DROP SCHEMA public CASCADE...");
-                await client.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;');
-                console.log("✨ SCHEMA REFRESHED!");
+                console.log("💣 [PANIC RESET] Executando Nuke de Soberania (v96.9.5)...");
+                await client.query('DROP SCHEMA IF EXISTS public CASCADE;');
+                await client.query('CREATE SCHEMA public;');
+                await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
+                await client.query('GRANT ALL ON SCHEMA public TO public;');
+                console.log("✨ SCHEMA REFRESHED & GRANTS APPLIED!");
                 return NextResponse.json({ message: "Database nuked. Now run with ?action=sync" });
             }
 
             if (action === "sync") {
-                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução e restore...");
-                const { execSync } = require('child_process');
+                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução e restore (v96.9.5)...");
 
-                const currentCwd = process.cwd();
-                console.log(`📂 CWD Atual: ${currentCwd}`);
+                // 0. Reforçar Permissões (v96.9.5)
+                console.log("🔐 Reforçando USAGE/CREATE no schema public...");
+                try {
+                    await client.query('GRANT USAGE, CREATE ON SCHEMA public TO squarecloud;');
+                    await client.query('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO squarecloud;');
+                    console.log("✅ Permissões Reforçadas!");
+                } catch (pErr: any) {
+                    console.warn("⚠️ Aviso de permissão:", pErr.message);
+                }
+
+                const { execSync } = require('child_process');
+                const schemaPath = "prisma/schema.prisma";
                 console.log(`📡 Usando DB URL: ${finalDbUrl.replace(/(:\/\/.*?:)(.*)(@.*)/, '$1****$3')}`);
 
                 try {
                     // 1. DB PUSH
                     console.log("⚒️ Rodando prisma db push...");
-                    const schemaPath = "prisma/schema.prisma";
-
                     const pushOutput = execSync(`npx prisma db push --accept-data-loss --schema=${schemaPath}`, {
                         env: { ...process.env, DATABASE_URL: finalDbUrl },
                         encoding: 'utf8'
                     });
-                    console.log("✅ DB PUSH Output:", pushOutput);
+                    console.log("✅ DB PUSH Sucesso!");
 
                     // 2. RESTORE
                     console.log("📥 Rodando restore-from-backup...");
@@ -78,12 +88,12 @@ export async function POST(request: NextRequest) {
                         env: { ...process.env, DATABASE_URL: finalDbUrl },
                         encoding: 'utf8'
                     });
-                    console.log("✅ RESTORE Output:", restoreOutput);
+                    console.log("✅ RESTORE Sucesso!");
 
                     return NextResponse.json({
                         message: "Sync and Restore finished successfully! 🏆",
-                        push: pushOutput.substring(0, 500),
-                        restore: restoreOutput.substring(0, 500)
+                        push: "DONE",
+                        restore: "DONE"
                     });
                 } catch (execError: any) {
                     console.error("❌ [PANIC SYNC] Falha detalhada:", execError.message);
