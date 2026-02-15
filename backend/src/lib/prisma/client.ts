@@ -20,30 +20,37 @@ declare global {
  */
 // Custom Adapter Removido em favor do oficial v6.3.0
 
-// v100: SSL Config with Pure Absolute Paths
+// v104: SSL Config with Pure Absolute Paths & Multi-Pattern Fallback
 function getSSLConfig(connectionString: string) {
   let sslConfig: any = { rejectUnauthorized: false };
 
   try {
-    // Square Cloud Definitive Paths
-    const cert = '/application/backend/certificates/certificate.pem';
-    const key = '/application/backend/certificates/private-key.key';
-    const ca = '/application/backend/certificates/ca-certificate.crt';
+    // Priority 1: Subdirectory Certificates
+    const certDir = '/application/backend/certificates';
+    const certPath = path.join(certDir, 'certificate.pem');
+    const keyPath = path.join(certDir, 'private-key.key');
+    const caPath = path.join(certDir, 'ca-certificate.crt');
 
-    if (fs.existsSync(cert) && fs.existsSync(key)) {
-      sslConfig.cert = fs.readFileSync(cert, 'utf8');
-      sslConfig.key = fs.readFileSync(key, 'utf8');
-      console.log(`🛡️ [Prisma/v100] mTLS Identidade Carregada: ${cert}`);
+    // Priority 2: Root Certificates (Seen in logs)
+    const rootCertPath = '/application/backend/client.crt';
+    const rootKeyPath = '/application/backend/client.key';
+    const rootCaPath = '/application/backend/ca.crt';
 
-      if (fs.existsSync(ca)) {
-        sslConfig.ca = fs.readFileSync(ca, 'utf8');
-        console.log(`📜 [Prisma/v100] CA Bundle Carregado: ${ca}`);
-      }
+    if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+      sslConfig.cert = fs.readFileSync(certPath, 'utf8');
+      sslConfig.key = fs.readFileSync(keyPath, 'utf8');
+      if (fs.existsSync(caPath)) sslConfig.ca = fs.readFileSync(caPath, 'utf8');
+      console.log(`🛡️ [Prisma/v104] mTLS Carregado (Dir): ${certPath}`);
+    } else if (fs.existsSync(rootCertPath) && fs.existsSync(rootKeyPath)) {
+      sslConfig.cert = fs.readFileSync(rootCertPath, 'utf8');
+      sslConfig.key = fs.readFileSync(rootKeyPath, 'utf8');
+      if (fs.existsSync(rootCaPath)) sslConfig.ca = fs.readFileSync(rootCaPath, 'utf8');
+      console.log(`🛡️ [Prisma/v104] mTLS Carregado (Root): ${rootCertPath}`);
     } else {
-      console.warn(`⚠️ [Prisma/v100] Certificados mTLS ausentes em /application/backend/certificates/`);
+      console.warn(`⚠️ [Prisma/v104] Certificados mTLS ausentes.`);
     }
   } catch (e: any) {
-    console.warn(`⚠️ [Prisma/v100] Erro ao preparar SSL:`, e.message);
+    console.warn(`⚠️ [Prisma/v104] Erro ao preparar SSL:`, e.message);
   }
   return sslConfig;
 }
@@ -107,10 +114,11 @@ const fixDatabaseUrl = (url: string) => {
 
     const u = new URL(cleanUrl);
 
-    // 1. Database Name Normalizer
+    // 1. Database Name & Schema Normalizer (Fix P1010)
     if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres" || u.pathname.toLowerCase() === "/gestao_db") {
       u.pathname = "/squarecloud";
-      console.log(`[Prisma/v103] 🔄 URL Ajustada: Banco alvo definido para '/squarecloud'.`);
+      u.searchParams.set('schema', 'public');
+      console.log(`[Prisma/v104] 🔄 URL Ajustada: Banco alvo 'squarecloud', Schema 'public'.`);
     }
 
     // v99.18: No Downgrade. mTLS is mandatory for 'squarecloud' user identification.

@@ -42,18 +42,18 @@ export async function POST(request: NextRequest) {
 
     const getMtlsOptions = () => {
         try {
-            const cert = "/application/backend/certificates/certificate.pem";
-            const key = "/application/backend/certificates/private-key.key";
-            const ca = "/application/backend/certificates/ca-certificate.crt";
+            // Paths alinhados com v104
+            const paths = [
+                { cert: "/application/backend/certificates/certificate.pem", key: "/application/backend/certificates/private-key.key", ca: "/application/backend/certificates/ca-certificate.crt" },
+                { cert: "/application/backend/client.crt", key: "/application/backend/client.key", ca: "/application/backend/ca.crt" }
+            ];
 
-            if (fs.existsSync(cert) && fs.existsSync(key)) {
-                const sslConfig: any = {
-                    cert: fs.readFileSync(cert, 'utf8'),
-                    key: fs.readFileSync(key, 'utf8'),
-                    rejectUnauthorized: false
-                };
-                if (fs.existsSync(ca)) sslConfig.ca = fs.readFileSync(ca, 'utf8');
-                return sslConfig;
+            for (const p of paths) {
+                if (fs.existsSync(p.cert) && fs.existsSync(p.key)) {
+                    const ssl: any = { cert: fs.readFileSync(p.cert, 'utf8'), key: fs.readFileSync(p.key, 'utf8'), rejectUnauthorized: false };
+                    if (fs.existsSync(p.ca)) ssl.ca = fs.readFileSync(p.ca, 'utf8');
+                    return ssl;
+                }
             }
             return { rejectUnauthorized: false };
         } catch (e) { return { rejectUnauthorized: false }; }
@@ -63,13 +63,10 @@ export async function POST(request: NextRequest) {
         try {
             const u = new URL(url.replace(/['"]/g, ""));
             return {
-                user: u.username,
-                password: u.password,
-                host: u.hostname,
-                port: parseInt(u.port) || 5432,
+                connectionString: url,
                 database: 'squarecloud',
                 ssl: getMtlsOptions(),
-                connectionTimeoutMillis: 5000
+                connectionTimeoutMillis: 10000
             };
         } catch (e) { return { connectionString: url, ssl: { rejectUnauthorized: false } }; }
     };
@@ -80,19 +77,18 @@ export async function POST(request: NextRequest) {
     try {
         const client = await pool.connect();
         try {
-            // v102: SUPREME PERMISSION ENFORCER (Run before any action)
-            console.log("🛡️ [v102] Ativando Supervisor de Permissões...");
-            try {
-                await client.query('GRANT CONNECT ON DATABASE squarecloud TO squarecloud;');
-                await client.query('GRANT ALL PRIVILEGES ON DATABASE squarecloud TO squarecloud;');
-                await client.query('CREATE SCHEMA IF NOT EXISTS public;');
-                await client.query('ALTER SCHEMA public OWNER TO squarecloud;');
-                await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
-                await client.query('GRANT ALL ON SCHEMA public TO public;');
-                await client.query('SET search_path TO public;');
-                await client.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO squarecloud;');
-                await client.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO squarecloud;');
-            } catch (pErr: any) { console.warn("⚠️ Supervisor Warning:", pErr.message); }
+            console.log("🛡️ [v104] Supervisor de Permissões (Resiliência Ativa)...");
+            const runSafe = async (q: string) => { try { await client.query(q); } catch (e: any) { console.warn(`⚠️ Ignorado (${q.split(' ')[0]}):`, e.message); } };
+
+            await runSafe('GRANT CONNECT ON DATABASE squarecloud TO squarecloud;');
+            await runSafe('GRANT ALL PRIVILEGES ON DATABASE squarecloud TO squarecloud;');
+            await runSafe('CREATE SCHEMA IF NOT EXISTS public;');
+            await runSafe('ALTER SCHEMA public OWNER TO squarecloud;');
+            await runSafe('GRANT ALL ON SCHEMA public TO squarecloud;');
+            await runSafe('GRANT ALL ON SCHEMA public TO public;');
+            await runSafe('SET search_path TO public;');
+            await runSafe('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO squarecloud;');
+            await runSafe('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO squarecloud;');
 
             if (action === "doctor") {
                 console.log("🩺 [DOCTOR/v102] Iniciando Diagnóstico Profundo...");
