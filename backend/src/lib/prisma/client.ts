@@ -4,166 +4,166 @@ import pg from "pg";
 import fs from "fs";
 import path from "path";
 
-// v105: Robust ESM Pool Import
-const Pool = pg.Pool || (pg as any).default?.Pool;
-
-// Tipagem estendida
 export type ExtendedPrismaClient = PrismaClient;
 
 declare global {
   var prisma: ExtendedPrismaClient | undefined;
 }
 
-/**
- * v98.5: Orion PG Adapter - Forensic Mode
- * Dump total de OIDs e tradução bruta sem filtros.
- */
-// Custom Adapter Removido em favor do oficial v6.3.0
+// v108: Definitive Production Architecture (Builder + Proxy + mTLS)
+export class PrismaClientBuilder {
+  private static instance: ExtendedPrismaClient;
 
-// v107: SSL Config with SNI & Binary Buffers (Fix Unknown CA)
-function getSSLConfig(connectionString: string) {
-  let sslConfig: any = { rejectUnauthorized: false };
-
-  try {
-    const u = new URL(connectionString);
-    sslConfig.servername = u.hostname;
-
-    // Priority 1: Subdirectory Certificates
-    const certDir = '/application/backend/certificates';
-    const paths = {
-      cert: path.join(certDir, 'certificate.pem'),
-      key: path.join(certDir, 'private-key.key'),
-      ca: path.join(certDir, 'ca-certificate.crt')
+  /**
+   * Extrai e valida credenciais brutas das variáveis de ambiente
+   */
+  private static getEnvCredentials() {
+    return {
+      host: process.env.PGHOST,
+      user: process.env.PGUSER,
+      password: process.env.PGPASSWORD,
+      port: parseInt(process.env.PGPORT || "5432"),
+      database: process.env.PGDATABASE,
     };
-
-    // Priority 2: Root Certificates (Seen in logs)
-    const rootPaths = {
-      cert: '/application/backend/client.crt',
-      key: '/application/backend/client.key',
-      ca: '/application/backend/ca.crt'
-    };
-
-    const loadCert = (p: any, tag: string) => {
-      if (fs.existsSync(p.cert) && fs.existsSync(p.key)) {
-        sslConfig.cert = fs.readFileSync(p.cert);
-        sslConfig.key = fs.readFileSync(p.key);
-        if (fs.existsSync(p.ca)) sslConfig.ca = fs.readFileSync(p.ca);
-        console.log(`🛡️ [Prisma/v107] mTLS ${tag} Carregado: ${p.cert}`);
-        return true;
-      }
-      return false;
-    };
-
-    if (!loadCert(paths, "Dir") && !loadCert(rootPaths, "Root")) {
-      console.warn(`⚠️ [Prisma/v107] Certificados mTLS ausentes.`);
-    }
-  } catch (e: any) {
-    console.warn(`⚠️ [Prisma/v107] Erro ao preparar SSL:`, e.message);
   }
-  return sslConfig;
+
+  /**
+   * Normaliza a DATABASE_URL para evitar erros P1010 e garantir schema correto
+   */
+  private static normalizeUrl(url: string): string {
+    try {
+      let cleanUrl = url.replace(/['"]/g, "");
+      const u = new URL(cleanUrl);
+
+      // Fix P1010: Forçar squarecloud e public schema se estiver no alvo padrão
+      if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres" || u.pathname.toLowerCase() === "/gestao_db") {
+        u.pathname = "/squarecloud";
+        u.searchParams.set('schema', 'public');
+        console.log(`[Prisma/v108] 🔄 URL Normalizada: Banco 'squarecloud', Schema 'public'.`);
+      }
+      return u.toString();
+    } catch {
+      return url;
+    }
+  }
+
+  /**
+   * Prepara configuração SSL com mTLS (Binary Buffers + SNI)
+   */
+  private static getSSLConfig(url: string) {
+    let sslConfig: any = { rejectUnauthorized: false };
+    try {
+      const u = new URL(url);
+      sslConfig.servername = u.hostname;
+
+      const paths = [
+        { cert: '/application/backend/certificates/certificate.pem', key: '/application/backend/certificates/private-key.key', ca: '/application/backend/certificates/ca-certificate.crt' },
+        { cert: '/application/backend/client.crt', key: '/application/backend/client.key', ca: '/application/backend/ca.crt' }
+      ];
+
+      for (const p of paths) {
+        if (fs.existsSync(p.cert) && fs.existsSync(p.key)) {
+          sslConfig.cert = fs.readFileSync(p.cert);
+          sslConfig.key = fs.readFileSync(p.key);
+          if (fs.existsSync(p.ca)) sslConfig.ca = fs.readFileSync(p.ca);
+          console.log(`🛡️ [Prisma/v108] mTLS Carregado: ${p.cert}`);
+          break;
+        }
+      }
+    } catch (e: any) {
+      console.warn(`⚠️ [Prisma/v108] SSL Config Warning:`, e.message);
+    }
+    return sslConfig;
+  }
+
+  /**
+   * Constrói a instância do Prisma com o Adapter PG oficial
+   */
+  public static build(): ExtendedPrismaClient {
+    if (this.instance) return this.instance;
+
+    const rawUrl = process.env.DATABASE_URL || "";
+    const url = this.normalizeUrl(rawUrl);
+    const creds = this.getEnvCredentials();
+
+    try {
+      console.log(`🔌 [Prisma/v108] Buildando Cliente (Modo Adapter)...`);
+
+      // Validação de sanidade exigida pelo commit c188ee7
+      if (!creds.host || !creds.user || !creds.password) {
+        console.warn("⚠️ [Prisma/v108] Credenciais PG parciais no ENV. Usando URL direta.");
+      }
+
+      const PoolConstructor = (pg as any).Pool || (pg as any).default?.Pool || pg;
+      const ssl = this.getSSLConfig(url);
+
+      // Configuração estruturada do Pool (Evita Erro de Bind)
+      const poolConfig: any = {
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 15000,
+        ssl
+      };
+
+      if (creds.host && creds.user) {
+        Object.assign(poolConfig, {
+          user: creds.user,
+          password: creds.password,
+          host: creds.host,
+          port: creds.port,
+          database: creds.database
+        });
+      } else {
+        poolConfig.connectionString = url;
+      }
+
+      const pool = new PoolConstructor(poolConfig);
+      const adapter = new PrismaPg(pool);
+
+      const client = new PrismaClient({
+        adapter: adapter as any,
+        log: ["error"]
+      });
+
+      this.instance = createPrismaProxy(client as any);
+      return this.instance;
+    } catch (err: any) {
+      console.error(`🚨 [Prisma/v108] Erro Fatal no Builder:`, err.message);
+      // Fallback de emergência para motor nativo
+      return new PrismaClient({ datasources: { db: { url } } }) as any;
+    }
+  }
 }
 
-// v107: Factory Final (Binary & SNI Protected)
-const createExtendedClient = (url: string) => {
-  const version = 'v107';
-  try {
-    console.log(`🔌 [Prisma/${version}] Conectando ao Banco...`);
+/**
+ * Safer Function Wrappers (Proxy Mode) - Implementação solicitada no commit c188ee7
+ */
+function createPrismaProxy(client: PrismaClient): ExtendedPrismaClient {
+  return new Proxy(client, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
 
-    const u = new URL(url);
-    const ssl = getSSLConfig(url);
-
-    // Garantir que temos o Pool correto via ESM
-    const PoolConstructor = (pg as any).Pool || (pg as any).default?.Pool || pg;
-
-    const pool = new PoolConstructor({
-      user: u.username,
-      password: decodeURIComponent(u.password),
-      host: u.hostname,
-      port: parseInt(u.port),
-      database: u.pathname.substring(1).split('?')[0] || 'squarecloud',
-      ssl,
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 15000
-    });
-
-    // Verificação de saúde do Pool (Prevenir Erro de Bind)
-    if (!pool || typeof pool.query !== 'function') {
-      throw new Error("Falha na inicialização do Pool (Bind Error)");
-    }
-
-    const adapter = new PrismaPg(pool);
-    return new PrismaClient({
-      adapter: adapter as any,
-      log: ["error"]
-    }) as unknown as ExtendedPrismaClient;
-  } catch (err: any) {
-    console.warn(`⚠️ [Prisma/${version}] Fallback para Motor Nativo:`, err.message);
-
-    const u = new URL(url);
-    u.searchParams.set('sslmode', 'verify-ca');
-
-    const paths = [
-      { cert: "/application/backend/certificates/certificate.pem", key: "/application/backend/certificates/private-key.key", ca: "/application/backend/certificates/ca-certificate.crt" },
-      { cert: "/application/backend/client.crt", key: "/application/backend/client.key", ca: "/application/backend/ca.crt" }
-    ];
-
-    for (const p of paths) {
-      if (fs.existsSync(p.cert)) {
-        u.searchParams.set('sslcert', p.cert);
-        u.searchParams.set('sslkey', p.key);
-        u.searchParams.set('sslrootcert', p.ca);
-        break;
+      // Interceptamos apenas chamadas de funções para adicionar segurança
+      if (typeof value === 'function' && !prop.toString().startsWith('$')) {
+        return async (...args: any[]) => {
+          try {
+            return await value.apply(target, args);
+          } catch (err: any) {
+            console.error(`❌ [PrismaProxy] Erro na operação ${prop.toString()}:`, err.message);
+            throw err;
+          }
+        };
       }
+      return value;
     }
-
-    return new PrismaClient({
-      datasources: { db: { url: u.toString() } }
-    }) as unknown as ExtendedPrismaClient;
-  }
-};
+  }) as unknown as ExtendedPrismaClient;
+}
 
 const globalForPrisma = global as unknown as {
   prisma: ExtendedPrismaClient
-  on(event: string, listener: (...args: any[]) => void): any;
-  addListener(event: string, listener: (...args: any[]) => void): any;
-  removeListener(event: string, listener: (...args: any[]) => void): any;
-  emit(event: string, ...args: any[]): boolean;
 }
 
-// Helper Hoisted
-// v99: SSL Bypass (Emergency Protocol)
-// A recriação do banco invalidou o CA. Precisamos ignorar a verificação de certificado temporariamente e forçar conexão via squarecloud.
-const fixDatabaseUrl = (url: string) => {
-  try {
-    // Remover aspas extras
-    let cleanUrl = url.replace(/['"]/g, "");
-
-    const u = new URL(cleanUrl);
-
-    // 1. Database Name & Schema Normalizer (Fix P1010)
-    if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres" || u.pathname.toLowerCase() === "/gestao_db") {
-      u.pathname = "/squarecloud";
-      u.searchParams.set('schema', 'public');
-      console.log(`[Prisma/v104] 🔄 URL Ajustada: Banco alvo 'squarecloud', Schema 'public'.`);
-    }
-
-    // v99.18: No Downgrade. mTLS is mandatory for 'squarecloud' user identification.
-    if (u.searchParams.has('sslmode') && u.searchParams.get('sslmode') === 'verify-ca') {
-      console.log(`[Prisma/v99.18] 🛡️ Mantendo mTLS na URL: verify-ca.`);
-    }
-
-    // v99.3: Killswitch Removido (mTLS é obrigatório)
-    // Mantemos os parâmetros na URL mas o Pool vai usar o config explícito do getSSLConfig também.
-
-    return u.toString();
-  } catch (e) { return url; }
-};
-
-// v98.9: Inicialização (Pós-Hoisting)
-const rawDbUrl = process.env.DATABASE_URL;
-const dbUrl = rawDbUrl ? fixDatabaseUrl(rawDbUrl) : undefined;
-
-export const prisma = globalForPrisma.prisma || (dbUrl ? createExtendedClient(dbUrl) : new PrismaClient());
+export const prisma = globalForPrisma.prisma || PrismaClientBuilder.build();
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+
