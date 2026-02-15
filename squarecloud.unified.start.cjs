@@ -22,6 +22,23 @@ process.env.INTERNAL_PROXY_KEY = INTERNAL_PROXY_KEY;
 const backendDir = path.join(__dirname, 'backend');
 const frontendDistDir = path.join(__dirname, 'frontend_dist');
 
+// v153: Função auxiliar para executar SQL usando o motor do Prisma (resiliente ao mTLS)
+function runSqlViaPrisma(sql, url, env) {
+    try {
+        console.log(`🔨 [v153] Executando comando SQL via Prisma CLI...`);
+        execSync(`npx prisma db execute --stdin --url "${url}"`, {
+            input: sql,
+            env: { ...env, NODE_TLS_REJECT_UNAUTHORIZED: '0' },
+            stdio: 'inherit',
+            cwd: backendDir
+        });
+        return true;
+    } catch (e) {
+        console.warn('⚠️ [v153] Falha ao executar SQL via Prisma:', e.message);
+        return false;
+    }
+}
+
 // ==========================================
 // 🚀 AUTO-HEALING (LIMPEZA AUTOMÁTICA)
 // ==========================================
@@ -199,8 +216,10 @@ if (!isRealClientCert) {
 }
 
 const sslConfig = { rejectUnauthorized: false };
+const sslSimpleConfig = { rejectUnauthorized: false }; // Sem mTLS para redundância
 if (fs.existsSync(caCertPath)) {
     sslConfig.ca = fs.readFileSync(caCertPath);
+    sslSimpleConfig.ca = fs.readFileSync(caCertPath);
     console.log('[SSL] 🛡️  CA Root carregada.');
 }
 if (isRealClientCert && fs.existsSync(clientKeyPath)) {
@@ -367,8 +386,8 @@ function setupEnvironment(finalUrl) {
         console.warn('⚠️ Erro certs:', e.message);
     }
 
-    // URL para Aplicação (Full mTLS)
-    const sslParams = `&sslmode=verify-ca&sslcert=${absCert}&sslkey=${absKey}&sslrootcert=${absCA}`;
+    // v159: Forçando schema=public para garantir que o Prisma encontre as tabelas criadas manualmente
+    const sslParams = `&schema=public&sslmode=verify-ca&sslcert=${absCert}&sslkey=${absKey}&sslrootcert=${absCA}`;
     const cleanBaseUrl = finalUrl.split('?')[0];
     const finalAppUrl = `${cleanBaseUrl}?${sslParams.substring(1)}`;
 
@@ -451,64 +470,117 @@ async function syncSchemaAndSeeds(commonEnv, finalAppUrl, success) {
     );
 
     if (shouldNuke) {
-        console.log('💣 [NUKE] Limpeza bruta solicitada...');
-        const nukePool = new Pool({
-            connectionString: finalAppUrl,
-            ssl: { rejectUnauthorized: false, ...sslConfig },
-            connectionTimeoutMillis: 10000
-        });
-        const client = await nukePool.connect();
-        try {
-            console.log('💣 Executando DROP SCHEMA public CASCADE...');
-            await client.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;');
-            console.log('✨ SCHEMA REFRESHED!');
-        } catch (e) {
-            console.warn(`⚠️ Falha no NUKE: ${e.message}`);
-        } finally {
-            client.release();
-            await nukePool.end();
-        }
+        console.log('💣 [v153] Iniciando NUKE do banco via Prisma...');
+        const nukeSql = 'DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;';
+        runSqlViaPrisma(nukeSql, finalAppUrl, commonEnv);
     }
 
     if (shouldSync) {
-        console.log('🏗️ Criando tabelas (modo unificado)...');
+        console.log('🏗️  [v157] Sincronizando Estrutura via Prisma Migrations...');
         try {
-            console.log('⚒️  Gerando script SQL da estrutura...');
-            const sqlStructure = execSync(
-                'npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script',
-                { env: commonEnv, encoding: 'utf8', cwd: backendDir }
-            );
-
-            if (sqlStructure && sqlStructure.trim().length > 10) {
-                process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-                const injectionPool = new Pool({
-                    connectionString: finalAppUrl,
-                    ssl: { rejectUnauthorized: false, ...sslConfig }
+            // Tentativa 1: Migrate Deploy (Oficial para produção/banco limpo)
+            console.log('🚀 Executando: npx prisma migrate deploy...');
+            execSync('npx prisma migrate deploy', {
+                env: { ...commonEnv, NODE_TLS_REJECT_UNAUTHORIZED: '0' },
+                stdio: 'inherit',
+                cwd: backendDir
+            });
+            console.log('✅ [v157] Migrations aplicadas com sucesso!');
+        } catch (e) {
+            console.warn('⚠️ [v157] Falha nas Migrations, tentando db push como fallback...', e.message);
+            try {
+                // Tentativa 2: DB Push (Fallback agressivo)
+                execSync('npx prisma db push --skip-generate --accept-data-loss', {
+                    env: { ...commonEnv, NODE_TLS_REJECT_UNAUTHORIZED: '0' },
+                    stdio: 'inherit',
+                    cwd: backendDir
                 });
-
-                const client = await injectionPool.connect();
+                console.log('✅ [v157] Estrutura sincronizada via db push!');
+            } catch (e2) {
+                console.warn('⚠️ [v157] Falha no db push, tentando injeção manual...');
                 try {
-                    await client.query(sqlStructure);
-                    console.log('✅ ESTRUTURA INJETADA VIA SQL!');
-                } finally {
-                    client.release();
-                    await injectionPool.end();
+                    const sqlStructure = execSync(
+                        'npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script',
+                        { env: commonEnv, encoding: 'utf8', cwd: backendDir }
+                    );
+                    if (sqlStructure && sqlStructure.trim().length > 10) {
+                        runSqlViaPrisma(sqlStructure, finalAppUrl, commonEnv);
+                    }
+                } catch (e3) {
+                    console.error('❌ Falha Total na Sincronização:', e3.message);
                 }
             }
-        } catch (e) {
-            console.warn(`⚠️ Falha na injeção: ${e.message}`);
         }
     }
 
-    if (process.env.RESTORE_BACKUP === 'true') {
-        console.log('📥 Restaurando dados do backup de 08/02...');
+    // v159: Universal Booster com Fallback SSL
+    console.log('🛡️  [v159] EXECUTANDO BOOSTER NUCLEAR...');
+    try {
+        const boosterOptions = {
+            connectionString: finalAppUrl.split('?')[0],
+            ssl: { ...sslConfig, rejectUnauthorized: false },
+            connectionTimeoutMillis: 10000
+        };
+
+        // Tenta com mTLS primeiro, se falhar tenta SSL simples (alguns proxies barram o cert cliente)
+        let client;
         try {
-            execSync('npx tsx src/scripts/restore-from-backup.ts', { stdio: 'inherit', env: commonEnv, cwd: backendDir });
-            console.log('✅ Restauração de backup concluída!');
-        } catch (e) {
-            console.warn('⚠️ Erro no restore:', e.message);
+            console.log('📡 [v159] Tentativa 1: Booster via mTLS...');
+            const pool = new Pool(boosterOptions);
+            client = await pool.connect();
+        } catch (sslErr) {
+            console.warn('⚠️  [v159] Falha mTLS no Booster (tentando SSL Simples):', sslErr.message);
+            const poolFallback = new Pool({
+                ...boosterOptions,
+                ssl: { rejectUnauthorized: false } // Sem certificados cliente no fallback
+            });
+            client = await poolFallback.connect();
         }
+
+        try {
+            console.log('🔑 Aplicando privilégios nucleares e fixando search_path...');
+            await client.query(`
+                GRANT ALL ON SCHEMA public TO public;
+                GRANT ALL ON SCHEMA public TO squarecloud;
+                GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO squarecloud;
+                GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO squarecloud;
+                GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO squarecloud;
+                GRANT USAGE, CREATE ON SCHEMA public TO squarecloud;
+                ALTER DATABASE squarecloud OWNER TO squarecloud;
+                ALTER SCHEMA public OWNER TO squarecloud;
+                ALTER ROLE squarecloud SET search_path TO public;
+                
+                -- Garante que o Prisma (que usa transações) não tenha travas de busca
+                SET search_path TO public;
+            `);
+            console.log('✅ [v159] Booster Nuclear aplicado com SUCESSO!');
+        } finally {
+            if (client) {
+                client.release();
+                // O pool será encerrado automaticamente ao fim do processo ou podemos deixá-lo para GC
+            }
+        }
+    } catch (e) {
+        console.warn('⚠️ [v159] Booster Nuclear falhou (prosseguindo):', e.message);
     }
+
+    // v154: Restauração com Booster Interno (Prisma powered)
+    console.log('--------------------------------------------------');
+    console.log('📥 [v155] INICIANDO RESTAURAÇÃO (INTERNAL BOOSTER ACTIVE)');
+    try {
+        const tsxPath = path.join(backendDir, 'node_modules', '.bin', 'tsx');
+        const cmd = fs.existsSync(tsxPath) ? `node ${tsxPath} src/scripts/restore-from-backup.ts` : 'npx tsx src/scripts/restore-from-backup.ts';
+
+        execSync(cmd, {
+            stdio: 'inherit',
+            env: { ...commonEnv, NODE_OPTIONS: '--import tsx' },
+            cwd: backendDir
+        });
+        console.log('✅ [v154] Processo de restauro finalizado!');
+    } catch (e) {
+        console.error('❌ [v154] Erro no Restauro:', e.message);
+    }
+    console.log('--------------------------------------------------');
 
     if (process.env.RUN_SEEDS === 'true' || process.env.FORCE_SEED === 'true') {
         console.log('🌟 Executando Master Seed...');
