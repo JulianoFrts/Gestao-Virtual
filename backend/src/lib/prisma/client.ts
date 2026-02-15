@@ -39,7 +39,7 @@ const createPrismaClient = () => {
 
 const buildPrismaWithFallback = (url: string) => {
   const maskedOriginal = url.split('@')[1] || 'oculta';
-  console.log(`[Prisma/v88] 🚀 Inicializando v88. Host: ${maskedOriginal.split('?')[0]}`);
+  console.log(`[Prisma/v89] 🚀 Inicializando v89. Target: ${maskedOriginal.split('?')[0]}`);
 
   const sslConfig = getSSLConfig(url);
   const getEnv = (key: string) => {
@@ -47,75 +47,82 @@ const buildPrismaWithFallback = (url: string) => {
     return (val && val !== 'undefined' && val !== 'null') ? val : null;
   };
 
-  const pgHost = getEnv('PGHOST');
-  const pgUser = getEnv('PGUSER');
-  const pgPassword = getEnv('PGPASSWORD');
-  const pgPort = getEnv('PGPORT') || '5432';
-  const pgDatabase = getEnv('PGDATABASE') || 'squarecloud';
-
   const poolConfig: any = {
     connectionString: url,
     ssl: sslConfig,
     connectionTimeoutMillis: 15000,
     idleTimeoutMillis: 30000,
-    max: 5
+    max: 10
   };
 
-  if (pgHost) poolConfig.host = pgHost;
-  if (pgUser) poolConfig.user = pgUser;
-  if (pgPassword) poolConfig.password = pgPassword;
-  if (pgPort) poolConfig.port = parseInt(pgPort, 10);
-  if (pgDatabase) poolConfig.database = pgDatabase;
+  if (getEnv('PGHOST')) poolConfig.host = getEnv('PGHOST');
+  if (getEnv('PGUSER')) poolConfig.user = getEnv('PGUSER');
+  if (getEnv('PGPASSWORD')) poolConfig.password = getEnv('PGPASSWORD');
+  if (getEnv('PGPORT')) poolConfig.port = parseInt(getEnv('PGPORT')!, 10);
+  if (getEnv('PGDATABASE')) poolConfig.database = getEnv('PGDATABASE');
 
-  // DIAGNÓSTICO DIRETO (v88): Testar se o PG puro conecta
-  const testPool = new pg.Pool({ ...poolConfig, max: 1 });
-  testPool.query('SELECT current_user, current_database(), current_schema()')
-    .then(res => {
-      const row = res.rows[0];
-      console.log(`✅ [Prisma/v88] PG Nativo Conectado! User: ${row.current_user}, DB: ${row.current_database}, Schema: ${row.current_schema}`);
-      testPool.end();
-    })
-    .catch(err => {
-      console.error(`❌ [Prisma/v88] Falha de conexão PG Nativo: ${err.message}`);
-      testPool.end();
-    });
+  // DIAGNÓSTICO PG (v89)
+  const diagPool = new pg.Pool({ ...poolConfig, max: 1 });
+  diagPool.query('SELECT 1').then(() => {
+    console.log(`✅ [Prisma/v89] Conexão Base (pg) OK.`);
+    diagPool.end();
+  }).catch(e => {
+    console.error(`❌ [Prisma/v89] Conexão Base (pg) FALHOU: ${e.message}`);
+    diagPool.end();
+  });
 
-  // TENTA MODO ADAPTER (Se não houver erro de bind)
+  // TENTA MODO ADAPTER COM PROXY DE BINDING (v89)
   try {
     const pool = new pg.Pool(poolConfig);
-    const adapter = new PrismaPg(pool);
+    const rawAdapter = new PrismaPg(pool);
 
-    // Sanity check para evitar bind error silencioso
-    if (!adapter || typeof (adapter as any).query !== 'function') {
-      throw new Error("Adapter bind check failed");
-    }
+    // CORREÇÃO CRÍTICA v89: Proxy para resolver o erro "Cannot read properties of undefined (reading 'bind')"
+    // Se o Prisma 6 tenta fazer .bind() em métodos que ele espera mas não encontra, nós os interceptamos aqui.
+    const adapter = new Proxy(rawAdapter, {
+      get: (target, prop) => {
+        const name = prop.toString();
+        const val = (target as any)[prop];
 
-    console.log(`[Prisma/v88] 🔋 Usando Modo ADAPTER.`);
+        // Log de acesso a propriedades críticas para debug
+        if (['query', 'execute', 'transactionContext', 'startTransaction'].includes(name)) {
+          if (val === undefined) {
+            console.warn(`⚠️ [Prisma/v89] Prisma acessou '${name}' que é undefined no adapter!`);
+          }
+        }
+
+        if (typeof val === 'function') {
+          return val.bind(target);
+        }
+        return val;
+      }
+    });
+
+    console.log(`[Prisma/v89] 🔋 Ativando Modo ADAPTER.`);
     return new PrismaClient({
-      adapter: adapter,
+      adapter: adapter as any,
       log: ["error"],
     } as any) as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v88] Modo Adapter Indisponível (Binding). Alternando para NATIVO...`);
+    console.warn(`⚠️ [Prisma/v89] Falha no Modo Adapter. Erro: ${err.message}. Alternando para NATIVO...`);
 
-    // RECONSTRÓI A URL NATIVA (v88 - Fiel ao Probe)
+    // RECONSTRÓI A URL NATIVA (v89 - Preservando Query Params Originais)
     let nativeUrl = url;
     try {
       const urlObj = new URL(url);
-      if (pgUser) urlObj.username = pgUser;
-      if (pgPassword) urlObj.password = pgPassword;
-      if (pgHost) urlObj.hostname = pgHost;
-      if (pgPort) urlObj.port = pgPort;
+      if (poolConfig.user) urlObj.username = poolConfig.user;
+      if (poolConfig.password) urlObj.password = poolConfig.password;
+      if (poolConfig.host) urlObj.hostname = poolConfig.host;
+      if (poolConfig.port) urlObj.port = poolConfig.port.toString();
 
-      // Se a URL não tem o banco, e temos PGDATABASE definido
-      if ((!urlObj.pathname || urlObj.pathname === '/') && pgDatabase) {
-        urlObj.pathname = `/${pgDatabase}`;
+      // Se PGDATABASE existe e não está na URL, injeta
+      if (getEnv('PGDATABASE') && (!urlObj.pathname || urlObj.pathname === '/')) {
+        urlObj.pathname = `/${getEnv('PGDATABASE')}`;
       }
 
       nativeUrl = urlObj.toString();
-      console.log(`📍 [Prisma/v88] Fallback URL Nativa: ${urlObj.hostname}/${urlObj.pathname.replace('/', '')}`);
+      console.log(`📍 [Prisma/v89] Fallback URL Nativa: ${urlObj.hostname}${urlObj.pathname}`);
     } catch (e) {
-      console.error(`❌ [Prisma/v88] Erro ao processar URL para fallback.`);
+      console.error(`❌ [Prisma/v89] Falha ao processar URL para fallback nativo.`);
     }
 
     try {
@@ -125,7 +132,7 @@ const buildPrismaWithFallback = (url: string) => {
       } as any);
       return client as ExtendedPrismaClient;
     } catch (nativeErr: any) {
-      console.error(`❌ [Prisma/v88] Falha crítica final:`, nativeErr.message);
+      console.error(`❌ [Prisma/v89] Erro Fatal Inevitável:`, nativeErr.message);
       throw nativeErr;
     }
   }
@@ -145,7 +152,7 @@ export const prisma = new Proxy({} as any, {
 
     if (p === '$state') {
       const inst = (globalThis as any).prismaInstance;
-      return { v: "88", init: !!inst, models: inst ? Object.keys(inst).filter(k => !k.startsWith('$')) : [] };
+      return { v: "89", init: !!inst, keys: inst ? Object.keys(inst).length : 0 };
     }
 
     if (['$$typeof', 'constructor', 'toJSON', 'then', 'inspect'].includes(p)) return undefined;
@@ -164,7 +171,7 @@ export const prisma = new Proxy({} as any, {
       }
       return value;
     } catch (err: any) {
-      console.error(`❌ [Prisma/v88] Erro Proxy (${p}):`, err.message);
+      console.error(`❌ [Prisma/v89] Erro de Proxy em '${p}':`, err.message);
       return undefined;
     }
   }
@@ -198,6 +205,7 @@ const getSSLConfig = (connectionString: string) => {
     if (certPath && keyPath) {
       sslConfig.cert = fs.readFileSync(certPath, 'utf8');
       sslConfig.key = fs.readFileSync(keyPath, 'utf8');
+      console.log('🛡️ [Prisma/v89] mTLS Configurado.');
     }
   }
   return sslConfig;
