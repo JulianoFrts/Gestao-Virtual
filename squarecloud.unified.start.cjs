@@ -22,22 +22,32 @@ process.env.INTERNAL_PROXY_KEY = INTERNAL_PROXY_KEY;
 const backendDir = path.join(__dirname, 'backend');
 const frontendDistDir = path.join(__dirname, 'frontend_dist');
 
-// v201: Loader manual de .env para garantir que DATABASE_URL seja lida mesmo se não estiver no dashboard
+// v202: Loader manual de .env ultra-robusto (remove prefixos psql e aspas mal formadas)
 function loadEnv() {
     const envPath = path.join(backendDir, '.env');
     if (fs.existsSync(envPath)) {
         console.log('📖 Carregando .env manual de:', envPath);
-        const content = fs.readFileSync(envPath, 'utf8');
-        content.split('\n').forEach(line => {
-            const match = line.match(/^([^=]+)=(.*)$/);
-            if (match) {
-                const key = match[1].trim();
-                const value = match[2].trim().replace(/^["']|["']$/g, '');
-                if (!process.env[key] || process.env[key] === '') {
-                    process.env[key] = value;
+        try {
+            const content = fs.readFileSync(envPath, 'utf8');
+            content.split('\n').forEach(line => {
+                const trimmedLine = line.trim();
+                if (!trimmedLine || trimmedLine.startsWith('#')) return;
+
+                const match = trimmedLine.match(/^([^=]+)=(.*)$/);
+                if (match) {
+                    const key = match[1].trim();
+                    let value = match[2].trim()
+                        .replace(/^psql\s+['"]?/, '') // Remove "psql" e aspa inicial se houver
+                        .replace(/^["']|["']$/g, ''); // Remove aspas envolventes
+
+                    if (!process.env[key] || process.env[key] === '') {
+                        process.env[key] = value;
+                    }
                 }
-            }
-        });
+            });
+        } catch (e) {
+            console.warn('⚠️ Erro ao ler .env manual:', e.message);
+        }
     }
 }
 loadEnv();
@@ -236,7 +246,7 @@ async function probeDatabase() {
         const probePool = new Pool({
             connectionString: cleanUrlForProbe(url),
             ssl: isNeon ? { rejectUnauthorized: false } : sslConfig,
-            connectionTimeoutMillis: 10000
+            connectionTimeoutMillis: 30000 // 30s para Neon "acordar"
         });
 
         try {
@@ -252,6 +262,14 @@ async function probeDatabase() {
         } catch (err) {
             console.log(`❌ Falha: ${err.message}`);
             await probePool.end();
+
+            // v203: Se for Neon e der timeout, assumimos que a URL está correta 
+            // e deixamos o Prisma lidar com o wake-up mais tarde.
+            if (isNeon && (err.message.includes('timeout') || err.message.includes('terminated'))) {
+                console.log('⏳ Neon pode estar em standby. Prosseguindo com URL candidata...');
+                success = true;
+                break;
+            }
         }
     }
 
@@ -375,11 +393,14 @@ function setupEnvironment(finalUrl) {
 async function syncSchemaAndSeeds(commonEnv, finalAppUrl, finalNakedUrl, success) {
     const isNeon = finalAppUrl.includes('neon.tech');
     const shouldNuke = success && process.env.FORCE_NUKE_DB === 'true';
+
+    // v203: shouldSync mais agressivo para Neon
     const shouldSync = success && (
         shouldNuke ||
         process.env.RUN_SEEDS === 'true' ||
         process.env.FORCE_DB_PUSH === 'true' ||
-        process.env.FORCE_SEED === 'true'
+        process.env.FORCE_SEED === 'true' ||
+        isNeon // Forçar check no Neon sempre (o prisma db push é rápido se nada mudou)
     );
 
     console.log(`🛡️ [v200] EXECUTANDO BOOSTER SQL NO BANCO DESTINO: ${isNeon ? 'NEON' : 'SQUARE'}...`);
