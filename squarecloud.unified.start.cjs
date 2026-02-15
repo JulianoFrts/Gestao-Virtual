@@ -72,6 +72,7 @@ console.log('🚀 GESTÃO VIRTUAL — Servidor Unificado');
 console.log('==================================================');
 console.log(`📦 Backend Dir: ${backendDir}`);
 console.log(`📦 Frontend Dist: ${frontendDistDir}`);
+console.log(`🛠️ Flags: NUKE=${process.env.FORCE_NUKE_DB === 'true'}, RESTORE=${process.env.RESTORE_BACKUP === 'true'}`);
 
 // ==========================================
 // 1. INSTALAR DEPENDÊNCIAS

@@ -66,7 +66,8 @@ export class OrionPgAdapter {
    * Tradutor de Roles Legadas: Se o banco retornar letras, convertemos para o Enum do Prisma.
    */
   private translateEnum(fieldName: string, val: any): any {
-    if (fieldName === 'role') {
+    const lowerField = fieldName.toLowerCase();
+    if (lowerField.includes('role')) {
       const roleMap: Record<string, string> = {
         'S': 'SUPER_ADMIN',
         'A': 'ADMIN',
@@ -76,9 +77,12 @@ export class OrionPgAdapter {
         'G': 'GUEST',
         'M': 'MANAGER'
       };
-      // Se for uma letra só, tenta mapear, senão retorna o original
       if (typeof val === 'string' && val.length === 1) {
-        return roleMap[val.toUpperCase()] || val;
+        const mapped = roleMap[val.toUpperCase()];
+        if (mapped) {
+          // console.log(`[Adapter/v96] 🔄 Traduzindo Enum: ${fieldName} ('${val}' -> '${mapped}')`);
+          return mapped;
+        }
       }
     }
     return val;
@@ -89,6 +93,11 @@ export class OrionPgAdapter {
 
     // Tratamento de Enums
     const translated = this.translateEnum(fieldName, val);
+
+    // Diagnóstico Crítico: Se o valor ainda for 'S', 'A' ou 'U' após a tradução, logamos
+    if (typeof translated === 'string' && translated.length === 1 && ['S', 'A', 'U'].includes(translated.toUpperCase())) {
+      console.log(`[Adapter/v96] ⚠️ Alerta: Valor bruto detectado em '${fieldName}': '${translated}' (OID: ${oid})`);
+    }
 
     // Serialização Quaint
     if (oid === 20 || oid === 1700) return translated.toString();
