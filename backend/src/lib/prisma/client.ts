@@ -25,10 +25,10 @@ declare global {
 export class OrionPgAdapter {
   readonly flavour = 'postgres';
   readonly provider = 'postgres'; // Compatibility
-  readonly adapterName = 'orion-pg-adapter-v99.1';
+  readonly adapterName = 'orion-pg-adapter-v99.4';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v99.1] Bridge forensic iniciada.`);
+    console.log(`[Adapter/v99.4] Bridge forensic iniciada.`);
   }
 
   // Métodos Auxiliares
@@ -208,39 +208,45 @@ export class OrionPgAdapter {
 }
 
 // Helper Hoisted
+// v99.3: Helper SSL Robusto
 function getSSLConfig(connectionString: string) {
-  let sslConfig: any = false;
-  if (connectionString && connectionString.includes('sslmode')) {
-    sslConfig = { rejectUnauthorized: false };
+  // Sempre começa aceitando certificados inválidos (Servidor Recriado = CA Novo/Desconhecido)
+  let sslConfig: any = { rejectUnauthorized: false };
+
+  // Tenta carregar mTLS se existirem arquivos (Environment Square Cloud)
+  try {
     const certsRoot = '/application/backend';
     const findPath = (f: string) => {
-      const p1 = path.join(certsRoot, f);
-      const p2 = path.join('/application', f);
-      return fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : null);
+      const p1 = path.join(certsRoot, 'certificates', f); // Novo path v99.4
+      const p2 = path.join(certsRoot, f);
+      const p3 = path.join('/application', f);
+      return fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : (fs.existsSync(p3) ? p3 : null));
     };
 
-    const ca = findPath('ca.crt');
-    if (ca) sslConfig.ca = fs.readFileSync(ca, 'utf8');
+    // v99.4: Mapping de Nomes (Legacy vs New)
+    const certPath = findPath('certificate.pem') || findPath('client.crt');
+    const keyPath = findPath('private-key.key') || findPath('client.key');
 
-    const cert = findPath('client.crt');
-    const key = findPath('client.key');
-    if (cert && key) {
-      sslConfig.cert = fs.readFileSync(cert, 'utf8');
-      sslConfig.key = fs.readFileSync(key, 'utf8');
-      console.log('🛡️ [Prisma/v98.8] mTLS v98.8 Ativo.');
+    if (certPath && keyPath) {
+      sslConfig.cert = fs.readFileSync(certPath, 'utf8');
+      sslConfig.key = fs.readFileSync(keyPath, 'utf8');
+      console.log(`🛡️ [Prisma/v99.4] mTLS Carregado: ${certPath}`);
+    } else {
+      console.log(`⚠️ [Prisma/v99.4] mTLS Não encontrado. Usando SSL Simples.`);
     }
+  } catch (e) {
+    console.warn(`⚠️ [Prisma/v99.4] Erro lendo certificados:`, e);
   }
+
   return sslConfig;
 }
 
-// v99: Factory com Configuração Segura de SSL
+// v99.3: Factory com Configuração Híbrida
 const createExtendedClient = (url: string) => {
   try {
     const pool = new pg.Pool({
       connectionString: url,
-      ssl: {
-        rejectUnauthorized: false // v99: Aceitar certificado novo do banco recriado
-      }
+      ssl: getSSLConfig(url) // Usa helper restaurado
     });
 
     const adapter = new OrionPgAdapter(pool);
@@ -290,16 +296,11 @@ const fixDatabaseUrl = (url: string) => {
     // 2. SSL CA Bypass (Devido a recriação do banco)
     if (u.searchParams.has('sslmode') && u.searchParams.get('sslmode') === 'verify-ca') {
       u.searchParams.set('sslmode', 'require'); // Downgrade para aceitar self-signed (com rejectUnauthorized=false no pg)
-      console.log(`[Prisma/v99.1] 🔓 SSL Downgrade: verify-ca -> require (CA inválido detectado).`);
+      console.log(`[Prisma/v99.3] 🔓 SSL Downgrade: verify-ca -> require (CA inválido detectado).`);
     }
 
-    // v99.1: Killswitch mTLS (Certificados antigos são inválidos no novo banco)
-    if (u.searchParams.has('sslcert')) {
-      u.searchParams.delete('sslcert');
-      u.searchParams.delete('sslkey');
-      u.searchParams.delete('sslrootcert');
-      console.log(`[Prisma/v99.1] ✂️ mTLS Removido: Certificados de cliente ignorados para evitar 'unknown ca'.`);
-    }
+    // v99.3: Killswitch Removido (mTLS é obrigatório)
+    // Mantemos os parâmetros na URL mas o Pool vai usar o config explícito do getSSLConfig também.
 
     return u.toString();
   } catch (e) { return url; }

@@ -46,21 +46,60 @@ export async function POST(request: NextRequest) {
         } catch (e) { return url; }
     };
 
-    // v99.2: Brute Force Config Builder
-    // Ignoramos a string de conexão direta para evitar que o pg driver priorize params de mTLS injetados automaticamente.
+    const finalDbUrl = fixDatabaseUrl(dbUrl);
+    const action = request.nextUrl.searchParams.get("action") || "sync";
+
+    // v99.3: Hybrid Authenticator
+    // O servidor EXIGE certificado de cliente (mTLS), mas o certificado do servidor (CA) é desconhecido.
+    // Solução: Enviar client.crt/key mas ignorar validação do server (rejectUnauthorized: false).
+    const fs = require('fs');
+    const path = require('path');
+
+    const getMtlsOptions = () => {
+        try {
+            // Caminhos possíveis para os certificados (Production Environment)
+            const certsRoot = '/application/backend';
+            const findPath = (f: string) => {
+                const p1 = path.join(certsRoot, 'certificates', f); // Novo path v99.4
+                const p2 = path.join(certsRoot, f);
+                const p3 = path.join('/application', f);
+                return fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : (fs.existsSync(p3) ? p3 : null));
+            };
+
+            // v99.4: Mapping de Nomes (Legacy vs New)
+            const certPath = findPath('certificate.pem') || findPath('client.crt');
+            const keyPath = findPath('private-key.key') || findPath('client.key');
+
+            if (certPath && keyPath) {
+                console.log(`[PANIC/v99.4] 🛡️ Certificados Encontrados: ${certPath}`);
+                return {
+                    cert: fs.readFileSync(certPath, 'utf8'),
+                    key: fs.readFileSync(keyPath, 'utf8'),
+                    rejectUnauthorized: false // Ignora CA do servidor
+                };
+            }
+            console.warn(`[PANIC/v99.4] ⚠️ Certificados NÃO encontrados. Tentando conexão insegura...`);
+            return { rejectUnauthorized: false };
+        } catch (e) {
+            console.error("[PANIC/v99.4] Erro ao ler certificados:", e);
+            return { rejectUnauthorized: false };
+        }
+    };
+
     const buildPoolConfig = (url: string) => {
         try {
             const u = new URL(url.replace(/['"]/g, ""));
-            console.log(`[PANIC/v99.2] 🔧 Parsing URL: Host=${u.hostname} Port=${u.port} User=${u.username}`);
+            console.log(`[PANIC/v99.3] 🔧 Parsing URL: Host=${u.hostname} Port=${u.port} User=${u.username}`);
+
+            const sslOptions = getMtlsOptions();
+
             return {
                 user: u.username,
                 password: u.password,
                 host: u.hostname,
                 port: parseInt(u.port) || 5432,
-                database: 'squarecloud', // Force correct DB name
-                ssl: {
-                    rejectUnauthorized: false
-                },
+                database: 'squarecloud',
+                ssl: sslOptions,
                 connectionTimeoutMillis: 5000
             };
         } catch (e) {
