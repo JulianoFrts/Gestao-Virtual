@@ -19,46 +19,52 @@ declare global {
 }
 
 /**
- * v92: Pure-Handmade Adapter Bridge (Deep Fixed)
- * Correção da assinatura de argumentos (args vs values) e formato de linhas (array vs object).
+ * v93: Pure-Handmade Adapter Bridge (Final Precision)
+ * Correção do mapeamento de ColumnTypes para o motor Quaint do Prisma 6.
+ * O erro 'Inconsistent column data' no v92 provou que a conexão está OK.
  */
 class OrionPgAdapter {
   readonly provider = 'postgres';
-  readonly adapterName = 'orion-pg-adapter-v92';
+  readonly adapterName = 'orion-pg-adapter-v93';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v92] Bridge Handmade Inicializada.`);
+    console.log(`[Adapter/v93] Bridge Handmade Inicializada.`);
   }
 
-  // Mapeamento de OID do Postgres para Type IDs da Prisma
-  // Simplificado para garantir compatibilidade
+  /**
+   * Mapeamento preciso para Prisma 6 (Engine Quaint)
+   * 0: Int32, 1: Int64, 2: Float, 3: Double, 4: Boolean, 5: Char, 6: Text, ...
+   * Nota: O erro 'must be an i32' no v92 (que retornava 0) indica que 0 é interpretado como i32.
+   * Portanto, precisamos retornar o ID correto para TEXT/UUID.
+   */
   private mapColumnType(oid: number): number {
     switch (oid) {
-      case 16: return 1; // bool
-      case 17: return 2; // bytea
-      case 20:
-      case 21:
-      case 23: return 3; // int
-      case 700:
-      case 701: return 4; // float
-      case 1700: return 5; // numeric
-      case 1082: return 6; // date
+      case 16: return 4; // Boolean
+      case 21: return 0; // Int32 (int2)
+      case 23: return 0; // Int32 (int4)
+      case 20: return 1; // Int64 (int8)
+      case 700: return 2; // Float
+      case 701: return 3; // Double
+      case 1700: return 2; // Numeric (mapeado para float por segurança)
+      case 1082: return 9; // Date
       case 1114:
-      case 1184: return 7; // time/timestamp
+      case 1184: return 8; // DateTime / Timestamp
       case 114:
-      case 3802: return 8; // json
-      default: return 0; // string/text
+      case 3802: return 11; // Json
+      case 2950: return 6; // UUID -> Text
+      case 18:
+      case 25:
+      case 1043: return 6; // Char/Text/Varchar -> Text
+      default: return 6; // Default to Text para evitar erros de cast numérico
     }
   }
 
   async queryRaw(params: { sql: string; args: any[] }) {
     try {
-      // FIX v92: Prisma passa 'args', pg espera 'values'
       const res = await this.pool.query(params.sql, params.args);
 
-      // FIX v92: Prisma espera 'rows' como Array de Arrays [ [val1, val2], [val1, val2] ]
-      // e não como Array de Objetos [ {col1: val1}, ... ]
-      const rows = res.rows.map(row => res.fields.map(field => row[field.name]));
+      // Converte objetos de linha em arrays puros de valores para o Prisma
+      const rows = res.rows.map(row => res.fields.map(field => (row as any)[field.name]));
 
       return {
         ok: true,
@@ -69,7 +75,7 @@ class OrionPgAdapter {
         }
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v92] Query Error:`, err.message);
+      console.error(`❌ [Adapter/v93] Query Error (${params.sql.substring(0, 50)}...):`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -82,7 +88,7 @@ class OrionPgAdapter {
         value: res.rowCount || 0
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v92] Execute Error:`, err.message);
+      console.error(`❌ [Adapter/v93] Execute Error:`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -94,8 +100,15 @@ class OrionPgAdapter {
       value: {
         queryRaw: async (p: any) => {
           const r = await client.query(p.sql, p.args);
-          const rows = r.rows.map(row => r.fields.map(f => row[f.name]));
-          return { ok: true, value: { columnNames: r.fields.map(f => f.name), columnTypes: r.fields.map(f => this.mapColumnType(f.dataTypeID)), rows: rows } };
+          const rows = r.rows.map(row => r.fields.map(f => (row as any)[f.name]));
+          return {
+            ok: true,
+            value: {
+              columnNames: r.fields.map(f => f.name),
+              columnTypes: r.fields.map(f => this.mapColumnType(f.dataTypeID)),
+              rows: rows
+            }
+          };
         },
         executeRaw: async (p: any) => {
           const r = await client.query(p.sql, p.args);
@@ -110,7 +123,7 @@ class OrionPgAdapter {
 
 const buildPrismaWithFallback = (url: string) => {
   const maskedOriginal = url.split('@')[1] || 'oculta';
-  console.log(`[Prisma/v92] 🚀 Inicializando v92. Target: ${maskedOriginal.split('?')[0]}`);
+  console.log(`[Prisma/v93] 🚀 Inicializando v93. Target: ${maskedOriginal.split('?')[0]}`);
 
   const sslConfig = getSSLConfig(url);
   const getEnv = (key: string) => {
@@ -123,7 +136,7 @@ const buildPrismaWithFallback = (url: string) => {
     ssl: sslConfig,
     connectionTimeoutMillis: 15000,
     idleTimeoutMillis: 30000,
-    max: 10
+    max: 15 // Aumentado para suportar picos
   };
 
   if (getEnv('PGHOST')) poolConfig.host = getEnv('PGHOST');
@@ -136,13 +149,13 @@ const buildPrismaWithFallback = (url: string) => {
     const pool = new pg.Pool(poolConfig);
     const adapter = new OrionPgAdapter(pool);
 
-    console.log(`[Prisma/v92] 🔋 Ativando Modo ADAPTER HANDMADE.`);
+    console.log(`[Prisma/v93] 🔋 Ativando Modo ADAPTER HANDMADE (mTLS).`);
     return new PrismaClient({
       adapter: adapter as any,
       log: ["error"],
     } as any) as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v92] Erro no Modo Adapter. Ativando Fallback...`);
+    console.warn(`⚠️ [Prisma/v93] Falha Crítica de Inicialização. Ativando Modo Nativo...`);
 
     let nativeUrl = url;
     try {
@@ -168,7 +181,7 @@ const buildPrismaWithFallback = (url: string) => {
 
 const getPrisma = () => {
   if (!(globalThis as any).prismaInstance) {
-    const url = process.env.DATABASE_URL?.replace(/['"]/g, "");
+    const url = (process.env.DATABASE_URL || '').replace(/['"]/g, "");
     if (!url) return {} as any;
     (globalThis as any).prismaInstance = buildPrismaWithFallback(url);
   }
@@ -182,7 +195,7 @@ export const prisma = new Proxy({} as any, {
 
     if (p === '$state') {
       const inst = (globalThis as any).prismaInstance;
-      return { v: "92", init: !!inst, type: 'handmade' };
+      return { v: "93", init: !!inst, status: inst ? 'online' : 'uninitialized' };
     }
 
     if (['$$typeof', 'constructor', 'toJSON', 'then', 'inspect'].includes(p)) return undefined;
@@ -201,7 +214,7 @@ export const prisma = new Proxy({} as any, {
       }
       return value;
     } catch (err: any) {
-      console.error(`❌ [Prisma/v92] Proxy Error '${p}':`, err.message);
+      console.error(`❌ [Prisma/v93] Erro de Proxy em '${p}':`, err.message);
       return undefined;
     }
   }
@@ -227,7 +240,7 @@ const getSSLConfig = (connectionString: string) => {
     if (cert && key) {
       sslConfig.cert = fs.readFileSync(cert, 'utf8');
       sslConfig.key = fs.readFileSync(key, 'utf8');
-      console.log('🛡️ [Prisma/v92] mTLS v92 OK.');
+      console.log('🛡️ [Prisma/v93] mTLS v93 Ativo.');
     }
   }
   return sslConfig;
