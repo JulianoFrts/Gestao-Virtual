@@ -19,46 +19,42 @@ declare global {
 }
 
 /**
- * v96.9.9: Orion PG Adapter - Forensic Mode
+ * v97.0: Orion PG Adapter - Forensic Mode
  * Dump total de OIDs e tradução bruta sem filtros.
  */
 export class OrionPgAdapter {
   readonly provider = 'postgres';
-  readonly adapterName = 'orion-pg-adapter-v96.9.9';
+  readonly adapterName = 'orion-pg-adapter-v97.0';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v96.9.9] Bridge forensic iniciada.`);
+    console.log(`[Adapter/v97.0] Bridge forensic iniciada.`);
   }
 
   /**
    * Mapeamento Quaint (Prisma 6)
    * ID 0: Int32, 1: Int64, 2: Float, 3: Double, 4: Numeric, 5: Boolean, 6: Text, 11: Json
    */
-  private mapColumnType(oid: number, fieldName?: string): number {
+  private mapColumnType(oid: number, fieldName?: string): any {
+    let kind = 6; // Default Text
     switch (oid) {
-      case 16: return 5; // Bool
+      case 16: kind = 5; break; // Bool
       case 21:
-      case 23: return 0; // Int32
-      case 20: return 1; // Int64
-      case 700: return 2; // Float
-      case 701: return 3; // Double
-      case 1700: return 4; // Numeric
+      case 23: kind = 0; break; // Int32
+      case 20: kind = 1; break; // Int64
+      case 700: kind = 2; break; // Float
+      case 701: kind = 3; break; // Double
+      case 1700: kind = 4; break; // Numeric
       case 114:
-      case 3802: return 11; // Json
+      case 3802: kind = 11; break; // Json
       case 1082:
       case 1114:
       case 1184:
       case 2950:
       case 18:
       case 25:
-      case 1043: return 6; // Text/UUID/Date
-      default:
-        // Debug para novos OIDs (como Enums customizados)
-        if (fieldName === 'role' || fieldName === 'status') {
-          // console.log(`[Adapter/v96] Enum detectado: ${fieldName} (OID: ${oid})`);
-        }
-        return 6;
+      case 1043: kind = 6; break; // Text/UUID/Date
     }
+    return { kind };
   }
 
   /**
@@ -82,7 +78,7 @@ export class OrionPgAdapter {
       if (trimmed.length === 1) {
         const mapped = roleMap[trimmed];
         if (mapped) {
-          console.log(`[Adapter/v96.9.9] 🔄 Auto-Tradução Universal: ${fieldName} ('${val}' -> '${mapped}')`);
+          console.log(`[Adapter/v97.0] 🔄 Auto-Tradução Universal: ${fieldName} ('${val}' -> '${mapped}')`);
           return mapped;
         }
       }
@@ -93,22 +89,22 @@ export class OrionPgAdapter {
   private serializeValue(val: any, oid: number, fieldName: string): any {
     if (val === null || val === undefined) return null;
 
-    // Interceptação Forense (v96.9.9)
+    // Interceptação Forense (v97.0)
     if (typeof val === 'string' && val.trim().length === 1) {
-      console.log(`[Adapter/v96.9.9] 🛡️ INTERCEPT: [${fieldName}] Raw='${val}' OID=${oid}`);
+      console.log(`[Adapter/v97.0] 🛡️ INTERCEPT: [${fieldName}] Raw='${val}' OID=${oid}`);
     }
 
     // Tradução Universal
     const translated = this.translateEnum(fieldName, val);
 
-    // Inspeção Profunda (v96.9.9)
+    // Inspeção Profunda (v97.0)
     if (typeof translated === 'string' && (translated === 'S' || translated === 'A')) {
-      console.log(`[Adapter/v96.9.9] 🔍 Result [${fieldName}]: Value='${translated}' OID=${oid}`);
+      console.log(`[Adapter/v97.0] 🔍 Result [${fieldName}]: Value='${translated}' OID=${oid}`);
     }
 
     // Diagnóstico de Alerta
     if (typeof translated === 'string' && translated.length === 1 && ['S', 'A', 'U'].includes(translated.toUpperCase())) {
-      console.log(`[Adapter/v96.9.9] ⚠️ Alerta Crítico: Valor bruto escapou em '${fieldName}': '${translated}' (OID: ${oid})`);
+      console.log(`[Adapter/v97.0] ⚠️ Alerta Crítico: Valor bruto escapou em '${fieldName}': '${translated}' (OID: ${oid})`);
     }
 
     // Serialização Quaint (Prisma 6)
@@ -126,12 +122,12 @@ export class OrionPgAdapter {
     try {
       const res = await this.pool.query(params.sql, params.args);
 
-      // Diagnóstico de Estrutura (v96.9.9)
+      // Diagnóstico de Estrutura (v97.0)
       if (params.sql.toLowerCase().includes('auth_credentials') || params.sql.toLowerCase().includes('select')) {
         const fieldDesc = res.fields.map(f => `${f.name}(${f.dataTypeID})`).join(', ');
-        console.log(`[Adapter/v96.9.9] 📡 Query [${res.rowCount} rows]: ${fieldDesc}`);
+        console.log(`[Adapter/v97.0] 📡 Query [${res.rowCount} rows]: ${fieldDesc}`);
         if (res.rows.length > 0) {
-          console.log(`[Adapter/v96.9.9] 🧪 Sample Raw: ${JSON.stringify(res.rows[0]).substring(0, 150)}`);
+          console.log(`[Adapter/v97.0] 🧪 Sample Raw: ${JSON.stringify(res.rows[0]).substring(0, 150)}`);
         }
       }
 
@@ -151,7 +147,7 @@ export class OrionPgAdapter {
         }
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v96.9.9] Query Error:`, err.message);
+      console.error(`❌ [Adapter/v97.0] Query Error:`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -161,7 +157,7 @@ export class OrionPgAdapter {
       const res = await this.pool.query(params.sql, params.args);
       return { ok: true, value: res.rowCount || 0 };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v96.9.9] Execute Error:`, err.message);
+      console.error(`❌ [Adapter/v97.0] Execute Error:`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -231,7 +227,7 @@ const buildPrismaWithFallback = (url: string) => {
       log: ["error"],
     } as any) as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v96.9.9] Falha Crítica. Usando Modo Nativo.`);
+    console.warn(`⚠️ [Prisma/v97.0] Falha Crítica. Usando Modo Nativo.`);
     return new PrismaClient({ datasources: { db: { url } } }) as ExtendedPrismaClient;
   }
 };
@@ -249,7 +245,7 @@ export const prisma = new Proxy({} as any, {
   get: (target, prop) => {
     if (typeof prop === 'symbol') return (target as any)[prop];
     const p = prop as string;
-    if (p === '$state') return { v: "96.5", status: (globalThis as any).prismaInstance ? 'active' : 'idle' };
+    if (p === '$state') return { v: "97.0", status: (globalThis as any).prismaInstance ? 'active' : 'idle' };
     if (['$$typeof', 'constructor', 'toJSON', 'then', 'inspect'].includes(p)) return undefined;
 
     try {
@@ -261,7 +257,7 @@ export const prisma = new Proxy({} as any, {
       }
       return value;
     } catch (err: any) {
-      console.error(`❌ [Prisma/v96.5] Proxy Error '${p}':`, err.message);
+      console.error(`❌ [Prisma/v97.0] Proxy Error '${p}':`, err.message);
       return undefined;
     }
   }
@@ -282,7 +278,7 @@ const getSSLConfig = (connectionString: string) => {
     if (cert && key) {
       sslConfig.cert = fs.readFileSync(cert, 'utf8');
       sslConfig.key = fs.readFileSync(key, 'utf8');
-      console.log('🛡️ [Prisma/v96.5] mTLS v96.5 Ativo.');
+      console.log('🛡️ [Prisma/v97.0] mTLS v97.0 Ativo.');
     }
   }
   return sslConfig;

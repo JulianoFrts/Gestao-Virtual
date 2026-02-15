@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "DATABASE_URL missing" }, { status: 500 });
     }
 
-    // Helper para garantir banco correto (v96.9.9)
+    // Helper para garantir banco correto (v97.0)
     const fixDatabaseUrl = (url: string) => {
         try {
             const u = new URL(url.replace(/['"]/g, ""));
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
         const client = await pool.connect();
         try {
             if (action === "nuke") {
-                console.log("💣 [PANIC RESET] Executando Nuke de Soberania (v96.9.9)...");
+                console.log("💣 [PANIC RESET] Executando Nuke de Soberania (v97.0)...");
                 await client.query('DROP SCHEMA IF EXISTS public CASCADE;');
                 await client.query('CREATE SCHEMA public;');
                 await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
@@ -68,9 +68,9 @@ export async function POST(request: NextRequest) {
             }
 
             if (action === "sync") {
-                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução e restore (v96.9.9)...");
+                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução e restore (v97.0)...");
 
-                // 0. Super-Sovereignty Discovery Protocol (v96.9.9)
+                // 0. Super-Sovereignty Discovery Protocol (v97.0)
                 console.log("🔐 Aplicando Super-Sovereignty Discovery...");
                 try {
                     const dbInfo = await client.query('SELECT current_database() as db, current_schema() as sc, current_user as us;');
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
                     await client.query(`ALTER SCHEMA ${targetSchema} OWNER TO squarecloud;`);
 
                     // Teste de Sanidade SQL
-                    await client.query(`CREATE TABLE IF NOT EXISTS ${targetSchema}._panic_test (id int); DROP TABLE ${targetSchema}._panic_test;`);
+                    await client.query(`CREATE TABLE IF NOT EXISTS public._panic_test (id int); DROP TABLE public._panic_test;`);
                     console.log("✅ Soberania Confirmada e Teste SQL Passou!");
                 } catch (pErr: any) {
                     console.warn("⚠️ Aviso de soberania/discovery:", pErr.message);
@@ -97,13 +97,16 @@ export async function POST(request: NextRequest) {
 
                 const { execSync } = require('child_process');
                 const schemaPath = "prisma/schema.prisma";
-                console.log(`📡 Usando DB URL: ${finalDbUrl.replace(/(:\/\/.*?:)(.*)(@.*)/, '$1****$3')}`);
+
+                // URL Encoding for special characters in password (Fix P1010 suspect)
+                const safeUrl = finalDbUrl.replace(/(postgresql:\/\/.*?):(.*?)@/, (m, p1, p2) => `${p1}:${encodeURIComponent(p2.replace(/['"]/g, ''))}@`);
+                console.log(`📡 Usando DB URL (safe): ${safeUrl.replace(/(:\/\/.*?:)(.*)(@.*)/, '$1****$3')}`);
 
                 try {
                     // 1. DB PUSH
                     console.log("⚒️ Rodando prisma db push...");
                     const pushOutput = execSync(`npx prisma db push --accept-data-loss --schema=${schemaPath}`, {
-                        env: { ...process.env, DATABASE_URL: finalDbUrl },
+                        env: { ...process.env, DATABASE_URL: safeUrl },
                         encoding: 'utf8'
                     });
                     console.log("✅ DB PUSH Sucesso!");
@@ -111,7 +114,7 @@ export async function POST(request: NextRequest) {
                     // 2. RESTORE
                     console.log("📥 Rodando restore-from-backup...");
                     const restoreOutput = execSync('npx tsx src/scripts/restore-from-backup.ts', {
-                        env: { ...process.env, DATABASE_URL: finalDbUrl },
+                        env: { ...process.env, DATABASE_URL: safeUrl },
                         encoding: 'utf8'
                     });
                     console.log("✅ RESTORE Sucesso!");
