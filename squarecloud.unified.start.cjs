@@ -70,14 +70,15 @@ if (DEPLOY_ID !== '[[DEPLOY_ID]]') {
 console.log('==================================================');
 console.log('🚀 GESTÃO VIRTUAL — Servidor Unificado');
 console.log('==================================================');
+console.log('');
+console.log('##################################################');
+console.log('🚨 ALERTA DE CONFIGURAÇÃO DE BANCO DE DADOS:');
+console.log(`🔥 NUKE ATIVO   : ${process.env.FORCE_NUKE_DB === 'true' ? '🚀 SIM (LIMPANDO TUDO!)' : '---'}`);
+console.log(`📥 RESTORE ATIVO: ${process.env.RESTORE_BACKUP === 'true' ? '🚀 SIM (RESTAURANDO 08/02)' : '---'}`);
+console.log('##################################################');
+console.log('');
 console.log(`📦 Backend Dir: ${backendDir}`);
 console.log(`📦 Frontend Dist: ${frontendDistDir}`);
-console.log('');
-console.log('--------------------------------------------------');
-console.log('🛠️  CONFIGURAÇÃO DE BANCO DE DADOS:');
-console.log(`🔥 FORCE_NUKE_DB : ${process.env.FORCE_NUKE_DB === 'true' ? '✅ ATIVO (CUIDADO!)' : '❌ Inativo'}`);
-console.log(`📥 RESTORE_BACKUP: ${process.env.RESTORE_BACKUP === 'true' ? '✅ ATIVO' : '❌ Inativo'}`);
-console.log('--------------------------------------------------');
 console.log('');
 
 // ==========================================

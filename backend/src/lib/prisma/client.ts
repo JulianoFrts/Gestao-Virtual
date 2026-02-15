@@ -19,15 +19,15 @@ declare global {
 }
 
 /**
- * v96.6: Orion PG Adapter - Universal Tracking
- * Adiciona logs em todos os níveis de processamento para capturar fugas de dados brutos.
+ * v96.7: Orion PG Adapter - Total Resilience
+ * Bridge universal de enums com trim e rastro completo em todos os métodos.
  */
 export class OrionPgAdapter {
   readonly provider = 'postgres';
-  readonly adapterName = 'orion-pg-adapter-v96.6';
+  readonly adapterName = 'orion-pg-adapter-v96.7';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v96.6] Bridge Iniciada.`);
+    console.log(`[Adapter/v96.7] Bridge Iniciada.`);
   }
 
   /**
@@ -77,11 +77,14 @@ export class OrionPgAdapter {
       'M': 'MANAGER'
     };
 
-    if (typeof val === 'string' && val.length === 1) {
-      const mapped = roleMap[val.toUpperCase()];
-      if (mapped) {
-        console.log(`[Adapter/v96.5] 🔄 Auto-Tradução Universal: ${fieldName} ('${val}' -> '${mapped}')`);
-        return mapped;
+    if (typeof val === 'string') {
+      const trimmed = val.trim().toUpperCase();
+      if (trimmed.length === 1) {
+        const mapped = roleMap[trimmed];
+        if (mapped) {
+          console.log(`[Adapter/v96.7] 🔄 Auto-Tradução Universal: ${fieldName} ('${val}' -> '${mapped}')`);
+          return mapped;
+        }
       }
     }
     return val;
@@ -93,14 +96,14 @@ export class OrionPgAdapter {
     // Tradução Universal
     const translated = this.translateEnum(fieldName, val);
 
-    // Inspeção Profunda (Aparece no log se o valor for suspeito)
-    if (typeof translated === 'string' && translated.length === 1) {
-      console.log(`[Adapter/v96.5] 🔍 Inspect [${fieldName}]: Value='${translated}' OID=${oid}`);
+    // Inspeção Profunda (v96.7)
+    if (typeof translated === 'string' && (translated.length === 1 || translated === 'S' || translated === 'A')) {
+      console.log(`[Adapter/v96.7] 🔍 Inspect [${fieldName}]: Value='${translated}' OID=${oid}`);
     }
 
     // Diagnóstico de Alerta
     if (typeof translated === 'string' && translated.length === 1 && ['S', 'A', 'U'].includes(translated.toUpperCase())) {
-      console.log(`[Adapter/v96.5] ⚠️ Alerta Crítico: Valor bruto escapou em '${fieldName}': '${translated}' (OID: ${oid})`);
+      console.log(`[Adapter/v96.7] ⚠️ Alerta Crítico: Valor bruto escapou em '${fieldName}': '${translated}' (OID: ${oid})`);
     }
 
     // Serialização Quaint (Prisma 6)
@@ -144,7 +147,7 @@ export class OrionPgAdapter {
       const res = await this.pool.query(params.sql, params.args);
       return { ok: true, value: res.rowCount || 0 };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v96.5] Execute Error:`, err.message);
+      console.error(`❌ [Adapter/v96.7] Execute Error:`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -214,7 +217,7 @@ const buildPrismaWithFallback = (url: string) => {
       log: ["error"],
     } as any) as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v96.5] Falha Crítica. Usando Modo Nativo.`);
+    console.warn(`⚠️ [Prisma/v96.7] Falha Crítica. Usando Modo Nativo.`);
     return new PrismaClient({ datasources: { db: { url } } }) as ExtendedPrismaClient;
   }
 };
