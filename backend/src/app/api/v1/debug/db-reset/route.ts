@@ -34,13 +34,18 @@ export async function POST(request: NextRequest) {
                 console.log(`[PANIC/v99.1] 🔓 SSL Downgrade: verify-ca -> require.`);
             }
 
-            // v99.1: Killswitch mTLS
-            if (u.searchParams.has('sslcert')) {
-                u.searchParams.delete('sslcert');
-                u.searchParams.delete('sslkey');
-                u.searchParams.delete('sslrootcert');
-                console.log(`[PANIC/v99.1] ✂️ mTLS Removido.`);
-            }
+            // v99.14: Child Process SSL Fix (Restore mTLS)
+            // O Child Process (restore script) precisa dos certificados na URL para conectar com privilégios.
+            // Os paths são fixados para o ambiente Square Cloud.
+            console.log(`[PANIC/v99.14] 🛡️ Injetando Certificados na URL do Child Process.`);
+            u.searchParams.set('sslmode', 'verify-ca');
+            u.searchParams.set('sslcert', '/application/backend/certificates/certificate.pem');
+            u.searchParams.set('sslkey', '/application/backend/certificates/private-key.key');
+            u.searchParams.set('sslrootcert', '/application/backend/certificates/ca-certificate.crt');
+
+            // Log seguro (Ocultando senha na URL printada)
+            const safeLogUrl = u.toString().replace(/:[^:@]+@/, ':****@');
+            console.log(`[PANIC/v99.14] 🔗 URL Child Process (Sanitized): ${safeLogUrl}`);
 
             return u.toString();
         } catch (e) { return url; }
