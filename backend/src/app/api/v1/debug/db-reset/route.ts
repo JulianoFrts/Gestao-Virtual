@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "DATABASE_URL missing" }, { status: 500 });
     }
 
-    // Helper para garantir banco correto (v97.2)
+    // Helper para garantir banco correto (v97.3)
     const fixDatabaseUrl = (url: string) => {
         try {
             const u = new URL(url.replace(/['"]/g, ""));
@@ -29,13 +29,14 @@ export async function POST(request: NextRequest) {
                 console.log(`[PANIC] Redirecionando banco de ${u.pathname || 'default'} para /squarecloud`);
                 u.pathname = "/squarecloud";
             }
+
+            // Forçamos schema public na URL base
             u.searchParams.set("schema", "public");
             return u.toString();
         } catch (e) { return url; }
     };
 
     const finalDbUrl = fixDatabaseUrl(dbUrl);
-
     const action = request.nextUrl.searchParams.get("action") || "nuke";
 
     console.log("💣 [PANIC RESET] Instando limpeza bruta via API...");
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
         const client = await pool.connect();
         try {
             if (action === "nuke") {
-                console.log("💣 [PANIC RESET] Executando Nuke de Soberania (v97.1)...");
+                console.log("💣 [PANIC RESET] Executando Nuke de Soberania (v97.3)...");
                 await client.query('DROP SCHEMA IF EXISTS public CASCADE;');
                 await client.query('CREATE SCHEMA public;');
                 await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
@@ -60,30 +61,29 @@ export async function POST(request: NextRequest) {
             }
 
             if (action === "sync") {
-                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução e restore (v97.1)...");
+                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução e restore (v97.3)...");
 
-                // 0. Super-Sovereignty Discovery Protocol (v97.1)
-                console.log("🔐 Aplicando Forensic Discovery...");
+                // 0. Absolute Sovereignty Protocol (v97.3)
+                console.log("🔐 Aplicando Absolute Sovereignty...");
                 try {
                     const dbInfo = await client.query('SELECT current_database() as db, current_schema() as sc, current_user as us;');
                     console.log(`📊 Realm: DB="${dbInfo.rows[0].db}", Schema="${dbInfo.rows[0].sc}", User="${dbInfo.rows[0].us}"`);
 
-                    // Diagnóstico de Usuário e Owner
-                    const uStat = await client.query('SELECT usename, usecreatedb, usesuper FROM pg_user WHERE usename = current_user;');
-                    const dbOwner = await client.query('SELECT d.datname, u.usename FROM pg_database d JOIN pg_user u ON d.datdba = u.usesysid WHERE d.datname = current_database();');
-                    console.log(`👤 User: Createdb=${uStat.rows[0].usecreatedb}, Super=${uStat.rows[0].usesuper} | DB Owner=${dbOwner.rows[0].usename}`);
-
-                    // Verificação de privilégios de schema
-                    const canCreate = await client.query("SELECT has_schema_privilege('public', 'CREATE') as can_create, has_schema_privilege('public', 'USAGE') as can_usage;");
-                    console.log(`🛡️ Schema public: CREATE=${canCreate.rows[0].can_create}, USAGE=${canCreate.rows[0].can_usage}`);
-
-                    // Protocolo de Soberania Absoluta
                     const targetSchema = dbInfo.rows[0].sc || 'public';
                     const targetDB = dbInfo.rows[0].db;
 
+                    // Soberania em Nível de Database e Schema
                     await client.query(`GRANT ALL PRIVILEGES ON DATABASE ${targetDB} TO squarecloud;`);
                     await client.query(`GRANT ALL ON SCHEMA ${targetSchema} TO squarecloud;`);
+                    await client.query(`GRANT ALL ON SCHEMA ${targetSchema} TO public;`);
                     await client.query(`ALTER SCHEMA ${targetSchema} OWNER TO squarecloud;`);
+
+                    // Soberania em Nível de Objetos (Absolute Grant v97.3)
+                    try {
+                        await client.query(`GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA ${targetSchema} TO squarecloud;`);
+                        await client.query(`GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA ${targetSchema} TO squarecloud;`);
+                        await client.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA ${targetSchema} GRANT ALL ON TABLES TO squarecloud;`);
+                    } catch (e) { }
 
                     // Teste de Sanidade SQL
                     await client.query(`CREATE TABLE IF NOT EXISTS public._panic_test (id int); DROP TABLE public._panic_test;`);
@@ -95,14 +95,9 @@ export async function POST(request: NextRequest) {
                 const { execSync } = require('child_process');
                 const schemaPath = "prisma/schema.prisma";
 
-                // URL Encoding robusta e injeção de search_path
-                const urlObj = new URL(finalDbUrl.replace(/['"]/g, ''));
-                urlObj.password = encodeURIComponent(urlObj.password);
-                urlObj.searchParams.set("schema", "public");
-                urlObj.searchParams.set("search_path", "public");
-                const safeUrl = urlObj.toString();
-
-                console.log(`📡 Usando DB URL (safe): ${safeUrl.replace(/(:\/\/.*?:)(.*)(@.*)/, '$1****$3')}`);
+                // URL Sanitizada SEM redouble encoding (v97.3)
+                const safeUrl = finalDbUrl.replace(/['"]/g, '');
+                console.log(`📡 Usando DB URL: ${safeUrl.replace(/(:\/\/.*?:)(.*)(@.*)/, '$1****$3')}`);
 
                 try {
                     // 1. DB PUSH
