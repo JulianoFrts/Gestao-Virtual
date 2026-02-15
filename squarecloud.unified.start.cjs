@@ -149,48 +149,35 @@ try {
 
 // ==========================================
 // 2. SSL / mTLS / CERTIFICADOS
-// (Lógica mantida do backend/squarecloud.start.cjs)
 // ==========================================
 
 const { Pool } = require('pg');
-
-let dbUrl = process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/['"]/g, "") : undefined;
-
-if (dbUrl) {
-    if (!dbUrl.includes('sslmode=')) {
-        const separator = dbUrl.includes('?') ? '&' : '?';
-        dbUrl = dbUrl + separator + 'sslmode=require';
-    }
-    dbUrl = dbUrl.replace(/[&?]uselibpqcompat=true/, '');
-}
-
-if (!dbUrl) {
-    console.error('🚨 ERRO: DATABASE_URL não encontrada!');
-}
 
 // Certificados
 const certsDir = path.join(backendDir, 'certificates');
 if (!fs.existsSync(certsDir)) fs.mkdirSync(certsDir, { recursive: true });
 
-// v178: Simplificação de SSL - Mantemos apenas a cópia básica, mas não injetamos na URL
-// Apenas para caso precise futuramente.
-const caCertPath = path.join(certsDir, 'ca.crt');
-const rawCaPath = path.join(certsDir, 'ca-certificate.crt');
+// v178: Simplificação de SSL - Mantemos apenas a cópia básica
+const caCertPath = path.join(certsDir, 'ca-certificate.crt');
+const clientCertPath = path.join(certsDir, 'certificate.pem');
+const clientKeyPath = path.join(certsDir, 'private-key.key');
 
-if (fs.existsSync(rawCaPath) && !fs.existsSync(caCertPath)) {
-    console.log('📦 Copiando ca-certificate.crt -> ca.crt');
-    fs.copyFileSync(rawCaPath, caCertPath);
-}
+const ca = fs.existsSync(caCertPath) ? fs.readFileSync(caCertPath) : null;
+const cert = fs.existsSync(clientCertPath) ? fs.readFileSync(clientCertPath) : null;
+const key = fs.existsSync(clientKeyPath) ? fs.readFileSync(clientKeyPath) : null;
 
-const sslConfig = { rejectUnauthorized: false };
-console.log('[SSL] ℹ️ Modo v178 (Simplificado): rejectUnauthorized=false');
+const sslConfig = ca && cert && key ?
+    { ca, cert, key, rejectUnauthorized: false } :
+    { rejectUnauthorized: false };
+
+console.log('[SSL] ℹ️ Modo v200-Neon: SSL Configurado.');
 
 // ==========================================
 // 2. PROBE DE BANCO DE DADOS
 // ==========================================
 
 async function probeDatabase() {
-    console.log('🧪 Iniciando Probe de Banco...');
+    console.log('🧪 Iniciando Probe de Banco (v200 - Neon Ready)...');
 
     const connectionString = process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/['"]/g, "") : undefined;
     if (!connectionString) {
@@ -200,27 +187,26 @@ async function probeDatabase() {
 
     const cleanUrlForProbe = (u) => u.split('?')[0];
 
-    // v161: Candidatos robustos garantindo o pathname /dbname
-    const candidates = [];
-    try {
-        const base = new URL(connectionString);
-        const hosts = [base.hostname];
-        const ports = [base.port || '7161'];
-        // v178: Prioridade DEFINITIVA para 'gestaodb'
-        const dbs = ['gestaodb', 'squarecloud', 'postgres', 'admin'];
+    // v200: Neon Detection
+    const isNeon = connectionString.includes('neon.tech');
+    console.log(`📡 Modo de Conexão: ${isNeon ? '🚀 Neon (Direct Stream)' : '🛡️ Square Cloud (mTLS required)'}`);
 
-        for (const db of dbs) {
-            const u = new URL(connectionString);
-            u.pathname = `/${db}`;
-            candidates.push(u.toString());
-        }
-        candidates.push(connectionString); // Original como fallback
-    } catch (e) {
-        candidates.push(connectionString);
+    const candidates = [];
+    candidates.push(connectionString); // Prioridade máxima para a string atualizada
+
+    if (!isNeon) {
+        try {
+            const base = new URL(connectionString);
+            const dbs = ['squarecloud', 'postgres', 'admin'];
+            for (const db of dbs) {
+                const u = new URL(connectionString);
+                u.pathname = `/${db}`;
+                candidates.push(u.toString());
+            }
+        } catch (e) { }
     }
 
-    // v171: Garante que o default seja o squarecloud se nada for encontrado
-    let finalUrl = candidates.find(c => c.includes('/gestaodb')) || candidates[0];
+    let finalUrl = candidates[0];
     let success = false;
 
     for (const url of candidates) {
@@ -229,8 +215,8 @@ async function probeDatabase() {
 
         const probePool = new Pool({
             connectionString: cleanUrlForProbe(url),
-            ssl: { rejectUnauthorized: false },
-            connectionTimeoutMillis: 5000
+            ssl: isNeon ? { rejectUnauthorized: false } : sslConfig,
+            connectionTimeoutMillis: 10000
         });
 
         try {
@@ -242,7 +228,7 @@ async function probeDatabase() {
             success = true;
             client.release();
             await probePool.end();
-            if (dbName === 'gestaodb') break;
+            break;
         } catch (err) {
             console.log(`❌ Falha: ${err.message}`);
             await probePool.end();
@@ -259,20 +245,6 @@ async function probeDatabase() {
 function buildBackendIfNeeded(commonEnv) {
     const buildSentinel = path.join(backendDir, '.next', '.square_build_complete_v2');
 
-    // Limpa legado
-    const legacyPaths = [
-        'src/app/api/v1/time-records',
-        'src/app/api/v1/daily-reports',
-        'src/app/api/v1/work-stages'
-    ];
-    legacyPaths.forEach(p => {
-        const fullPath = path.join(backendDir, p);
-        if (fs.existsSync(fullPath)) {
-            console.log(`🧹 Removendo pasta legada: ${p}`);
-            try { fs.rmSync(fullPath, { recursive: true, force: true }); } catch (e) { }
-        }
-    });
-
     // 🔧 Patch: Desabilitar output standalone para compatibilidade com `next start`
     const nextConfigPath = path.join(backendDir, 'next.config.mjs');
     if (fs.existsSync(nextConfigPath)) {
@@ -282,26 +254,8 @@ function buildBackendIfNeeded(commonEnv) {
                 config = config.replace(/output:\s*['"]standalone['"]/g, '// output: "standalone" // Desabilitado para SquareCloud (next start)');
                 fs.writeFileSync(nextConfigPath, config);
                 console.log('🔧 Patch: output standalone DESABILITADO no next.config.mjs');
-
-                // Forçar rebuild se o patch foi aplicado (old build usava standalone)
-                const oldSentinel = path.join(backendDir, '.next', '.square_build_complete_unified');
-                if (fs.existsSync(oldSentinel)) {
-                    console.log('🧹 Removendo sentinel antigo (rebuild necessário)...');
-                    try { fs.unlinkSync(oldSentinel); } catch (e) { }
-                }
-                if (fs.existsSync(buildSentinel)) {
-                    try { fs.unlinkSync(buildSentinel); } catch (e) { }
-                }
-                // Limpar build antigo com standalone
-                const nextDir = path.join(backendDir, '.next');
-                if (fs.existsSync(nextDir)) {
-                    console.log('🧹 Limpando build antigo (.next)...');
-                    try { fs.rmSync(nextDir, { recursive: true, force: true }); } catch (e) { }
-                }
             }
-        } catch (e) {
-            console.warn('⚠️ Erro ao patchar next.config.mjs:', e.message);
-        }
+        } catch (e) { }
     }
 
     if (!fs.existsSync(buildSentinel)) {
@@ -315,13 +269,13 @@ function buildBackendIfNeeded(commonEnv) {
             runPkg('build', { cwd: backendDir, env: commonEnv });
 
             fs.mkdirSync(path.dirname(buildSentinel), { recursive: true });
-            fs.writeFileSync(buildSentinel, `Build v165 complete at ${new Date().toISOString()}`);
+            fs.writeFileSync(buildSentinel, `Build v200 complete at ${new Date().toISOString()}`);
             console.log('✅ Build finalizado com sucesso!');
         } catch (e) {
             console.error('⚠️ Falha no build automático:', e.message);
         }
     } else {
-        console.log('✅ Build do backend já existe (sentinel v2 encontrado).');
+        console.log('✅ Build do backend já existe.');
     }
 }
 
@@ -330,17 +284,22 @@ function buildBackendIfNeeded(commonEnv) {
 // ==========================================
 
 function setupEnvironment(finalUrl) {
-    // v178: Simplificação (Nenhum path de certificado injetado)
-
-    // v178: SSL Simplificado (User Request)
-    // Removemos caminhos de certificado para evitar 'unknown ca'.
-    // O servidor SquareCloud aceita conexão apenas com senha + sslmode=require.
-    const sslParams = `&schema=public&sslmode=require`;
+    const isNeon = finalUrl.includes('neon.tech');
     const cleanBaseUrl = finalUrl.split('?')[0];
 
-    // v178: URLs Limpas
-    const finalNakedUrl = `${cleanBaseUrl}?sslmode=require`;
-    const finalAppUrl = `${cleanBaseUrl}?${sslParams.substring(1)}`;
+    let finalAppUrl;
+    if (isNeon) {
+        // Neon usa pooler com sslmode=require
+        finalAppUrl = `${cleanBaseUrl}?sslmode=require`;
+        console.log('🚀 Configurando DATABASE_URL para Neon...');
+    } else {
+        // v178: URLs com mTLS para Prisma (Usando caminhos absolutos)
+        const prismaSslParams = `&sslmode=require&sslcert=${clientCertPath}&sslkey=${clientKeyPath}&sslrootcert=${caCertPath}`;
+        finalAppUrl = `${cleanBaseUrl}?${prismaSslParams.substring(1)}`;
+        console.log('🛡️ Configurando DATABASE_URL com mTLS...');
+    }
+
+    const finalNakedUrl = finalAppUrl;
 
     // Parse da URL
     let pgEnvs = {};
@@ -351,11 +310,9 @@ function setupEnvironment(finalUrl) {
             PGPASSWORD: urlObj.password,
             PGHOST: urlObj.hostname,
             PGPORT: urlObj.port || '7161',
-            PGDATABASE: urlObj.pathname.split('/')[1] || 'squarecloud'
+            PGDATABASE: urlObj.pathname.split('/')[1] || 'neondb'
         };
-    } catch (e) {
-        console.warn('⚠️ Falha no parsing da URL.');
-    }
+    } catch (e) { }
 
     // Escrever .env no diretório do backend
     const nextAuthUrl = process.env.NEXTAUTH_URL || 'https://www.gestaovirtual.com';
@@ -369,18 +326,13 @@ function setupEnvironment(finalUrl) {
             `PGDATABASE="${pgEnvs.PGDATABASE}"`,
             `PRISMA_CLIENT_ENGINE_TYPE="library"`,
             `PRISMA_CLI_QUERY_ENGINE_TYPE="library"`,
-            `PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK="1"`,
-            `PRISMA_SCHEMA_DISABLE_SEARCH_PATH_CHECK="1"`,
-            `PRISMA_SCHEMA_DISABLE_DATABASE_CREATION="1"`,
             `AUTH_TRUST_HOST="1"`,
             `NEXTAUTH_URL="${nextAuthUrl}"`,
             `TRUST_PROXY="1"`,
             `INTERNAL_PROXY_KEY="${INTERNAL_PROXY_KEY}"`,
             ''
         ].join('\n'));
-    } catch (err) {
-        console.warn('⚠️ Erro ao escrever .env:', err.message);
-    }
+    } catch (err) { }
 
     return {
         finalAppUrl,
@@ -390,17 +342,7 @@ function setupEnvironment(finalUrl) {
             ...process.env,
             ...pgEnvs,
             DATABASE_URL: finalAppUrl,
-            // v178: Enviando SSL params simplificados para o env também
             PGSSLMODE: 'require',
-            PRISMA_CLIENT_ENGINE_TYPE: 'library',
-            PRISMA_CLI_QUERY_ENGINE_TYPE: 'library',
-            PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK: '1',
-            PRISMA_SCHEMA_DISABLE_SEARCH_PATH_CHECK: '1',
-            PRISMA_SCHEMA_DISABLE_DATABASE_CREATION: '1',
-            AUTH_TRUST_HOST: '1',
-            TRUST_PROXY: '1',
-            INTERNAL_PROXY_KEY: INTERNAL_PROXY_KEY,
-            CERT_PATH_ROOT: backendDir,
             NODE_ENV: 'production'
         }
     };
@@ -411,6 +353,7 @@ function setupEnvironment(finalUrl) {
 // ==========================================
 
 async function syncSchemaAndSeeds(commonEnv, finalAppUrl, finalNakedUrl, success) {
+    const isNeon = finalAppUrl.includes('neon.tech');
     const shouldNuke = success && process.env.FORCE_NUKE_DB === 'true';
     const shouldSync = success && (
         shouldNuke ||
@@ -419,110 +362,68 @@ async function syncSchemaAndSeeds(commonEnv, finalAppUrl, finalNakedUrl, success
         process.env.FORCE_SEED === 'true'
     );
 
-    // v178: CLI Booster (Prisma Engine Powered)
-    // Substituindo o driver 'pg' (que falha no SSL) pelo Prisma CLI.
-    console.log('🛡️ [v178] EXECUTANDO BOOSTER VIA PRISMA CLI (Target: gestaodb)...');
+    console.log(`🛡️ [v200] EXECUTANDO BOOSTER SQL NO BANCO DESTINO: ${isNeon ? 'NEON' : 'SQUARE'}...`);
     try {
         const sqlCommands = [
-            // Garantir permissões no Schema Public
             `GRANT USAGE, CREATE ON SCHEMA public TO public;`,
-            `GRANT USAGE, CREATE ON SCHEMA public TO squarecloud;`,
-            `GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO squarecloud;`,
-            `GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO squarecloud;`,
-            `GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO squarecloud;`,
-            `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO squarecloud;`,
-            `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO squarecloud;`,
-            // Garantir Owner e Conexão Explicitamente no gestaodb
-            `ALTER DATABASE gestaodb OWNER TO squarecloud;`,
-            `GRANT CONNECT ON DATABASE gestaodb TO public;`,
-            `GRANT CONNECT ON DATABASE gestaodb TO squarecloud;`,
-            // Garantir Owner do Schema
-            `ALTER SCHEMA public OWNER TO squarecloud;`
+            `GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO public;`,
+            `ALTER SCHEMA public OWNER TO current_user;`
         ].join('\n');
 
-        // Executar tudo em um único comando via stdin na URL Naked (gestaodb)
-        // A url finalNakedUrl já tem sslmode=require (v178)
-        const successGrant = runSqlViaPrisma(sqlCommands, finalNakedUrl, commonEnv);
+        const boosterPool = new Pool({
+            connectionString: finalNakedUrl.split('?')[0],
+            ssl: isNeon ? { rejectUnauthorized: false } : sslConfig,
+            connectionTimeoutMillis: 10000
+        });
 
-        if (successGrant) {
-            console.log('✅ [v178] Booster CLI aplicado com sucesso!');
-        } else {
-            console.warn('⚠️ [v178] Booster CLI retornou erro (ver logs acima).');
+        try {
+            const client = await boosterPool.connect();
+            await client.query(sqlCommands);
+            console.log('✅ [v200] Booster SQL aplicado com sucesso!');
+            client.release();
+        } catch (err) {
+            console.warn('⚠️ [v200] Falha no Booster SQL:', err.message);
+        } finally {
+            await boosterPool.end();
         }
 
-    } catch (e) {
-        console.warn('⚠️ [v178] Falha CRÍTICA no Booster CLI:', e.message);
-    }
+    } catch (e) { }
 
     if (shouldNuke) {
-        console.log('💣 [v153] Iniciando NUKE do banco via Prisma...');
+        console.log('💣 [v153] Iniciando NUKE do banco...');
         const nukeSql = 'DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;';
         runSqlViaPrisma(nukeSql, finalAppUrl, commonEnv);
     }
 
     if (shouldSync) {
-        console.log('🏗️  [v162] Sincronizando Estrutura via Prisma Migrations...');
+        console.log('🏗️  [v162] Sincronizando Estrutura...');
         try {
-            console.log('🚀 Executando: prisma migrate deploy...');
-            runPkg('prisma migrate deploy', {
+            runPkg('prisma db push --accept-data-loss', {
                 env: { ...commonEnv, NODE_TLS_REJECT_UNAUTHORIZED: '0' },
                 cwd: backendDir
             });
-            console.log('✅ [v162] Migrations aplicadas com sucesso!');
+            console.log('✅ [v162] Estrutura sincronizada!');
         } catch (e) {
-            console.warn('⚠️ [v162] Falha nas Migrations, tentando db push como fallback...', e.message);
-            try {
-                runPkg('prisma db push --skip-generate --accept-data-loss', {
-                    env: { ...commonEnv, NODE_TLS_REJECT_UNAUTHORIZED: '0' },
-                    cwd: backendDir
-                });
-                console.log('✅ [v162] Estrutura sincronizada via db push!');
-            } catch (e2) {
-                console.warn('⚠️ [v162] Falha no db push, tentando injeção manual...');
-                try {
-                    const sqlStructure = execSync(
-                        'npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script',
-                        { env: commonEnv, encoding: 'utf8', cwd: backendDir }
-                    );
-                    if (sqlStructure && sqlStructure.trim().length > 10) {
-                        runSqlViaPrisma(sqlStructure, finalAppUrl, commonEnv);
-                    }
-                } catch (e3) {
-                    console.error('❌ Falha Total na Sincronização:', e3.message);
-                }
-            }
+            console.error('❌ Falha na Sincronização:', e.message);
         }
 
-        // v154: Restauração com Booster Interno (Prisma powered)
-        console.log('--------------------------------------------------');
-        console.log('📥 [v155] INICIANDO RESTAURAÇÃO (INTERNAL BOOSTER ACTIVE)');
+        console.log('📥 [v155] INICIANDO RESTAURAÇÃO...');
         try {
-            const tsxPath = path.join(backendDir, 'node_modules', '.bin', 'tsx');
-            const cmd = fs.existsSync(tsxPath) ? `node ${tsxPath} src/scripts/restore-from-backup.ts` : 'npx tsx src/scripts/restore-from-backup.ts';
-
-            execSync(cmd, {
+            execSync('npx tsx src/scripts/restore-from-backup.ts', {
                 stdio: 'inherit',
-                env: { ...commonEnv, NODE_OPTIONS: '--import tsx' },
+                env: { ...commonEnv },
                 cwd: backendDir
             });
             console.log('✅ [v154] Processo de restauro finalizado!');
-        } catch (e) {
-            console.error('❌ [v154] Erro no Restauro:', e.message);
-        }
-        console.log('--------------------------------------------------');
+        } catch (e) { }
 
         if (process.env.RUN_SEEDS === 'true' || process.env.FORCE_SEED === 'true') {
             console.log('🌟 Executando Master Seed...');
             try {
                 execSync('npx tsx src/scripts/master-seed.ts', { stdio: 'inherit', env: commonEnv, cwd: backendDir });
-            } catch (e) {
-                console.warn('⚠️ Erro no seeding:', e.message);
-            }
-            console.log('✅ Master Seed finalizado!');
+            } catch (e) { }
         }
     }
-
-    // ==========================================
 }
 
 // ==========================================
@@ -758,23 +659,12 @@ function startGateway() {
 
 (async () => {
     try {
-        // 1. Probe (para definir URL final)
         const { finalUrl, success } = await probeDatabase();
-
-        // 2. Setup (Certs + Env)
         const { commonEnv, finalAppUrl, finalNakedUrl } = setupEnvironment(finalUrl);
-
-        // 3. Backend Build (se precisar)
         buildBackendIfNeeded(commonEnv);
-
-        // 4. Sync / Seeds / Nuke
         await syncSchemaAndSeeds(commonEnv, finalAppUrl, finalNakedUrl, success);
-
-        // 5. Start Gateway e Backend em PARALELO
-        // O Gateway serve o frontend imediatamente. O Backend sobe no seu tempo.
         startGateway();
         await startBackend(commonEnv);
-
     } catch (e) {
         console.error('🔥 CRASH FATAL:', e);
         process.exit(1);

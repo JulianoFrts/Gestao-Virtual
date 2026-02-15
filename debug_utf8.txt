@@ -1,0 +1,24 @@
+﻿Loading .env from C:\Users\Juliano Freitas\Documents\GitHub\Gestao-Virtual\backend\.env
+Original DB URL: postgresql://squarecloud:****@square-cloud-db-1480ff49ea5347c7972935ef4523b9ef.squareweb.app:7161/squarecloud?sslmode=require
+Certs found: { ca: true, cert: true, key: true }
+
+--- Testing: Probe Default (No Certs) ---
+URL: postgresql://squarecloud:****@square-cloud-db-1480ff49ea5347c7972935ef4523b9ef.squareweb.app:7161/squarecloud?sslmode=require
+ÔØî Failed: connection requires a valid client certificate
+
+--- Testing: mTLS (Full Certs) ---
+URL: postgresql://squarecloud:****@square-cloud-db-1480ff49ea5347c7972935ef4523b9ef.squareweb.app:7161/squarecloud?sslmode=require
+Ô£à Connected!
+Results: {
+  current_database: 'squarecloud',
+  current_user: 'squarecloud',
+  current_schema: 'public'
+}
+
+--- Testing: mTLS + gestaodb ---
+URL: postgresql://squarecloud:****@square-cloud-db-1480ff49ea5347c7972935ef4523b9ef.squareweb.app:7161/gestaodb?sslmode=require
+ÔØî Failed: database "gestaodb" does not exist
+
+--- Testing: uselibpqcompat=true ---
+URL: postgresql://squarecloud:****@square-cloud-db-1480ff49ea5347c7972935ef4523b9ef.squareweb.app:7161/squarecloud?sslmode=require&uselibpqcompat=true
+ÔØî Failed: connection requires a valid client certificate
