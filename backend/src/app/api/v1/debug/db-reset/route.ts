@@ -140,6 +140,33 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ message: "Database nuked. Now run with ?action=sync" });
             }
 
+            if (action === "migrate") {
+                console.log("📜 [PANIC] Executando Prisma Migrate Deploy (v99.26)...");
+                const { execSync } = require('child_process');
+                const safeUrl = finalDbUrl.replace(/['"]/g, '');
+
+                try {
+                    const output = execSync(`npx prisma migrate deploy`, {
+                        env: { ...process.env, DATABASE_URL: safeUrl },
+                        encoding: 'utf8',
+                        maxBuffer: 10 * 1024 * 1024
+                    });
+                    console.log("✅ MIGRATE Sucesso!");
+                    return NextResponse.json({
+                        message: "Prisma Migrate Deploy finished successfully!",
+                        output: output,
+                        status: "MIGRATED"
+                    });
+                } catch (migrateErr: any) {
+                    console.error("❌ Migrate falhou:", migrateErr.message);
+                    return NextResponse.json({
+                        error: "Migration failed",
+                        stdout: migrateErr.stdout?.toString(),
+                        stderr: migrateErr.stderr?.toString()
+                    }, { status: 500 });
+                }
+            }
+
             if (action === "sync") {
                 console.log("🏗️ [PANIC SYNC] Iniciando reconstrução bloco único (v98.4)...");
 
