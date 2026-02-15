@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "DATABASE_URL missing" }, { status: 500 });
     }
 
-    // Helper para garantir banco correto (v97.0)
+    // Helper para garantir banco correto (v97.1)
     const fixDatabaseUrl = (url: string) => {
         try {
             const u = new URL(url.replace(/['"]/g, ""));
@@ -36,6 +36,9 @@ export async function POST(request: NextRequest) {
                 console.log("🔄 [PANIC] Aplicando Modo Invertido (Database=public, Schema=squarecloud)");
                 u.pathname = "/public";
                 u.searchParams.set("schema", "squarecloud");
+            } else {
+                u.searchParams.set("schema", "public");
+                u.searchParams.set("search_path", "public");
             }
 
             return u.toString();
@@ -57,7 +60,7 @@ export async function POST(request: NextRequest) {
         const client = await pool.connect();
         try {
             if (action === "nuke") {
-                console.log("💣 [PANIC RESET] Executando Nuke de Soberania (v97.0)...");
+                console.log("💣 [PANIC RESET] Executando Nuke de Soberania (v97.1)...");
                 await client.query('DROP SCHEMA IF EXISTS public CASCADE;');
                 await client.query('CREATE SCHEMA public;');
                 await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
@@ -68,17 +71,22 @@ export async function POST(request: NextRequest) {
             }
 
             if (action === "sync") {
-                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução e restore (v97.0)...");
+                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução e restore (v97.1)...");
 
-                // 0. Super-Sovereignty Discovery Protocol (v97.0)
-                console.log("🔐 Aplicando Super-Sovereignty Discovery...");
+                // 0. Super-Sovereignty Discovery Protocol (v97.1)
+                console.log("🔐 Aplicando Forensic Discovery...");
                 try {
                     const dbInfo = await client.query('SELECT current_database() as db, current_schema() as sc, current_user as us;');
                     console.log(`📊 Realm: DB="${dbInfo.rows[0].db}", Schema="${dbInfo.rows[0].sc}", User="${dbInfo.rows[0].us}"`);
 
-                    // Diagnóstico de Usuário
+                    // Diagnóstico de Usuário e Owner
                     const uStat = await client.query('SELECT usename, usecreatedb, usesuper FROM pg_user WHERE usename = current_user;');
-                    console.log(`👤 User Stats: Createdb=${uStat.rows[0].usecreatedb}, Super=${uStat.rows[0].usesuper}`);
+                    const dbOwner = await client.query('SELECT d.datname, u.usename FROM pg_database d JOIN pg_user u ON d.datdba = u.usesysid WHERE d.datname = current_database();');
+                    console.log(`👤 User: Createdb=${uStat.rows[0].usecreatedb}, Super=${uStat.rows[0].usesuper} | DB Owner=${dbOwner.rows[0].usename}`);
+
+                    // Verificação de privilégios de schema
+                    const canCreate = await client.query("SELECT has_schema_privilege('public', 'CREATE') as can_create, has_schema_privilege('public', 'USAGE') as can_usage;");
+                    console.log(`🛡️ Schema public: CREATE=${canCreate.rows[0].can_create}, USAGE=${canCreate.rows[0].can_usage}`);
 
                     // Protocolo de Soberania Absoluta
                     const targetSchema = dbInfo.rows[0].sc || 'public';
@@ -98,8 +106,13 @@ export async function POST(request: NextRequest) {
                 const { execSync } = require('child_process');
                 const schemaPath = "prisma/schema.prisma";
 
-                // URL Encoding for special characters in password (Fix P1010 suspect)
-                const safeUrl = finalDbUrl.replace(/(postgresql:\/\/.*?):(.*?)@/, (m, p1, p2) => `${p1}:${encodeURIComponent(p2.replace(/['"]/g, ''))}@`);
+                // URL Encoding robusta e injeção de search_path
+                const urlObj = new URL(finalDbUrl.replace(/['"]/g, ''));
+                urlObj.password = encodeURIComponent(urlObj.password);
+                urlObj.searchParams.set("schema", "public");
+                urlObj.searchParams.set("search_path", "public");
+                const safeUrl = urlObj.toString();
+
                 console.log(`📡 Usando DB URL (safe): ${safeUrl.replace(/(:\/\/.*?:)(.*)(@.*)/, '$1****$3')}`);
 
                 try {
