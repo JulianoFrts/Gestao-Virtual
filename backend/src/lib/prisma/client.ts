@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import pg from "pg";
+import { Pool } from "pg";
 import fs from "fs";
 import path from "path";
 
@@ -25,17 +25,15 @@ declare global {
  */
 // Custom Adapter Removido em favor do oficial v6.3.0
 
-// Helper Hoisted
-// v99.10: Helper SSL Robusto (Restored)
+// v99.24: Helper SSL Robusto
 function getSSLConfig(connectionString: string) {
-  // Sempre começa aceitando certificados inválidos (Servidor Recriado = CA Novo/Desconhecido)
   let sslConfig: any = { rejectUnauthorized: false };
 
   try {
     const certsRoot = '/application/backend';
     const findPath = (f: string) => {
-      const p1 = path.join(certsRoot, 'certificates', f);
-      const p2 = path.join(certsRoot, f);
+      const p1 = path.join(certsRoot, f);
+      const p2 = path.join(certsRoot, 'certificates', f);
       return fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : null);
     };
 
@@ -46,16 +44,16 @@ function getSSLConfig(connectionString: string) {
     if (certPath && keyPath) {
       sslConfig.cert = fs.readFileSync(certPath, 'utf8');
       sslConfig.key = fs.readFileSync(keyPath, 'utf8');
-      console.log(`🛡️ [Prisma/v99.21] mTLS Carregado: ${certPath}`);
+      console.log(`🛡️ [Prisma/v99.24] mTLS Carregado: ${certPath}`);
       if (caPath) {
         sslConfig.ca = fs.readFileSync(caPath, 'utf8');
-        console.log(`📜 [Prisma/v99.21] CA Bundle Carregado: ${caPath}`);
+        console.log(`📜 [Prisma/v99.24] CA Bundle Carregado: ${caPath}`);
       }
     } else {
-      console.warn(`⚠️ [Prisma/v99.21] Certificados não encontrados em ${certsRoot}.`);
+      console.warn(`⚠️ [Prisma/v99.24] Certificados não encontrados em ${certsRoot}.`);
     }
   } catch (e) {
-    console.warn(`⚠️ [Prisma/v99.10] Erro lendo certificados:`, e);
+    console.warn(`⚠️ [Prisma/v99.24] Erro lendo certificados:`, e);
   }
   return sslConfig;
 }
@@ -63,11 +61,11 @@ function getSSLConfig(connectionString: string) {
 // v99.3: Factory com Configuração Híbrida
 const createExtendedClient = (url: string) => {
   try {
-    // v99.23: Official PrismaPg Adapter
-    console.log('🔌 [Prisma/v99.23] Usando PrismaPg oficial (mTLS Bridge).');
+    // v99.25: Official PrismaPg Adapter (ESM Fix)
+    console.log('🔌 [Prisma/v99.25] Usando PrismaPg oficial (mTLS Bridge).');
 
     const ssl = getSSLConfig(url);
-    const pool = new pg.Pool({
+    const pool = new Pool({
       connectionString: url,
       ssl,
       max: 10,
@@ -82,8 +80,10 @@ const createExtendedClient = (url: string) => {
       log: ["error"]
     }) as unknown as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v99.23] Erro fatal na factory:`, err.message);
-    return new PrismaClient() as unknown as ExtendedPrismaClient;
+    console.warn(`⚠️ [Prisma/v99.25] Erro fatal na factory:`, err.message);
+    return new PrismaClient({
+      datasources: { db: { url } }
+    }) as unknown as ExtendedPrismaClient;
   }
 };
 
