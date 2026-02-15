@@ -23,7 +23,7 @@ declare global {
  * Correção do mapeamento de Booleanos (ID 5) e Numerics/BigInts. 
  * Resolvendo "expected a string-encoded number ... found false".
  */
-class OrionPgAdapter {
+export class OrionPgAdapter {
   readonly provider = 'postgres';
   readonly adapterName = 'orion-pg-adapter-v95';
 
@@ -101,7 +101,8 @@ class OrionPgAdapter {
         value: {
           columnNames: res.fields.map(f => f.name),
           columnTypes: res.fields.map(f => this.mapColumnType(f.dataTypeID)),
-          rows: rows
+          rows: rows,
+          _raw_fields: res.fields // Apenas para diagnóstico v95
         }
       };
     } catch (err: any) {
@@ -136,7 +137,8 @@ class OrionPgAdapter {
             value: {
               columnNames: r.fields.map(f => f.name),
               columnTypes: r.fields.map(f => this.mapColumnType(f.dataTypeID)),
-              rows: rows
+              rows: rows,
+              _raw_fields: r.fields // Apenas para diagnóstico v95
             }
           };
         },
