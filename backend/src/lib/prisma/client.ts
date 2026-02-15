@@ -207,40 +207,61 @@ export class OrionPgAdapter {
 }
 
 // Helper Hoisted
-// v99.3: Helper SSL Robusto
+// v99.10: Helper SSL Robusto (Restored)
 function getSSLConfig(connectionString: string) {
-  // v99.9: Ghost Mode - Ignora todos os arquivos de cert
-  // Motivo: Os arquivos atuais são do DB antigo e causam 'unknown ca' no DB novo.
-  console.log(`[Prisma/v99.9] 👻 SSL Config: One-Way (No Client Certs).`);
-  return { rejectUnauthorized: false };
+  // Sempre começa aceitando certificados inválidos (Servidor Recriado = CA Novo/Desconhecido)
+  let sslConfig: any = { rejectUnauthorized: false };
+
+  try {
+    const certsRoot = '/application/backend';
+    const findPath = (f: string) => {
+      const p1 = path.join(certsRoot, 'certificates', f);
+      const p2 = path.join(certsRoot, f);
+      return fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : null);
+    };
+
+    const certPath = findPath('certificate.pem') || findPath('client.crt');
+    const keyPath = findPath('private-key.key') || findPath('client.key');
+    const caPath = findPath('ca-certificate.crt') || findPath('ca.crt');
+
+    if (certPath && keyPath) {
+      sslConfig.cert = fs.readFileSync(certPath, 'utf8');
+      sslConfig.key = fs.readFileSync(keyPath, 'utf8');
+      console.log(`🛡️ [Prisma/v99.10] mTLS Carregado: ${certPath}`);
+      if (caPath) {
+        sslConfig.ca = fs.readFileSync(caPath, 'utf8');
+        console.log(`📜 [Prisma/v99.10] CA Bundle Carregado: ${caPath}`);
+      }
+    }
+  } catch (e) {
+    console.warn(`⚠️ [Prisma/v99.10] Erro lendo certificados:`, e);
+  }
+  return sslConfig;
 }
 
 // v99.3: Factory com Configuração Híbrida
 const createExtendedClient = (url: string) => {
   try {
-    // v99.7: SSL Restore Strategy (v99.5 Logic)
-    const pool = new pg.Pool({
-      connectionString: url,
-      ssl: getSSLConfig(url) // Restaura mTLS e CA
-    });
-
-    const adapter = new OrionPgAdapter(pool);
-    console.log('🔌 [Prisma/v99] Adaptador Orion ativado com sucesso.');
+    // v99.10: Adapter Disabled (Native Mode Only)
+    // O driver adapter customizado está causando conflitos de versão com o Prisma.
+    // Usaremos conexão nativa do Prisma, mas precisamos garantir que a URL suporte os certificados.
+    console.log('🔌 [Prisma/v99.10] Modo Nativo Forçado (Adapter Desativado).');
 
     return new PrismaClient({
-      adapter,
+      datasources: { db: { url } },
       log: ["error"],
-    } as any) as ExtendedPrismaClient;
-  } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v99] Falha Crítica na inicialização do Adapter:`, err.message);
-    console.warn(`⚠️ [Prisma/v99] Stack:`, err.stack);
-    console.warn(`⚠️ [Prisma/v99] Caindo para Modo Nativo.`);
-    // Fallback Native Client também precisa de SSL Bypass se o URL original tiver verify-ca
-    return new PrismaClient({
-      datasources: { db: { url } }
-      // Nota: O Prisma Nativo usa a URL diretamente. Se ela tiver parameters de SSL, ele tenta honrar.
-      // O fixDatabaseUrl já mudou para 'require', o que deve ajudar.
     }) as ExtendedPrismaClient;
+  } catch (err: any) {
+    console.warn(`⚠️ [Prisma/v99] Erro fatal na factory:`, err.message);
+    return new PrismaClient() as ExtendedPrismaClient;
+  }
+};
+// Fallback Native Client também precisa de SSL Bypass se o URL original tiver verify-ca
+return new PrismaClient({
+  datasources: { db: { url } }
+  // Nota: O Prisma Nativo usa a URL diretamente. Se ela tiver parameters de SSL, ele tenta honrar.
+  // O fixDatabaseUrl já mudou para 'require', o que deve ajudar.
+}) as ExtendedPrismaClient;
   }
 };
 
