@@ -23,17 +23,14 @@ declare global {
  * Dump total de OIDs e tradução bruta sem filtros.
  */
 export class OrionPgAdapter {
-  readonly provider = 'postgres';
-  readonly adapterName = 'orion-pg-adapter-v98.8';
+  readonly flavour = 'postgres'; // Prisma 6 Requirement?
+  readonly adapterName = 'orion-pg-adapter-v98.9';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v98.8] Bridge forensic iniciada.`);
+    console.log(`[Adapter/v98.9] Bridge forensic iniciada.`);
   }
 
-  /**
-   * Mapeamento Quaint (Prisma 6)
-   * ID 0: Int32, 1: Int64, 2: Float, 3: Double, 4: Numeric, 5: Boolean, 6: Text, 11: Json
-   */
+  // Helper Interno (pode ficar como método privado)
   private mapColumnType(oid: number, fieldName?: string): any {
     let kind = 6; // Default Text
     switch (oid) {
@@ -57,11 +54,6 @@ export class OrionPgAdapter {
     return { kind };
   }
 
-  /**
-   * v96.5: Universal Enum Bridge
-   * Agora converte 'S', 'A', 'U' etc. em QUALQUER campo, 
-   * eliminando erros de inconsistência mesmo quando o nome do campo varia.
-   */
   private translateEnum(fieldName: string, val: any): any {
     const roleMap: Record<string, string> = {
       'S': 'SUPER_ADMIN',
@@ -91,36 +83,32 @@ export class OrionPgAdapter {
 
     // Interceptação Forense (v98.6)
     if (typeof val === 'string' && val.trim().length === 1) {
-      console.log(`[Adapter/v98.8] 🛡️ INTERCEPT: [${fieldName}] Raw='${val}' OID=${oid}`);
+      console.log(`[Adapter/v98.9] 🛡️ INTERCEPT: [${fieldName}] Raw='${val}' OID=${oid}`);
     }
 
-    // Tradução Universal
     const translated = this.translateEnum(fieldName, val);
 
-    // Inspeção Profunda (v98.8)
     if (typeof translated === 'string' && (translated === 'S' || translated === 'A')) {
-      console.log(`[Adapter/v98.8] 🔍 Result [${fieldName}]: Value='${translated}' OID=${oid}`);
+      console.log(`[Adapter/v98.9] 🔍 Result [${fieldName}]: Value='${translated}' OID=${oid}`);
     }
 
-    // Diagnóstico de Alerta
     if (typeof translated === 'string' && translated.length === 1 && /[A-Z]/.test(translated)) {
-      console.log(`[Adapter/v98.8] ⚠️ Alerta Crítico: Valor bruto escapou em '${fieldName}': '${translated}' (OID: ${oid})`);
+      console.log(`[Adapter/v98.9] ⚠️ Alerta Crítico: Valor bruto escapou em '${fieldName}': '${translated}' (OID: ${oid})`);
     }
 
-    // Serialização Quaint (Prisma 6)
     return translated;
   }
 
-  async query(params: any): Promise<any> {
+  // Arrow Functions para garantir Bind Correto
+  query = async (params: any): Promise<any> => {
     try {
       const res = await this.pool.query(params.sql, params.args);
 
-      // Diagnóstico de Estrutura (v98.7)
       if (params.sql.toLowerCase().includes('auth_credentials') || params.sql.toLowerCase().includes('select')) {
         const fieldDesc = res.fields.map(f => `${f.name}(${f.dataTypeID})`).join(', ');
-        console.log(`[Adapter/v98.7] 📡 Query [${res.rowCount} rows]: ${fieldDesc}`);
+        console.log(`[Adapter/v98.9] 📡 Query [${res.rowCount} rows]: ${fieldDesc}`);
         if (res.rows.length > 0) {
-          console.log(`[Adapter/v98.7] 🧪 Sample Raw: ${JSON.stringify(res.rows[0]).substring(0, 150)}`);
+          console.log(`[Adapter/v98.9] 🧪 Sample Raw: ${JSON.stringify(res.rows[0]).substring(0, 150)}`);
         }
       }
 
@@ -140,28 +128,26 @@ export class OrionPgAdapter {
         }),
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v98.8] Query Error:`, err.message);
+      console.error(`❌ [Adapter/v98.9] Query Error:`, err.message);
       return { ok: false, error: err };
     }
   }
 
-  async execute(params: any): Promise<any> {
+  execute = async (params: any): Promise<any> => {
     try {
-      // v98.2: Schema Context Shield
       if (params.sql.trim().toUpperCase().startsWith('CREATE') || params.sql.trim().toUpperCase().startsWith('DROP')) {
-        console.log(`[Adapter/v98.8] 🛡️ DDL Detectado. Executando em contexto seguro.`);
+        console.log(`[Adapter/v98.9] 🛡️ DDL Detectado. Executando em contexto seguro.`);
       }
 
       const res = await this.pool.query(params.sql, params.args);
       return { ok: true, value: res.rowCount || 0 };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v98.8] Execute Error:`, err.message);
+      console.error(`❌ [Adapter/v98.9] Execute Error:`, err.message);
       return { ok: false, error: err };
     }
   }
 
-  // v98.8: Interface Correta para Prisma Driver Adapter
-  async startTransaction() {
+  startTransaction = async () => {
     const client = await this.pool.connect();
     const adapter = this;
 
@@ -173,7 +159,7 @@ export class OrionPgAdapter {
     }
 
     return {
-      pk: '', // Placeholder
+      pk: '',
       options: { isolationLevel: 'Serializable', readOnly: false } as any,
       query: async (params: any) => {
         try {
@@ -194,7 +180,7 @@ export class OrionPgAdapter {
             }),
           };
         } catch (err: any) {
-          console.error(`❌ [Adapter/v98.8] TX Query Error:`, err.message);
+          console.error(`❌ [Adapter/v98.9] TX Query Error:`, err.message);
           return { ok: false, error: err };
         }
       },
@@ -203,7 +189,7 @@ export class OrionPgAdapter {
           const res = await client.query(params.sql, params.args);
           return { ok: true, value: res.rowCount || 0 };
         } catch (err: any) {
-          console.error(`❌ [Adapter/v98.8] TX Execute Error:`, err.message);
+          console.error(`❌ [Adapter/v98.9] TX Execute Error:`, err.message);
           return { ok: false, error: err };
         }
       },
@@ -265,16 +251,16 @@ const createExtendedClient = (url: string) => {
     });
 
     const adapter = new OrionPgAdapter(pool);
-    console.log('🔌 [Prisma/v98.8] Adaptador Orion ativado com sucesso.');
+    console.log('🔌 [Prisma/v98.9] Adaptador Orion ativado com sucesso.');
 
     return new PrismaClient({
       adapter,
       log: ["error"],
     } as any) as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v98.8] Falha Crítica na inicialização do Adapter:`, err.message);
-    console.warn(`⚠️ [Prisma/v98.8] Stack:`, err.stack);
-    console.warn(`⚠️ [Prisma/v98.8] Caindo para Modo Nativo.`);
+    console.warn(`⚠️ [Prisma/v98.9] Falha Crítica na inicialização do Adapter:`, err.message);
+    console.warn(`⚠️ [Prisma/v98.9] Stack:`, err.stack);
+    console.warn(`⚠️ [Prisma/v98.9] Caindo para Modo Nativo.`);
     return new PrismaClient({ datasources: { db: { url } } }) as ExtendedPrismaClient;
   }
 };

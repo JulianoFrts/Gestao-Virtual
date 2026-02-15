@@ -3,7 +3,7 @@ import { Pool } from "pg";
 
 /**
  * PANIC RESET API - GESTÃO VIRTUAL
- * v98.8: Adapter Integrity & Permission Enforcer Protocol
+ * v98.9: Arrow Binding & Pre-Grant Protocol
  */
 export async function POST(request: NextRequest) {
     const secret = process.env.APP_SECRET || "temp_secret_123";
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const finalDbUrl = fixDatabaseUrl(dbUrl);
     const action = request.nextUrl.searchParams.get("action") || "sync";
 
-    console.log(`💣 [PANIC/v98.8] Ação: ${action}`);
+    console.log(`💣 [PANIC/v98.9] Ação: ${action}`);
 
     const pool = new Pool({
         connectionString: finalDbUrl,
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
         const client = await pool.connect();
         try {
             if (action === "nuke") {
-                console.log("💣 [PANIC] Executando Nuke de Emergência (v98.8)...");
+                console.log("💣 [PANIC] Executando Nuke de Emergência (v98.9)...");
                 await client.query('DROP SCHEMA IF EXISTS public CASCADE;');
                 await client.query('CREATE SCHEMA public;');
                 await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
@@ -104,6 +104,10 @@ export async function POST(request: NextRequest) {
                         console.log("⚒️ Aplicando DDL como bloco único resiliente...");
                         // Prisma DDL script costuma vir com 'SET search_path...' e outras diretivas.
                         // Executamos tudo de uma vez.
+
+                        // v98.9: Pre-Grant to ensure creation rights
+                        await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
+
                         await client.query(ddl);
 
 
@@ -144,7 +148,7 @@ export async function POST(request: NextRequest) {
                 }
 
                 return NextResponse.json({
-                    message: "Sync and Restore finished successfully (v98.8)! 🏆",
+                    message: "Sync and Restore finished successfully (v98.9)! 🏆",
                     tablesCreated: rowCount,
                     status: "STABLE_RECONSTRUCTED"
                 });
