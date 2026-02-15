@@ -226,6 +226,18 @@ export async function POST(request: NextRequest) {
                     throw new Error("Sincronização falhou: Nenhuma tabela encontrada no schema public.");
                 }
 
+                // 5.5 GRANT REFORÇADO (v99.12) - Correção de "Denied Access"
+                console.log("🛡️ [v99.12] Reaplicando Grants antes do Restore...");
+                try {
+                    await client.query('GRANT USAGE ON SCHEMA public TO squarecloud;');
+                    await client.query('GRANT CREATE ON SCHEMA public TO squarecloud;');
+                    await client.query('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO squarecloud;');
+                    await client.query('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO squarecloud;');
+                    console.log("✅ Grants reaplicados com sucesso!");
+                } catch (grantErr: any) {
+                    console.warn("⚠️ Falha não-crítica ao aplicar Grants extras:", grantErr.message);
+                }
+
                 // 6. RESTORE (v97.7+)
                 console.log("📥 Iniciando restauração de dados...");
                 try {
