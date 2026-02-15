@@ -1,8 +1,10 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
+import pg from "pg";
 import fs from "fs";
 import path from "path";
+
+const { Pool } = pg;
 
 // Tipagem estendida
 export type ExtendedPrismaClient = PrismaClient & {
@@ -61,8 +63,8 @@ function getSSLConfig(connectionString: string) {
 // v99.3: Factory com Configuração Híbrida
 const createExtendedClient = (url: string) => {
   try {
-    // v99.25: Official PrismaPg Adapter (ESM Fix)
-    console.log('🔌 [Prisma/v99.25] Usando PrismaPg oficial (mTLS Bridge).');
+    // v99.27: Official PrismaPg Adapter (Definitive ESM Bridge)
+    console.log('🔌 [Prisma/v99.27] Usando PrismaPg oficial (mTLS Bridge).');
 
     const ssl = getSSLConfig(url);
     const pool = new Pool({
@@ -80,7 +82,7 @@ const createExtendedClient = (url: string) => {
       log: ["error"]
     }) as unknown as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v99.25] Erro fatal na factory:`, err.message);
+    console.warn(`⚠️ [Prisma/v99.27] Erro fatal na factory:`, err.message);
     return new PrismaClient({
       datasources: { db: { url } }
     }) as unknown as ExtendedPrismaClient;

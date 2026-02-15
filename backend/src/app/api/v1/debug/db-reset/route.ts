@@ -19,39 +19,34 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "DATABASE_URL missing" }, { status: 500 });
     }
 
-    const fixDatabaseUrl = (url: string) => {
+    const buildChildProcessUrl = (url: string) => {
         try {
             const u = new URL(url.replace(/['"]/g, ""));
-
-            // 1. Database Name Normalizer
+            // Force SquareCloud DB Name
             if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres") {
                 u.pathname = "/squarecloud";
             }
 
-            // 2. SSL CA Bypass (Devido a recriação do banco)
-            if (u.searchParams.has('sslmode') && u.searchParams.get('sslmode') === 'verify-ca') {
-                u.searchParams.set('sslmode', 'require');
-                console.log(`[PANIC/v99.1] 🔓 SSL Downgrade: verify-ca -> require.`);
-            }
+            // Build base URL without params
+            const baseUrl = `${u.protocol}//${u.username}:${u.password}@${u.hostname}:${u.port}${u.pathname}`;
 
-            // v99.14: Child Process SSL Fix (Restore mTLS)
-            // O Child Process (restore script) precisa dos certificados na URL para conectar com privilégios.
-            // Os paths são fixados para o ambiente Square Cloud.
-            console.log(`[PANIC/v99.14] 🛡️ Injetando Certificados na URL do Child Process.`);
-            u.searchParams.set('sslmode', 'verify-ca');
-            u.searchParams.set('sslcert', '/application/backend/certificates/certificate.pem');
-            u.searchParams.set('sslkey', '/application/backend/certificates/private-key.key');
-            u.searchParams.set('sslrootcert', '/application/backend/certificates/ca-certificate.crt');
+            // v99.27: MANUAL PARAMS BUILD (Avoid %2F path encoding which Prisma Engine hates)
+            // Using sslmode=require as it's more stable for handshake but still sends certs.
+            const cert = "/application/backend/certificates/certificate.pem";
+            const key = "/application/backend/certificates/private-key.key";
+            const ca = "/application/backend/certificates/ca-certificate.crt";
 
-            // Log seguro (Ocultando senha na URL printada)
-            const safeLogUrl = u.toString().replace(/:[^:@]+@/, ':****@');
-            console.log(`[PANIC/v99.14] 🔗 URL Child Process (Sanitized): ${safeLogUrl}`);
+            const finalUrl = `${baseUrl}?sslmode=require&sslcert=${cert}&sslkey=${key}&sslrootcert=${ca}`;
 
-            return u.toString();
+            // Log Sanitized
+            const safeUrl = finalUrl.replace(/:[^:@]+@/, ':****@');
+            console.log(`[PANIC/v99.27] 🔗 URL Child Process (Manual String): ${safeUrl}`);
+
+            return finalUrl;
         } catch (e) { return url; }
     };
 
-    const finalDbUrl = fixDatabaseUrl(dbUrl);
+    const finalDbUrl = buildChildProcessUrl(dbUrl);
     const action = request.nextUrl.searchParams.get("action") || "sync";
 
     // v99.3: Hybrid Authenticator
