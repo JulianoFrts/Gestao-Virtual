@@ -50,47 +50,32 @@ const createPrismaClient = () => {
 
 const buildPrismaWithFallback = (url: string) => {
   const maskedOriginal = url.split('@')[1] || 'oculta';
-  console.log(`[Prisma] Inicializando cliente com URL: ${maskedOriginal}`);
+  console.log(`[Prisma/v81] Inicializando cliente com URL: ${maskedOriginal}`);
 
-  // v57: Configuração SSL simplificada v79
   const sslConfig = getSSLConfig(url);
 
-  // v80: Conexão Atômica - Campos lidos exclusivamente de variáveis de ambiente (SEGURANÇA)
-  const getEnv = (key: string) => {
-    const val = process.env[key];
-    return (val && val !== 'undefined' && val !== 'null') ? val : null;
-  };
-
-  // Extrai fallbacks SEGUROS apenas da DATABASE_URL (sem hardcoded)
-  const parsedHost = url.match(/@([^:\/]+)/)?.[1] || undefined;
-  const parsedPort = url.match(/:(\d+)\//)?.[1] || undefined;
-  const parsedDb = url.split('/').pop()?.split('?')[0] || undefined;
-
-  const pgHost = getEnv('PGHOST') || parsedHost;
-  const pgPort = getEnv('PGPORT') || parsedPort;
-  const pgUser = getEnv('PGUSER');
-  const pgPassword = getEnv('PGPASSWORD');
-  const pgDatabase = getEnv('PGDATABASE') || parsedDb;
-
-  if (!pgHost || !pgUser || !pgPassword) {
-    console.error('❌ [Prisma/v80] Variáveis de ambiente obrigatórias ausentes (PGHOST, PGUSER, PGPASSWORD). Verifique o .env.');
-    throw new Error('Configuração de banco de dados incompleta. Defina PGHOST, PGUSER e PGPASSWORD.');
-  }
-
-  const poolConfig = {
-    host: pgHost,
-    port: parseInt(pgPort || '5432', 10),
-    user: pgUser,
-    password: pgPassword,
-    database: pgDatabase || 'squarecloud',
+  // v81: Conexão Simplificada usando connectionString nativa do pg Pool
+  // Prioridade para variáveis de ambiente específicas se definidas
+  const poolConfig: any = {
+    connectionString: url,
     ssl: sslConfig,
-    // Configurações de timeout para evitar 408
     connectionTimeoutMillis: 10000,
     idleTimeoutMillis: 30000,
     max: 10
   };
 
-  console.log(`[Prisma/v80] Pool Atômico configurado para HOST: ${poolConfig.host}`);
+  const getEnv = (key: string) => {
+    const val = process.env[key];
+    return (val && val !== 'undefined' && val !== 'null') ? val : null;
+  };
+
+  if (getEnv('PGHOST')) poolConfig.host = getEnv('PGHOST');
+  if (getEnv('PGUSER')) poolConfig.user = getEnv('PGUSER');
+  if (getEnv('PGPASSWORD')) poolConfig.password = getEnv('PGPASSWORD');
+  if (getEnv('PGPORT')) poolConfig.port = parseInt(getEnv('PGPORT')!, 10);
+  if (getEnv('PGDATABASE')) poolConfig.database = getEnv('PGDATABASE');
+
+  console.log(`[Prisma/v81] Pool Atômico configurado via connectionString.`);
   const pool = new pg.Pool(poolConfig);
 
   const adapter = new PrismaPg(pool);
@@ -111,29 +96,53 @@ const getPrisma = () => {
   return (globalThis as any).prismaInstance;
 };
 
-// v59: Singleton Proxy Totalmente Lazy
-// v79.2: Singleton Proxy Totalmente Lazy e Robusto
+// v82: Singleton Proxy Totalmente Lazy, Robusto e com Auto-Healing
 export const prisma = new Proxy({} as any, {
-  get: (_target, prop) => {
-    if (typeof prop === 'symbol' ||
-      ['$$typeof', 'constructor', 'toJSON', 'then'].includes(prop as string)) {
-      return undefined;
+  get: (target, prop) => {
+    if (typeof prop === 'symbol') return (target as any)[prop];
+    const p = prop as string;
+
+    // Propriedade especial para diagnóstico
+    if (p === '$state') {
+      const inst = (globalThis as any).prismaInstance;
+      return {
+        initialized: !!inst,
+        models: inst ? Object.keys(inst).filter(key => !key.startsWith('$')) : [],
+        env: {
+          hasUrl: !!process.env.DATABASE_URL,
+          hasHost: !!process.env.PGHOST
+        }
+      };
     }
 
+    if (['$$typeof', 'constructor', 'toJSON', 'then', 'inspect'].includes(p)) return undefined;
+
     try {
-      const instance = getPrisma();
+      let instance = getPrisma();
+
+      // Auto-healing: se a instância for um objeto vazio, tenta recriar
+      if (instance && Object.keys(instance).length === 0 && process.env.DATABASE_URL) {
+        console.warn(`🔄 [PrismaProxy] Instância vazia detectada para '${p}'. Tentando reinicializar...`);
+        (globalThis as any).prismaInstance = createPrismaClient();
+        instance = (globalThis as any).prismaInstance;
+      }
+
       if (!instance) return undefined;
 
-      const value = (instance as any)[prop];
+      const value = (instance as any)[p];
+
+      if (value === undefined && !p.startsWith('$')) {
+        console.error(`❌ [PrismaProxy] Model '${p}' não encontrado na instância. Disponíveis:`,
+          Object.keys(instance).filter(k => !k.startsWith('$')).join(', '));
+      }
 
       if (typeof value === 'function') {
-        // Wrapper seguro em vez de .bind() para evitar TypeErrors em ambientes restritos
         return (...args: any[]) => value.apply(instance, args);
       }
 
       return value;
     } catch (err: any) {
-      console.error(`❌ [PrismaProxy] Erro de acesso em '${String(prop)}':`, err.message);
+      console.error(`❌ [PrismaProxy] Erro de acesso em '${p}':`, err.message);
       return undefined;
     }
   }
