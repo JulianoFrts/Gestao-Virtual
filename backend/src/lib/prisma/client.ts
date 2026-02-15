@@ -24,10 +24,10 @@ declare global {
  */
 export class OrionPgAdapter {
   readonly provider = 'postgres';
-  readonly adapterName = 'orion-pg-adapter-v98.7';
+  readonly adapterName = 'orion-pg-adapter-v98.8';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v98.7] Bridge forensic iniciada.`);
+    console.log(`[Adapter/v98.8] Bridge forensic iniciada.`);
   }
 
   /**
@@ -91,20 +91,20 @@ export class OrionPgAdapter {
 
     // Interceptação Forense (v98.6)
     if (typeof val === 'string' && val.trim().length === 1) {
-      console.log(`[Adapter/v98.7] 🛡️ INTERCEPT: [${fieldName}] Raw='${val}' OID=${oid}`);
+      console.log(`[Adapter/v98.8] 🛡️ INTERCEPT: [${fieldName}] Raw='${val}' OID=${oid}`);
     }
 
     // Tradução Universal
     const translated = this.translateEnum(fieldName, val);
 
-    // Inspeção Profunda (v98.7)
+    // Inspeção Profunda (v98.8)
     if (typeof translated === 'string' && (translated === 'S' || translated === 'A')) {
-      console.log(`[Adapter/v98.7] 🔍 Result [${fieldName}]: Value='${translated}' OID=${oid}`);
+      console.log(`[Adapter/v98.8] 🔍 Result [${fieldName}]: Value='${translated}' OID=${oid}`);
     }
 
     // Diagnóstico de Alerta
     if (typeof translated === 'string' && translated.length === 1 && /[A-Z]/.test(translated)) {
-      console.log(`[Adapter/v98.7] ⚠️ Alerta Crítico: Valor bruto escapou em '${fieldName}': '${translated}' (OID: ${oid})`);
+      console.log(`[Adapter/v98.8] ⚠️ Alerta Crítico: Valor bruto escapou em '${fieldName}': '${translated}' (OID: ${oid})`);
     }
 
     // Serialização Quaint (Prisma 6)
@@ -140,7 +140,7 @@ export class OrionPgAdapter {
         }),
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v98.7] Query Error:`, err.message);
+      console.error(`❌ [Adapter/v98.8] Query Error:`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -149,48 +149,83 @@ export class OrionPgAdapter {
     try {
       // v98.2: Schema Context Shield
       if (params.sql.trim().toUpperCase().startsWith('CREATE') || params.sql.trim().toUpperCase().startsWith('DROP')) {
-        console.log(`[Adapter/v98.7] 🛡️ DDL Detectado. Executando em contexto seguro.`);
+        console.log(`[Adapter/v98.8] 🛡️ DDL Detectado. Executando em contexto seguro.`);
       }
 
       const res = await this.pool.query(params.sql, params.args);
       return { ok: true, value: res.rowCount || 0 };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v98.7] Execute Error:`, err.message);
+      console.error(`❌ [Adapter/v98.8] Execute Error:`, err.message);
       return { ok: false, error: err };
     }
   }
 
-  async transactionContext() {
+  // v98.8: Interface Correta para Prisma Driver Adapter
+  async startTransaction() {
     const client = await this.pool.connect();
+    const adapter = this;
+
+    try {
+      await client.query('BEGIN');
+    } catch (err) {
+      client.release();
+      throw err;
+    }
+
     return {
-      ok: true,
-      value: {
-        queryRaw: async (p: any) => {
-          const r = await client.query(p.sql, p.args);
-          const rows = r.rows.map(row => r.fields.map(f => {
-            const raw = (row as any)[f.name];
-            const processed = this.serializeValue(raw, f.dataTypeID, f.name);
-            // Log extra para transações
-            if (typeof processed === 'string' && processed.length === 1) {
-              console.log(`[Adapter/v98.7] (TX) 🔍 Inspect [${f.name}]: Value='${processed}' OID=${f.dataTypeID}`);
-            }
-            return processed;
-          }));
+      pk: '', // Placeholder
+      options: { isolationLevel: 'Serializable', readOnly: false } as any,
+      query: async (params: any) => {
+        try {
+          const res = await client.query(params.sql, params.args);
           return {
             ok: true,
-            value: {
-              columnNames: r.fields.map(f => f.name),
-              columnTypes: r.fields.map(f => this.mapColumnType(f.dataTypeID, f.name)),
-              rows: rows
-            }
+            fields: res.fields.map((field) => ({
+              name: field.name,
+              columnType: adapter.mapColumnType(field.dataTypeID, field.name),
+            })),
+            rows: res.rows.map((row) => {
+              const serializedRow: any[] = [];
+              for (const field of res.fields) {
+                const val = row[field.name];
+                serializedRow.push(adapter.serializeValue(val, field.dataTypeID, field.name));
+              }
+              return serializedRow;
+            }),
           };
-        },
-        executeRaw: async (p: any) => {
-          const r = await client.query(p.sql, p.args);
-          return { ok: true, value: r.rowCount || 0 };
-        },
-        commit: async () => { await client.query('COMMIT'); client.release(); },
-        rollback: async () => { await client.query('ROLLBACK'); client.release(); }
+        } catch (err: any) {
+          console.error(`❌ [Adapter/v98.8] TX Query Error:`, err.message);
+          return { ok: false, error: err };
+        }
+      },
+      execute: async (params: any) => {
+        try {
+          const res = await client.query(params.sql, params.args);
+          return { ok: true, value: res.rowCount || 0 };
+        } catch (err: any) {
+          console.error(`❌ [Adapter/v98.8] TX Execute Error:`, err.message);
+          return { ok: false, error: err };
+        }
+      },
+      commit: async () => {
+        try {
+          await client.query('COMMIT');
+        } finally {
+          client.release();
+        }
+        return { ok: true, value: undefined };
+      },
+      rollback: async () => {
+        try {
+          await client.query('ROLLBACK');
+        } finally {
+          client.release();
+        }
+        return { ok: true, value: undefined };
+      },
+      dispose: async () => {
+        client.release();
+        return { ok: true, value: undefined };
       }
     };
   }
@@ -216,7 +251,7 @@ function getSSLConfig(connectionString: string) {
     if (cert && key) {
       sslConfig.cert = fs.readFileSync(cert, 'utf8');
       sslConfig.key = fs.readFileSync(key, 'utf8');
-      console.log('🛡️ [Prisma/v98.7] mTLS v98.7 Ativo.');
+      console.log('🛡️ [Prisma/v98.8] mTLS v98.8 Ativo.');
     }
   }
   return sslConfig;
@@ -230,16 +265,16 @@ const createExtendedClient = (url: string) => {
     });
 
     const adapter = new OrionPgAdapter(pool);
-    console.log('🔌 [Prisma/v98.7] Adaptador Orion ativado com sucesso.');
+    console.log('🔌 [Prisma/v98.8] Adaptador Orion ativado com sucesso.');
 
     return new PrismaClient({
       adapter,
       log: ["error"],
     } as any) as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v98.7] Falha Crítica na inicialização do Adapter:`, err.message);
-    console.warn(`⚠️ [Prisma/v98.7] Stack:`, err.stack);
-    console.warn(`⚠️ [Prisma/v98.7] Caindo para Modo Nativo.`);
+    console.warn(`⚠️ [Prisma/v98.8] Falha Crítica na inicialização do Adapter:`, err.message);
+    console.warn(`⚠️ [Prisma/v98.8] Stack:`, err.stack);
+    console.warn(`⚠️ [Prisma/v98.8] Caindo para Modo Nativo.`);
     return new PrismaClient({ datasources: { db: { url } } }) as ExtendedPrismaClient;
   }
 };
