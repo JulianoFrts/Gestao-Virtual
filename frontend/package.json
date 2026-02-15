@@ -19,8 +19,7 @@
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
     "e2e:debug": "playwright test --debug",
-    "e2e:ui:debug": "playwright test --ui --debug",
-    "deploy:worker": "wrangler deploy"
+    "e2e:ui:debug": "playwright test --ui --debug"
   },
   "dependencies": {
     "@deck.gl/layers": "9.2.6",
@@ -143,8 +142,6 @@
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.38.0",
     "vite-plugin-restart": "^2.0.0",
-    "vitest": "^4.0.18",
-    "wrangler": "^3.107.2",
-    "@cloudflare/workers-types": "^4.20250204.0"
+    "vitest": "^4.0.18"
   }
 }

@@ -1,6 +1,9 @@
 import { Anchor } from '../types/anchor'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1'
+const envUrl = import.meta.env.VITE_API_URL || "/api/v1";
+const API_URL = envUrl.startsWith("http")
+    ? envUrl
+    : `${typeof window !== "undefined" ? window.location.origin : ""}${envUrl.startsWith("/") ? "" : "/"}${envUrl}`;
 
 export const STANDARD_COMPANY_ID = '00000000-0000-0000-0000-000000000000'
 export const STANDARD_PROJECT_ID = '00000000-0000-0000-0000-000000000000'

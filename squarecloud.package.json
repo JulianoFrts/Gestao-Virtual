@@ -1,0 +1,15 @@
+{
+    "name": "gestao-virtual-unified",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Gestao Virtual - Backend API + Frontend Unificado",
+    "main": "squarecloud.unified.start.cjs",
+    "scripts": {
+        "start": "node squarecloud.unified.start.cjs"
+    },
+    "dependencies": {
+        "express": "^4.21.0",
+        "http-proxy-middleware": "^3.0.0",
+        "compression": "^1.7.4"
+    }
+}

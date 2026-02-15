@@ -1,109 +1,101 @@
 # Guia de Deploy na SquareCloud - Gestão Virtual
 
-A **SquareCloud** é uma plataforma focada em simplicidade, ideal para hospedar bots e aplicações Node.js/Web. Diferente do Docker (onde tudo roda junto), aqui nós separamos cada serviço.
+A **SquareCloud** é uma plataforma focada em simplicidade, ideal para hospedar aplicações Node.js/Web.
 
-## 📋 Arquitetura na SquareCloud
+## 📋 Arquitetura na SquareCloud (Unificada)
 
-Seu sistema será dividido em **3 Aplicações** e **1 Banco de Dados**:
+O sistema roda em **1 Aplicação** + **1 Banco de Dados**:
 
-1.  **Backend (API)**: Uma aplicação Node.js.
-2.  **Frontend (Site)**: Uma aplicação Web Estática.
-3.  **Worker (Opcional)**: Uma aplicação Node.js para tarefas pesadas.
-4.  **Banco de Dados**: PostgreSQL gerenciado pela SquareCloud.
+1.  **Gestão Virtual (Unificado)**: Uma aplicação Node.js que serve Backend (API) + Frontend (Site Estático) juntos.
+2.  **Banco de Dados**: PostgreSQL gerenciado pela SquareCloud.
+
+### Como funciona internamente
+
+```
+┌─────────────────────────────────────────────────────┐
+│            SquareCloud (1 App — 3072 MB)             │
+│                                                      │
+│  Express Gateway (Porta 80 - Pública)                │
+│  ├── /api/v1/* → proxy → Next.js (porta 3001)       │
+│  │              + Header X-Internal-Proxy-Key 🔒     │
+│  └── /*        → dist/ (frontend estático)           │
+│                                                      │
+│  Next.js API (Porta 3001 - INTERNA, não exposta)     │
+│  └── Apenas aceita requests com header secreto       │
+└─────────────────────────────────────────────────────┘
+```
 
 ---
 
-## 🚀 Passo a Passo
+## 🚀 Deploy Unificado (Recomendado)
 
 ### 1. Criar o Banco de Dados
 
 1.  Acesse o [Dashboard da SquareCloud](https://squarecloud.app/dashboard).
 2.  Vá em **Dedicated Databases**.
 3.  Crie um novo banco **PostgreSQL**.
-4.  Copie a **DATABASE_URL** fornecida. Você vai precisar dela.
+4.  Copie a **DATABASE_URL** fornecida.
 
 ---
 
-### 2. Deploy do Backend (API)
+### 2. Gerar o ZIP de Deploy
 
-Este deploy envia sua API para a nuvem.
+Execute na raiz do projeto:
 
-1.  Navegue até a pasta `backend/`.
-2.  Edite o arquivo `.env` localmente (ou configure no dashboard depois) com as variáveis de produção:
+```powershell
+npm run deploy:zip:unified
+```
+
+Este comando:
+1. Faz o **build do frontend** (Vite → `dist/`)
+2. Monta a estrutura com backend (src, prisma, certificates) + frontend (dist)
+3. Gera `GESTAO_VIRTUAL_UNIFIED.zip`
+
+---
+
+### 3. Upload na SquareCloud
+
+1.  No Dashboard, clique em **Upload App** ou **Nova Aplicação**.
+2.  Envie o arquivo `GESTAO_VIRTUAL_UNIFIED.zip`.
+3.  Configure as **variáveis de ambiente** (Secrets):
     ```env
     DATABASE_URL=SuaURLdoPostgresDaSquareCloud
-    NEXTAUTH_URL=https://seu-frontend.squareweb.app (URL que você terá após subir o front)
+    NEXTAUTH_URL=https://www.gestaovirtual.com
     NEXTAUTH_SECRET=SuaSenhaSegura
     JWT_SECRET=SuaSenhaSegura
+    INTERNAL_PROXY_KEY=UmaChaveUUIDv4Forte
     ```
-    > **Dica:** A SquareCloud permite definir variáveis de ambiente (Secrets) diretamente no painel da aplicação após o upload. Isso é mais seguro.
-
-3.  **Compactar**: Selecione **TODOS** os arquivos dentro da pasta `backend/` e crie um arquivo ZIP (ex: `backend.zip`).
-    *   ⚠️ **Importante:** Não inclua a pasta `node_modules` ou `.next` (o build será feito lá ou você sobe o build pronto).
-    *   *Recomendação:* Para next.js na SquareCloud, o ideal é subir os arquivos fonte e deixar ele instalar (`npm install`) e rodar (`npm start`). Certifique-se de que o `package.json` tem os scripts de build se necessário, ou envie a pasta `.next` já buildada se preferir (mais rápido, mas arquivo maior).
-    *   O arquivo `squarecloud.app` já está configurado para `npm run start`.
-
-4.  **Upload**:
-    *   No Dashboard, clique em **Upload App**.
-    *   Envie o arquivo `backend.zip`.
-    *   Aguarde o build e inicialização.
-    *   Copie a URL da aplicação (ex: `https://orion-backend.squareweb.app`).
+4.  Aguarde o build e inicialização (pode levar alguns minutos no primeiro deploy).
 
 ---
 
-### 3. Deploy do Frontend (Site)
+### 4. Configurar Domínio
 
-1.  Navegue até a pasta `frontend/`.
-2.  **Build**: Execute o comando de build localmente para gerar a pasta `dist`:
-    ```powershell
-    npm run build
-    ```
-3.  **Compactar**: Entre na pasta `dist/` gerada. Selecione tudo e crie um ZIP.
-    *   **OU**: Compacte a raiz do `frontend/` (sem node_modules) e configure o `MAIN` para `dist/index.html` se quiser buildar lá (mas sites estáticos geralmente sobem prontos).
-    *   *Nossa configuração atual (`squarecloud.app`):* Espera que você suba a raiz do `frontend`. A SquareCloud detectará o site estático.
-    *   **Melhor prática para Static na Square:** Suba o conteúdo da pasta `dist` com o arquivo `squarecloud.app` dentro dela.
-    
-    **Passo Corrigido:**
-    1.  Rode `npm run build` no `frontend`.
-    2.  Copie o arquivo `squarecloud.app` para dentro da pasta `dist`.
-    3.  Compacte o conteúdo da pasta `dist`.
-    4.  Faça o upload desse ZIP.
-
-4.  **Upload**:
-    *   Envie o ZIP no Dashboard.
-    *   Tipo: **Website**.
+No Cloudflare, aponte `www.gestaovirtual.com` para o subdomínio da SquareCloud:
+- `gestao-virtual.squareweb.app`
 
 ---
 
-### 4. Conectar Tudo
+## ⚠️ Resumo das Configurações
 
-Após subir o Backend e o Frontend:
-
-1.  Volte nas configurações do **Backend** na SquareCloud.
-2.  Garanta que a variável `NEXTAUTH_URL` aponta para a URL do seu **Frontend**.
-3.  Vá no código do seu **Frontend** (localmente), edite a variável que aponta para a API (ex: `VITE_API_URL`) para apontar para a URL do **Backend** da SquareCloud.
-4.  Re-builde o Frontend e suba novamente se mudou a variável.
+| Item | Arquivo | Localização |
+|------|---------|-------------|
+| **Config Unificada** | `squarecloud.unified.app` | Raiz do projeto (vira `squarecloud.app` no ZIP) |
+| **Start Unificado** | `squarecloud.unified.start.cjs` | Raiz do projeto |
+| **Script de Deploy** | `deploy_zip_unified.ps1` | `scripts/` |
+| **Middleware Security** | `middleware.ts` | `backend/src/` |
 
 ---
 
-### 5. Deploy do Worker (Opcional)
+## 📦 Deploy Separado (Legado)
 
-Se precisar do processamento em segundo plano:
+> **Nota:** Este modo é mantido apenas como referência. O deploy unificado acima é o recomendado.
 
-1.  Entre na pasta `backend/`.
-2.  Crie um ZIP contendo:
-    *   `package.json`
-    *   `worker.ts`
-    *   `squarecloud.worker.app` (renomeie para `squarecloud.app`)
-    *   Pasta `src/` (se houver dependências)
-3.  Suba como uma nova aplicação.
-
-## ⚠️ Resumo das Configurações Criadas
-
-| Aplicação | Arquivo de Config | Onde está |
-|-----------|-------------------|-----------|
-| **Backend** | `squarecloud.app` | `backend/` |
-| **Frontend** | `squarecloud.app` | `frontend/` |
-| **Worker** | `squarecloud.worker.app` | `backend/` |
+Para deploy separado (2 apps), use:
+```powershell
+npm run deploy:zip:backend   # Gera ORION_BACKEND.zip
+npm run deploy:zip:frontend  # Gera ORION_FRONTEND.zip
+```
 
 Boa sorte com o deploy! 🚀
+

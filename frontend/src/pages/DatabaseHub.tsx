@@ -24,8 +24,11 @@ const SqlConsole = () => {
         setLoading(true);
         setError(null);
         try {
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
-            const accessToken = session?.access_token || session?.token || (session?.user?.id ? 'SESSION_COOKIE' : '');
+            const envUrl = import.meta.env.VITE_API_URL || '/api/v1';
+            const apiUrl = envUrl.startsWith('http')
+                ? envUrl
+                : `${window.location.origin}${envUrl.startsWith('/') ? '' : '/'}${envUrl}`;
+            const accessToken = (session as any)?.access_token || (session as any)?.token || ((session as any)?.user?.id ? 'SESSION_COOKIE' : '');
 
             // If using NextAuth cookies, credentials: include is needed
             // If using Supabase/JWT, Authorization header is needed.

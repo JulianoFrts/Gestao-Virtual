@@ -15,6 +15,11 @@ import { jwtVerify } from "jose";
 
 
 // =============================================
+// 🔒 CHAVE INTERNA DO PROXY (Gateway Unificado)
+// =============================================
+const INTERNAL_PROXY_KEY = process.env.INTERNAL_PROXY_KEY || '';
+
+// =============================================
 // CONFIGURAÇÃO CORS
 // =============================================
 
@@ -27,6 +32,9 @@ const ALLOWED_ORIGINS = [
 if (process.env.NODE_ENV === "production") {
   console.log(`[CORS/v76] 🔧 Cloudflare Shield Active: NEXTAUTH_URL=${process.env.NEXTAUTH_URL}`);
   console.log(`[CORS/v76] 🛡️ IP Trust: Cloudflare (cf-connecting-ip) enabled.`);
+  if (INTERNAL_PROXY_KEY) {
+    console.log(`[SECURITY] 🔒 Internal Proxy Key configurada (modo unificado ativo).`);
+  }
 }
 
 const CORS_HEADERS = {
@@ -143,31 +151,36 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const pathname = request.nextUrl.pathname;
   const cfRay = request.headers.get("cf-ray") || "none";
 
-  // 0. CLOUDFLARE ARMOR & PROTOCOL ENFORCEMENT
+  // 0. VALIDAÇÃO DE PROXY INTERNO + CLOUDFLARE ARMOR
   if (process.env.NODE_ENV === "production") {
-    // Bloqueio de acesso direto (sem passar pelo Cloudflare)
-    if (!cfRay || cfRay === "none") {
-      console.warn(`[SECURITY/v89] 🚫 Bloqueando acesso direto sem Cloudflare Ray. Host: ${request.headers.get("host")}`);
-      return new NextResponse(
-        JSON.stringify({
-          success: false,
-          message: "Acesso restrito: Por favor, use o domínio oficial da aplicação.",
-          error: "Direct access blocked by CF Armor"
-        }),
-        { status: 403, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
+    const proxyKey = request.headers.get("x-internal-proxy-key");
+    const isInternalProxy = INTERNAL_PROXY_KEY && proxyKey === INTERNAL_PROXY_KEY;
 
-    const proto = request.headers.get("x-forwarded-proto");
-    const forwardHost = request.headers.get("x-forwarded-host") || request.headers.get("host");
+    // Se a request vem do proxy interno, pula o check de Cloudflare
+    if (!isInternalProxy) {
+      // Bloqueio de acesso direto (sem passar pelo Cloudflare NEM pelo proxy interno)
+      if (!cfRay || cfRay === "none") {
+        console.warn(`[SECURITY/v89] 🚫 Bloqueando acesso direto sem Cloudflare Ray. Host: ${request.headers.get("host")}`);
+        return new NextResponse(
+          JSON.stringify({
+            success: false,
+            message: "Acesso restrito: Por favor, use o domínio oficial da aplicação.",
+            error: "Direct access blocked by CF Armor"
+          }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
 
-    // Se o Cloudflare estiver mandando HTTP (ou redirecionamento mal configurado na borda), forçamos o upgrade
-    if (proto === "http") {
-      console.log(`[SECURITY/v89] Protocolo HTTP detectado via ray: ${cfRay}. Redirecionando...`);
-      const httpsUrl = new URL(request.url);
-      httpsUrl.protocol = "https:";
-      if (forwardHost) httpsUrl.host = forwardHost;
-      return NextResponse.redirect(httpsUrl, 301);
+      const proto = request.headers.get("x-forwarded-proto");
+      const forwardHost = request.headers.get("x-forwarded-host") || request.headers.get("host");
+
+      if (proto === "http") {
+        console.log(`[SECURITY/v89] Protocolo HTTP detectado via ray: ${cfRay}. Redirecionando...`);
+        const httpsUrl = new URL(request.url);
+        httpsUrl.protocol = "https:";
+        if (forwardHost) httpsUrl.host = forwardHost;
+        return NextResponse.redirect(httpsUrl, 301);
+      }
     }
   }
 

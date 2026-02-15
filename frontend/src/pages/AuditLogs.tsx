@@ -295,11 +295,10 @@ export default function AuditLogs() {
 
       // SSE requer URL absoluta (EventSource não funciona com proxy Vite)
       // VITE_API_URL pode ser relativa ("/api/v1"), então forçamos URL absoluta
-      const envUrl = import.meta.env.VITE_API_URL;
-      const backendUrl =
-        envUrl && envUrl.startsWith("http")
-          ? envUrl
-          : "http://localhost:3000/api/v1";
+      const envUrl = import.meta.env.VITE_API_URL || "/api/v1";
+      const backendUrl = envUrl.startsWith("http")
+        ? envUrl
+        : `${window.location.origin}${envUrl.startsWith("/") ? "" : "/"}${envUrl}`;
       const sseUrl = `${backendUrl}/audit/scan-stream?token=${encodeURIComponent(token)}`;
       console.log("[SSE] URL FINAL:", sseUrl);
 
@@ -664,8 +663,8 @@ export default function AuditLogs() {
         </div>
       </div>
 
-      <Tabs 
-        defaultValue={defaultTab} 
+      <Tabs
+        defaultValue={defaultTab}
         className="w-full"
         onValueChange={(val) => {
           setSearchParams({ tab: val });
@@ -1067,11 +1066,11 @@ export default function AuditLogs() {
                       </span>
                       <p className="text-3xl font-black text-foreground">
                         {selectedRouteResult.lastCheck &&
-                        isValidDate(selectedRouteResult.lastCheck)
+                          isValidDate(selectedRouteResult.lastCheck)
                           ? format(
-                              new Date(selectedRouteResult.lastCheck),
-                              "HH:mm:ss",
-                            )
+                            new Date(selectedRouteResult.lastCheck),
+                            "HH:mm:ss",
+                          )
                           : "--:--"}
                       </p>
                     </div>
@@ -1445,7 +1444,7 @@ export default function AuditLogs() {
                                 "w-16 shrink-0 font-bold",
                                 log.data.severity === "HIGH" && "text-red-400",
                                 log.data.severity === "MEDIUM" &&
-                                  "text-amber-400",
+                                "text-amber-400",
                                 log.data.severity === "LOW" && "text-blue-400",
                               )}
                             >
@@ -1693,7 +1692,7 @@ export default function AuditLogs() {
                       </Badge>
                     </div>
                     {(selectedAuditResult as any)?.files &&
-                    (selectedAuditResult as any)?.files?.length > 1 ? (
+                      (selectedAuditResult as any)?.files?.length > 1 ? (
                       <div className="mt-4 w-full">
                         <div className="flex items-center justify-between mb-2">
                           <span className="font-mono text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
@@ -1847,11 +1846,10 @@ export default function AuditLogs() {
                           <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-black text-xs">0{item.id}</div>
                           <h3 className="font-bold text-lg tracking-tight group-hover:text-primary transition-colors">{item.title}</h3>
                         </div>
-                        <Badge className={`${
-                          item.severity === 'CRÍTICO' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
-                          item.severity === 'ALTO' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
-                          'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                        } font-black text-[10px] tracking-widest`}>
+                        <Badge className={`${item.severity === 'CRÍTICO' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+                            item.severity === 'ALTO' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
+                              'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                          } font-black text-[10px] tracking-widest`}>
                           {item.severity}
                         </Badge>
                       </div>
@@ -1878,7 +1876,7 @@ export default function AuditLogs() {
             <div className="space-y-6">
               <Card className="glass-card border-white/5 bg-linear-to-br from-primary/5 to-transparent relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
-                   <ShieldCheck className="w-40 h-40 text-primary" />
+                  <ShieldCheck className="w-40 h-40 text-primary" />
                 </div>
                 <CardHeader>
                   <CardTitle className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
