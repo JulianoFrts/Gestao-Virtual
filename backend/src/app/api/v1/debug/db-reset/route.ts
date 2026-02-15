@@ -3,7 +3,7 @@ import { Pool } from "pg";
 
 /**
  * PANIC RESET API - GESTÃO VIRTUAL
- * v98.9: Arrow Binding & Pre-Grant Protocol
+ * v98.11: Explicit Bind & Owner Enforcer Protocol
  */
 export async function POST(request: NextRequest) {
     const secret = process.env.APP_SECRET || "temp_secret_123";
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const finalDbUrl = fixDatabaseUrl(dbUrl);
     const action = request.nextUrl.searchParams.get("action") || "sync";
 
-    console.log(`💣 [PANIC/v98.9] Ação: ${action}`);
+    console.log(`💣 [PANIC/v98.11] Ação: ${action}`);
 
     const pool = new Pool({
         connectionString: finalDbUrl,
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
         const client = await pool.connect();
         try {
             if (action === "nuke") {
-                console.log("💣 [PANIC] Executando Nuke de Emergência (v98.9)...");
+                console.log("💣 [PANIC] Executando Nuke de Emergência (v98.11)...");
                 await client.query('DROP SCHEMA IF EXISTS public CASCADE;');
                 await client.query('CREATE SCHEMA public;');
                 await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
@@ -111,8 +111,17 @@ export async function POST(request: NextRequest) {
                         await client.query(ddl);
 
 
-                        // v98.8: Permission Enforcer
-                        console.log("🛡️ [v98.8] Aplicando permissões e alterando propriedade...");
+                        // v98.11: Owner Enforcer (Loop em cada tabela para garantir ownership)
+                        console.log("🛡️ [v98.11] Forçando propriedade de tabelas para 'squarecloud'...");
+                        await client.query(`
+                            DO $$ DECLARE r RECORD;
+                            BEGIN
+                                FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+                                    EXECUTE 'ALTER TABLE public.' || quote_ident(r.tablename) || ' OWNER TO squarecloud';
+                                END LOOP;
+                            END $$;
+                        `);
+
                         await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
                         await client.query('ALTER SCHEMA public OWNER TO squarecloud;');
                         await client.query('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO squarecloud;');
@@ -148,7 +157,7 @@ export async function POST(request: NextRequest) {
                 }
 
                 return NextResponse.json({
-                    message: "Sync and Restore finished successfully (v98.9)! 🏆",
+                    message: "Sync and Restore finished successfully (v98.11)! 🏆",
                     tablesCreated: rowCount,
                     status: "STABLE_RECONSTRUCTED"
                 });
