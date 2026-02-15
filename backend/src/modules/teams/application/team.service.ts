@@ -1,5 +1,6 @@
 import { TeamRepository, FindAllTeamsParams } from "../domain/team.repository";
 import { getLaborClassification } from "@/lib/utils/laborUtils";
+import { logger } from "@/lib/utils/logger";
 
 export class TeamService {
   constructor(private readonly repository: TeamRepository) { }
@@ -140,9 +141,9 @@ export class TeamService {
     await this.prisma.$transaction(async (tx: any) => {
       for (const item of items) {
         const member = await this.validateAndCreateMember(
-          tx,
+          item.userId,
           item.teamId,
-          item.userId
+          tx,
         );
         if (member) results.push(member);
       }
@@ -152,30 +153,20 @@ export class TeamService {
   }
 
   private async validateAndCreateMember(
-    tx: any,
-    teamId: string,
     userId: string,
+    teamId: string,
+    tx: any,
   ) {
-    if (!teamId || !userId) throw new Error("teamId and userId are required");
+    logger.debug("[TeamService] Validating and creating member:", { userId, teamId });
 
-    const [user, team] = await Promise.all([
-      tx.user.findUnique({
-        where: { id: userId },
-        include: { jobFunction: true },
-      }),
-      tx.team.findUnique({ where: { id: teamId } }),
-    ]);
+    // Garantir que a equipe existe
+    const team = await tx.team.findUnique({
+      where: { id: teamId },
+    });
 
-    if (!user) throw new Error(`Usuário ${userId} não encontrado`);
-    if (!team) throw new Error(`Equipe ${teamId} não encontrada`);
-
-    const userLaborType = getLaborClassification(
-      user.jobFunction?.name || undefined,
-    );
-    if ((team as any).laborType && (team as any).laborType !== userLaborType) {
-      throw new Error(
-        `O funcionário ${user.name} é ${userLaborType}, mas a equipe ${team.name} é ${(team as any).laborType}`,
-      );
+    if (!team) {
+      logger.error(`[TeamService] Team ${teamId} not found`);
+      throw new Error(`Equipe com ID ${teamId} não encontrada`);
     }
 
     // Regra: Remover de qualquer outra equipe onde seja membro
@@ -187,14 +178,31 @@ export class TeamService {
       data: { supervisorId: null },
     });
 
-    const existing = await tx.teamMember.findFirst({
-      where: { teamId, userId },
+    // Criar o membro com classificação correta
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      include: { jobFunction: true },
     });
 
-    if (existing) return null;
+    if (!user) {
+      logger.error(`[TeamService] User ${userId} not found`);
+      throw new Error(`Usuário ${userId} não encontrado`);
+    }
 
-    return tx.teamMember.create({
-      data: { teamId, userId },
+    const userLaborType = getLaborClassification(user.jobFunction?.name);
+
+    if (team.laborType && team.laborType !== userLaborType) {
+      logger.warn(`[TeamService] Labor mismatch for user ${user.name}: Expected ${team.laborType}, got ${userLaborType}`);
+      throw new Error(
+        `Incompatibilidade: A equipe é de ${team.laborType}, mas o funcionário é ${userLaborType}`,
+      );
+    }
+
+    const result = await tx.teamMember.create({
+      data: {
+        userId,
+        teamId,
+      },
       include: {
         team: { select: { id: true, name: true } },
         user: {
@@ -206,6 +214,9 @@ export class TeamService {
         },
       },
     });
+
+    logger.debug(`[TeamService] Member record created: ${result.id}`);
+    return result;
   }
 
   async removeMember(teamId: string, userId: string) {
@@ -227,52 +238,29 @@ export class TeamService {
   }
 
   async moveMember(employeeId: string, toTeamId: string | null) {
+    logger.debug("[TeamService] moveMember called", { employeeId, toTeamId });
+
     return this.prisma.$transaction(async (tx: any) => {
-      const employee = await tx.user.findUnique({
-        where: { id: employeeId },
-        include: { jobFunction: true },
-      });
-
-      if (!employee) throw new Error("Funcionário não encontrado");
-
-      const employeeLaborType = getLaborClassification(
-        employee.jobFunction?.name,
-      );
-
-      // 1. Remove from all team member lists
-      await tx.teamMember.deleteMany({
+      // 1. Remover de qualquer equipe (limpando o estado atual)
+      const deleted = await tx.teamMember.deleteMany({
         where: { userId: employeeId },
       });
+      logger.debug(`[TeamService] Deleted ${deleted.count} old memberships`);
 
-      // 2. Remove from any leadership
-      await tx.team.updateMany({
+      // 2. Remover de qualquer liderança
+      const updated = await tx.team.updateMany({
         where: { supervisorId: employeeId },
         data: { supervisorId: null },
       });
+      logger.debug(`[TeamService] Removed leadership from ${updated.count} teams`);
 
-      // 3. Add to new team as member if toTeamId provided
+      // 3. Se houver equipe de destino, validar e criar
       if (toTeamId && toTeamId !== "null") {
-        const targetTeam = await tx.team.findUnique({
-          where: { id: toTeamId },
-        });
-        if (!targetTeam) throw new Error("Equipe de destino não encontrada");
-
-        if (
-          targetTeam.laborType &&
-          targetTeam.laborType !== employeeLaborType
-        ) {
-          throw new Error(
-            `Incompatibilidade: Esta equipe é de ${targetTeam.laborType}, mas o funcionário é ${employeeLaborType}`,
-          );
-        }
-
-        return await tx.teamMember.create({
-          data: {
-            userId: employeeId,
-            teamId: toTeamId,
-          },
-        });
+        logger.debug(`[TeamService] Adding to target team: ${toTeamId}`);
+        return await this.validateAndCreateMember(employeeId, toTeamId, tx);
       }
+
+      logger.info(`[TeamService] Member ${employeeId} moved to Talent Pool`);
       return null;
     });
   }

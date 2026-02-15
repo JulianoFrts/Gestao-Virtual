@@ -17,8 +17,14 @@ export async function POST(request: NextRequest) {
   try {
     await requireAdmin();
 
-    const { p_employee_id, p_from_team_id, p_to_team_id } =
-      (await request.json()) as any;
+    const body = await request.json();
+    const { p_employee_id, p_from_team_id, p_to_team_id } = body;
+
+    logger.debug("[RPC] move_team_member params:", {
+      employeeId: p_employee_id,
+      from: p_from_team_id,
+      to: p_to_team_id
+    });
 
     if (!p_employee_id) {
       return ApiResponse.badRequest("ID do funcionário é obrigatório");
@@ -26,14 +32,12 @@ export async function POST(request: NextRequest) {
 
     await teamService.moveMember(p_employee_id, p_to_team_id);
 
-    logger.info("Membro de equipe movido com sucesso", {
-      employeeId: p_employee_id,
-      from: p_from_team_id,
-      to: p_to_team_id,
-    });
-
     return ApiResponse.json(null, "Membro movido com sucesso");
-  } catch (error) {
+  } catch (error: any) {
+    logger.error("[RPC ERR] Error in move_team_member:", {
+      message: error.message,
+      stack: error.stack,
+    });
     return handleApiError(
       error,
       "src/app/api/v1/rpc/move_team_member/route.ts#POST",
