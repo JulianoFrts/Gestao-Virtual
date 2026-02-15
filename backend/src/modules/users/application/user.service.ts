@@ -168,7 +168,7 @@ export class UserService {
       if (performer) {
         const performerRole = (performer as any).authCredential?.role || "";
         const isGod = isGodRole(performerRole) || (performer as any).hierarchyLevel >= SECURITY_RANKS.MASTER;
-        
+
         const targetLevel = (existing as any).hierarchyLevel || 0;
         const performerLevel = (performer as any).hierarchyLevel || 0;
 
@@ -180,7 +180,7 @@ export class UserService {
 
     // 3. Preparação e Normalização
     const updateData = { ...data };
-    
+
     // Tratamento de senha
     if (updateData.password) {
       updateData.password = await this.securityService.hashPassword(updateData.password);
@@ -209,19 +209,19 @@ export class UserService {
     // [SECURITY] Tratamento de Flag isSystemAdmin
     // Somente God Roles podem alterar essa flag crítica
     if (updateData.isSystemAdmin !== undefined && updateData.isSystemAdmin !== (existing as any).isSystemAdmin) {
-       if (performerId) {
-          const performer = await this.repository.findById(performerId, {
-            id: true,
-            hierarchyLevel: true,
-            authCredential: { select: { role: true } },
-          });
-          const performerRole = (performer as any).authCredential?.role || "";
-          const isOwner = isSystemOwner(performerRole);
+      if (performerId) {
+        const performer = await this.repository.findById(performerId, {
+          id: true,
+          hierarchyLevel: true,
+          authCredential: { select: { role: true } },
+        });
+        const performerRole = (performer as any).authCredential?.role || "";
+        const isOwner = isSystemOwner(performerRole);
 
-          if (!isOwner) {
-             throw new Error("Segurança Crítica: Apenas Super Administradores podem conceder ou revogar status de System Admin.");
-          }
-       }
+        if (!isOwner) {
+          throw new Error("Segurança Crítica: Apenas Super Administradores podem conceder ou revogar status de System Admin.");
+        }
+      }
     }
 
     // 4. Persistência Granular (Campo a Campo)
@@ -231,7 +231,7 @@ export class UserService {
     };
 
     const fieldsToProcess = Object.keys(updateData);
-    
+
     for (const field of fieldsToProcess) {
       try {
         let value = updateData[field];
@@ -276,6 +276,28 @@ export class UserService {
       _report: report,
       _partial: report.failed.length > 0
     };
+  }
+
+  /**
+   * Atualização em massa de usuários.
+   * Itera sobre os IDs e aplica o updateUser para cada um, garantindo auditoria e segurança.
+   */
+  async bulkUpdateUsers(ids: string[], data: any, performerId: string) {
+    const results = {
+      success: [] as string[],
+      failed: [] as { id: string; error: string }[],
+    };
+
+    for (const id of ids) {
+      try {
+        await this.updateUser(id, data, { id: true }, performerId);
+        results.success.push(id);
+      } catch (error: any) {
+        results.failed.push({ id, error: error.message || "Erro desconhecido" });
+      }
+    }
+
+    return results;
   }
 
   async deleteUser(id: string, performerId?: string) {

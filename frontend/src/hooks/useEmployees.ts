@@ -33,10 +33,10 @@ export function useEmployees(options?: EmployeeFilters) {
     // Blindagem: Se não tiver usuário, não tenta buscar
     // Isso é consistente com useTeams e previne loops 401
     if (!currentUserSignal.value) {
-        // console.log("[useEmployees] Skipped fetch: No user logged in.");
-        return;
+      // console.log("[useEmployees] Skipped fetch: No user logged in.");
+      return;
     }
-    
+
     fetchEmployees();
   }, [options?.companyId, options?.projectId, options?.siteId, options?.excludeCorporate]);
 
@@ -128,15 +128,15 @@ export function useEmployees(options?: EmployeeFilters) {
 
         // Insert/Update Address
         if (data.cep || data.street || data.city) {
-            await db.from('user_addresses').upsert({
-                user_id: created.id,
-                cep: data.cep || '',
-                logradouro: data.street || '',
-                number: data.number || '',
-                bairro: data.neighborhood || '',
-                localidade: data.city || '',
-                uf: data.state || ''
-            }, { onConflict: 'user_id' });
+          await db.from('user_addresses').upsert({
+            user_id: created.id,
+            cep: data.cep || '',
+            logradouro: data.street || '',
+            number: data.number || '',
+            bairro: data.neighborhood || '',
+            localidade: data.city || '',
+            uf: data.state || ''
+          }, { onConflict: 'user_id' });
         }
 
         const updatedEmployee = {
@@ -151,9 +151,9 @@ export function useEmployees(options?: EmployeeFilters) {
         return { success: true, data: updatedEmployee };
       } catch (error: any) {
         // Se for erro de duplicidade (Unique constraint), não cai no modo offline
-        const isConflict = error.message?.includes('P2002') || 
-                           error.message?.includes('Unique constraint') ||
-                           error.status === 409;
+        const isConflict = error.message?.includes('P2002') ||
+          error.message?.includes('Unique constraint') ||
+          error.status === 409;
 
         if (isConflict) {
           console.error('CPF or Registration collision detected:', error);
@@ -235,15 +235,15 @@ export function useEmployees(options?: EmployeeFilters) {
 
         // Update Address
         if (data.cep !== undefined || data.street !== undefined || data.city !== undefined || data.state !== undefined || data.number !== undefined || data.neighborhood !== undefined) {
-            await db.from('user_addresses').upsert({
-                user_id: id,
-                cep: data.cep || '',
-                logradouro: data.street || '',
-                number: data.number || '',
-                bairro: data.neighborhood || '',
-                localidade: data.city || '',
-                uf: data.state || ''
-            }, { onConflict: 'user_id' });
+          await db.from('user_addresses').upsert({
+            user_id: id,
+            cep: data.cep || '',
+            logradouro: data.street || '',
+            number: data.number || '',
+            bairro: data.neighborhood || '',
+            localidade: data.city || '',
+            uf: data.state || ''
+          }, { onConflict: 'user_id' });
         }
 
         await storageService.setItem('employees', employeesSignal.value);
@@ -348,6 +348,39 @@ export function useEmployees(options?: EmployeeFilters) {
     }
   };
 
+  const bulkUpdateEmployees = async (ids: string[], data: any) => {
+    if (!navigator.onLine) {
+      toast({
+        title: "Modo Offline",
+        description: "A edição em massa requer conexão com a internet.",
+        variant: "destructive",
+      });
+      return { success: false };
+    }
+
+    try {
+      const { error } = await db.from("rpc/bulk_update_users" as any).post({ ids, data });
+      if (error) throw error;
+
+      toast({
+        title: "Atualização concluída",
+        description: `${ids.length} colaboradores foram atualizados.`,
+      });
+
+      await fetchEmployees(true);
+      return { success: true };
+    } catch (error: any) {
+      logError("Employees Bulk Update", error);
+      const userMessage = mapDatabaseError(error);
+      toast({
+        title: "Erro na atualização em massa",
+        description: userMessage,
+        variant: "destructive",
+      });
+      return { success: false, error: userMessage };
+    }
+  };
+
   return {
     employees: employeesSignal.value,
     isLoading: isLoadingEmployees.value,
@@ -355,6 +388,7 @@ export function useEmployees(options?: EmployeeFilters) {
     updateEmployee,
     deleteEmployee,
     deleteMultipleEmployees,
+    bulkUpdateEmployees,
     refresh: () => fetchEmployees(true),
   };
 }

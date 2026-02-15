@@ -214,12 +214,14 @@ export async function GET(request: NextRequest) {
 
     // Caso normal
     const result = await userService.listUsers({
-      where,
-      page,
-      limit,
-      sortBy,
-      sortOrder,
-      select: publicUserSelect,
+      params: {
+        where,
+        page,
+        limit,
+        sortBy,
+        sortOrder,
+        select: publicUserSelect,
+      }
     });
 
     return ApiResponse.json(result);

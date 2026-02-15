@@ -99,6 +99,7 @@ export default function Employees() {
     updateEmployee,
     deleteEmployee,
     deleteMultipleEmployees,
+    bulkUpdateEmployees,
   } = useEmployees();
   const { sites, isLoading: loadingSites } = useSites();
   const { projects, isLoading: loadingProjects } = useProjects();
@@ -218,9 +219,15 @@ export default function Employees() {
     open: false,
     title: "",
     description: "",
-    onConfirm: () => {},
+    onConfirm: () => { },
     variant: "default",
   });
+
+  // Bulk Edit State
+  const [isBulkDialogOpen, setIsBulkDialogOpen] = useState(false);
+  const [bulkField, setBulkField] = useState<string>("");
+  const [bulkValue, setBulkValue] = useState<any>(null);
+  const [isBulkSaving, setIsBulkSaving] = useState(false);
 
   // Sorting computed localmente para não poluir o signal global se for específico da view
   const sortedData = useMemo(() => {
@@ -350,7 +357,7 @@ export default function Employees() {
     });
     setIsImportModalOpen(true);
     e.target.value = "";
-  };;
+  };
 
   const handleConfirmImport = async () => {
     if (!importFile) return;
@@ -1469,18 +1476,18 @@ export default function Employees() {
               className={cn(
                 "border-border/30 hover:bg-muted/50",
                 selectedIds.length > 0 &&
-                  "border-primary/50 text-primary bg-primary/5",
+                "border-primary/50 text-primary bg-primary/5",
               )}
               onClick={handleSelectAll}
             >
               {selectedIds.length === displayEmployees.length &&
-              displayEmployees.length > 0 ? (
+                displayEmployees.length > 0 ? (
                 <XCircle className="w-4 h-4 mr-2" />
               ) : (
                 <CheckSquare className="w-4 h-4 mr-2" />
               )}
               {selectedIds.length === displayEmployees.length &&
-              displayEmployees.length > 0
+                displayEmployees.length > 0
                 ? "Desmarcar Todos"
                 : "Selecionar Tudo"}
             </Button>
@@ -1493,6 +1500,21 @@ export default function Employees() {
               >
                 <Trash2 className="w-4 h-4 mr-2" />
                 Remover ({selectedIds.length})
+              </Button>
+            )}
+
+            {selectedIds.length > 0 && canUpdate && (
+              <Button
+                variant="outline"
+                className="border-primary/50 text-primary bg-primary/5 hover:bg-primary/10"
+                onClick={() => {
+                  setBulkField("");
+                  setBulkValue(null);
+                  setIsBulkDialogOpen(true);
+                }}
+              >
+                <Pencil className="w-4 h-4 mr-2" />
+                Editar ({selectedIds.length})
               </Button>
             )}
           </div>
@@ -1533,7 +1555,7 @@ export default function Employees() {
                     className="h-8 w-8"
                   >
                     {selectedIds.length === displayEmployees.length &&
-                    displayEmployees.length > 0 ? (
+                      displayEmployees.length > 0 ? (
                       <CheckSquare className="w-5 h-5 text-primary" />
                     ) : (
                       <Square className="w-5 h-5 text-muted-foreground" />
@@ -1760,13 +1782,12 @@ export default function Employees() {
                             <Badge
                               variant="outline"
                               className={`
-                                                            ${
-                                                              level >= 8
-                                                                ? "bg-amber-500/20 text-amber-500 border-amber-500/20"
-                                                                : level >= 5
-                                                                  ? "bg-primary/20 text-primary border-primary/20"
-                                                                  : "bg-white/5 text-muted-foreground border-white/10"
-                                                            }
+                                                            ${level >= 8
+                                  ? "bg-amber-500/20 text-amber-500 border-amber-500/20"
+                                  : level >= 5
+                                    ? "bg-primary/20 text-primary border-primary/20"
+                                    : "bg-white/5 text-muted-foreground border-white/10"
+                                }
                                                             font-bold
                                                         `}
                             >
@@ -1917,9 +1938,9 @@ export default function Employees() {
                         {(() => {
                           const canManage = profile
                             ? canManageEmployee(profile, {
-                                level: EmployeeProfile.level,
-                                companyId: EmployeeProfile.companyId,
-                              })
+                              level: EmployeeProfile.level,
+                              companyId: EmployeeProfile.companyId,
+                            })
                             : false;
 
                           if (!canManage) {
@@ -1997,12 +2018,159 @@ export default function Employees() {
         </div>
       </div>
 
-      <FaceRegistrationDialog
-        employee={faceRegEmployee}
-        open={isFaceRegOpen}
-        onOpenChange={setIsFaceRegOpen}
-      />
       {/* Confirmation Dialog */}
+      {/* Bulk Edit Dialog */}
+      <Dialog open={isBulkDialogOpen} onOpenChange={setIsBulkDialogOpen}>
+        <DialogContent className="max-w-md bg-card/95 border-border/50 backdrop-blur-xl shadow-premium">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-5 h-5 text-primary" />
+              Edição em Massa ({selectedIds.length})
+            </DialogTitle>
+            <DialogDescription>
+              Selecione um campo para aplicar a alteração em todos os {selectedIds.length} colaboradores selecionados.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Campo para Alterar</Label>
+              <Select value={bulkField} onValueChange={(val) => {
+                setBulkField(val);
+                setBulkValue(null);
+              }}>
+                <SelectTrigger className="industrial-input">
+                  <SelectValue placeholder="Selecione o campo..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {isCorporateRole(profile?.role) && <SelectItem value="companyId">Empresa</SelectItem>}
+                  <SelectItem value="projectId">Obra / Projeto</SelectItem>
+                  <SelectItem value="siteId">Canteiro / Unidade</SelectItem>
+                  <SelectItem value="functionId">Função / Cargo</SelectItem>
+                  <SelectItem value="level">Nível Profissional</SelectItem>
+                  <SelectItem value="laborType">Tipo de Mão de Obra</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {bulkField === "companyId" && (
+              <div className="space-y-2">
+                <Label>Nova Empresa</Label>
+                <Select value={bulkValue} onValueChange={setBulkValue}>
+                  <SelectTrigger className="industrial-input">
+                    <SelectValue placeholder="Selecione a empresa..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {companies.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {bulkField === "projectId" && (
+              <div className="space-y-2">
+                <Label>Nova Obra</Label>
+                <Select value={bulkValue} onValueChange={setBulkValue}>
+                  <SelectTrigger className="industrial-input">
+                    <SelectValue placeholder="Selecione a obra..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {bulkField === "siteId" && (
+              <div className="space-y-2">
+                <Label>Novo Canteiro</Label>
+                <Select value={bulkValue} onValueChange={setBulkValue}>
+                  <SelectTrigger className="industrial-input">
+                    <SelectValue placeholder="Selecione o canteiro..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sites.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {bulkField === "functionId" && (
+              <div className="space-y-2">
+                <Label>Nova Função</Label>
+                <Select value={bulkValue} onValueChange={setBulkValue}>
+                  <SelectTrigger className="industrial-input">
+                    <SelectValue placeholder="Selecione a função..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {functions.map((f) => (
+                      <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {bulkField === "level" && (
+              <div className="space-y-2">
+                <Label>Novo Nível Profissional</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  max="10"
+                  className="industrial-input"
+                  value={bulkValue || 0}
+                  onChange={(e) => setBulkValue(parseInt(e.target.value))}
+                />
+              </div>
+            )}
+
+            {bulkField === "laborType" && (
+              <div className="space-y-2">
+                <Label>Tipo de Mão de Obra</Label>
+                <Select value={bulkValue} onValueChange={setBulkValue}>
+                  <SelectTrigger className="industrial-input">
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="MOD">MOD - Direta</SelectItem>
+                    <SelectItem value="MOI">MOI - Indireta</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+            <Button variant="ghost" onClick={() => setIsBulkDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              className="gradient-primary shadow-glow"
+              disabled={!bulkField || !bulkValue || isBulkSaving}
+              onClick={async () => {
+                setIsBulkSaving(true);
+                const result = await bulkUpdateEmployees(selectedIds, { [bulkField]: bulkValue });
+                if (result.success) {
+                  setIsBulkDialogOpen(false);
+                  setSelectedIds([]);
+                }
+                setIsBulkSaving(false);
+              }}
+            >
+              {isBulkSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Aplicar a Todos
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmationDialog
         open={confirmModal.open}
         onOpenChange={(open) => setConfirmModal((prev) => ({ ...prev, open }))}
@@ -2010,6 +2178,12 @@ export default function Employees() {
         description={confirmModal.description}
         onConfirm={confirmModal.onConfirm}
         variant={confirmModal.variant}
+      />
+
+      <FaceRegistrationDialog
+        open={isFaceRegOpen}
+        onOpenChange={setIsFaceRegOpen}
+        employee={faceRegEmployee}
       />
     </div>
   );
