@@ -15,9 +15,10 @@ import { generateToken } from "@/lib/auth/token";
 import { UserService } from "@/modules/users/application/user.service";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
 import { AuthService } from "@/modules/auth/application/auth.service";
+import { PrismaAuthCredentialRepository } from "@/modules/auth/infrastructure/prisma-auth-credential.repository";
 
 const userService = new UserService(new PrismaUserRepository());
-const authService = new AuthService(userService);
+const authService = new AuthService(userService, new PrismaAuthCredentialRepository());
 
 const loginSchema = z.object({
   email: z.string().min(1), // Permite email ou matrícula/login

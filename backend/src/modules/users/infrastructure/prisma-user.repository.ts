@@ -3,7 +3,11 @@ import { User, Prisma } from "@prisma/client";
 import { UserRepository } from "../domain/user.repository";
 
 export class PrismaUserRepository implements UserRepository {
-  public prisma = prisma;
+  private prisma: any;
+
+  constructor(prismaInstance?: any) {
+    this.prisma = prismaInstance || prisma;
+  }
 
   async findAll(params: {
     where: Prisma.UserWhereInput;
@@ -12,7 +16,7 @@ export class PrismaUserRepository implements UserRepository {
     orderBy?: Prisma.UserOrderByWithRelationInput;
     select?: Prisma.UserSelect;
   }): Promise<Partial<User>[]> {
-    return prisma.user.findMany({
+    return this.prisma.user.findMany({
       where: params.where,
       skip: params.skip,
       take: params.take,
@@ -22,22 +26,21 @@ export class PrismaUserRepository implements UserRepository {
   }
 
   async count(where: Prisma.UserWhereInput): Promise<number> {
-    return prisma.user.count({ where });
+    return this.prisma.user.count({ where });
   }
 
   async findById(
     id: string,
     select?: Prisma.UserSelect,
   ): Promise<Partial<User> | null> {
-    return prisma.user.findUnique({
+    return this.prisma.user.findUnique({
       where: { id },
       select,
     });
   }
 
   async findByEmail(email: string): Promise<Partial<User> | null> {
-    // Email agora está em AuthCredential
-    const authCredential = await prisma.authCredential.findUnique({
+    const authCredential = await this.prisma.authCredential.findUnique({
       where: { email: email.toLowerCase().trim() },
       include: { user: true },
     });
@@ -45,7 +48,6 @@ export class PrismaUserRepository implements UserRepository {
   }
 
   async create(data: any, select?: Prisma.UserSelect): Promise<Partial<User>> {
-    // Mapear dados planos para estrutura aninhada do Prisma
     const {
       id: _bodyId,
       email,
@@ -100,12 +102,12 @@ export class PrismaUserRepository implements UserRepository {
           neighborhood: neighborhood || "",
           city: city || "",
           stateCode: state || "null",
-          stateName: "", // Optional
+          stateName: "",
         },
       };
     }
 
-    return prisma.user.create({
+    return this.prisma.user.create({
       data: createData,
       select,
     });
@@ -211,7 +213,7 @@ export class PrismaUserRepository implements UserRepository {
       };
     }
 
-    return prisma.user.update({
+    return this.prisma.user.update({
       where: { id },
       data: updateData,
       select,
@@ -219,7 +221,7 @@ export class PrismaUserRepository implements UserRepository {
   }
 
   async delete(id: string): Promise<void> {
-    await prisma.user.delete({
+    await this.prisma.user.delete({
       where: { id },
     });
   }
@@ -228,8 +230,7 @@ export class PrismaUserRepository implements UserRepository {
     identifier: string,
     select?: Prisma.UserSelect,
   ): Promise<Partial<User> | null> {
-    // Primeiro, tentar por CPF ou registrationNumber
-    const user = await prisma.user.findFirst({
+    const user = await this.prisma.user.findFirst({
       where: {
         OR: [
           { registrationNumber: identifier },
@@ -241,8 +242,7 @@ export class PrismaUserRepository implements UserRepository {
 
     if (user) return user;
 
-    // Tentar via AuthCredential (email ou login)
-    const authCredential = await prisma.authCredential.findFirst({
+    const authCredential = await this.prisma.authCredential.findFirst({
       where: {
         OR: [
           { email: identifier.toLowerCase().trim() },
@@ -258,8 +258,7 @@ export class PrismaUserRepository implements UserRepository {
   async deduplicateCPFs(): Promise<number> {
     console.log("[Maintenance] Iniciando limpeza profunda de CPFs...");
 
-    // 1. Buscar todos os usuários que possuem CPF
-    const allUsers = await prisma.user.findMany({
+    const allUsers = await this.prisma.user.findMany({
       where: { cpf: { not: null } },
       orderBy: { createdAt: "asc" },
       select: { id: true, cpf: true },
@@ -279,7 +278,6 @@ export class PrismaUserRepository implements UserRepository {
       }
 
       if (seen.has(sanitized)) {
-        // Conflito detectado: este é mais novo, então removemos o CPF dele
         toNullify.push(user.id);
       } else {
         seen.add(sanitized);
@@ -291,21 +289,18 @@ export class PrismaUserRepository implements UserRepository {
 
     let fixCount = 0;
 
-    // Passo 1: Anular CPFs de registros duplicados ou inválidos
     if (toNullify.length > 0) {
       console.log(`[Maintenance] Anulando ${toNullify.length} CPFs conflitantes...`);
-      await prisma.user.updateMany({
+      await this.prisma.user.updateMany({
         where: { id: { in: toNullify } },
         data: { cpf: null },
       });
       fixCount += toNullify.length;
     }
 
-    // Passo 2: Sanitizar CPFs únicos que ainda estão com máscara
-    // Usamos um loop individual para garantir que cada um seja processado
     for (const item of toSanitize) {
       try {
-        await prisma.user.update({
+        await this.prisma.user.update({
           where: { id: item.id },
           data: { cpf: item.sanitized },
         });
@@ -320,7 +315,7 @@ export class PrismaUserRepository implements UserRepository {
   }
 
   async upsertAddress(userId: string, data: any): Promise<any> {
-    return prisma.userAddress.upsert({
+    return this.prisma.userAddress.upsert({
       where: { userId },
       update: data,
       create: { ...data, userId },

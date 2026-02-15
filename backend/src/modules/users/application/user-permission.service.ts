@@ -1,9 +1,9 @@
 import { isGodRole, isSystemOwner, getFlagsForRole, hasWildcardAccess, SECURITY_RANKS } from "@/lib/constants/security";
 import { ROLE_LEVELS } from "@/lib/constants";
-import { UserRepository } from "../domain/user.repository";
+import { PermissionRepository } from "../domain/permission.repository";
 
 export class UserPermissionService {
-  constructor(private readonly repository: UserRepository) {}
+  constructor(private readonly repository: PermissionRepository) { }
 
   async getRankByRole(role: string): Promise<number> {
     try {
@@ -28,26 +28,13 @@ export class UserPermissionService {
 
     try {
       const currentRoleUpper = (role || "WORKER").toUpperCase();
-      const prisma = (this.repository as any).prisma;
 
       // 1. Buscar o ID do nível de permissão baseado no nome da role
-      const level = await prisma.permissionLevel.findFirst({
-        where: {
-          OR: [{ name: currentRoleUpper }, { name: role }],
-        },
-        select: { id: true },
-      });
+      const level = await this.repository.findLevelByName(role);
 
       if (level?.id) {
         // 2. Buscar a matriz de permissões para este nível
-        const matrixData = await prisma.permissionMatrix.findMany({
-          where: { levelId: level.id },
-          include: {
-            module: {
-              select: { code: true },
-            },
-          },
-        });
+        const matrixData = await this.repository.findMatrixByLevelId(level.id);
 
         // 3. Montar o mapa de permissões
         if (matrixData) {
@@ -68,35 +55,26 @@ export class UserPermissionService {
       permissionsMap["dashboard"] = true;
 
       // 3.5. INJEÇÃO DE FLAGS POR ROLE (ROLE_FLAGS)
-      // Cada role já possui suas flags individuais definidas em ROLE_FLAGS.
       const roleFlags = getFlagsForRole(currentRoleUpper);
       roleFlags.forEach(f => { permissionsMap[f] = true; });
 
-      // Escudo Dourado: roles God e System Owners
-      if (hasWildcardAccess(currentRoleUpper)) {
-        permissionsMap["system.is_protected"] = true;
-      } else if (isSystemOwner(currentRoleUpper)) {
+      // Escudo Dourado
+      if (hasWildcardAccess(currentRoleUpper) || isSystemOwner(currentRoleUpper)) {
         permissionsMap["system.is_protected"] = true;
       }
 
       // 4. Buscar Permissões Customizadas do Usuário (Overrides Diretos)
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { 
-          functionId: true,
-          permissions: true 
-        },
-      });
+      const user = await this.repository.findUserWithPermissions(userId);
 
-      // 4.1. Aplicar Overrides Individuais (O campo 'permissions' no DB sempre ganha)
+      // 4.1. Aplicar Overrides Individuais
       if (user?.permissions && typeof user.permissions === 'object') {
         const customPerms = user.permissions as Record<string, any>;
         Object.entries(customPerms).forEach(([code, isGranted]) => {
           if (typeof isGranted === 'boolean') {
             permissionsMap[code] = isGranted;
             if (isGranted && code.includes(".")) {
-               const [base] = code.split(".");
-               permissionsMap[base] = true;
+              const [base] = code.split(".");
+              permissionsMap[base] = true;
             }
           }
         });
@@ -104,29 +82,21 @@ export class UserPermissionService {
 
       // 5. Buscar Permissões Delegadas por Cargo no Projeto
       if (projectId && userId && user?.functionId) {
-          const delegatedPerms =
-            await prisma.projectPermissionDelegation.findMany({
-              where: {
-                projectId,
-                jobFunctionId: user.functionId,
-              },
-              include: {
-                module: { select: { code: true } },
-              },
-            });
+        const delegatedPerms =
+          await this.repository.findProjectDelegations(projectId, user.functionId);
 
-          delegatedPerms.forEach((item: any) => {
-            const moduleCode = item.module?.code;
-            if (moduleCode) {
-              if (item.isGranted) {
-                permissionsMap[moduleCode] = true;
-                if (moduleCode.includes(".")) {
-                  const [base] = moduleCode.split(".");
-                  permissionsMap[base] = true;
-                }
+        delegatedPerms.forEach((item: any) => {
+          const moduleCode = item.module?.code;
+          if (moduleCode) {
+            if (item.isGranted) {
+              permissionsMap[moduleCode] = true;
+              if (moduleCode.includes(".")) {
+                const [base] = moduleCode.split(".");
+                permissionsMap[base] = true;
               }
             }
-          });
+          }
+        });
       }
     } catch (err) {
       console.error(
@@ -151,7 +121,7 @@ export class UserPermissionService {
     // Flags de Nível Administrativo (Soberania do Backend)
     const isGod = isGodRole(r);
     const isOwner = isSystemOwner(r);
-    
+
     // showAdminMenu liberado por Role (Admin+) OU por permissão individual OU Rank Global
     const isHighLevel = isOwner || level >= SECURITY_RANKS.ADMIN || !!perms["users.manage"] || !!perms["companies.manage"];
     const isCorporate =

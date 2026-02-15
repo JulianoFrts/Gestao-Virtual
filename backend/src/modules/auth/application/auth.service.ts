@@ -1,26 +1,17 @@
-/**
- * Auth Service - Sistema de Autenticação Multi-Modal
- * Suporta login por Email, Login customizado, CPF e 2FA
- */
-
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { AuthCredentialRepository } from "../domain/auth-credential.repository";
+import { IAuthCredentialRepository } from "../domain/auth-credential.repository";
 import { UserService } from "../../users/application/user.service";
 
-const SALT_ROUNDS = 12;
-const TOTP_WINDOW = 30; // segundos
+const SALT_ROUNDS = parseInt(process.env.AUTH_SALT_ROUNDS || "12", 10);
+const TOTP_WINDOW = parseInt(process.env.AUTH_TOTP_WINDOW || "30", 10);
+const MFA_ISSUER = process.env.AUTH_MFA_ISSUER || "OrioN";
 
 export class AuthService {
-  private readonly authRepo: AuthCredentialRepository;
-
-  constructor(private readonly userService: UserService) {
-    this.authRepo = new AuthCredentialRepository();
-  }
-
-  // =============================================
-  // REGISTRO
-  // =============================================
+  constructor(
+    private readonly userService: UserService,
+    private readonly authRepo: IAuthCredentialRepository
+  ) { }
 
   /**
    * Registra um novo usuário com credenciais
@@ -34,20 +25,16 @@ export class AuthService {
     projectId?: string | null;
     siteId?: string | null;
     registrationNumber?: string | null;
-    [key: string]: any; // Allow extra fields like CPF, Address, etc.
+    [key: string]: any;
   }) {
-    // Validar senha mínima de 6 caracteres (O Zod já faz, mas mantemos como redundância)
     if (!data.password || data.password.length < 6) {
       throw new Error("Senha deve ter no mínimo 6 caracteres");
     }
 
-    // Verificar se email já existe
     if (await this.authRepo.emailExists(data.email)) {
       throw new Error("Email já está em uso");
     }
 
-    // Criar usuário completo via UserService (que já lida com AuthCredential e Affiliation)
-    // O UserService.createUser já faz o hash da senha
     const newUser = await this.userService.createUser({
       ...data,
       role: data.role || "USER",
@@ -55,10 +42,6 @@ export class AuthService {
 
     return newUser;
   }
-
-  // =============================================
-  // AUTENTICAÇÃO
-  // =============================================
 
   /**
    * Autentica usuário por qualquer identificador
@@ -70,7 +53,6 @@ export class AuthService {
       return { success: false, error: "INVALID_CREDENTIALS" };
     }
 
-    // Verificar status
     if (credential.status === "SUSPENDED" || credential.status === "INACTIVE") {
       return { success: false, error: "ACCOUNT_DISABLED" };
     }
@@ -79,13 +61,11 @@ export class AuthService {
       return { success: false, error: "SYSTEM_ACCESS_DISABLED" };
     }
 
-    // Verificar senha
     const isValidPassword = await bcrypt.compare(password, credential.password);
     if (!isValidPassword) {
       return { success: false, error: "INVALID_CREDENTIALS" };
     }
 
-    // Verificar MFA se habilitado
     if (credential.mfaEnabled) {
       if (!mfaCode) {
         return { success: false, error: "MFA_REQUIRED", requiresMfa: true };
@@ -96,7 +76,6 @@ export class AuthService {
       }
     }
 
-    // Atualizar último login
     await this.authRepo.updateLastLogin(credential.userId);
 
     return {
@@ -132,10 +111,6 @@ export class AuthService {
     };
   }
 
-  // =============================================
-  // RECUPERAÇÃO DE SENHA
-  // =============================================
-
   /**
    * Recupera senha usando 2FA (obrigatório)
    */
@@ -144,7 +119,6 @@ export class AuthService {
     mfaCode: string,
     newPassword: string,
   ): Promise<{ success: boolean; error?: string }> {
-    // Validar nova senha
     if (!newPassword || newPassword.length < 6) {
       return { success: false, error: "Senha deve ter no mínimo 6 caracteres" };
     }
@@ -155,7 +129,6 @@ export class AuthService {
       return { success: false, error: "Email não encontrado" };
     }
 
-    // MFA é obrigatório para recuperação
     if (!credential.mfaEnabled || !credential.mfaSecret) {
       return {
         success: false,
@@ -163,21 +136,15 @@ export class AuthService {
       };
     }
 
-    // Verificar código MFA
     if (!this.verifyTotpCode(credential.mfaSecret, mfaCode)) {
       return { success: false, error: "Código 2FA inválido" };
     }
 
-    // Atualizar senha
     const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
     await this.authRepo.updatePassword(credential.userId, hashedPassword);
 
     return { success: true };
   }
-
-  // =============================================
-  // CONFIGURAÇÃO DE LOGIN CUSTOMIZADO
-  // =============================================
 
   /**
    * Cadastra login customizado para um usuário
@@ -190,7 +157,6 @@ export class AuthService {
       return { success: false, error: "Login deve ter no mínimo 3 caracteres" };
     }
 
-    // Verificar se login já existe
     if (await this.authRepo.loginExists(login, userId)) {
       return { success: false, error: "Login já está em uso" };
     }
@@ -199,16 +165,12 @@ export class AuthService {
     return { success: true };
   }
 
-  // =============================================
-  // CONFIGURAÇÃO DE MFA
-  // =============================================
-
   /**
    * Gera secret para MFA
    */
   generateMfaSecret(): { secret: string; otpAuthUrl: string } {
     const secret = this.generateBase32Secret();
-    const otpAuthUrl = `otpauth://totp/OrioN?secret=${secret}&issuer=OrioN`;
+    const otpAuthUrl = `otpauth://totp/${MFA_ISSUER}?secret=${secret}&issuer=${MFA_ISSUER}`;
 
     return { secret, otpAuthUrl };
   }
@@ -221,7 +183,6 @@ export class AuthService {
     secret: string,
     code: string,
   ): Promise<{ success: boolean; error?: string }> {
-    // Verificar código antes de habilitar
     if (!this.verifyTotpCode(secret, code)) {
       return { success: false, error: "Código inválido" };
     }
@@ -243,7 +204,6 @@ export class AuthService {
       return { success: false, error: "Usuário não encontrado" };
     }
 
-    // Verificar senha antes de desabilitar
     const isValidPassword = await bcrypt.compare(password, credential.password);
     if (!isValidPassword) {
       return { success: false, error: "Senha inválida" };
@@ -252,10 +212,6 @@ export class AuthService {
     await this.authRepo.setMfaEnabled(userId, false);
     return { success: true };
   }
-
-  // =============================================
-  // HELPERS
-  // =============================================
 
   /**
    * Verifica código TOTP
@@ -266,7 +222,6 @@ export class AuthService {
     try {
       const time = Math.floor(Date.now() / 1000 / TOTP_WINDOW);
 
-      // Verificar código atual e adjacentes (tolerância de ±1 janela)
       for (let i = -1; i <= 1; i++) {
         const counter = time + i;
         const generatedCode = this.generateTotpCode(secret, counter);
@@ -280,14 +235,10 @@ export class AuthService {
     }
   }
 
-  /**
-   * Gera código TOTP para um contador específico
-   */
   private generateTotpCode(secret: string, counter: number): string {
     const buffer = Buffer.alloc(8);
     buffer.writeBigInt64BE(BigInt(counter));
 
-    // Decodificar secret base32
     const secretBuffer = this.base32Decode(secret);
     const hmac = crypto.createHmac("sha1", secretBuffer);
     hmac.update(buffer);
@@ -304,9 +255,6 @@ export class AuthService {
     return otp.toString().padStart(6, "0");
   }
 
-  /**
-   * Gera secret em Base32
-   */
   private generateBase32Secret(length: number = 20): string {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
     let secret = "";
@@ -317,9 +265,6 @@ export class AuthService {
     return secret;
   }
 
-  /**
-   * Decodifica Base32
-   */
   private base32Decode(encoded: string): Buffer {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
     let bits = "";
@@ -337,10 +282,6 @@ export class AuthService {
 
     return Buffer.from(bytes);
   }
-
-  // =============================================
-  // MÉTODOS LEGADOS (compatibilidade)
-  // =============================================
 
   async resolveLoginIdentifier(identifier: string) {
     return this.authRepo.findByIdentifier(identifier);

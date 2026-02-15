@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma/client";
 import { UserPermissionService } from "./user-permission.service";
 import { UserSecurityService } from "./user-security.service";
 import { UserLegacyService } from "./user-legacy.service";
+import { PrismaPermissionRepository } from "../infrastructure/prisma-permission.repository";
 
 export class UserService {
   private readonly permissionService: UserPermissionService;
@@ -17,7 +18,8 @@ export class UserService {
     private readonly repository: UserRepository,
     private readonly auditRepository?: SystemAuditRepository,
   ) {
-    this.permissionService = new UserPermissionService(repository);
+    const permissionRepository = new PrismaPermissionRepository();
+    this.permissionService = new UserPermissionService(permissionRepository);
     this.securityService = new UserSecurityService(repository, auditRepository);
     this.legacyService = new UserLegacyService(repository);
   }

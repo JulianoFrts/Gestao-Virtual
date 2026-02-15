@@ -6,7 +6,7 @@ import { fakerPT_BR as faker } from "@faker-js/faker";
 const DATABASE_URL = "postgresql://orion:OrionPass123@localhost:5432/orion_db";
 const pool = new pg.Pool({ connectionString: DATABASE_URL });
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient({ adapter } as any);
 
 async function main() {
   console.log("🚀 INICIANDO MANUTENÇÃO MASSIVA (VIA ADAPTER)...");
@@ -48,10 +48,10 @@ async function main() {
           cpf: faker.string.numeric("###.###.###-##"),
           phone: faker.helpers.replaceSymbols("(##) 9####-####"),
           authCredential: {
-              update: {
-                  email: `${user.id.slice(-8)}@orion.ficticio`,
-                  role: isMOI ? "MANAGER" : "WORKER"
-              }
+            update: {
+              email: `${user.id.slice(-8)}@orion.ficticio`,
+              role: isMOI ? "MANAGER" : "WORKER"
+            }
           }
         },
       });

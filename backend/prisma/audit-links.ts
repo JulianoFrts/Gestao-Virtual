@@ -11,7 +11,7 @@ if (!connectionString) {
 
 const pool = new pg.Pool({ connectionString });
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient({ adapter } as any);
 
 async function audit() {
   console.log("🔍 Iniciando Auditoria Completa de Vínculos...\n");
@@ -33,9 +33,9 @@ async function audit() {
 
     // Lançamentos de HH (Relatórios Diários - Aproximação por elementos ativos)
     const hhCount = await prisma.mapElementProductionProgress.count({
-      where: { 
-          activityId: stage.productionActivityId,
-          currentStatus: { not: 'PENDING' }
+      where: {
+        activityId: stage.productionActivityId,
+        currentStatus: { not: 'PENDING' }
       },
     });
 

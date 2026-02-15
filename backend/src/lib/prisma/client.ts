@@ -55,18 +55,34 @@ const buildPrismaWithFallback = (url: string) => {
   // v57: Configuração SSL simplificada v79
   const sslConfig = getSSLConfig(url);
 
-  // v79: Conexão Atômica - Campos separados para máxima robustez na Square Cloud
+  // v80: Conexão Atômica - Campos lidos exclusivamente de variáveis de ambiente (SEGURANÇA)
   const getEnv = (key: string) => {
     const val = process.env[key];
     return (val && val !== 'undefined' && val !== 'null') ? val : null;
   };
 
+  // Extrai fallbacks SEGUROS apenas da DATABASE_URL (sem hardcoded)
+  const parsedHost = url.match(/@([^:\/]+)/)?.[1] || undefined;
+  const parsedPort = url.match(/:(\d+)\//)?.[1] || undefined;
+  const parsedDb = url.split('/').pop()?.split('?')[0] || undefined;
+
+  const pgHost = getEnv('PGHOST') || parsedHost;
+  const pgPort = getEnv('PGPORT') || parsedPort;
+  const pgUser = getEnv('PGUSER');
+  const pgPassword = getEnv('PGPASSWORD');
+  const pgDatabase = getEnv('PGDATABASE') || parsedDb;
+
+  if (!pgHost || !pgUser || !pgPassword) {
+    console.error('❌ [Prisma/v80] Variáveis de ambiente obrigatórias ausentes (PGHOST, PGUSER, PGPASSWORD). Verifique o .env.');
+    throw new Error('Configuração de banco de dados incompleta. Defina PGHOST, PGUSER e PGPASSWORD.');
+  }
+
   const poolConfig = {
-    host: getEnv('PGHOST') || 'square-cloud-db-968c164fe7f54e8495348c391f1f1afd.squareweb.app',
-    port: parseInt(getEnv('PGPORT') || '7135', 10) || 7135,
-    user: getEnv('PGUSER') || 'squarecloud',
-    password: getEnv('PGPASSWORD') || 'XiDQiHYRqbA6eOPEABlOD40j',
-    database: getEnv('PGDATABASE') || url.split('/').pop()?.split('?')[0] || 'squarecloud',
+    host: pgHost,
+    port: parseInt(pgPort || '5432', 10),
+    user: pgUser,
+    password: pgPassword,
+    database: pgDatabase || 'squarecloud',
     ssl: sslConfig,
     // Configurações de timeout para evitar 408
     connectionTimeoutMillis: 10000,
@@ -74,18 +90,14 @@ const buildPrismaWithFallback = (url: string) => {
     max: 10
   };
 
-  console.log(`[Prisma/v79] Pool Atômico configurado para HOST: ${poolConfig.host}`);
+  console.log(`[Prisma/v80] Pool Atômico configurado para HOST: ${poolConfig.host}`);
   const pool = new pg.Pool(poolConfig);
 
   const adapter = new PrismaPg(pool);
   const client = new PrismaClient({
     adapter,
     log: ["error"],
-  }) as ExtendedPrismaClient;
-
-  // Adiciona interceptor para fallback se for erro de banco inexistente
-  // Infelizmente o Prisma não nos deixa trocar a URL do adapter facilmente após instanciado
-  // sem recriar o adapter. Mas o erro de conexão acontece no primeiro query.
+  } as any) as ExtendedPrismaClient;
 
   return client;
 };
@@ -100,13 +112,30 @@ const getPrisma = () => {
 };
 
 // v59: Singleton Proxy Totalmente Lazy
+// v79.2: Singleton Proxy Totalmente Lazy e Robusto
 export const prisma = new Proxy({} as any, {
-  get: (target, prop) => {
-    if (prop === '$$typeof' || prop === 'constructor' || prop === 'toJSON' || prop === 'then') return undefined;
+  get: (_target, prop) => {
+    if (typeof prop === 'symbol' ||
+      ['$$typeof', 'constructor', 'toJSON', 'then'].includes(prop as string)) {
+      return undefined;
+    }
 
-    const instance = getPrisma();
-    const value = (instance as any)[prop];
-    return typeof value === 'function' ? value.bind(instance) : value;
+    try {
+      const instance = getPrisma();
+      if (!instance) return undefined;
+
+      const value = (instance as any)[prop];
+
+      if (typeof value === 'function') {
+        // Wrapper seguro em vez de .bind() para evitar TypeErrors em ambientes restritos
+        return (...args: any[]) => value.apply(instance, args);
+      }
+
+      return value;
+    } catch (err: any) {
+      console.error(`❌ [PrismaProxy] Erro de acesso em '${String(prop)}':`, err.message);
+      return undefined;
+    }
   }
 }) as ExtendedPrismaClient;
 

@@ -1,7 +1,5 @@
 /**
  * RPC Compatibility API - GESTÃO VIRTUAL Backend
- *
- * Endpoint: POST /api/v1/rpc/login_funcionario
  */
 
 import { NextRequest } from "next/server";
@@ -11,9 +9,11 @@ import { generateToken } from "@/lib/auth/token";
 import { UserService } from "@/modules/users/application/user.service";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
 import { AuthService } from "@/modules/auth/application/auth.service";
+import { PrismaAuthCredentialRepository } from "@/modules/auth/infrastructure/prisma-auth-credential.repository";
 
+// Singleton services para a rota (usando o prisma global)
 const userService = new UserService(new PrismaUserRepository());
-const authService = new AuthService(userService);
+const authService = new AuthService(userService, new PrismaAuthCredentialRepository());
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,7 +30,6 @@ export async function POST(request: NextRequest) {
       identifier: credentials.identifier,
     });
 
-    // AuthService.resolveLoginIdentifier busca por email, cpf ou matricula
     const user = await authService.resolveLoginIdentifier(
       credentials.identifier,
     );
@@ -39,7 +38,6 @@ export async function POST(request: NextRequest) {
       return ApiResponse.unauthorized("Usuário não encontrado ou sem senha");
     }
 
-    // Usamos o password do usuário encontrado para verificar
     const isValid = await (authService as any).verifyCredentials(
       credentials.identifier,
       credentials.password,
