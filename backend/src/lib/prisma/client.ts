@@ -19,14 +19,8 @@ declare global {
   var prisma: ExtendedPrismaClient | undefined;
 }
 
-/**
- * Instância singleton do Prisma Client
- */
-// Instância singleton do Prisma Client
 const createPrismaClient = () => {
-  // v50: Proxy robusto para fase de build (evita ReferenceError)
   if (process.env.PRISMA_IGNORE_CONNECTION === 'true') {
-    console.log('🛡️ [Prisma] Modo Build: Ativando Proxy de Segurança (Bypass de Conexão).');
     return new Proxy({}, {
       get: () => {
         return new Proxy(() => { }, {
@@ -38,28 +32,27 @@ const createPrismaClient = () => {
   }
 
   const connectionString = process.env.DATABASE_URL?.replace(/['"]/g, "");
-
   if (!connectionString) {
-    console.warn("⚠️ DATABASE_URL não definida. Retornando cliente vazio para fase de build.");
+    console.warn("⚠️ DATABASE_URL não definida. Retornando cliente vazio.");
     return {} as any;
   }
 
-  // A função createPrismaClient agora é um wrapper para lidar com fallbacks
   return buildPrismaWithFallback(connectionString);
 };
 
 const buildPrismaWithFallback = (url: string) => {
   const maskedOriginal = url.split('@')[1] || 'oculta';
-  console.log(`[Prisma/v83] Inicializando cliente com URL: ${maskedOriginal}`);
+  console.log(`[Prisma/v84] 🚀 Inicializando v84. URL: ${maskedOriginal}`);
+
+  // Diagnóstico de dependências
+  console.log(`📦 [Prisma/v84] Deps Status: Client=${typeof PrismaClient}, PgAdapter=${typeof PrismaPg}, Pg=${typeof pg}`);
 
   const sslConfig = getSSLConfig(url);
 
-  // v81: Conexão Simplificada usando connectionString nativa do pg Pool
-  // Prioridade para variáveis de ambiente específicas se definidas
   const poolConfig: any = {
     connectionString: url,
     ssl: sslConfig,
-    connectionTimeoutMillis: 10000,
+    connectionTimeoutMillis: 15000,
     idleTimeoutMillis: 30000,
     max: 10
   };
@@ -69,48 +62,54 @@ const buildPrismaWithFallback = (url: string) => {
     return (val && val !== 'undefined' && val !== 'null') ? val : null;
   };
 
+  // Aplica overrides de env vars se existirem
   if (getEnv('PGHOST')) poolConfig.host = getEnv('PGHOST');
   if (getEnv('PGUSER')) poolConfig.user = getEnv('PGUSER');
   if (getEnv('PGPASSWORD')) poolConfig.password = getEnv('PGPASSWORD');
   if (getEnv('PGPORT')) poolConfig.port = parseInt(getEnv('PGPORT')!, 10);
   if (getEnv('PGDATABASE')) poolConfig.database = getEnv('PGDATABASE');
 
-  console.log(`[Prisma/v83] Pool Atômico configurado para HOST: ${poolConfig.host || 'url'}`);
-  const pool = new pg.Pool(poolConfig);
+  console.log(`[Prisma/v84] 🔋 Pool configurado (Host: ${poolConfig.host || 'url-base'}).`);
 
-  const adapter = new PrismaPg(pool);
-  const client = new PrismaClient({
-    adapter,
-    log: ["error"],
-  } as any) as ExtendedPrismaClient;
+  try {
+    const pool = new pg.Pool(poolConfig);
+    const adapter = new PrismaPg(pool);
+    const client = new PrismaClient({
+      adapter,
+      log: ["error"],
+    } as any) as ExtendedPrismaClient;
 
-  return client;
+    return client;
+  } catch (err: any) {
+    console.error(`❌ [Prisma/v84] Erro FATAL no construtor:`, err.stack || err.message);
+    throw err;
+  }
 };
 
 const getPrisma = () => {
-  // Memoização robusta para evitar múltiplas instâncias
   if (!(globalThis as any).prismaInstance) {
-    (globalThis as any).prismaInstance = createPrismaClient();
-    console.log('💎 [Prisma/v83] Instância Singleton Criada.');
+    console.log('💎 [Prisma/v84] Criando Singleton...');
+    try {
+      const inst = createPrismaClient();
+      (globalThis as any).prismaInstance = inst;
+      console.log('✅ [Prisma/v84] Singleton Pronto.');
+    } catch (e: any) {
+      console.error('❌ [Prisma/v84] Falha na criação do Singleton:', e.message);
+      return null;
+    }
   }
   return (globalThis as any).prismaInstance;
 };
 
-// v83: Singleton Proxy Ultra-Resiliente com Auto-Check de Modelos
+// Singleton Proxy Defensivo v84
 export const prisma = new Proxy({} as any, {
   get: (target, prop) => {
     if (typeof prop === 'symbol') return (target as any)[prop];
     const p = prop as string;
 
-    // Diagnóstico
     if (p === '$state') {
       const inst = (globalThis as any).prismaInstance;
-      return {
-        v: "83",
-        init: !!inst,
-        keys: inst ? Object.keys(inst).length : 0,
-        models: inst ? Object.keys(inst).filter(k => !k.startsWith('$') && !k.startsWith('_')) : []
-      };
+      return { v: "84", init: !!inst, models: inst ? Object.keys(inst).filter(k => !k.startsWith('$')) : [] };
     }
 
     if (['$$typeof', 'constructor', 'toJSON', 'then', 'inspect'].includes(p)) return undefined;
@@ -118,32 +117,31 @@ export const prisma = new Proxy({} as any, {
     try {
       let instance = getPrisma();
 
-      // 1. Verificação de Saúde: Se o modelo não existe na instância
-      if (instance && !instance[p as keyof typeof instance] && !p.startsWith('$')) {
-        console.warn(`⚠️ [Prisma/v83] Model '${p}' não detectado. Tentando reinicialização bruta...`);
+      // Auto-Healing: Se a instância existe mas o modelo não está acessível (bind error avoidance)
+      if (instance && !p.startsWith('$') && !instance[p]) {
+        console.warn(`🔄 [Prisma/v84] Modelo '${p}' indisponível. Resetando instância...`);
         (globalThis as any).prismaInstance = createPrismaClient();
         instance = (globalThis as any).prismaInstance;
       }
 
       if (!instance) return undefined;
 
-      // 2. Acesso Defensivo: Evita disparar getters se o objeto for nulo/indefinido
       const value = (instance as any)[p];
 
-      if (value === undefined || value === null) {
-        if (!p.startsWith('$')) {
-          console.error(`❌ [Prisma/v83] Falha crítica: '${p}' é undefined na instância.`);
-        }
-        return undefined;
-      }
-
       if (typeof value === 'function') {
-        return (...args: any[]) => value.apply(instance, args);
+        return (...args: any[]) => {
+          try {
+            return value.apply(instance, args);
+          } catch (err: any) {
+            console.error(`❌ [Prisma/v84] Erro ao executar ${p}:`, err.message);
+            throw err;
+          }
+        };
       }
 
       return value;
     } catch (err: any) {
-      console.error(`❌ [Prisma/v83] Erro capturado pelo Proxy ao acessar '${p}':`, err.message);
+      console.error(`❌ [Prisma/v84] Exceção no Proxy ao acessar '${p}':`, err.message);
       return undefined;
     }
   }
@@ -154,34 +152,24 @@ export default prisma;
 const getSSLConfig = (connectionString: string) => {
   let sslConfig: any = false;
 
-  // v65: Suporte expandido para verify-ca e verify-full
   if (connectionString.includes('sslmode=require') ||
     connectionString.includes('sslmode=verify-full') ||
     connectionString.includes('sslmode=verify-ca')) {
 
-    sslConfig = {
-      rejectUnauthorized: false,
-    };
+    sslConfig = { rejectUnauthorized: false };
 
-    const certsRoot = process.env.CERT_PATH_ROOT || '/application';
-    console.log(`🔍 [Prisma/v78] Configurando mTLS Master. Path: ${certsRoot}`);
+    const certsRoot = process.env.CERT_PATH_ROOT || '/application/backend';
+    console.log(`🔍 [Prisma/v84] Lendo mTLS de: ${certsRoot}`);
 
-    // v72: Busca simplificada e robusta na raiz
     const paths = {
-      ca: [path.join(certsRoot, 'ca.crt'), process.env.PGSSLROOTCERT],
-      cert: [path.join(certsRoot, 'client.crt'), process.env.PGSSLCERT],
-      key: [path.join(certsRoot, 'client.key'), process.env.PGSSLKEY]
+      ca: [path.join(certsRoot, 'ca.crt'), process.env.PGSSLROOTCERT, '/application/ca.crt'],
+      cert: [path.join(certsRoot, 'client.crt'), process.env.PGSSLCERT, '/application/client.crt'],
+      key: [path.join(certsRoot, 'client.key'), process.env.PGSSLKEY, '/application/client.key']
     };
 
     const findFirst = (list: (string | undefined)[], label: string) => {
-      const found = list.find(p => {
-        if (!p) return false;
-        const exists = fs.existsSync(p);
-        if (exists) {
-          console.log(`📍 [Prisma/v65] ${label} encontrado: ${p}`);
-        }
-        return exists;
-      });
+      const found = list.find(p => p && fs.existsSync(p));
+      if (found) console.log(`📍 [Prisma/v84] ${label} OK: ${found}`);
       return found;
     };
 
@@ -189,65 +177,26 @@ const getSSLConfig = (connectionString: string) => {
     const certPath = findFirst(paths.cert, 'Cert');
     const keyPath = findFirst(paths.key, 'Key');
 
-    if (caPath) {
-      sslConfig.ca = fs.readFileSync(caPath, 'utf8');
-      console.log('📦 [Prisma/mTLS] CA Root carregada.');
-    }
-
+    if (caPath) sslConfig.ca = fs.readFileSync(caPath, 'utf8');
     if (certPath && keyPath) {
       sslConfig.cert = fs.readFileSync(certPath, 'utf8');
       sslConfig.key = fs.readFileSync(keyPath, 'utf8');
-      console.log('🛡️ [Prisma/mTLS] Cert + Key carregados.');
-    } else {
-      console.warn('⚠️ [Prisma/mTLS] Identidade incompleta nos caminhos verificados.');
+      console.log('🛡️ [Prisma/v84] mTLS Completo.');
     }
   }
   return sslConfig;
 }
 
-/**
- * Verificação robusta com fallback
- */
-export async function checkDatabaseConnection(): Promise<{
-  connected: boolean;
-  latency?: number;
-  error?: string;
-  dbName?: string;
-}> {
+export async function checkDatabaseConnection() {
   const startTime = Date.now();
   try {
     await prisma.$queryRaw`SELECT 1`;
     return { connected: true, latency: Date.now() - startTime };
   } catch (error: any) {
-    // Se o erro for "database not available" e tivermos fallback
-    if ((error.message.includes('not available') || error.code === '3D000') && process.env.DATABASE_URL_FALLBACK) {
-      console.warn(`⚠️ Banco principal indisponível. Tentando fallback para 'postgres'...`);
-      try {
-        // Tentativa bruta via pool direta (já que o Prisma está amarrado ao adapter original)
-        const fallbackPool = new pg.Pool({
-          connectionString: process.env.DATABASE_URL_FALLBACK,
-          ssl: getSSLConfig(process.env.DATABASE_URL_FALLBACK)
-        });
-        const res = await fallbackPool.query('SELECT current_database()');
-        return {
-          connected: true,
-          error: `Conectado via FALLBACK. Banco original falhou: ${error.message}`,
-          dbName: res.rows[0].current_database
-        };
-      } catch (fallbackErr: any) {
-        return { connected: false, error: `Falha no banco e no fallback: ${fallbackErr.message}` };
-      }
-    }
-    return {
-      connected: false,
-      error: error instanceof Error ? error.message : "Erro desconhecido",
-    };
+    return { connected: false, error: error.message };
   }
 }
 
-/**
- * Função para desconectar do banco de dados
- */
-export async function disconnectDatabase(): Promise<void> {
+export async function disconnectDatabase() {
   await prisma.$disconnect();
 }
