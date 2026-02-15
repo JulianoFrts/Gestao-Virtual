@@ -102,7 +102,7 @@ try {
 // (Lógica mantida do backend/squarecloud.start.cjs)
 // ==========================================
 
-const { Pool } = require(path.join(backendDir, 'node_modules', 'pg'));
+const { Pool } = require('pg');
 
 let dbUrl = process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/['"]/g, "") : undefined;
 

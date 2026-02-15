@@ -1,5 +1,5 @@
-/// <reference types="react" />
 import React from 'react'
+import { createPortal } from 'react-dom'
 
 import {
   DndContext,
@@ -19,6 +19,7 @@ import {
   pointerWithin,
   rectIntersection
 } from '@dnd-kit/core'
+import { snapCenterToCursor } from '@dnd-kit/modifiers'
 import {
   arrayMove,
   SortableContext,
@@ -108,7 +109,7 @@ function EmployeeCardStatic({
       className={cn(
         'group relative mb-2 flex cursor-grab items-center gap-3 rounded-xl border p-3 transition-all duration-300',
         'glass-card bg-white/5 border-white/5 hover:bg-white/10 hover:border-primary/30 active:cursor-grabbing',
-        isOverlay && 'border-amber-500 bg-amber-500/10 shadow-glow -rotate-1 z-50 ring-2 ring-amber-500/20',
+        isOverlay && 'border-amber-500 bg-amber-500/10 shadow-glow z-50 ring-2 ring-amber-500/20',
         !isOverlay && isDragging && 'opacity-30 scale-[0.98] grayscale-[0.5] border-dashed border-white/20'
       )}
     >
@@ -1064,18 +1065,22 @@ export default function TeamComposition() {
           </div>
         </div>
 
-        {/* Drag Overlay for Premium Feel */}
-        <DragOverlay
-          dropAnimation={null}
-          adjustScale={true}
-          style={{ cursor: 'grabbing' }}
-        >
-          {activeEmployee ? (
-            <div className="pointer-events-none z-100 w-[288px] drop-shadow-2xl">
-              <EmployeeCardStatic employee={activeEmployee} isOverlay />
-            </div>
-          ) : null}
-        </DragOverlay>
+        {/* Drag Overlay with Portal and Snap Modifiers */}
+        {createPortal(
+          <DragOverlay
+            dropAnimation={null}
+            adjustScale={true}
+            modifiers={[snapCenterToCursor]}
+            style={{ cursor: 'grabbing' }}
+          >
+            {activeEmployee ? (
+              <div className="pointer-events-none z-[9999] w-[288px] drop-shadow-2xl">
+                <EmployeeCardStatic employee={activeEmployee} isOverlay />
+              </div>
+            ) : null}
+          </DragOverlay>,
+          document.body
+        )}
 
         {/* Edit Team Dialog */}
         <Dialog
