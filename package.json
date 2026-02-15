@@ -7,6 +7,10 @@
         "backend",
         "frontend"
     ],
+    "dependencies": {
+        "dotenv": "^16.4.7",
+        "tsx": "^4.19.2"
+    },
     "scripts": {
         "dev": "node StartUp_Local.js",
         "dev:backend": "npm run dev -w backend",

@@ -24,7 +24,7 @@ export class PrismaClientBuilder {
 
       u.pathname = "/squarecloud";
 
-      // v158: Restaurando schema=public para resolver Access Denied no upsert
+      // v161: Forçando schema=public agressivamente para visibilidade das tabelas
       u.searchParams.set('schema', 'public');
       u.searchParams.set('sslmode', 'verify-ca');
 
@@ -60,7 +60,7 @@ export class PrismaClientBuilder {
     const normalizedUrl = this.normalizeUrl(rawUrl);
 
     try {
-      console.log(`🔌 [Prisma/v151] Naked Mode Active (Success Pattern v142).`);
+      console.log(`🔌 [Prisma/v165] Schema Force Active (public).`);
 
       const client = new PrismaClient({
         datasources: { db: { url: normalizedUrl } },

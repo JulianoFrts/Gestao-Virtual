@@ -9,7 +9,7 @@
     "dev:https": "set PRISMA_CLIENT_ENGINE_TYPE=library && next dev --experimental-https",
     "openapi:generate": "tsx src/scripts/generate-openapi.ts",
     "build": "npm run openapi:generate && next build",
-    "start": "next start",
+    "start": "npm run build && next start -p 3001",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
