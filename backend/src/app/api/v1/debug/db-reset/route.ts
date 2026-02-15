@@ -20,18 +20,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "DATABASE_URL missing" }, { status: 500 });
     }
 
-    // Helper para garantir banco correto (v97.4)
+    // Helper para garantir banco correto (v97.5)
     const fixDatabaseUrl = (url: string) => {
         try {
             const u = new URL(url.replace(/['"]/g, ""));
-            // Forçamos squarecloud em vez de postgres por padrão
+            const requestedSchema = request.nextUrl.searchParams.get("schema") || "squarecloud";
+
+            // Forçamos squarecloud em vez de postgres por padrão no pathname
             if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres") {
                 console.log(`[PANIC] Redirecionando banco de ${u.pathname || 'default'} para /squarecloud`);
                 u.pathname = "/squarecloud";
             }
 
-            // Forçamos schema public na URL base
-            u.searchParams.set("schema", "public");
+            // v97.5: Sovereign Schema selection
+            u.searchParams.set("schema", requestedSchema);
             return u.toString();
         } catch (e) { return url; }
     };
@@ -50,44 +52,53 @@ export async function POST(request: NextRequest) {
         const client = await pool.connect();
         try {
             if (action === "nuke") {
-                console.log("💣 [PANIC RESET] Executando Nuke de Soberania (v97.4)...");
+                console.log("💣 [PANIC RESET] Executando Nuke de Soberania (v97.5)...");
                 await client.query('DROP SCHEMA IF EXISTS public CASCADE;');
                 await client.query('CREATE SCHEMA public;');
                 await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
                 await client.query('GRANT ALL ON SCHEMA public TO public;');
                 await client.query('ALTER SCHEMA public OWNER TO squarecloud;');
-                console.log("✨ SCHEMA REFRESHED & SOVEREIGNTY ESTABLISHED!");
+
+                // v97.5: Criando schema de escape
+                await client.query('CREATE SCHEMA IF NOT EXISTS squarecloud;');
+                await client.query('GRANT ALL ON SCHEMA squarecloud TO squarecloud;');
+                await client.query('GRANT ALL ON SCHEMA squarecloud TO public;');
+
+                console.log("✨ SCHEMAS REFRESHED & SOVEREIGNTY ESTABLISHED!");
                 return NextResponse.json({ message: "Database nuked. Now run with ?action=sync" });
             }
 
             if (action === "sync") {
-                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução e restore (v97.4)...");
+                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução e restore (v97.5)...");
 
-                // 0. Absolute Sovereignty Protocol (v97.4)
-                console.log("🔐 Aplicando Absolute Sovereignty...");
+                // 0. Sovereign Schema Protocol (v97.5)
+                console.log("🔐 Aplicando Sovereign Schema...");
                 try {
                     const dbInfo = await client.query('SELECT current_database() as db, current_schema() as sc, current_user as us;');
                     console.log(`📊 Realm: DB="${dbInfo.rows[0].db}", Schema="${dbInfo.rows[0].sc}", User="${dbInfo.rows[0].us}"`);
 
-                    const targetSchema = dbInfo.rows[0].sc || 'public';
+                    const targetSchema = request.nextUrl.searchParams.get("schema") || "squarecloud";
                     const targetDB = dbInfo.rows[0].db;
 
-                    // Soberania em Nível de Database e Schema
-                    await client.query(`GRANT ALL PRIVILEGES ON DATABASE ${targetDB} TO squarecloud;`);
+                    // Garantir que o schema de escape existe
+                    await client.query(`CREATE SCHEMA IF NOT EXISTS ${targetSchema};`);
                     await client.query(`GRANT ALL ON SCHEMA ${targetSchema} TO squarecloud;`);
                     await client.query(`GRANT ALL ON SCHEMA ${targetSchema} TO public;`);
                     await client.query(`ALTER SCHEMA ${targetSchema} OWNER TO squarecloud;`);
 
-                    // Soberania em Nível de Objetos (Absolute Grant v97.4)
+                    // Liberar o banco
+                    await client.query(`GRANT ALL PRIVILEGES ON DATABASE ${targetDB} TO squarecloud;`);
+
+                    // Soberania em Nível de Objetos (Absolute Grant v97.5)
                     try {
                         await client.query(`GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA ${targetSchema} TO squarecloud;`);
                         await client.query(`GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA ${targetSchema} TO squarecloud;`);
                         await client.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA ${targetSchema} GRANT ALL ON TABLES TO squarecloud;`);
                     } catch (e) { }
 
-                    // Teste de Sanidade SQL
-                    await client.query(`CREATE TABLE IF NOT EXISTS public._panic_test (id int); DROP TABLE public._panic_test;`);
-                    console.log("✅ Soberania Confirmada e Teste SQL Passou!");
+                    // Teste de Sanidade SQL no schema alvo
+                    await client.query(`CREATE TABLE IF NOT EXISTS ${targetSchema}._panic_test (id int); DROP TABLE ${targetSchema}._panic_test;`);
+                    console.log(`✅ Soberania Confirmada no schema '${targetSchema}'!`);
                 } catch (pErr: any) {
                     console.warn("⚠️ Aviso de soberania/discovery:", pErr.message);
                 }
@@ -95,7 +106,7 @@ export async function POST(request: NextRequest) {
                 const { execSync } = require('child_process');
                 const schemaPath = "prisma/schema.prisma";
 
-                // URL Sanitizada SEM redouble encoding (v97.4)
+                // URL v97.5: Usando o schema definido (default squarecloud)
                 const safeUrl = finalDbUrl.replace(/['"]/g, '');
                 console.log(`📡 Usando DB URL: ${safeUrl.replace(/(:\/\/.*?:)(.*)(@.*)/, '$1****$3')}`);
 
