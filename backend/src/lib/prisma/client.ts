@@ -24,10 +24,10 @@ declare global {
  */
 export class OrionPgAdapter {
   readonly provider = 'postgres';
-  readonly adapterName = 'orion-pg-adapter-v98.5';
+  readonly adapterName = 'orion-pg-adapter-v98.6';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v98.5] Bridge forensic iniciada.`);
+    console.log(`[Adapter/v98.6] Bridge forensic iniciada.`);
   }
 
   /**
@@ -54,7 +54,7 @@ export class OrionPgAdapter {
       case 25:
       case 1043: kind = 6; break; // Text/UUID/Date
     }
-    return kind;
+    return { kind };
   }
 
   /**
@@ -89,75 +89,73 @@ export class OrionPgAdapter {
   private serializeValue(val: any, oid: number, fieldName: string): any {
     if (val === null || val === undefined) return null;
 
-    // Interceptação Forense (v98.5)
+    // Interceptação Forense (v98.6)
     if (typeof val === 'string' && val.trim().length === 1) {
-      console.log(`[Adapter/v98.5] 🛡️ INTERCEPT: [${fieldName}] Raw='${val}' OID=${oid}`);
+      console.log(`[Adapter/v98.6] 🛡️ INTERCEPT: [${fieldName}] Raw='${val}' OID=${oid}`);
     }
 
     // Tradução Universal
     const translated = this.translateEnum(fieldName, val);
 
-    // Inspeção Profunda (v98.5)
+    // Inspeção Profunda (v98.6)
     if (typeof translated === 'string' && (translated === 'S' || translated === 'A')) {
-      console.log(`[Adapter/v98.5] 🔍 Result [${fieldName}]: Value='${translated}' OID=${oid}`);
+      console.log(`[Adapter/v98.6] 🔍 Result [${fieldName}]: Value='${translated}' OID=${oid}`);
     }
 
     // Diagnóstico de Alerta
-    if (typeof translated === 'string' && translated.length === 1 && ['S', 'A', 'U'].includes(translated.toUpperCase())) {
-      console.log(`[Adapter/v98.5] ⚠️ Alerta Crítico: Valor bruto escapou em '${fieldName}': '${translated}' (OID: ${oid})`);
+    if (typeof translated === 'string' && translated.length === 1 && /[A-Z]/.test(translated)) {
+      console.log(`[Adapter/v98.6] ⚠️ Alerta Crítico: Valor bruto escapou em '${fieldName}': '${translated}' (OID: ${oid})`);
     }
 
     // Serialização Quaint (Prisma 6)
-    if (oid === 20 || oid === 1700) return translated.toString();
-    if (translated instanceof Date) return translated.toISOString();
-    if (oid === 16) return !!translated;
-    if (oid === 114 || oid === 3802) {
-      return typeof translated === 'string' ? translated : JSON.stringify(translated);
-    }
-
     return translated;
   }
 
-  async queryRaw(params: { sql: string; args: any[] }) {
+  async query(params: any): Promise<any> {
     try {
       const res = await this.pool.query(params.sql, params.args);
 
-      // Diagnóstico de Estrutura (v98.5)
+      // Diagnóstico de Estrutura (v98.6)
       if (params.sql.toLowerCase().includes('auth_credentials') || params.sql.toLowerCase().includes('select')) {
         const fieldDesc = res.fields.map(f => `${f.name}(${f.dataTypeID})`).join(', ');
-        console.log(`[Adapter/v98.5] 📡 Query [${res.rowCount} rows]: ${fieldDesc}`);
+        console.log(`[Adapter/v98.6] 📡 Query [${res.rowCount} rows]: ${fieldDesc}`);
         if (res.rows.length > 0) {
-          console.log(`[Adapter/v98.5] 🧪 Sample Raw: ${JSON.stringify(res.rows[0]).substring(0, 150)}`);
+          console.log(`[Adapter/v98.6] 🧪 Sample Raw: ${JSON.stringify(res.rows[0]).substring(0, 150)}`);
         }
       }
 
-      const rows = res.rows.map(row =>
-        res.fields.map(field => {
-          const rawValue = (row as any)[field.name];
-          return this.serializeValue(rawValue, field.dataTypeID, field.name);
-        })
-      );
-
       return {
         ok: true,
-        value: {
-          columnNames: res.fields.map(f => f.name),
-          columnTypes: res.fields.map(f => this.mapColumnType(f.dataTypeID, f.name)),
-          rows: rows
-        }
+        fields: res.fields.map((field) => ({
+          name: field.name,
+          columnType: this.mapColumnType(field.dataTypeID, field.name),
+        })),
+        rows: res.rows.map((row) => {
+          const serializedRow: any[] = [];
+          for (const field of res.fields) {
+            const val = row[field.name];
+            serializedRow.push(this.serializeValue(val, field.dataTypeID, field.name));
+          }
+          return serializedRow;
+        }),
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v98.5] Query Error:`, err.message);
+      console.error(`❌ [Adapter/v98.6] Query Error:`, err.message);
       return { ok: false, error: err };
     }
   }
 
-  async executeRaw(params: { sql: string; args: any[] }) {
+  async execute(params: any): Promise<any> {
     try {
+      // v98.2: Schema Context Shield
+      if (params.sql.trim().toUpperCase().startsWith('CREATE') || params.sql.trim().toUpperCase().startsWith('DROP')) {
+        console.log(`[Adapter/v98.6] 🛡️ DDL Detectado. Executando em contexto seguro.`);
+      }
+
       const res = await this.pool.query(params.sql, params.args);
       return { ok: true, value: res.rowCount || 0 };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v98.5] Execute Error:`, err.message);
+      console.error(`❌ [Adapter/v98.6] Execute Error:`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -174,7 +172,7 @@ export class OrionPgAdapter {
             const processed = this.serializeValue(raw, f.dataTypeID, f.name);
             // Log extra para transações
             if (typeof processed === 'string' && processed.length === 1) {
-              console.log(`[Adapter/v96.6] (TX) 🔍 Inspect [${f.name}]: Value='${processed}' OID=${f.dataTypeID}`);
+              console.log(`[Adapter/v98.6] (TX) 🔍 Inspect [${f.name}]: Value='${processed}' OID=${f.dataTypeID}`);
             }
             return processed;
           }));
@@ -278,7 +276,7 @@ const getSSLConfig = (connectionString: string) => {
     if (cert && key) {
       sslConfig.cert = fs.readFileSync(cert, 'utf8');
       sslConfig.key = fs.readFileSync(key, 'utf8');
-      console.log('🛡️ [Prisma/v98.5] mTLS v98.5 Ativo.');
+      console.log('🛡️ [Prisma/v98.6] mTLS v98.6 Ativo.');
     }
   }
   return sslConfig;

@@ -42,7 +42,13 @@ async function importSeedFile(filePath: string, modelName: string) {
             }
           }
 
-          // 2. Type Conversion Armor
+          // 2. Type Conversion Armor & Special Connections
+          if (key === 'functionId' && typeof value === 'string') {
+            // Fix for 'Unknown argument functionId': use connect
+            cleanItem['jobFunction'] = { connect: { id: value } };
+            continue;
+          }
+
           if (typeof value === "string") {
             // DateTime Conversion
             // Regex to check if string looks like an ISO Date (e.g., 2026-02-07T09:00:45.282Z)
