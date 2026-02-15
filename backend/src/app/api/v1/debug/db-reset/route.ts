@@ -226,23 +226,43 @@ export async function POST(request: NextRequest) {
                     throw new Error("Sincronização falhou: Nenhuma tabela encontrada no schema public.");
                 }
 
-                // 5.5 GRANT REFORÇADO (v99.12) - Correção de "Denied Access"
-                console.log("🛡️ [v99.12] Reaplicando Grants antes do Restore...");
+                // 5.5 GRANT NUCLEAR (v99.13) - Force Ownership & Privileges
+                console.log("🛡️ [v99.13] Aplicando Correção Nuclear de Permissões...");
                 try {
-                    await client.query('GRANT USAGE ON SCHEMA public TO squarecloud;');
-                    await client.query('GRANT CREATE ON SCHEMA public TO squarecloud;');
-                    await client.query('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO squarecloud;');
+                    // 1. Tentar assumir ownership do Schema (Crucial para Cloud DBs)
+                    await client.query('ALTER SCHEMA public OWNER TO squarecloud;');
+
+                    // 2. Garantir permissões básicas
+                    await client.query('GRANT USAGE, CREATE ON SCHEMA public TO squarecloud;');
+                    await client.query('GRANT ALL PRIVILEGES ON DATABASE squarecloud TO squarecloud;');
+
+                    // 3. Forçar ownership de TODAS as tabelas (Loop Explícito)
+                    await client.query(`
+                        DO $$ DECLARE r RECORD;
+                        BEGIN
+                            FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+                                EXECUTE 'ALTER TABLE public.' || quote_ident(r.tablename) || ' OWNER TO squarecloud';
+                                EXECUTE 'GRANT ALL PRIVILEGES ON TABLE public.' || quote_ident(r.tablename) || ' TO squarecloud';
+                            END LOOP;
+                        END $$;
+                    `);
+
+                    // 4. Sequências (para IDs autoincrement)
                     await client.query('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO squarecloud;');
-                    console.log("✅ Grants reaplicados com sucesso!");
-                } catch (grantErr: any) {
-                    console.warn("⚠️ Falha não-crítica ao aplicar Grants extras:", grantErr.message);
+
+                    console.log("☢️ [v99.13] Permissões nucleares aplicadas!");
+                } catch (nuclearErr: any) {
+                    console.warn("⚠️ Falha parcial no Nuclear Grant (esperado em ambientes restritos):", nuclearErr.message);
                 }
 
                 // 6. RESTORE (v97.7+)
                 console.log("📥 Iniciando restauração de dados...");
                 try {
+                    const restoreEnv = { ...process.env, DATABASE_URL: safeUrl };
+                    console.log("🔎 [RESTORE] Usando Connection String segura para o script...");
+
                     execSync('npx tsx src/scripts/restore-from-backup.ts', {
-                        env: { ...process.env, DATABASE_URL: safeUrl },
+                        env: restoreEnv,
                         encoding: 'utf8',
                         maxBuffer: 20 * 1024 * 1024
                     });
