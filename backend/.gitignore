@@ -46,7 +46,7 @@ next-env.d.ts
 prisma/migrations/
 
 # Misc
-*.pem
+# *.pem
 .vercel
 
 # Privado
