@@ -10,7 +10,7 @@ declare global {
   var prisma: ExtendedPrismaClient | undefined;
 }
 
-// v109: Advanced Production Architecture (Recursive Proxy + Intelligent Normalization)
+// v110: Absolute P1010 Resolution (Forced Schema + Database Normalization)
 export class PrismaClientBuilder {
   private static instance: ExtendedPrismaClient;
 
@@ -18,12 +18,19 @@ export class PrismaClientBuilder {
    * Extrai e valida credenciais brutas das variáveis de ambiente
    */
   private static getEnvCredentials() {
+    let dbName = process.env.PGDATABASE || "squarecloud";
+
+    // v110: Normalização de Sanidade para o Banco
+    if (dbName === "postgres" || dbName === "gestao_db") {
+      dbName = "squarecloud";
+    }
+
     return {
       host: process.env.PGHOST,
       user: process.env.PGUSER,
       password: process.env.PGPASSWORD,
-      port: parseInt(process.env.PGPORT || "5432"),
-      database: process.env.PGDATABASE,
+      port: parseInt(process.env.PGPORT || "7135"),
+      database: dbName,
     };
   }
 
@@ -36,14 +43,15 @@ export class PrismaClientBuilder {
       const u = new URL(cleanUrl);
       const currentPath = u.pathname.toLowerCase();
 
-      // v109: Só normalizamos se for o banco padrão do Postgres que falha na SquareCloud
+      // v110: Forçar Banco 'squarecloud' se for um dos bancos de sistema ou padrão
       if (!u.pathname || u.pathname === "/" || currentPath === "/postgres" || currentPath === "/gestao_db") {
-        if (currentPath === "/gestao_db" || !u.pathname || u.pathname === "/") {
-          u.pathname = "/squarecloud";
-          u.searchParams.set('schema', 'public');
-          console.log(`[Prisma/v109] 🔄 Normalização: ${currentPath || 'root'} -> squarecloud/public.`);
-        }
+        u.pathname = "/squarecloud";
+        console.log(`[Prisma/v110] 🔄 Database Normalization: ${currentPath || 'root'} -> squarecloud.`);
       }
+
+      // v110: Forçar Schema 'public' (Essencial para evitar P1010)
+      u.searchParams.set('schema', 'public');
+
       return u.toString();
     } catch {
       return url;
@@ -70,12 +78,12 @@ export class PrismaClientBuilder {
           sslConfig.cert = fs.readFileSync(p.cert);
           sslConfig.key = fs.readFileSync(p.key);
           if (fs.existsSync(p.ca)) sslConfig.ca = fs.readFileSync(p.ca);
-          console.log(`🛡️ [Prisma/v109] mTLS Ativo: ${path.basename(p.cert)}`);
+          console.log(`🛡️ [Prisma/v110] mTLS Bound: ${path.basename(p.cert)}`);
           break;
         }
       }
     } catch (e: any) {
-      console.warn(`⚠️ [Prisma/v109] SSL Config Warning:`, e.message);
+      console.warn(`⚠️ [Prisma/v110] SSL Config Warning:`, e.message);
     }
     return sslConfig;
   }
@@ -91,21 +99,20 @@ export class PrismaClientBuilder {
     const creds = this.getEnvCredentials();
 
     try {
-      console.log(`🔌 [Prisma/v109] Iniciando Builder...`);
+      console.log(`🔌 [Prisma/v110] Initializing Production Client...`);
 
       const PoolConstructor = (pg as any).Pool || (pg as any).default?.Pool || pg;
       const ssl = this.getSSLConfig(url);
 
-      // Configuração estruturada do Pool
       const poolConfig: any = {
-        max: 10,
+        max: 20, // Aumentado para produção
         idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 15000,
+        connectionTimeoutMillis: 20000,
         ssl
       };
 
       if (creds.host && creds.user) {
-        console.log(`📡 [Prisma/v109] Usando Credenciais PGHOST: ${creds.host}`);
+        console.log(`📡 [Prisma/v110] Source: Atomic Envs (Host: ${creds.host}, DB: ${creds.database})`);
         Object.assign(poolConfig, {
           user: creds.user,
           password: creds.password,
@@ -114,7 +121,8 @@ export class PrismaClientBuilder {
           database: creds.database
         });
       } else {
-        console.log(`📡 [Prisma/v109] Usando URL Completa.`);
+        const masked = url.replace(/(:\/\/.*?:)(.*)(@.*)/, '$1****$3');
+        console.log(`📡 [Prisma/v110] Source: DATABASE_URL (${masked})`);
         poolConfig.connectionString = url;
       }
 
@@ -129,43 +137,40 @@ export class PrismaClientBuilder {
       this.instance = createRecursivePrismaProxy(client);
       return this.instance;
     } catch (err: any) {
-      console.error(`🚨 [Prisma/v109] Erro Fatal no Builder:`, err.message);
+      console.error(`🚨 [Prisma/v110] Critical Failure:`, err.message);
       return new PrismaClient({ datasources: { db: { url } } }) as any;
     }
   }
 }
 
 /**
- * Safer Function Wrappers (Recursive Proxy) - v109
+ * Recursive Proxy for Safer Function Wrappers - v110
  */
 function createRecursivePrismaProxy(target: any, pathName: string = 'prisma'): any {
   return new Proxy(target, {
     get(obj, prop) {
-      // Evitar receiver no Reflect.get para compatibilidade com internos do Prisma
       const value = obj[prop];
       const propName = prop.toString();
 
-      // Ignorar propriedades internas, Symbols e campos privados do Prisma
       if (typeof prop === 'symbol' || propName.startsWith('$') || propName.startsWith('_')) {
         return value;
       }
 
-      // Se for um modelo (user, authCredential, etc), envolvemos recursivamente
+      // Recursão para modelos
       if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
         return createRecursivePrismaProxy(value, `${pathName}.${propName}`);
       }
 
-      // Se for uma função de operação (findUnique, findFirst, etc)
+      // Wrapper para funções de banco
       if (typeof value === 'function') {
         const wrapped = async (...args: any[]) => {
           try {
             return await value.apply(obj, args);
           } catch (err: any) {
-            console.error(`❌ [PrismaProxy] Erro em ${pathName}.${propName}:`, err.message);
+            console.error(`❌ [PrismaProxy/v110] Error in ${pathName}.${propName}:`, err.message);
             throw err;
           }
         };
-        // Preserva metadados se necessário
         return wrapped;
       }
 
