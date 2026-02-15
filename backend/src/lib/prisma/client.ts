@@ -66,23 +66,22 @@ export class OrionPgAdapter {
    * Tradutor de Roles Legadas: Se o banco retornar letras, convertemos para o Enum do Prisma.
    */
   private translateEnum(fieldName: string, val: any): any {
-    const lowerField = fieldName.toLowerCase();
-    if (lowerField.includes('role')) {
-      const roleMap: Record<string, string> = {
-        'S': 'SUPER_ADMIN',
-        'A': 'ADMIN',
-        'U': 'USER',
-        'W': 'WORKER',
-        'T': 'TECHNICIAN',
-        'G': 'GUEST',
-        'M': 'MANAGER'
-      };
-      if (typeof val === 'string' && val.length === 1) {
-        const mapped = roleMap[val.toUpperCase()];
-        if (mapped) {
-          // console.log(`[Adapter/v96] 🔄 Traduzindo Enum: ${fieldName} ('${val}' -> '${mapped}')`);
-          return mapped;
-        }
+    const roleMap: Record<string, string> = {
+      'S': 'SUPER_ADMIN',
+      'A': 'ADMIN',
+      'U': 'USER',
+      'W': 'WORKER',
+      'T': 'TECHNICIAN',
+      'G': 'GUEST',
+      'M': 'MANAGER'
+    };
+
+    if (typeof val === 'string' && val.length === 1) {
+      const mapped = roleMap[val.toUpperCase()];
+      if (mapped) {
+        // Logamos sempre que houver uma tradução para confirmar que o bridge está agindo
+        console.log(`[Adapter/v96] 🔄 Auto-Tradução: ${fieldName} ('${val}' -> '${mapped}')`);
+        return mapped;
       }
     }
     return val;
@@ -94,7 +93,12 @@ export class OrionPgAdapter {
     // Tratamento de Enums
     const translated = this.translateEnum(fieldName, val);
 
-    // Diagnóstico Crítico: Se o valor ainda for 'S', 'A' ou 'U' após a tradução, logamos
+    // Diagnóstico Crítico: Se for uma string de 1 caractere, logamos para saber por que o 'S' está passando
+    if (typeof translated === 'string' && translated.length === 1) {
+      console.log(`[Adapter/v96] 🔍 Inspect: Field '${fieldName}' = '${translated}' (OID: ${oid})`);
+    }
+
+    // Diagnóstico de Alerta: Se o valor ainda for um dos problemáticos após a tradução
     if (typeof translated === 'string' && translated.length === 1 && ['S', 'A', 'U'].includes(translated.toUpperCase())) {
       console.log(`[Adapter/v96] ⚠️ Alerta: Valor bruto detectado em '${fieldName}': '${translated}' (OID: ${oid})`);
     }
