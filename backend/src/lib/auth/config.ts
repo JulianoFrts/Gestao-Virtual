@@ -13,24 +13,23 @@ import { UserPermissionService } from "@/modules/users/application/user-permissi
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
 
 const userRepo = new PrismaUserRepository();
-const permissionService = new UserPermissionService(userRepo);
+const permissionService = new UserPermissionService(userRepo as any);
+
+const SESSION_MAX_AGE = 20 * 60 * 60; // 20 horas
+const MFA_TIME_STEP = 30; // 30 segundos
+const MFA_WINDOW = 1; // +/- 1 step
 
 export const authConfig: NextAuthConfig = {
-  // Estratégia de sessão JWT via Auth.js
   session: {
     strategy: "jwt",
-    maxAge: 20 * 60 * 60, // 20 horas (conforme solicitado pelo usuário)
+    maxAge: SESSION_MAX_AGE,
   },
-
-  // Configuração de páginas customizadas
   pages: {
     signIn: "/auth/login",
     signOut: "/auth/logout",
     error: "/auth/error",
     verifyRequest: "/auth/verify",
   },
-
-  // Provedores
   providers: [
     CredentialsProvider({
       id: "credentials",
@@ -45,8 +44,6 @@ export const authConfig: NextAuthConfig = {
       },
     }),
   ],
-
-  // Callbacks
   callbacks: {
     async jwt({ token, user, trigger }) {
       if (user) {
@@ -56,19 +53,16 @@ export const authConfig: NextAuthConfig = {
         token.status = user.status;
         token.hierarchyLevel = (user as any).hierarchyLevel;
 
-        // Inicializar permissões no login
-        const perms = await permissionService.getPermissionsMap(
+        token.permissions = await permissionService.getPermissionsMap(
           user.role as string,
           user.id as string,
         );
-        const ui = await permissionService.getUIFlagsMap(
+        token.ui = await permissionService.getUIFlagsMap(
           user.role as string,
           (user as any).hierarchyLevel,
         );
-        token.permissions = perms;
-        token.ui = ui;
       }
-      // Atualização de sessão
+
       if (trigger === "update" && token.id) {
         await refreshUserToken(token);
       }
@@ -79,34 +73,22 @@ export const authConfig: NextAuthConfig = {
       return session;
     },
   },
-
-  // Logging via Auth.js logger
   logger: {
-    error(code, ...message) {
-      logger.error(`Auth Error: ${code}`, { message });
-    },
-    warn(code, ...message) {
-      logger.warn(`Auth Warn: ${code}`, { message });
-    },
+    error(code, ...message) { logger.error(`Auth Error: ${code}`, { message }); },
+    warn(code, ...message) { logger.warn(`Auth Warn: ${code}`, { message }); },
   },
-
-  // Secret
   secret: process.env.NEXTAUTH_SECRET,
 };
 
 // =============================================
-// HELPERS - Verificação Multi-Modal
+// HELPERS
 // =============================================
 
-type CredentialsInput = Partial<
-  Record<"identifier" | "password" | "mfaCode", unknown>
->;
+type CredentialsInput = Partial<Record<"identifier" | "password" | "mfaCode", unknown>>;
 
 async function verifyCredentials(credentials: CredentialsInput) {
   try {
-    const identifier = String(credentials?.identifier || "")
-      .toLowerCase()
-      .trim();
+    const identifier = String(credentials?.identifier || "").toLowerCase().trim();
     const password = String(credentials?.password || "");
     const mfaCode = String(credentials?.mfaCode || "");
 
@@ -115,7 +97,6 @@ async function verifyCredentials(credentials: CredentialsInput) {
       return null;
     }
 
-    // Buscar credencial por email, login ou CPF (via user)
     const authCredential = await findAuthCredential(identifier);
 
     if (!authCredential) {
@@ -123,68 +104,42 @@ async function verifyCredentials(credentials: CredentialsInput) {
       return null;
     }
 
-    // Verificar status
-    if (
-      authCredential.status === "SUSPENDED" ||
-      authCredential.status === "INACTIVE"
-    ) {
-      logger.warn("Conta inativa ou suspensa", {
-        userId: authCredential.userId,
-      });
+    if (authCredential.status === "SUSPENDED" || authCredential.status === "INACTIVE") {
+      logger.warn("Conta inativa/suspensa", { userId: authCredential.userId });
       return null;
     }
 
-    // Verificar se systemUse está ativo
     if (!authCredential.systemUse) {
-      logger.warn("Acesso ao sistema desabilitado", {
-        userId: authCredential.userId,
-      });
+      logger.warn("Acesso sistema desabilitado", { userId: authCredential.userId });
       return null;
     }
 
-    // Se MFA está habilitado e não foi fornecido código, verificar apenas senha
+    // Validação MFA ou Senha
     if (authCredential.mfaEnabled) {
       if (!mfaCode) {
-        // Primeira etapa: verificar senha e solicitar MFA
-        const isValidPassword = await bcrypt.compare(
-          password,
-          authCredential.password,
-        );
-        if (!isValidPassword) {
-          logger.warn("Senha inválida (MFA pendente)");
+        // Pré-validação de senha antes de pedir MFA
+        if (!await bcrypt.compare(password, authCredential.password)) {
+          logger.warn("Senha inválida (Pré-MFA)");
           return null;
         }
-        // Retornar indicador de que MFA é necessário
-        // NextAuth não suporta bem isso, então vamos usar uma flag
         throw new Error("MFA_REQUIRED");
       }
-
-      // Verificar código MFA
       if (!verifyMfaCode(authCredential.mfaSecret, mfaCode)) {
         logger.warn("Código MFA inválido");
         return null;
       }
-    }
-
-    // Verificar senha (caso não tenha MFA ou MFA válido)
-    if (!authCredential.mfaEnabled && password) {
-      const isValidPassword = await bcrypt.compare(
-        password,
-        authCredential.password,
-      );
-      if (!isValidPassword) {
+    } else if (password) {
+      if (!await bcrypt.compare(password, authCredential.password)) {
         logger.warn("Senha inválida");
         return null;
       }
     }
 
-    // Atualizar último login
     await prisma.authCredential.update({
       where: { id: authCredential.id },
       data: { lastLoginAt: new Date() },
     });
 
-    // Retornar objeto usuário (v5 compatível)
     return {
       id: authCredential.userId,
       email: authCredential.email,
@@ -195,121 +150,73 @@ async function verifyCredentials(credentials: CredentialsInput) {
       hierarchyLevel: authCredential.user.hierarchyLevel,
     };
   } catch (error) {
-    if (error instanceof Error && error.message === "MFA_REQUIRED") {
-      throw error; // Re-throw para tratamento especial
-    }
+    if (error instanceof Error && error.message === "MFA_REQUIRED") throw error;
     logger.error("Erro Auth", { error });
     return null;
   }
 }
 
-/**
- * Busca credencial de autenticação por email, login ou CPF
- */
 async function findAuthCredential(identifier: string) {
-  // Tentar por email
-  let credential = await prisma.authCredential.findUnique({
-    where: { email: identifier },
-    include: {
-      user: {
-        select: { name: true, image: true, cpf: true, hierarchyLevel: true },
-      },
-    },
-  });
+  const includeUser = { include: { user: { select: { name: true, image: true, cpf: true, hierarchyLevel: true } } } };
 
+  // 1. Email
+  let credential = await prisma.authCredential.findUnique({ where: { email: identifier }, ...includeUser });
   if (credential) return credential;
 
-  // Tentar por login customizado
-  credential = await prisma.authCredential.findUnique({
-    where: { login: identifier },
-    include: {
-      user: {
-        select: { name: true, image: true, cpf: true, hierarchyLevel: true },
-      },
-    },
-  });
-
+  // 2. Login
+  credential = await prisma.authCredential.findUnique({ where: { login: identifier }, ...includeUser });
   if (credential) return credential;
 
-  // Tentar por CPF (buscar user primeiro)
-  const userByCpf = await prisma.user.findUnique({
-    where: { cpf: identifier.replace(/\D/g, "") },
-    select: { id: true },
-  });
-
+  // 3. CPF
+  const userByCpf = await prisma.user.findUnique({ where: { cpf: identifier.replace(/\D/g, "") }, select: { id: true } });
   if (userByCpf) {
-    credential = await prisma.authCredential.findUnique({
-      where: { userId: userByCpf.id },
-      include: {
-        user: {
-          select: { name: true, image: true, cpf: true, hierarchyLevel: true },
-        },
-      },
-    });
+    return await prisma.authCredential.findUnique({ where: { userId: userByCpf.id }, ...includeUser });
   }
 
-  return credential;
+  return null;
 }
 
-/**
- * Verifica código TOTP (2FA)
- */
 function verifyMfaCode(secret: string | null, code: string): boolean {
   if (!secret || !code) return false;
-
   try {
-    const time = Math.floor(Date.now() / 1000 / 30);
+    const time = Math.floor(Date.now() / 1000 / MFA_TIME_STEP);
+    const secretBuffer = base32Decode(secret);
 
-    for (let i = -1; i <= 1; i++) {
+    for (let i = -MFA_WINDOW; i <= MFA_WINDOW; i++) {
       const counter = time + i;
       const buffer = Buffer.alloc(8);
       buffer.writeBigInt64BE(BigInt(counter));
 
-      // Decodificar base32 manualmente
-      const secretBuffer = base32Decode(secret);
-
-      // Usar crypto nativo do Node
       const hmac = crypto.createHmac("sha1", secretBuffer);
       hmac.update(buffer);
       const hash = hmac.digest();
 
       const offset = hash[hash.length - 1] & 0xf;
-      const otp =
-        (((hash[offset] & 0x7f) << 24) |
-          ((hash[offset + 1] & 0xff) << 16) |
-          ((hash[offset + 2] & 0xff) << 8) |
-          (hash[offset + 3] & 0xff)) %
-        1000000;
+      const otp = (((hash[offset] & 0x7f) << 24) |
+        ((hash[offset + 1] & 0xff) << 16) |
+        ((hash[offset + 2] & 0xff) << 8) |
+        (hash[offset + 3] & 0xff)) % 1000000;
 
-      if (otp.toString().padStart(6, "0") === code) {
-        return true;
-      }
+      if (otp.toString().padStart(6, "0") === code) return true;
     }
     return false;
   } catch (error) {
-    logger.error("Erro ao verificar MFA", { error });
+    logger.error("MFA Verify Error", { error });
     return false;
   }
 }
 
-/**
- * Decodifica string Base32 para Buffer
- */
 function base32Decode(encoded: string): Buffer {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
   let bits = "";
-
   for (const char of encoded.toUpperCase()) {
     const val = chars.indexOf(char);
-    if (val === -1) continue;
-    bits += val.toString(2).padStart(5, "0");
+    if (val !== -1) bits += val.toString(2).padStart(5, "0");
   }
-
   const bytes: number[] = [];
   for (let i = 0; i + 8 <= bits.length; i += 8) {
     bytes.push(parseInt(bits.substring(i, i + 8), 2));
   }
-
   return Buffer.from(bytes);
 }
 
@@ -317,58 +224,38 @@ async function refreshUserToken(token: Record<string, unknown>) {
   const authCred = await prisma.authCredential.findUnique({
     where: { userId: token.id as string },
     select: {
-      role: true,
-      status: true,
-      email: true,
-      user: {
-        select: {
-          name: true,
-          hierarchyLevel: true,
-          affiliation: {
-            select: {
-              companyId: true,
-              projectId: true,
-            },
-          },
-        },
-      },
+      role: true, status: true, email: true,
+      user: { select: { name: true, hierarchyLevel: true, affiliation: { select: { companyId: true, projectId: true } } } },
     },
   });
-  if (authCred) {
-    token.role = authCred.role;
-    token.status = authCred.status;
-    token.email = authCred.email;
-    token.name = authCred.user.name;
-    token.hierarchyLevel = authCred.user.hierarchyLevel;
-    token.companyId = authCred.user.affiliation?.companyId;
-    token.projectId = authCred.user.affiliation?.projectId;
 
-    // Atualizar permissões e UI
-    const perms = await permissionService.getPermissionsMap(
+  if (authCred) {
+    Object.assign(token, {
+      role: authCred.role,
+      status: authCred.status,
+      email: authCred.email,
+      name: authCred.user.name,
+      hierarchyLevel: authCred.user.hierarchyLevel,
+      companyId: authCred.user.affiliation?.companyId,
+      projectId: authCred.user.affiliation?.projectId,
+    });
+
+    token.permissions = await permissionService.getPermissionsMap(
       authCred.role,
       token.id as string,
       authCred.user.affiliation?.projectId || undefined,
     );
-    const ui = await permissionService.getUIFlagsMap(
+    token.ui = await permissionService.getUIFlagsMap(
       authCred.role,
       authCred.user.hierarchyLevel,
     );
-    token.permissions = perms;
-    token.ui = ui;
   }
 }
 
 function mapTokenToSession(session: any, token: any) {
   if (token && session.user) {
-    session.user.id = token.id;
-    session.user.email = token.email;
-    session.user.role = token.role;
-    session.user.status = token.status;
-    session.user.companyId = token.companyId;
-    session.user.projectId = token.projectId;
-    session.user.hierarchyLevel = token.hierarchyLevel;
-    session.user.permissions = token.permissions;
-    session.user.ui = token.ui;
+    const fields = ['id', 'email', 'role', 'status', 'companyId', 'projectId', 'hierarchyLevel', 'permissions', 'ui'];
+    fields.forEach(f => session.user[f] = token[f]);
   }
 }
 

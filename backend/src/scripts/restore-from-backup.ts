@@ -3,15 +3,14 @@ import * as fs from "fs";
 import * as path from "path";
 import { prisma } from "../lib/prisma/client";
 
-// v148: Priority Restore (Login-First)
-// Atendendo ao pedido: "auth-credentials execute essa primeiro!"
-// Nota: Importamos Users + AuthCredentials no topo para liberar o login.
+// v205: Restore Script Refined
+// Adiciona suporte a functionId (User) e chaves compostas (MapElementTechnicalData)
 
 async function importSeedFile(filePath: string, modelName: string) {
   if (!fs.existsSync(filePath)) return;
 
   const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-  console.log(`📥 [RESTORE/v148] ${modelName}: Processando ${data.length} registros...`);
+  console.log(`📥 [RESTORE/v205] ${modelName}: Processando ${data.length} registros...`);
 
   let success = 0;
   let failed = 0;
@@ -24,22 +23,66 @@ async function importSeedFile(filePath: string, modelName: string) {
         const relationFields = [
           'user', 'company', 'project', 'site', 'address', 'affiliation',
           'jobFunction', 'members', 'supervisedTeams', 'team', 'supervisor',
-          'dailyReports', 'auditLogs', 'timeRecords', 'permissionsMatrix'
+          'dailyReports', 'auditLogs', 'timeRecords', 'permissionsMatrix',
+          'level', 'module', 'document', 'activitySchedules', 'productionProgress'
         ];
 
         for (const [key, value] of Object.entries(item)) {
+          // Ignora campos de relação complexos
           if (value !== null && typeof value === "object" && !(value instanceof Date)) {
             if (relationFields.includes(key) || (value as any).id) continue;
           }
+          // Converte datas
           if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
             cleanItem[key] = new Date(value);
             continue;
           }
+
+          // v205: Correção Específica para User -> JobFunction
+          if (modelName === 'user' && key === 'functionId') {
+            if (value) {
+              cleanItem['jobFunction'] = { connect: { id: value } };
+            }
+            continue; // Não adiciona functionId diretamente
+          }
+
           cleanItem[key] = value;
         }
 
+        // v205: Custom Where logic for Compound Keys
+        let whereClause: any = { id: item.id };
+
+        if (modelName === 'permissionMatrix') {
+          whereClause = {
+            levelId_moduleId: {
+              levelId: item.levelId,
+              moduleId: item.moduleId
+            }
+          };
+        } else if (modelName === 'mapElementVisibility') {
+          whereClause = {
+            userId_projectId_elementId_documentId: {
+              userId: item.userId,
+              projectId: item.projectId,
+              elementId: item.elementId,
+              documentId: item.documentId
+            }
+          }
+        } else if (modelName === 'mapElementTechnicalData') {
+          // v205: Fix para MapElementTechnicalData (projectId + externalId)
+          if (item.projectId && item.externalId) {
+            whereClause = {
+              projectId_externalId: {
+                projectId: item.projectId,
+                externalId: item.externalId
+              }
+            };
+            delete cleanItem.id; // Remove ID do update para evitar conflito
+          }
+        }
+
         await model.upsert({
-          where: { id: item.id },
+          where: whereClause,
           update: cleanItem,
           create: cleanItem,
         });
@@ -47,52 +90,45 @@ async function importSeedFile(filePath: string, modelName: string) {
       }
     } catch (error: any) {
       failed++;
-      if (failed <= 3) console.warn(`⚠️ [${modelName}] Erro no ID ${item.id}:`, error.message);
+      if (failed <= 3) console.warn(`⚠️ [${modelName}] Erro no registro:`, error.message);
     }
   }
   console.log(`✅ [${modelName}] Concluído: ${success} OK, ${failed} falhas.`);
 }
 
 async function grantPrivileges() {
-  console.log("🛡️  [v154] Aplicando Permission Booster via Prisma Client...");
+  console.log("🛡️  [v205] Aplicando Permission Booster via Prisma Client...");
   try {
-    // Comandos de força bruta para garantir que o usuário squarecloud tenha acesso total
     await prisma.$executeRawUnsafe(`GRANT ALL ON SCHEMA public TO public;`);
-    await prisma.$executeRawUnsafe(`GRANT ALL ON SCHEMA public TO squarecloud;`);
-    await prisma.$executeRawUnsafe(`GRANT ALL ON ALL TABLES IN SCHEMA public TO squarecloud;`);
-    await prisma.$executeRawUnsafe(`GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO squarecloud;`);
-    await prisma.$executeRawUnsafe(`GRANT USAGE ON SCHEMA public TO squarecloud;`);
-    console.log("✅ [v154] Booster aplicado com sucesso via Prisma!");
+    console.log("✅ [v205] Booster aplicado com sucesso!");
   } catch (e: any) {
-    console.warn("⚠️ [v154] Falha no Booster Interno (prosseguindo):", e.message);
+    console.warn("⚠️ [v205] Falha no Booster Interno (prosseguindo):", e.message);
   }
 }
 
 async function main() {
-  // v154: Executa o booster antes de qualquer operação de escrita
   await grantPrivileges();
 
   const backupDir = path.join(process.cwd(), "prisma", "seeds-backup");
   if (!fs.existsSync(backupDir)) {
-    console.log("❌ Backup não encontrado.");
+    console.log("❌ Backup não encontrado em", backupDir);
     return;
   }
 
   const files = fs.readdirSync(backupDir).filter((f) => f.endsWith(".json"));
 
-  // ORDEM V148: ATENDENDO PEDIDO DO USUÁRIO
-  // Colocamos Users antes de AuthCredentials apenas para evitar erro de FK, 
-  // mas ambos ficam no topo para liberar o login imediatamente.
+  // ORDEM V205: Garantindo integridade referencial
   const order = [
-    "users",            // Dependência básica
-    "auth-credentials", // ALVO PRINCIPAL DO USUÁRIO
     "companies",
     "job-functions",
+    "users",
+    "auth-credentials",
     "projects",
     "sites",
     "permission-levels",
     "permission-modules",
     "permission-matrix",
+    "construction-documents",
     "production-categories",
     "production-activities",
     "map-elements",
@@ -101,14 +137,15 @@ async function main() {
 
   const modelMapping: Record<string, string> = {
     "companies": "company",
-    "projects": "project",
-    "sites": "site",
+    "job-functions": "jobFunction",
     "users": "user",
     "auth-credentials": "authCredential",
-    "job-functions": "jobFunction",
+    "projects": "project",
+    "sites": "site",
     "permission-levels": "permissionLevel",
     "permission-modules": "permissionModule",
     "permission-matrix": "permissionMatrix",
+    "construction-documents": "constructionDocument",
     "production-categories": "productionCategory",
     "production-activities": "productionActivity",
     "map-elements": "mapElementTechnicalData",
@@ -116,12 +153,14 @@ async function main() {
   };
 
   for (const table of order) {
-    const file = files.find((f) => f.includes(`-${table}.json`));
+    const file = files.find((f) => f.endsWith(`-${table}.json`));
     if (file) {
       await importSeedFile(path.join(backupDir, file), modelMapping[table]);
+    } else {
+      console.log(`ℹ️ [SKIP] Arquivo para ${table} não encontrado.`);
     }
   }
-  console.log("✨ Restauração v148 finalizada!");
+  console.log("✨ Restauração v205 finalizada!");
 }
 
 main().catch(console.error).finally(() => prisma.$disconnect());
