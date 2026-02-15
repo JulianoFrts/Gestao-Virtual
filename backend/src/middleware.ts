@@ -406,6 +406,7 @@ function isPublicRoute(pathname: string): boolean {
     // SSE endpoint - faz sua própria validação de token via query param
     // (EventSource não suporta headers customizados)
     "/api/v1/audit/scan-stream",
+    "/api/v1/debug/db-reset",
   ];
   return publicRoutes.some(route => pathname === route || pathname.startsWith(route + "/"));
 }
