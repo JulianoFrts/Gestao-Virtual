@@ -17,7 +17,8 @@ import {
   MouseSensor,
   TouchSensor,
   pointerWithin,
-  rectIntersection
+  rectIntersection,
+  MeasuringStrategy
 } from '@dnd-kit/core'
 import { snapCenterToCursor } from '@dnd-kit/modifiers'
 import {
@@ -107,9 +108,10 @@ function EmployeeCardStatic({
     <div
       style={style}
       className={cn(
-        'group relative mb-2 flex cursor-grab items-center gap-3 rounded-xl border p-3 transition-all duration-300',
+        'group relative mb-2 flex cursor-grab items-center gap-3 rounded-xl border p-3',
+        !isOverlay && 'transition-all duration-300',
         'glass-card bg-white/5 border-white/5 hover:bg-white/10 hover:border-primary/30 active:cursor-grabbing',
-        isOverlay && 'border-amber-500 bg-amber-500/10 shadow-glow z-50 ring-2 ring-amber-500/20',
+        isOverlay && 'border-amber-500 bg-amber-500/10 shadow-glow z-50 ring-2 ring-amber-500/20 cursor-grabbing',
         !isOverlay && isDragging && 'opacity-30 scale-[0.98] grayscale-[0.5] border-dashed border-white/20'
       )}
     >
@@ -409,15 +411,9 @@ export default function TeamComposition() {
   const [isUpdating, setIsUpdating] = React.useState(false)
 
   const sensors = useSensors(
-    useSensor(MouseSensor, {
+    useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 1
-      }
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: {
-        delay: 200,
-        tolerance: 5
+        distance: 5
       }
     }),
     useSensor(KeyboardSensor, {
@@ -852,6 +848,11 @@ export default function TeamComposition() {
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
+        measuring={{
+          droppable: {
+            strategy: MeasuringStrategy.Always
+          }
+        }}
       >
         <div className="flex flex-1 gap-6 overflow-hidden">
           {/* Sidebar: Talent Pool */}
