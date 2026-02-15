@@ -1,9 +1,9 @@
 DISPLAY_NAME=Gestao Virtual
 DESCRIPTION=Sistema Gestão Virtual (API + Frontend Unificado)
-MAIN=squarecloud.unified.start.cjs
+MAIN=start.js
 MEMORY=3072
 VERSION=recommended
-START=node squarecloud.unified.start.cjs
+START=node start.js
 AUTORESTART=true
 SUBDOMAIN=gestao-virtual
 WEBSITE=true

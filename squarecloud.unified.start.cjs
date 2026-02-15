@@ -22,6 +22,51 @@ process.env.INTERNAL_PROXY_KEY = INTERNAL_PROXY_KEY;
 const backendDir = path.join(__dirname, 'backend');
 const frontendDistDir = path.join(__dirname, 'frontend_dist');
 
+// ==========================================
+// 🚀 AUTO-HEALING (LIMPEZA AUTOMÁTICA)
+// ==========================================
+const DEPLOY_ID = '[[DEPLOY_ID]]'; // Injetado via PS1
+const deployIdFile = path.join(__dirname, '.square_deploy_id');
+
+if (DEPLOY_ID !== '[[DEPLOY_ID]]') {
+    let lastId = '';
+    if (fs.existsSync(deployIdFile)) {
+        lastId = fs.readFileSync(deployIdFile, 'utf8').trim();
+    }
+
+    if (lastId !== DEPLOY_ID) {
+        console.log('🔄 [AUTO-HEALING] Nova versão detectada! Iniciando limpeza de cache...');
+
+        // Pastas para limpar
+        const toClean = [
+            path.join(backendDir, '.next'),
+            path.join(backendDir, 'node_modules'),
+            path.join(__dirname, 'node_modules')
+        ];
+
+        toClean.forEach(p => {
+            if (fs.existsSync(p)) {
+                console.log(`🧹 Removendo: ${p}`);
+                try { fs.rmSync(p, { recursive: true, force: true }); } catch (e) { }
+            }
+        });
+
+        // Limpar sentinelas de build para forçar novo build
+        const sentinels = [
+            path.join(backendDir, '.next', '.square_build_complete_v2'),
+            path.join(backendDir, '.next', '.square_build_complete_unified')
+        ];
+        sentinels.forEach(s => {
+            if (fs.existsSync(s)) {
+                try { fs.unlinkSync(s); } catch (e) { }
+            }
+        });
+
+        fs.writeFileSync(deployIdFile, DEPLOY_ID);
+        console.log('✅ [AUTO-HEALING] Cache limpo com sucesso.');
+    }
+}
+
 console.log('==================================================');
 console.log('🚀 GESTÃO VIRTUAL — Servidor Unificado');
 console.log('==================================================');
@@ -610,8 +655,19 @@ function startGateway() {
                 resHeaders['access-control-allow-credentials'] = 'true';
             }
 
+            // Se o backend retornar 429, logamos para debug
+            if (proxyRes.statusCode === 429) {
+                console.warn(`⚠️ [GATEWAY] Backend retornou 429 para: ${options.path}`);
+            }
+
             res.writeHead(proxyRes.statusCode, resHeaders);
             proxyRes.pipe(res, { end: true });
+        });
+
+        // Aumentar timeout para auditorias longas
+        proxyReq.setTimeout(60000, () => {
+            console.error('🛑 [GATEWAY] Proxy Timeout!');
+            proxyReq.destroy();
         });
 
         proxyReq.on('error', (err) => {

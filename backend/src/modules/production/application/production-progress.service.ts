@@ -10,7 +10,7 @@ export class ProductionProgressService {
     source: "src/modules/production/application/production-progress.service",
   };
 
-  constructor(private readonly repository: ProductionRepository) {}
+  constructor(private readonly repository: ProductionRepository) { }
 
   async getElementProgress(elementId: string): Promise<ProductionProgress[]> {
     const results = await this.repository.findByElement(elementId);
@@ -68,14 +68,14 @@ export class ProductionProgressService {
       };
 
       const mappedMetadata = { ...metadata };
-      
+
       // Normalização: Tenta encontrar chaves correspondentes no metadata (case-insensitive)
       const metadataKeys = Object.keys(metadata);
-      
+
       Object.entries(technicalMapping).forEach(([sourceKey, targetKey]) => {
         // Se a chave alvo já estiver preenchida no metadata original, pula
         if (metadata[targetKey] !== undefined && mappedMetadata[targetKey] === undefined) {
-             mappedMetadata[targetKey] = metadata[targetKey];
+          mappedMetadata[targetKey] = metadata[targetKey];
         }
 
         // Tenta achar a chave de origem no metadata
@@ -195,7 +195,7 @@ export class ProductionProgressService {
     }
 
     if (!finalProjectId) {
-      throw new Error("ID do projeto não encontrado para o elemento informado");
+      throw new Error(`ID do projeto não encontrado para o elemento ${elementId}. Certifique-se que o elemento existe.`);
     }
 
     const { finalStartDate, finalEndDate } = await this.determineEffectiveDates(
@@ -260,7 +260,7 @@ export class ProductionProgressService {
     );
 
     const record = await this.repository.findById(progressId);
-    if (!record) throw new Error("Progress record not found");
+    if (!record) throw new Error(`Registro de progresso ${progressId} não encontrado.`);
 
     const entity = new ProductionProgress(record);
     entity.approveLog(logTimestamp, approvedBy);

@@ -30,9 +30,9 @@ export const BCRYPT_ROUNDS = 12;
 // RATE LIMITING
 // =============================================
 
-export const RATE_LIMIT_MAX = 100;
+export const RATE_LIMIT_MAX = 1000;
 export const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minuto
-export const RATE_LIMIT_BLOCK_MS = 5 * 60 * 1000; // 5 minutos
+export const RATE_LIMIT_BLOCK_MS = 1 * 60 * 1000; // 1 minuto (reduzido de 5min)
 
 // =============================================
 // TOKENS

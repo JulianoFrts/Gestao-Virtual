@@ -153,9 +153,9 @@ export const fetchEmployees = async (force = false) => {
 
   try {
     if (!navigator.onLine) {
-        const cached = await storageService.getItem<Employee[]>("employees");
-        if (cached) employees.value = cached;
-        return;
+      const cached = await storageService.getItem<Employee[]>("employees");
+      if (cached) employees.value = cached;
+      return;
     }
     const {
       companyId,
@@ -168,7 +168,7 @@ export const fetchEmployees = async (force = false) => {
       cpfOrRegistration,
     } = employeeFilters.value;
     // Usando db.from() que já inclui o token de autenticação
-    let query = db.from("users").select("*");
+    let query = db.from("users").select("*, jobFunction:job_functions(*)");
 
     // Aplicar filtros via eq()
     query = query.eq("role", "WORKER");
@@ -225,9 +225,9 @@ export const fetchEmployees = async (force = false) => {
     console.warn("[EmployeeSignals] Network error, checking local cache...");
     const cached = await storageService.getItem<Employee[]>("employees");
     if (cached) {
-        employees.value = cached;
+      employees.value = cached;
     } else {
-        console.error("[EmployeeSignals] Error fetching and no cache available:", err);
+      console.error("[EmployeeSignals] Error fetching and no cache available:", err);
     }
   } finally {
     isLoadingEmployees.value = false;

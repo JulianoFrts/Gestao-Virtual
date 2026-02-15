@@ -3,9 +3,9 @@
     "version": "1.0.0",
     "private": true,
     "description": "Gestao Virtual - Backend API + Frontend Unificado",
-    "main": "squarecloud.unified.start.cjs",
+    "main": "start.js",
     "scripts": {
-        "start": "node squarecloud.unified.start.cjs"
+        "start": "node start.js"
     },
     "dependencies": {
         "express": "^4.21.0",

@@ -278,13 +278,16 @@ export class OrionApiClient {
 
       while (response.status === 429 && retries < MAX_RETRIES) {
         retries++;
-        console.warn(`[ORION API] 429 Too Many Requests detected. Retrying in ${backoff}ms... (Attempt ${retries}/${MAX_RETRIES})`);
+        const retryAfter = response.headers.get("Retry-After");
+        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : backoff;
 
-        await new Promise(resolve => setTimeout(resolve, backoff));
+        console.warn(`[ORION API] 429 Too Many Requests detected. Retrying in ${waitTime}ms... (Attempt ${retries}/${MAX_RETRIES})`);
+
+        await new Promise(resolve => setTimeout(resolve, waitTime));
 
         // Tenta novamente
         response = await fetch(url.toString(), options);
-        backoff *= 2; // Exponecial backoff
+        backoff *= 2; // Exponecial backoff para o próximo se não houver Retry-After
       }
       // ----------------------------------------------
 

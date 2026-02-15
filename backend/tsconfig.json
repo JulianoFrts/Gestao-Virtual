@@ -24,7 +24,6 @@
     "jsx": "preserve",
     "types": [
       "node",
-      "jest",
       "react",
       "react-dom"
     ],
@@ -54,6 +53,9 @@
     "next.config.mjs"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    ".next",
+    "src/tests",
+    "out"
   ]
 }

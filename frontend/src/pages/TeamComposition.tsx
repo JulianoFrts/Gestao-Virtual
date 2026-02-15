@@ -108,7 +108,7 @@ function EmployeeCardStatic({
       className={cn(
         'group relative mb-2 flex cursor-grab items-center gap-3 rounded-xl border p-3 transition-all duration-300',
         'glass-card bg-white/5 border-white/5 hover:bg-white/10 hover:border-primary/30 active:cursor-grabbing',
-        isOverlay && 'border-amber-500 bg-amber-500/10 shadow-glow -rotate-1 scale-105 z-50 ring-2 ring-amber-500/20',
+        isOverlay && 'border-amber-500 bg-amber-500/10 shadow-glow -rotate-1 z-50 ring-2 ring-amber-500/20',
         !isOverlay && isDragging && 'opacity-30 scale-[0.98] grayscale-[0.5] border-dashed border-white/20'
       )}
     >
@@ -130,19 +130,19 @@ function EmployeeCardStatic({
           )}
         </div>
         <div className="flex items-center gap-2">
-           <Badge variant="outline" className="h-4 border-white/5 bg-white/5 px-1.5 text-[8px] font-black tracking-widest text-muted-foreground/80 uppercase">
-              {employee.functionName || 'Colaborador'}
-           </Badge>
+          <Badge variant="outline" className="h-4 border-white/5 bg-white/5 px-1.5 text-[8px] font-black tracking-widest text-muted-foreground/80 uppercase">
+            {employee.functionName || 'Colaborador'}
+          </Badge>
         </div>
       </div>
       {/* Badges de Nível - Minimalista Premium */}
       <div className="flex shrink-0 items-center gap-1.5 pr-1">
         {employee.level > 0 && (
           <div className="flex flex-col items-center">
-             <span className="text-[7px] font-black text-blue-400/50 uppercase leading-none mb-0.5">Lvl</span>
-             <span className="flex h-5 w-5 items-center justify-center rounded-md border border-blue-500/20 bg-blue-500/10 text-[10px] font-black text-blue-400">
-                {employee.level}
-             </span>
+            <span className="text-[7px] font-black text-blue-400/50 uppercase leading-none mb-0.5">Lvl</span>
+            <span className="flex h-5 w-5 items-center justify-center rounded-md border border-blue-500/20 bg-blue-500/10 text-[10px] font-black text-blue-400">
+              {employee.level}
+            </span>
           </div>
         )}
       </div>
@@ -243,7 +243,7 @@ function TeamColumn({
             className={cn(
               'bg-primary/10 text-primary border-primary/20',
               !isHealthy &&
-                'border-orange-500/20 bg-orange-500/10 text-orange-500'
+              'border-orange-500/20 bg-orange-500/10 text-orange-500'
             )}
           >
             Equipe
@@ -427,7 +427,7 @@ export default function TeamComposition() {
   const handleReorderMembers = async (teamId: string, oldIndex: number, newIndex: number) => {
     const team = teams.find(t => t.id === teamId);
     if (!team) return;
-    
+
     const newMembers = arrayMove(team.members, oldIndex, newIndex);
     await updateTeam(teamId, {
       name: team.name,
@@ -455,7 +455,7 @@ export default function TeamComposition() {
             (selectedSiteId === 'all' || emp.siteId === selectedSiteId) &&
             (selectedProjectId === 'all' ||
               sites.find(s => s.id === emp.siteId)?.projectId ===
-                selectedProjectId) &&
+              selectedProjectId) &&
             (!searchTerm ||
               emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()))
         )
@@ -559,7 +559,7 @@ export default function TeamComposition() {
         // Reordenamento na mesma equipe
         const oldIndex = targetTeam.members.indexOf(employeeId);
         const newIndex = targetTeam.members.indexOf(overId);
-        
+
         if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
           handleReorderMembers(targetTeam.id, oldIndex, newIndex);
         } else if (newIndex === -1 && overId === targetTeam.id) {
@@ -768,16 +768,16 @@ export default function TeamComposition() {
       <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-3">
-             <div className="p-2 rounded-2xl bg-primary/10 border border-primary/20 shadow-glow-sm">
-                <ArrowRightLeft className="text-primary h-6 w-6" />
-             </div>
-             <h1 className="font-display gradient-text text-4xl leading-tight font-black tracking-tight">
-                Team Composition
-             </h1>
+            <div className="p-2 rounded-2xl bg-primary/10 border border-primary/20 shadow-glow-sm">
+              <ArrowRightLeft className="text-primary h-6 w-6" />
+            </div>
+            <h1 className="font-display gradient-text text-4xl leading-tight font-black tracking-tight">
+              Team Composition
+            </h1>
           </div>
           <div className="text-muted-foreground/60 flex items-center gap-3 ml-12">
             <span className="text-xs font-medium bg-white/5 px-3 py-1 rounded-full border border-white/5 backdrop-blur-sm">
-                Gestão Estratégica de Capital Humano
+              Gestão Estratégica de Capital Humano
             </span>
           </div>
         </div>
@@ -1067,7 +1067,7 @@ export default function TeamComposition() {
         {/* Drag Overlay for Premium Feel */}
         <DragOverlay
           dropAnimation={null}
-          adjustScale={false}
+          adjustScale={true}
           style={{ cursor: 'grabbing' }}
         >
           {activeEmployee ? (
