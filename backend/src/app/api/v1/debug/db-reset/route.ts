@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "DATABASE_URL missing" }, { status: 500 });
     }
 
-    // Helper para garantir banco correto (v96.9.8)
+    // Helper para garantir banco correto (v96.9.9)
     const fixDatabaseUrl = (url: string) => {
         try {
             const u = new URL(url.replace(/['"]/g, ""));
@@ -49,8 +49,7 @@ export async function POST(request: NextRequest) {
     console.log("💣 [PANIC RESET] Instando limpeza bruta via API...");
 
     const pool = new Pool({
-        connectionString: dbUrl.replace(/['"]/g, ""),
-        connectionString: dbUrl.replace(/['']/g, ""),
+        connectionString: finalDbUrl,
         ssl: { rejectUnauthorized: false }
     });
 
@@ -58,7 +57,7 @@ export async function POST(request: NextRequest) {
         const client = await pool.connect();
         try {
             if (action === "nuke") {
-                console.log("💣 [PANIC RESET] Executando Nuke de Soberania (v96.9.7)...");
+                console.log("💣 [PANIC RESET] Executando Nuke de Soberania (v96.9.9)...");
                 await client.query('DROP SCHEMA IF EXISTS public CASCADE;');
                 await client.query('CREATE SCHEMA public;');
                 await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
@@ -69,26 +68,28 @@ export async function POST(request: NextRequest) {
             }
 
             if (action === "sync") {
-                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução e restore (v96.9.8)...");
+                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução e restore (v96.9.9)...");
 
-                // 0. Inversion Discovery Protocol (v96.9.8)
-                console.log("🔐 Aplicando Discovery Protocol...");
+                // 0. Super-Sovereignty Discovery Protocol (v96.9.9)
+                console.log("🔐 Aplicando Super-Sovereignty Discovery...");
                 try {
                     const dbInfo = await client.query('SELECT current_database() as db, current_schema() as sc, current_user as us;');
-                    console.log(`📊 Realm Status: DB="${dbInfo.rows[0].db}", Schema="${dbInfo.rows[0].sc}", User="${dbInfo.rows[0].us}"`);
+                    console.log(`📊 Realm: DB="${dbInfo.rows[0].db}", Schema="${dbInfo.rows[0].sc}", User="${dbInfo.rows[0].us}"`);
 
-                    // Listar schemas disponíveis para depurar "inversão"
-                    const scRows = await client.query('SELECT schema_name FROM information_schema.schemata;');
-                    console.log(`📂 Available Schemas: ${scRows.rows.map(r => r.schema_name).join(', ')}`);
+                    // Diagnóstico de Usuário
+                    const uStat = await client.query('SELECT usename, usecreatedb, usesuper FROM pg_user WHERE usename = current_user;');
+                    console.log(`👤 User Stats: Createdb=${uStat.rows[0].usecreatedb}, Super=${uStat.rows[0].usesuper}`);
 
-                    // Protocolo de Soberania (v96.9.8)
-                    const targetSchema = dbInfo.rows[0].sc === 'public' ? 'public' : dbInfo.rows[0].sc;
+                    // Protocolo de Soberania Absoluta
+                    const targetSchema = dbInfo.rows[0].sc || 'public';
+                    const targetDB = dbInfo.rows[0].db;
+
+                    await client.query(`GRANT ALL PRIVILEGES ON DATABASE ${targetDB} TO squarecloud;`);
                     await client.query(`GRANT ALL ON SCHEMA ${targetSchema} TO squarecloud;`);
-                    await client.query(`GRANT USAGE, CREATE ON SCHEMA ${targetSchema} TO squarecloud;`);
                     await client.query(`ALTER SCHEMA ${targetSchema} OWNER TO squarecloud;`);
 
                     // Teste de Sanidade SQL
-                    await client.query(`CREATE TABLE ${targetSchema}._panic_test (id int); DROP TABLE ${targetSchema}._panic_test;`);
+                    await client.query(`CREATE TABLE IF NOT EXISTS ${targetSchema}._panic_test (id int); DROP TABLE ${targetSchema}._panic_test;`);
                     console.log("✅ Soberania Confirmada e Teste SQL Passou!");
                 } catch (pErr: any) {
                     console.warn("⚠️ Aviso de soberania/discovery:", pErr.message);
