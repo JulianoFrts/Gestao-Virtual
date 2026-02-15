@@ -59,8 +59,8 @@ function getSSLConfig(connectionString: string) {
 // v99.3: Factory com Configuração Híbrida
 const createExtendedClient = (url: string) => {
   try {
-    // v100: Official PrismaPg Adapter (Stable)
-    console.log('🔌 [Prisma/v100] Inicializando Prisma Client...');
+    // v101: Official PrismaPg Adapter (Definitive)
+    console.log('🔌 [Prisma/v101] Inicializando Prisma Client...');
 
     const ssl = getSSLConfig(url);
     const pool = new Pool({

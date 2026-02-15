@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     const buildChildProcessUrl = (url: string) => {
         try {
             const u = new URL(url.replace(/['"]/g, ""));
-            // Force SquareCloud DB Name
+            // Force SquareCloud DB Name if generic
             if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres") {
                 u.pathname = "/squarecloud";
             }
@@ -30,17 +30,16 @@ export async function POST(request: NextRequest) {
             // Build base URL without params
             const baseUrl = `${u.protocol}//${u.username}:${u.password}@${u.hostname}:${u.port}${u.pathname}`;
 
-            // v99.27: MANUAL PARAMS BUILD (Avoid %2F path encoding which Prisma Engine hates)
-            // Using sslmode=require as it's more stable for handshake but still sends certs.
+            // v101: mTLS verify-ca for native Rust engine (Definitive Absolute Paths)
             const cert = "/application/backend/certificates/certificate.pem";
             const key = "/application/backend/certificates/private-key.key";
             const ca = "/application/backend/certificates/ca-certificate.crt";
 
-            const finalUrl = `${baseUrl}?sslmode=require&sslcert=${cert}&sslkey=${key}&sslrootcert=${ca}`;
+            const finalUrl = `${baseUrl}?sslmode=verify-ca&sslcert=${cert}&sslkey=${key}&sslrootcert=${ca}`;
 
             // Log Sanitized
             const safeUrl = finalUrl.replace(/:[^:@]+@/, ':****@');
-            console.log(`[PANIC/v99.27] 🔗 URL Child Process (Manual String): ${safeUrl}`);
+            console.log(`[PANIC/v101] 🔗 URL Child Process (v101): ${safeUrl}`);
 
             return finalUrl;
         } catch (e) { return url; }
@@ -158,13 +157,13 @@ export async function POST(request: NextRequest) {
             }
 
             if (action === "migrate") {
-                console.log("📜 [PANIC] Executando Prisma Migrate Deploy (v99.26)...");
+                console.log("📜 [PANIC] Executando Prisma Migrate Deploy (v101)...");
                 const { execSync } = require('child_process');
-                const safeUrl = finalDbUrl.replace(/['"]/g, '');
 
                 try {
-                    const output = execSync(`npx prisma migrate deploy`, {
-                        env: { ...process.env, DATABASE_URL: safeUrl },
+                    // v101: direct env injection and explicit schema
+                    const output = execSync(`npx prisma migrate deploy --schema=prisma/schema.prisma`, {
+                        env: { ...process.env, DATABASE_URL: finalDbUrl },
                         encoding: 'utf8',
                         maxBuffer: 10 * 1024 * 1024
                     });
@@ -185,23 +184,22 @@ export async function POST(request: NextRequest) {
             }
 
             if (action === "sync") {
-                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução bloco único (v98.4)...");
+                console.log("🏗️ [PANIC SYNC] Iniciando reconstrução bloco único (v101)...");
 
                 const { execSync } = require('child_process');
                 const schemaPath = "prisma/schema.prisma";
-                const safeUrl = finalDbUrl.replace(/['"]/g, '');
 
                 try {
                     // 1. Tentar DB PUSH (Modo Padrão)
                     console.log("⚒️ Tentativa 1: prisma db push...");
                     execSync(`npx prisma db push --accept-data-loss --schema=${schemaPath}`, {
-                        env: { ...process.env, DATABASE_URL: safeUrl },
+                        env: { ...process.env, DATABASE_URL: finalDbUrl },
                         encoding: 'utf8',
                         maxBuffer: 10 * 1024 * 1024
                     });
                     console.log("✅ DB PUSH Sucesso!");
                 } catch (pushError: any) {
-                    console.warn("⚠️ DB PUSH Falhou. Iniciando Fallback Bloco Único v98.4...");
+                    console.warn("⚠️ DB PUSH Falhou. Iniciando Fallback Bloco Único v101...");
 
                     try {
                         // 2. Garantir Contexto do Banco
@@ -227,7 +225,7 @@ export async function POST(request: NextRequest) {
                         // 4. Execução de DDL Inteiro (Evita quebra de funções/triggers)
                         console.log("📜 Gerando DDL completo...");
                         const ddl = execSync(`npx prisma migrate diff --from-empty --to-schema-datamodel ${schemaPath} --script`, {
-                            env: { ...process.env, DATABASE_URL: safeUrl },
+                            env: { ...process.env, DATABASE_URL: finalDbUrl },
                             encoding: 'utf8',
                             maxBuffer: 20 * 1024 * 1024
                         });
@@ -315,31 +313,23 @@ export async function POST(request: NextRequest) {
                     console.warn("⚠️ Falha parcial no Supreme Grant:", supremeErr.message);
                 }
 
-                // 6. RESTORE (v99.20)
-                console.log("📥 Iniciando restauração de dados...");
+                // 6. RESTORE (v101)
+                console.log("📥 Iniciando restauração de dados (v101)...");
                 try {
-                    // v99.20: Child Process URL RE-BUILD (Evitar Encoding excessivo)
-                    const u = new URL(dbUrl);
-                    u.pathname = "/squarecloud";
-                    const baseUrl = `${u.protocol}//${u.username}:${u.password}@${u.hostname}:${u.port}${u.pathname}`;
-
-                    // Construir a URL do restore de forma limpa
-                    const restoreUrl = `${baseUrl}?sslmode=verify-ca&sslcert=/application/backend/certificates/certificate.pem&sslkey=/application/backend/certificates/private-key.key&sslrootcert=/application/backend/certificates/ca-certificate.crt`;
-
-                    console.log("🔎 [RESTORE] Executando restore com URL Decoded.");
+                    console.log("🔎 [RESTORE] Executando restore com URL v101.");
 
                     execSync('npx tsx src/scripts/restore-from-backup.ts', {
-                        env: { ...process.env, DATABASE_URL: restoreUrl },
+                        env: { ...process.env, DATABASE_URL: finalDbUrl },
                         encoding: 'utf8',
                         maxBuffer: 20 * 1024 * 1024
                     });
                     console.log("✅ RESTORE Sucesso!");
                 } catch (resErr: any) {
-                    console.warn("⚠️ Restore concluído com avisos. Verifique os logs para garantir integridade parcial.");
+                    console.warn("⚠️ Restore concluído com avisos. Verifique os logs.");
                 }
 
                 return NextResponse.json({
-                    message: "Sync and Restore finished successfully (v99)! 🏆",
+                    message: "Sync and Restore finished successfully (v101)! 🏆",
                     tablesCreated: rowCount,
                     status: "STABLE_RECONSTRUCTED"
                 });
