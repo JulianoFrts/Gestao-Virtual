@@ -14,9 +14,6 @@ import {
   DragEndEvent,
   defaultDropAnimationSideEffects,
   useDroppable,
-  MouseSensor,
-  TouchSensor,
-  pointerWithin,
   rectIntersection,
   MeasuringStrategy
 } from '@dnd-kit/core'
@@ -108,10 +105,10 @@ function EmployeeCardStatic({
     <div
       style={style}
       className={cn(
-        'group relative mb-2 flex cursor-grab items-center gap-3 rounded-xl border p-3',
-        !isOverlay && 'transition-all duration-300',
+        'group relative flex cursor-grab items-center gap-3 rounded-xl border p-3',
+        !isOverlay && 'mb-2 transition-all duration-300',
         'glass-card bg-white/5 border-white/5 hover:bg-white/10 hover:border-primary/30 active:cursor-grabbing',
-        isOverlay && 'border-amber-500 bg-amber-500/10 shadow-glow z-50 ring-2 ring-amber-500/20 cursor-grabbing',
+        isOverlay && 'border-amber-500 bg-amber-500/10 shadow-glow z-[1000] ring-2 ring-amber-500/20 cursor-grabbing w-[288px]',
         !isOverlay && isDragging && 'opacity-30 scale-[0.98] grayscale-[0.5] border-dashed border-white/20'
       )}
     >
@@ -235,7 +232,7 @@ function TeamColumn({
         'flex w-80 flex-col rounded-3xl border transition-all duration-500',
         'glass-panel bg-black/40 backdrop-blur-2xl border-white/5 shadow-2xl',
         isOver
-          ? 'bg-amber-500/5 border-amber-500 ring-2 ring-amber-500/20 shadow-glow-sm scale-[1.01]'
+          ? 'bg-amber-500/5 border-amber-500 ring-2 ring-amber-500/20 shadow-glow-sm'
           : 'hover:border-white/10'
       )}
     >
@@ -760,7 +757,7 @@ export default function TeamComposition() {
   }
 
   return (
-    <div className="animate-fade-in flex h-[calc(100vh-8rem)] flex-col gap-8 overflow-hidden px-2 pt-2">
+    <div className="flex h-[calc(100vh-8rem)] flex-col gap-8 overflow-hidden px-2 pt-2">
       {/* Header com Filtro */}
       <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
         <div className="flex flex-col gap-2">
@@ -1066,19 +1063,24 @@ export default function TeamComposition() {
           </div>
         </div>
 
-        {/* Drag Overlay with Portal and Snap Modifiers */}
-        {createPortal(
+        {/* Drag Overlay - ALWAYS use Portal, adjustScale=true, and snapCenterToCursor */}
+        {activeId && createPortal(
           <DragOverlay
-            dropAnimation={null}
+            dropAnimation={{
+              sideEffects: defaultDropAnimationSideEffects({
+                styles: {
+                  active: {
+                    opacity: '0.4',
+                  },
+                },
+              }),
+            }}
             adjustScale={true}
             modifiers={[snapCenterToCursor]}
-            style={{ cursor: 'grabbing' }}
           >
-            {activeEmployee ? (
-              <div className="pointer-events-none z-[9999] w-[288px] drop-shadow-2xl">
-                <EmployeeCardStatic employee={activeEmployee} isOverlay />
-              </div>
-            ) : null}
+            <div className="pointer-events-none z-[9999] w-[288px] opacity-90 drop-shadow-2xl">
+              {activeEmployee && <EmployeeCardStatic employee={activeEmployee} isOverlay />}
+            </div>
           </DragOverlay>,
           document.body
         )}
