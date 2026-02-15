@@ -19,60 +19,68 @@ declare global {
 }
 
 /**
- * v94: Pure-Handmade Adapter Bridge (Deep Serialization)
- * Correção do erro 'expected a string, found {}' em campos de Data/JSON.
- * Traduz Date para ISOString e Objetos para JSON String.
+ * v95: Pure-Handmade Adapter Bridge (Final Type Map)
+ * Correção do mapeamento de Booleanos (ID 5) e Numerics/BigInts. 
+ * Resolvendo "expected a string-encoded number ... found false".
  */
 class OrionPgAdapter {
   readonly provider = 'postgres';
-  readonly adapterName = 'orion-pg-adapter-v94';
+  readonly adapterName = 'orion-pg-adapter-v95';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v94] Bridge Handmade Inicializada.`);
+    console.log(`[Adapter/v95] Bridge Handmade Inicializada.`);
   }
 
   /**
-   * Mapeamento preciso para Prisma 6 (Engine Quaint)
+   * Mapeamento de Tipos para o Motor Quaint (Prisma 6)
+   * ID 0: Int32
+   * ID 1: Int64 (BigInt)
+   * ID 2: Float
+   * ID 3: Double
+   * ID 4: Numeric (Decimal) -> Espera String-encoded
+   * ID 5: Boolean
+   * ID 6: Char/Text
+   * ID 10: DateTime
+   * ID 11: Json
    */
   private mapColumnType(oid: number): number {
     switch (oid) {
-      case 16: return 4; // Boolean
-      case 21: return 0; // Int32
-      case 23: return 0; // Int32
-      case 20: return 1; // Int64
-      case 700: return 2; // Float
-      case 701: return 3; // Double
-      case 1700: return 2; // Numeric
-      case 1082: return 6; // Date (Tratado como string ISO)
+      case 16: return 5; // Boolean (OID 16) -> ID 5
+      case 21:
+      case 23: return 0; // Int32 (int2, int4) -> ID 0
+      case 20: return 1; // Int64 (int8) -> ID 1
+      case 700: return 2; // Float4 -> ID 2
+      case 701: return 3; // Float8 -> ID 3
+      case 1700: return 4; // Numeric -> ID 4 (String-encoded)
+      case 1082: return 6; // Date -> ID 6 (Text-fallback)
       case 1114:
-      case 1184: return 6; // DateTime (Tratado como string ISO para evitar found {})
+      case 1184: return 6; // DateTime -> ID 6 (Text-fallback para evitar found {})
       case 114:
-      case 3802: return 11; // Json
-      case 2950: return 6; // UUID -> Text
-      case 18:
-      case 25:
-      case 1043: return 6; // Text
-      default: return 6; // Default Text
+      case 3802: return 11; // Json/JsonB -> ID 11
+      case 2950: return 6; // UUID -> ID 6 (Text)
+      default: return 6; // Default a Text
     }
   }
 
   /**
-   * Serializador de Valor: Converte tipos complexos do PG para primitivos que o Prisma entende.
+   * Serializador para garantir que o Prisma receba o formato exato.
    */
-  private serializeValue(val: any): any {
+  private serializeValue(val: any, oid: number): any {
     if (val === null || val === undefined) return null;
+
+    // Numerics/BigInts devem ser Strings para o Prisma quando o Adapter é usado
+    if (oid === 20 || oid === 1700) return val.toString();
+
+    // Datas devem ser ISOStrings para o Prisma 6 via Adapter manual
     if (val instanceof Date) return val.toISOString();
 
-    // Se for um objeto (como JSONB) mas não for um array primitivo, o Prisma pode se confundir
-    if (typeof val === 'object' && !Array.isArray(val)) {
-      // Se o Prisma espera um valor e recebe um objeto, ele pode falhar se não souber serializar
-      // Para campos JSON, o Prisma geralmente lida com o objeto, mas se deu "found {}", 
-      // quer dizer que a engine Quaint precisa de algo mais simples no bridge.
-      return val;
-    }
+    // Booleans devem ser literais true/false (mas o log indicou que o tipo 4 é numérico, então mantemos true/false se o tipo for 5)
+    if (oid === 16) return !!val;
 
-    // Conversão de BigInt para string/number conforme necessário
-    if (typeof val === 'bigint') return val.toString();
+    // JSON deve ser stringificado se for o tipo 11 ou fallback 6
+    if (oid === 114 || oid === 3802) {
+      return typeof val === 'string' ? val : JSON.stringify(val);
+    }
 
     return val;
   }
@@ -84,7 +92,7 @@ class OrionPgAdapter {
       const rows = res.rows.map(row =>
         res.fields.map(field => {
           const rawValue = (row as any)[field.name];
-          return this.serializeValue(rawValue);
+          return this.serializeValue(rawValue, field.dataTypeID);
         })
       );
 
@@ -97,7 +105,7 @@ class OrionPgAdapter {
         }
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v94] Query Error (${params.sql.substring(0, 50)}...):`, err.message);
+      console.error(`❌ [Adapter/v95] Query Error:`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -110,7 +118,7 @@ class OrionPgAdapter {
         value: res.rowCount || 0
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v94] Execute Error:`, err.message);
+      console.error(`❌ [Adapter/v95] Execute Error:`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -122,7 +130,7 @@ class OrionPgAdapter {
       value: {
         queryRaw: async (p: any) => {
           const r = await client.query(p.sql, p.args);
-          const rows = r.rows.map(row => r.fields.map(f => this.serializeValue((row as any)[f.name])));
+          const rows = r.rows.map(row => r.fields.map(f => this.serializeValue((row as any)[f.name], f.dataTypeID)));
           return {
             ok: true,
             value: {
@@ -145,7 +153,7 @@ class OrionPgAdapter {
 
 const buildPrismaWithFallback = (url: string) => {
   const maskedOriginal = url.split('@')[1] || 'oculta';
-  console.log(`[Prisma/v94] 🚀 Inicializando v94. Target: ${maskedOriginal.split('?')[0]}`);
+  console.log(`[Prisma/v95] 🚀 Inicializando v95. Target: ${maskedOriginal.split('?')[0]}`);
 
   const sslConfig = getSSLConfig(url);
   const getEnv = (key: string) => {
@@ -171,13 +179,13 @@ const buildPrismaWithFallback = (url: string) => {
     const pool = new pg.Pool(poolConfig);
     const adapter = new OrionPgAdapter(pool);
 
-    console.log(`[Prisma/v94] 🔋 Ativando Modo ADAPTER HANDMADE (mTLS Serialized).`);
+    console.log(`[Prisma/v95] 🔋 Ativando Modo ADAPTER HANDMADE (Final Type Map).`);
     return new PrismaClient({
       adapter: adapter as any,
       log: ["error"],
     } as any) as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v94] Falha Crítica. Ativando Modo Nativo...`);
+    console.warn(`⚠️ [Prisma/v95] Falha Crítica. Ativando Modo Nativo...`);
     return new PrismaClient({
       datasources: { db: { url: url } },
       log: ["error"],
@@ -201,7 +209,7 @@ export const prisma = new Proxy({} as any, {
 
     if (p === '$state') {
       const inst = (globalThis as any).prismaInstance;
-      return { v: "94", init: !!inst, type: 'handmade' };
+      return { v: "95", status: inst ? 'online' : 'offline' };
     }
 
     if (['$$typeof', 'constructor', 'toJSON', 'then', 'inspect'].includes(p)) return undefined;
@@ -220,7 +228,7 @@ export const prisma = new Proxy({} as any, {
       }
       return value;
     } catch (err: any) {
-      console.error(`❌ [Prisma/v94] Proxy Error '${p}':`, err.message);
+      console.error(`❌ [Prisma/v95] Proxy Error '${p}':`, err.message);
       return undefined;
     }
   }
@@ -243,7 +251,7 @@ const getSSLConfig = (connectionString: string) => {
     if (cert && key) {
       sslConfig.cert = fs.readFileSync(cert, 'utf8');
       sslConfig.key = fs.readFileSync(key, 'utf8');
-      console.log('🛡️ [Prisma/v94] mTLS v94 Ativo.');
+      console.log('🛡️ [Prisma/v95] mTLS v95 Ativo.');
     }
   }
   return sslConfig;
