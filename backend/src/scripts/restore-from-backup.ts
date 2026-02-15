@@ -4,20 +4,38 @@ import * as path from "path";
 import { prisma } from "../lib/prisma/client";
 
 async function importSeedFile(filePath: string, modelName: string) {
+  if (!fs.existsSync(filePath)) return;
+
   const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-  console.log(`📥 Importando ${data.length} registros para ${modelName}...`);
+  console.log(`📥 [RESTORE] ${modelName}: Agendando ${data.length} registros...`);
+
+  let success = 0;
+  let failed = 0;
 
   for (const item of data) {
     try {
       const model = (prisma as any)[modelName];
       if (model) {
-        // v97.7: Sanitização de item (Remover relações aninhadas para evitar PrismaClientValidationError)
+        // v98.4: Smart Sanitization
+        // Removemos apenas objetos de relação (que o Prisma não aceita em upsert direto com ID)
+        // Mantemos campos Json (como 'permissions', 'metadata', 'oldValues', 'newValues')
         const cleanItem: any = {};
+
+        // Lista de campos que sabemos serem relações no nosso schema
+        const relationFields = [
+          'user', 'company', 'project', 'site', 'address', 'affiliation',
+          'jobFunction', 'members', 'supervisedTeams', 'team', 'supervisor',
+          'dailyReports', 'auditLogs', 'timeRecords', 'permissionsMatrix',
+          'parent', 'children', 'productionActivity', 'target', 'createdBy',
+          'accounts', 'sessions', 'timeRecordsCreated', 'receivedMessages'
+        ];
+
         for (const [key, value] of Object.entries(item)) {
-          // Mantemos apenas tipos primitivos ou datas (como strings ISO)
-          // Se for objeto ou array (relação), ignoramos nesta fase escalar
           if (value !== null && typeof value === "object" && !(value instanceof Date)) {
-            continue;
+            // Se o campo estiver na lista de relações ou se parecer com uma relação (contém sub-objetos complexos com IDs)
+            if (relationFields.includes(key) || (value as any).id) {
+              continue;
+            }
           }
           cleanItem[key] = value;
         }
@@ -27,11 +45,16 @@ async function importSeedFile(filePath: string, modelName: string) {
           update: cleanItem,
           create: cleanItem,
         });
+        success++;
       }
-    } catch (error) {
-      console.warn(`⚠️ Falha ao importar registro ${item.id} em ${modelName}:`, error);
+    } catch (error: any) {
+      failed++;
+      if (failed < 10) {
+        console.warn(`⚠️ [${modelName}] Falha no ID ${item.id}:`, error.message);
+      }
     }
   }
+  console.log(`✅ [${modelName}] Concluído: ${success} sucessos, ${failed} falhas.`);
 }
 
 async function main() {
@@ -43,8 +66,6 @@ async function main() {
 
   const files = fs.readdirSync(backupDir).filter((f) => f.endsWith(".json"));
 
-  // Ordem de importação é importante por causa das FKs
-  // Esta lista pode ser refinada
   const order = [
     "companies",
     "projects",
@@ -108,12 +129,12 @@ async function main() {
     }
   }
 
-  console.log("✨ Restauração concluída!");
+  console.log("✨ Restauração v98.4 completa!");
 }
 
 main()
   .catch((e) => {
-    console.error("💥 Erro na restauração:", e);
+    console.error("💥 Erro fatal na restauração:", e);
   })
   .finally(async () => {
     await prisma.$disconnect();
