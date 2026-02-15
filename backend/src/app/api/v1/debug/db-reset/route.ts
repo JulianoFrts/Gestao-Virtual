@@ -125,6 +125,28 @@ export async function POST(request: NextRequest) {
     try {
         const client = await pool.connect();
         try {
+            // v100: SUPREME PERMISSION ENFORCER (Run before any action)
+            console.log("🛡️ [v100] Ativando Supervisor de Permissões...");
+            try {
+                // DB Level
+                await client.query('GRANT CONNECT ON DATABASE squarecloud TO squarecloud;');
+                await client.query('GRANT ALL PRIVILEGES ON DATABASE squarecloud TO squarecloud;');
+
+                // Schema Level
+                await client.query('CREATE SCHEMA IF NOT EXISTS public;');
+                await client.query('ALTER SCHEMA public OWNER TO squarecloud;');
+                await client.query('GRANT ALL ON SCHEMA public TO squarecloud;');
+                await client.query('GRANT ALL ON SCHEMA public TO public;');
+
+                // Defaults for future objects
+                await client.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO squarecloud;');
+                await client.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO squarecloud;');
+
+                console.log("✅ [v100] Supervisor: Permissões garantidas.");
+            } catch (pErr: any) {
+                console.warn("⚠️ Supervisor: Falha parcial nos grants:", pErr.message);
+            }
+
             if (action === "nuke") {
                 console.log("💣 [PANIC] Executando Nuke de Emergência (v99)...");
                 await client.query('DROP SCHEMA IF EXISTS public CASCADE;');

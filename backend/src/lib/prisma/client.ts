@@ -4,6 +4,7 @@ import pg from "pg";
 import fs from "fs";
 import path from "path";
 
+// v100: Definitive ESM Pool Destructuring
 const { Pool } = pg;
 
 // Tipagem estendida
@@ -27,35 +28,30 @@ declare global {
  */
 // Custom Adapter Removido em favor do oficial v6.3.0
 
-// v99.24: Helper SSL Robusto
+// v100: SSL Config with Pure Absolute Paths
 function getSSLConfig(connectionString: string) {
   let sslConfig: any = { rejectUnauthorized: false };
 
   try {
-    const certsRoot = '/application/backend';
-    const findPath = (f: string) => {
-      const p1 = path.join(certsRoot, f);
-      const p2 = path.join(certsRoot, 'certificates', f);
-      return fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : null);
-    };
+    // Square Cloud Definitive Paths
+    const cert = '/application/backend/certificates/certificate.pem';
+    const key = '/application/backend/certificates/private-key.key';
+    const ca = '/application/backend/certificates/ca-certificate.crt';
 
-    const certPath = findPath('certificate.pem') || findPath('client.crt') || findPath('client.pem');
-    const keyPath = findPath('private-key.key') || findPath('client.key') || findPath('private.key');
-    const caPath = findPath('ca-certificate.crt') || findPath('ca.crt') || findPath('root.crt');
+    if (fs.existsSync(cert) && fs.existsSync(key)) {
+      sslConfig.cert = fs.readFileSync(cert, 'utf8');
+      sslConfig.key = fs.readFileSync(key, 'utf8');
+      console.log(`🛡️ [Prisma/v100] mTLS Identidade Carregada: ${cert}`);
 
-    if (certPath && keyPath) {
-      sslConfig.cert = fs.readFileSync(certPath, 'utf8');
-      sslConfig.key = fs.readFileSync(keyPath, 'utf8');
-      console.log(`🛡️ [Prisma/v99.24] mTLS Carregado: ${certPath}`);
-      if (caPath) {
-        sslConfig.ca = fs.readFileSync(caPath, 'utf8');
-        console.log(`📜 [Prisma/v99.24] CA Bundle Carregado: ${caPath}`);
+      if (fs.existsSync(ca)) {
+        sslConfig.ca = fs.readFileSync(ca, 'utf8');
+        console.log(`📜 [Prisma/v100] CA Bundle Carregado: ${ca}`);
       }
     } else {
-      console.warn(`⚠️ [Prisma/v99.24] Certificados não encontrados em ${certsRoot}.`);
+      console.warn(`⚠️ [Prisma/v100] Certificados mTLS ausentes em /application/backend/certificates/`);
     }
-  } catch (e) {
-    console.warn(`⚠️ [Prisma/v99.24] Erro lendo certificados:`, e);
+  } catch (e: any) {
+    console.warn(`⚠️ [Prisma/v100] Erro ao preparar SSL:`, e.message);
   }
   return sslConfig;
 }
@@ -63,8 +59,8 @@ function getSSLConfig(connectionString: string) {
 // v99.3: Factory com Configuração Híbrida
 const createExtendedClient = (url: string) => {
   try {
-    // v99.27: Official PrismaPg Adapter (Definitive ESM Bridge)
-    console.log('🔌 [Prisma/v99.27] Usando PrismaPg oficial (mTLS Bridge).');
+    // v100: Official PrismaPg Adapter (Stable)
+    console.log('🔌 [Prisma/v100] Inicializando Prisma Client...');
 
     const ssl = getSSLConfig(url);
     const pool = new Pool({
@@ -82,7 +78,7 @@ const createExtendedClient = (url: string) => {
       log: ["error"]
     }) as unknown as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v99.27] Erro fatal na factory:`, err.message);
+    console.warn(`⚠️ [Prisma/v100] Factory Error:`, err.message);
     return new PrismaClient({
       datasources: { db: { url } }
     }) as unknown as ExtendedPrismaClient;
