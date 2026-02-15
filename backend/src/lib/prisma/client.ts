@@ -82,7 +82,7 @@ export class OrionPgAdapter {
       if (trimmed.length === 1) {
         const mapped = roleMap[trimmed];
         if (mapped) {
-          console.log(`[Adapter/v96.7] 🔄 Auto-Tradução Universal: ${fieldName} ('${val}' -> '${mapped}')`);
+          console.log(`[Adapter/v96.9] 🔄 Auto-Tradução Universal: ${fieldName} ('${val}' -> '${mapped}')`);
           return mapped;
         }
       }
@@ -151,7 +151,7 @@ export class OrionPgAdapter {
         }
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v96.5] Query Error:`, err.message);
+      console.error(`❌ [Adapter/v96.9] Query Error:`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -161,7 +161,7 @@ export class OrionPgAdapter {
       const res = await this.pool.query(params.sql, params.args);
       return { ok: true, value: res.rowCount || 0 };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v96.7] Execute Error:`, err.message);
+      console.error(`❌ [Adapter/v96.9] Execute Error:`, err.message);
       return { ok: false, error: err };
     }
   }
