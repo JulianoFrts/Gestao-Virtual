@@ -19,15 +19,15 @@ declare global {
 }
 
 /**
- * v96.7: Orion PG Adapter - Total Resilience
- * Bridge universal de enums com trim e rastro completo em todos os métodos.
+ * v96.8: Orion PG Adapter - Total Visibility
+ * Interceptação de baixo nível com dump de campos e valores brutos.
  */
 export class OrionPgAdapter {
   readonly provider = 'postgres';
-  readonly adapterName = 'orion-pg-adapter-v96.7';
+  readonly adapterName = 'orion-pg-adapter-v96.8';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v96.7] Bridge Iniciada.`);
+    console.log(`[Adapter/v96.8] Bridge Iniciada.`);
   }
 
   /**
@@ -96,14 +96,14 @@ export class OrionPgAdapter {
     // Tradução Universal
     const translated = this.translateEnum(fieldName, val);
 
-    // Inspeção Profunda (v96.7)
+    // Inspeção Profunda (v96.8)
     if (typeof translated === 'string' && (translated.length === 1 || translated === 'S' || translated === 'A')) {
-      console.log(`[Adapter/v96.7] 🔍 Inspect [${fieldName}]: Value='${translated}' OID=${oid}`);
+      console.log(`[Adapter/v96.8] 🔍 Inspect [${fieldName}]: Value='${translated}' OID=${oid}`);
     }
 
     // Diagnóstico de Alerta
     if (typeof translated === 'string' && translated.length === 1 && ['S', 'A', 'U'].includes(translated.toUpperCase())) {
-      console.log(`[Adapter/v96.7] ⚠️ Alerta Crítico: Valor bruto escapou em '${fieldName}': '${translated}' (OID: ${oid})`);
+      console.log(`[Adapter/v96.8] ⚠️ Alerta Crítico: Valor bruto escapou em '${fieldName}': '${translated}' (OID: ${oid})`);
     }
 
     // Serialização Quaint (Prisma 6)
@@ -120,6 +120,15 @@ export class OrionPgAdapter {
   async queryRaw(params: { sql: string; args: any[] }) {
     try {
       const res = await this.pool.query(params.sql, params.args);
+
+      // Diagnóstico de Estrutura (v96.8)
+      if (params.sql.toLowerCase().includes('auth_credentials') || params.sql.toLowerCase().includes('select')) {
+        const fieldDesc = res.fields.map(f => `${f.name}(${f.dataTypeID})`).join(', ');
+        console.log(`[Adapter/v96.8] 📡 Query [${res.rowCount} rows]: ${fieldDesc}`);
+        if (res.rows.length > 0) {
+          console.log(`[Adapter/v96.8] 🧪 Sample Raw: ${JSON.stringify(res.rows[0]).substring(0, 150)}`);
+        }
+      }
 
       const rows = res.rows.map(row =>
         res.fields.map(field => {
@@ -217,7 +226,7 @@ const buildPrismaWithFallback = (url: string) => {
       log: ["error"],
     } as any) as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v96.7] Falha Crítica. Usando Modo Nativo.`);
+    console.warn(`⚠️ [Prisma/v96.8] Falha Crítica. Usando Modo Nativo.`);
     return new PrismaClient({ datasources: { db: { url } } }) as ExtendedPrismaClient;
   }
 };
