@@ -25,69 +25,113 @@ declare global {
 export class OrionPgAdapter {
   readonly flavour = 'postgres';
   readonly provider = 'postgres'; // Compatibility
-  readonly adapterName = 'orion-pg-adapter-v98.11';
+  readonly adapterName = 'orion-pg-adapter-v98.12';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v98.11] Bridge forensic iniciada.`);
-    this.query = this.query.bind(this);
-    this.execute = this.execute.bind(this);
-    this.startTransaction = this.startTransaction.bind(this);
+    console.log(`[Adapter/v98.12] Bridge forensic iniciada.`);
   }
 
-  // ... (mapColumnType, translateEnum, serializeValue mantidos iguais, assumindo que estão ok)
-  // Mas precisamos garantir que eles existam no arquivo. 
-  // Vou usar o replace_file_content na range correta para não quebrar os auxiliares.
-  // Vou focar apenas em substituir os métodos convertidos.
+  // Métodos Auxiliares
+  private mapColumnType(oid: number, fieldName?: string): any {
+    let kind = 6; // Default Text
+    switch (oid) {
+      case 16: kind = 5; break; // Bool
+      case 21:
+      case 23: kind = 0; break; // Int32
+      case 20: kind = 1; break; // Int64
+      case 700: kind = 2; break; // Float
+      case 701: kind = 3; break; // Double
+      case 1700: kind = 4; break; // Numeric
+      case 114:
+      case 3802: kind = 11; break; // Json
+      case 1082:
+      case 1114:
+      case 1184:
+      case 2950:
+      case 18:
+      case 25:
+      case 1043: kind = 6; break; // Text/UUID/Date
+    }
+    return { kind };
+  }
 
-  async query(params: any): Promise<any> {
+  private translateEnum(fieldName: string, val: any): any {
+    const roleMap: Record<string, string> = {
+      'S': 'SUPER_ADMIN',
+      'A': 'ADMIN',
+      'U': 'USER',
+      'W': 'WORKER',
+      'T': 'TECHNICIAN',
+      'G': 'GUEST',
+      'M': 'MANAGER'
+    };
+
+    if (typeof val === 'string') {
+      const trimmed = val.trim().toUpperCase();
+      if (trimmed.length === 1) {
+        const mapped = roleMap[trimmed];
+        if (mapped) return mapped;
+      }
+    }
+    return val;
+  }
+
+  private serializeValue(val: any, oid: number, fieldName: string): any {
+    if (val === null || val === undefined) return null;
+
+    if (typeof val === 'string' && val.trim().length === 1) {
+      console.log(`[Adapter/v98.12] 🛡️ INTERCEPT: [${fieldName}] Raw='${val}' OID=${oid}`);
+    }
+
+    const translated = this.translateEnum(fieldName, val);
+    return translated;
+  }
+
+  // Implementação da Interface DriverAdapter (Arrow Functions)
+  query = async (params: any): Promise<any> => {
     try {
       const res = await this.pool.query(params.sql, params.args);
 
       if (params.sql.toLowerCase().includes('auth_credentials') || params.sql.toLowerCase().includes('select')) {
         const fieldDesc = res.fields.map(f => `${f.name}(${f.dataTypeID})`).join(', ');
-        console.log(`[Adapter/v98.11] 📡 Query [${res.rowCount} rows]: ${fieldDesc}`);
-        if (res.rows.length > 0) {
-          console.log(`[Adapter/v98.11] 🧪 Sample Raw: ${JSON.stringify(res.rows[0]).substring(0, 150)}`);
-        }
+        // console.log(`[Adapter/v98.12] 📡 Query [${res.rowCount} rows]: ${fieldDesc}`);
       }
 
-      const adapter = this; // Capture context
       return {
         ok: true,
         fields: res.fields.map((field) => ({
           name: field.name,
-          columnType: adapter.mapColumnType(field.dataTypeID, field.name),
+          columnType: this.mapColumnType(field.dataTypeID, field.name),
         })),
         rows: res.rows.map((row) => {
           const serializedRow: any[] = [];
           for (const field of res.fields) {
             const val = row[field.name];
-            serializedRow.push(adapter.serializeValue(val, field.dataTypeID, field.name));
+            serializedRow.push(this.serializeValue(val, field.dataTypeID, field.name));
           }
           return serializedRow;
         }),
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v98.11] Query Error:`, err.message);
+      console.error(`❌ [Adapter/v98.12] Query Error:`, err.message);
       return { ok: false, error: err };
     }
   }
 
-  async execute(params: any): Promise<any> {
+  execute = async (params: any): Promise<any> => {
     try {
       if (params.sql.trim().toUpperCase().startsWith('CREATE') || params.sql.trim().toUpperCase().startsWith('DROP')) {
-        console.log(`[Adapter/v98.11] 🛡️ DDL Detectado. Executando em contexto seguro.`);
+        console.log(`[Adapter/v98.12] 🛡️ DDL Detectado.`);
       }
-
       const res = await this.pool.query(params.sql, params.args);
       return { ok: true, value: res.rowCount || 0 };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v98.11] Execute Error:`, err.message);
+      console.error(`❌ [Adapter/v98.12] Execute Error:`, err.message);
       return { ok: false, error: err };
     }
   }
 
-  async startTransaction() {
+  startTransaction = async () => {
     const client = await this.pool.connect();
     const adapter = this;
 
@@ -120,7 +164,6 @@ export class OrionPgAdapter {
             }),
           };
         } catch (err: any) {
-          console.error(`❌ [Adapter/v98.11] TX Query Error:`, err.message);
           return { ok: false, error: err };
         }
       },
@@ -129,24 +172,15 @@ export class OrionPgAdapter {
           const res = await client.query(params.sql, params.args);
           return { ok: true, value: res.rowCount || 0 };
         } catch (err: any) {
-          console.error(`❌ [Adapter/v98.11] TX Execute Error:`, err.message);
           return { ok: false, error: err };
         }
       },
       commit: async () => {
-        try {
-          await client.query('COMMIT');
-        } finally {
-          client.release();
-        }
+        try { await client.query('COMMIT'); } finally { client.release(); }
         return { ok: true, value: undefined };
       },
       rollback: async () => {
-        try {
-          await client.query('ROLLBACK');
-        } finally {
-          client.release();
-        }
+        try { await client.query('ROLLBACK'); } finally { client.release(); }
         return { ok: true, value: undefined };
       },
       dispose: async () => {
@@ -154,6 +188,16 @@ export class OrionPgAdapter {
         return { ok: true, value: undefined };
       }
     };
+  }
+
+  // Métodos Extras que o Prisma pode estar buscando
+  close = async () => {
+    // Não fechamos o pool global, mas satisfazemos a interface
+    return { ok: true, value: undefined };
+  }
+
+  dispose = async () => {
+    return { ok: true, value: undefined };
   }
 }
 
@@ -191,16 +235,16 @@ const createExtendedClient = (url: string) => {
     });
 
     const adapter = new OrionPgAdapter(pool);
-    console.log('🔌 [Prisma/v98.11] Adaptador Orion ativado com sucesso.');
+    console.log('🔌 [Prisma/v98.12] Adaptador Orion ativado com sucesso.');
 
     return new PrismaClient({
       adapter,
       log: ["error"],
     } as any) as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v98.11] Falha Crítica na inicialização do Adapter:`, err.message);
-    console.warn(`⚠️ [Prisma/v98.11] Stack:`, err.stack);
-    console.warn(`⚠️ [Prisma/v98.11] Caindo para Modo Nativo.`);
+    console.warn(`⚠️ [Prisma/v98.12] Falha Crítica na inicialização do Adapter:`, err.message);
+    console.warn(`⚠️ [Prisma/v98.12] Stack:`, err.stack);
+    console.warn(`⚠️ [Prisma/v98.12] Caindo para Modo Nativo.`);
     return new PrismaClient({ datasources: { db: { url } } }) as ExtendedPrismaClient;
   }
 };
