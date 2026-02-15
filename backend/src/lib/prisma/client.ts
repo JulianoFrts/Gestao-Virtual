@@ -19,15 +19,15 @@ declare global {
 }
 
 /**
- * v97.5: Orion PG Adapter - Forensic Mode
+ * v97.6: Orion PG Adapter - Forensic Mode
  * Dump total de OIDs e tradução bruta sem filtros.
  */
 export class OrionPgAdapter {
   readonly provider = 'postgres';
-  readonly adapterName = 'orion-pg-adapter-v97.5';
+  readonly adapterName = 'orion-pg-adapter-v97.6';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v97.5] Bridge forensic iniciada.`);
+    console.log(`[Adapter/v97.6] Bridge forensic iniciada.`);
   }
 
   /**
@@ -78,7 +78,7 @@ export class OrionPgAdapter {
       if (trimmed.length === 1) {
         const mapped = roleMap[trimmed];
         if (mapped) {
-          console.log(`[Adapter/v97.5] 🔄 Auto-Tradução Universal: ${fieldName} ('${val}' -> '${mapped}')`);
+          console.log(`[Adapter/v97.6] 🔄 Auto-Tradução Universal: ${fieldName} ('${val}' -> '${mapped}')`);
           return mapped;
         }
       }
@@ -89,22 +89,22 @@ export class OrionPgAdapter {
   private serializeValue(val: any, oid: number, fieldName: string): any {
     if (val === null || val === undefined) return null;
 
-    // Interceptação Forense (v97.5)
+    // Interceptação Forense (v97.6)
     if (typeof val === 'string' && val.trim().length === 1) {
-      console.log(`[Adapter/v97.5] 🛡️ INTERCEPT: [${fieldName}] Raw='${val}' OID=${oid}`);
+      console.log(`[Adapter/v97.6] 🛡️ INTERCEPT: [${fieldName}] Raw='${val}' OID=${oid}`);
     }
 
     // Tradução Universal
     const translated = this.translateEnum(fieldName, val);
 
-    // Inspeção Profunda (v97.5)
+    // Inspeção Profunda (v97.6)
     if (typeof translated === 'string' && (translated === 'S' || translated === 'A')) {
-      console.log(`[Adapter/v97.5] 🔍 Result [${fieldName}]: Value='${translated}' OID=${oid}`);
+      console.log(`[Adapter/v97.6] 🔍 Result [${fieldName}]: Value='${translated}' OID=${oid}`);
     }
 
     // Diagnóstico de Alerta
     if (typeof translated === 'string' && translated.length === 1 && ['S', 'A', 'U'].includes(translated.toUpperCase())) {
-      console.log(`[Adapter/v97.5] ⚠️ Alerta Crítico: Valor bruto escapou em '${fieldName}': '${translated}' (OID: ${oid})`);
+      console.log(`[Adapter/v97.6] ⚠️ Alerta Crítico: Valor bruto escapou em '${fieldName}': '${translated}' (OID: ${oid})`);
     }
 
     // Serialização Quaint (Prisma 6)
@@ -122,12 +122,12 @@ export class OrionPgAdapter {
     try {
       const res = await this.pool.query(params.sql, params.args);
 
-      // Diagnóstico de Estrutura (v97.5)
+      // Diagnóstico de Estrutura (v97.6)
       if (params.sql.toLowerCase().includes('auth_credentials') || params.sql.toLowerCase().includes('select')) {
         const fieldDesc = res.fields.map(f => `${f.name}(${f.dataTypeID})`).join(', ');
-        console.log(`[Adapter/v97.5] 📡 Query [${res.rowCount} rows]: ${fieldDesc}`);
+        console.log(`[Adapter/v97.6] 📡 Query [${res.rowCount} rows]: ${fieldDesc}`);
         if (res.rows.length > 0) {
-          console.log(`[Adapter/v97.5] 🧪 Sample Raw: ${JSON.stringify(res.rows[0]).substring(0, 150)}`);
+          console.log(`[Adapter/v97.6] 🧪 Sample Raw: ${JSON.stringify(res.rows[0]).substring(0, 150)}`);
         }
       }
 
@@ -147,7 +147,7 @@ export class OrionPgAdapter {
         }
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v97.5] Query Error:`, err.message);
+      console.error(`❌ [Adapter/v97.6] Query Error:`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -157,7 +157,7 @@ export class OrionPgAdapter {
       const res = await this.pool.query(params.sql, params.args);
       return { ok: true, value: res.rowCount || 0 };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v97.5] Execute Error:`, err.message);
+      console.error(`❌ [Adapter/v97.6] Execute Error:`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -227,7 +227,7 @@ const buildPrismaWithFallback = (url: string) => {
       log: ["error"],
     } as any) as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v97.5] Falha Crítica. Usando Modo Nativo.`);
+    console.warn(`⚠️ [Prisma/v97.6] Falha Crítica. Usando Modo Nativo.`);
     return new PrismaClient({ datasources: { db: { url } } }) as ExtendedPrismaClient;
   }
 };
@@ -257,7 +257,7 @@ export const prisma = new Proxy({} as any, {
       }
       return value;
     } catch (err: any) {
-      console.error(`❌ [Prisma/v97.5] Proxy Error '${p}':`, err.message);
+      console.error(`❌ [Prisma/v97.6] Proxy Error '${p}':`, err.message);
       return undefined;
     }
   }
@@ -278,7 +278,7 @@ const getSSLConfig = (connectionString: string) => {
     if (cert && key) {
       sslConfig.cert = fs.readFileSync(cert, 'utf8');
       sslConfig.key = fs.readFileSync(key, 'utf8');
-      console.log('🛡️ [Prisma/v97.5] mTLS v97.5 Ativo.');
+      console.log('🛡️ [Prisma/v97.6] mTLS v97.6 Ativo.');
     }
   }
   return sslConfig;
