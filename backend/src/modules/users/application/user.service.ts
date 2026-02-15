@@ -1,6 +1,6 @@
 import { UserRepository } from "../domain/user.repository";
 import { SystemAuditRepository } from "../../audit/domain/system-audit.repository";
-import { Prisma } from "@prisma/client";
+import { type Prisma } from "@prisma/client";
 import { isGodRole, isSystemOwner, SECURITY_RANKS } from "@/lib/constants/security";
 import { ROLE_LEVELS } from "@/lib/constants";
 import { prisma } from "@/lib/prisma/client";

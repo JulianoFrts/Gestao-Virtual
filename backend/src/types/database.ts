@@ -169,12 +169,12 @@ export function buildUserWhereClause(
     if (filters.onlyCorporate) {
       where.authCredential = {
         ...(where.authCredential as any),
-        role: { in: corporateRoles },
+        role: { in: corporateRoles as Role[] },
       };
     } else if (filters.excludeCorporate) {
       where.authCredential = {
         ...(where.authCredential as any),
-        role: { notIn: corporateRoles },
+        role: { notIn: corporateRoles as Role[] },
       };
     }
   }

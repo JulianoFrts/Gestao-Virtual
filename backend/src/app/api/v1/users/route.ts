@@ -119,9 +119,9 @@ export async function GET(request: NextRequest) {
     // Segurança: Filtro por Hierarquia e Escopo
     if (!isAdmin) {
       if (currentUser.companyId) {
-        (where as any).companyId = currentUser.companyId;
+        where.affiliation = { companyId: currentUser.companyId };
       } else if (currentUser.projectId) {
-        (where as any).projectId = currentUser.projectId;
+        where.affiliation = { projectId: currentUser.projectId };
       } else {
         where.id = currentUser.id;
       }
@@ -214,14 +214,12 @@ export async function GET(request: NextRequest) {
 
     // Caso normal
     const result = await userService.listUsers({
-      params: {
-        where,
-        page,
-        limit,
-        sortBy,
-        sortOrder,
-        select: publicUserSelect,
-      }
+      where,
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+      select: publicUserSelect,
     });
 
     return ApiResponse.json(result);
