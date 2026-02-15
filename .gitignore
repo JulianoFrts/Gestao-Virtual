@@ -50,7 +50,6 @@ prisma/migrations/
 
 # Privado
 Melhorias/
-certificates/
 
 # Backups e Artefatos
 backups/
