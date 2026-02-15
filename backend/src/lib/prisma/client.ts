@@ -20,77 +20,102 @@ declare global {
  */
 // Custom Adapter Removido em favor do oficial v6.3.0
 
-// v104: SSL Config with Pure Absolute Paths & Multi-Pattern Fallback
+// v107: SSL Config with SNI & Binary Buffers (Fix Unknown CA)
 function getSSLConfig(connectionString: string) {
   let sslConfig: any = { rejectUnauthorized: false };
 
   try {
+    const u = new URL(connectionString);
+    sslConfig.servername = u.hostname;
+
     // Priority 1: Subdirectory Certificates
     const certDir = '/application/backend/certificates';
-    const certPath = path.join(certDir, 'certificate.pem');
-    const keyPath = path.join(certDir, 'private-key.key');
-    const caPath = path.join(certDir, 'ca-certificate.crt');
+    const paths = {
+      cert: path.join(certDir, 'certificate.pem'),
+      key: path.join(certDir, 'private-key.key'),
+      ca: path.join(certDir, 'ca-certificate.crt')
+    };
 
     // Priority 2: Root Certificates (Seen in logs)
-    const rootCertPath = '/application/backend/client.crt';
-    const rootKeyPath = '/application/backend/client.key';
-    const rootCaPath = '/application/backend/ca.crt';
+    const rootPaths = {
+      cert: '/application/backend/client.crt',
+      key: '/application/backend/client.key',
+      ca: '/application/backend/ca.crt'
+    };
 
-    if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
-      sslConfig.cert = fs.readFileSync(certPath, 'utf8');
-      sslConfig.key = fs.readFileSync(keyPath, 'utf8');
-      if (fs.existsSync(caPath)) sslConfig.ca = fs.readFileSync(caPath, 'utf8');
-      console.log(`🛡️ [Prisma/v104] mTLS Carregado (Dir): ${certPath}`);
-    } else if (fs.existsSync(rootCertPath) && fs.existsSync(rootKeyPath)) {
-      sslConfig.cert = fs.readFileSync(rootCertPath, 'utf8');
-      sslConfig.key = fs.readFileSync(rootKeyPath, 'utf8');
-      if (fs.existsSync(rootCaPath)) sslConfig.ca = fs.readFileSync(rootCaPath, 'utf8');
-      console.log(`🛡️ [Prisma/v104] mTLS Carregado (Root): ${rootCertPath}`);
-    } else {
-      console.warn(`⚠️ [Prisma/v104] Certificados mTLS ausentes.`);
+    const loadCert = (p: any, tag: string) => {
+      if (fs.existsSync(p.cert) && fs.existsSync(p.key)) {
+        sslConfig.cert = fs.readFileSync(p.cert);
+        sslConfig.key = fs.readFileSync(p.key);
+        if (fs.existsSync(p.ca)) sslConfig.ca = fs.readFileSync(p.ca);
+        console.log(`🛡️ [Prisma/v107] mTLS ${tag} Carregado: ${p.cert}`);
+        return true;
+      }
+      return false;
+    };
+
+    if (!loadCert(paths, "Dir") && !loadCert(rootPaths, "Root")) {
+      console.warn(`⚠️ [Prisma/v107] Certificados mTLS ausentes.`);
     }
   } catch (e: any) {
-    console.warn(`⚠️ [Prisma/v104] Erro ao preparar SSL:`, e.message);
+    console.warn(`⚠️ [Prisma/v107] Erro ao preparar SSL:`, e.message);
   }
   return sslConfig;
 }
 
-// v99.3: Factory com Configuração Híbrida
+// v107: Factory Final (Binary & SNI Protected)
 const createExtendedClient = (url: string) => {
+  const version = 'v107';
   try {
-    // v102: Official PrismaPg Adapter (Stable)
-    console.log('🔌 [Prisma/v102] Inicializando Prisma Client com Adapter...');
+    console.log(`🔌 [Prisma/${version}] Conectando ao Banco...`);
 
+    const u = new URL(url);
     const ssl = getSSLConfig(url);
-    const pool = new Pool({
-      connectionString: url,
+
+    // Garantir que temos o Pool correto via ESM
+    const PoolConstructor = (pg as any).Pool || (pg as any).default?.Pool || pg;
+
+    const pool = new PoolConstructor({
+      user: u.username,
+      password: decodeURIComponent(u.password),
+      host: u.hostname,
+      port: parseInt(u.port),
+      database: u.pathname.substring(1).split('?')[0] || 'squarecloud',
       ssl,
       max: 10,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000
+      connectionTimeoutMillis: 15000
     });
 
+    // Verificação de saúde do Pool (Prevenir Erro de Bind)
+    if (!pool || typeof pool.query !== 'function') {
+      throw new Error("Falha na inicialização do Pool (Bind Error)");
+    }
+
     const adapter = new PrismaPg(pool);
-
-    if (!adapter) throw new Error("Falha ao criar PrismaPg Adapter");
-
     return new PrismaClient({
       adapter: adapter as any,
       log: ["error"]
     }) as unknown as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v102] Factory FALLBACK:`, err.message);
-
-    // v102: Ghost Strategy - Inject mTLS params into URL for native engine fallback
-    const cert = "/application/backend/certificates/certificate.pem";
-    const key = "/application/backend/certificates/private-key.key";
-    const ca = "/application/backend/certificates/ca-certificate.crt";
+    console.warn(`⚠️ [Prisma/${version}] Fallback para Motor Nativo:`, err.message);
 
     const u = new URL(url);
     u.searchParams.set('sslmode', 'verify-ca');
-    u.searchParams.set('sslcert', cert);
-    u.searchParams.set('sslkey', key);
-    u.searchParams.set('sslrootcert', ca);
+
+    const paths = [
+      { cert: "/application/backend/certificates/certificate.pem", key: "/application/backend/certificates/private-key.key", ca: "/application/backend/certificates/ca-certificate.crt" },
+      { cert: "/application/backend/client.crt", key: "/application/backend/client.key", ca: "/application/backend/ca.crt" }
+    ];
+
+    for (const p of paths) {
+      if (fs.existsSync(p.cert)) {
+        u.searchParams.set('sslcert', p.cert);
+        u.searchParams.set('sslkey', p.key);
+        u.searchParams.set('sslrootcert', p.ca);
+        break;
+      }
+    }
 
     return new PrismaClient({
       datasources: { db: { url: u.toString() } }

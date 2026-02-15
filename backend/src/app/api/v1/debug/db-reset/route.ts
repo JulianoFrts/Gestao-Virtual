@@ -56,9 +56,9 @@ export async function POST(request: NextRequest) {
     const fs = require('fs');
     const path = require('path');
 
-    const getMtlsOptions = () => {
+    const getMtlsOptions = (url: string) => {
         try {
-            // Paths alinhados com v104
+            const u = new URL(url);
             const paths = [
                 { cert: "/application/backend/certificates/certificate.pem", key: "/application/backend/certificates/private-key.key", ca: "/application/backend/certificates/ca-certificate.crt" },
                 { cert: "/application/backend/client.crt", key: "/application/backend/client.key", ca: "/application/backend/ca.crt" }
@@ -66,29 +66,40 @@ export async function POST(request: NextRequest) {
 
             for (const p of paths) {
                 if (fs.existsSync(p.cert) && fs.existsSync(p.key)) {
-                    const ssl: any = { cert: fs.readFileSync(p.cert, 'utf8'), key: fs.readFileSync(p.key, 'utf8'), rejectUnauthorized: false };
-                    if (fs.existsSync(p.ca)) ssl.ca = fs.readFileSync(p.ca, 'utf8');
+                    const ssl: any = {
+                        cert: fs.readFileSync(p.cert),
+                        key: fs.readFileSync(p.key),
+                        rejectUnauthorized: false,
+                        servername: u.hostname
+                    };
+                    if (fs.existsSync(p.ca)) ssl.ca = fs.readFileSync(p.ca);
                     return ssl;
                 }
             }
-            return { rejectUnauthorized: false };
+            return { rejectUnauthorized: false, servername: u.hostname };
         } catch (e) { return { rejectUnauthorized: false }; }
     };
 
     const buildPoolConfig = (url: string) => {
         try {
-            const u = new URL(url.replace(/['"]/g, ""));
+            const u = new URL(url);
             return {
-                connectionString: url,
-                database: 'squarecloud',
-                ssl: getMtlsOptions(),
-                connectionTimeoutMillis: 10000
+                user: u.username,
+                password: decodeURIComponent(u.password),
+                host: u.hostname,
+                port: parseInt(u.port),
+                database: u.pathname.substring(1).split('?')[0] || 'squarecloud',
+                ssl: getMtlsOptions(url),
+                connectionTimeoutMillis: 15000,
+                idleTimeoutMillis: 30000,
+                max: 1
             };
         } catch (e) { return { connectionString: url, ssl: { rejectUnauthorized: false } }; }
     };
 
+    const PoolConstructor = pg.Pool || (pg as any).default?.Pool || pg;
     const poolConfig = buildPoolConfig(dbUrl);
-    const pool = new Pool(poolConfig);
+    const pool = new PoolConstructor(poolConfig);
 
     try {
         const client = await pool.connect();
