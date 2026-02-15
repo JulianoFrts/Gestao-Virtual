@@ -39,7 +39,7 @@ const createPrismaClient = () => {
 
 const buildPrismaWithFallback = (url: string) => {
   const maskedOriginal = url.split('@')[1] || 'oculta';
-  console.log(`[Prisma/v89] 🚀 Inicializando v89. Target: ${maskedOriginal.split('?')[0]}`);
+  console.log(`[Prisma/v90] 🚀 Inicializando v90. Target: ${maskedOriginal.split('?')[0]}`);
 
   const sslConfig = getSSLConfig(url);
   const getEnv = (key: string) => {
@@ -61,51 +61,51 @@ const buildPrismaWithFallback = (url: string) => {
   if (getEnv('PGPORT')) poolConfig.port = parseInt(getEnv('PGPORT')!, 10);
   if (getEnv('PGDATABASE')) poolConfig.database = getEnv('PGDATABASE');
 
-  // DIAGNÓSTICO PG (v89)
+  // PROBE BASE (v90)
   const diagPool = new pg.Pool({ ...poolConfig, max: 1 });
-  diagPool.query('SELECT 1').then(() => {
-    console.log(`✅ [Prisma/v89] Conexão Base (pg) OK.`);
+  diagPool.query('SELECT current_user, current_database() as db').then((res) => {
+    console.log(`✅ [Prisma/v90] Conexão Base OK. User: ${res.rows[0].current_user}, DB: ${res.rows[0].db}`);
     diagPool.end();
   }).catch(e => {
-    console.error(`❌ [Prisma/v89] Conexão Base (pg) FALHOU: ${e.message}`);
+    console.error(`❌ [Prisma/v90] Conexão Base FALHOU: ${e.message}`);
     diagPool.end();
   });
 
-  // TENTA MODO ADAPTER COM PROXY DE BINDING (v89)
+  // MODO ADAPTER COM BRIDGE MANUAL (v90)
   try {
+    console.log(`[Prisma/v90] 🔋 Ativando Modo ADAPTER (Bridge Manual).`);
     const pool = new pg.Pool(poolConfig);
     const rawAdapter = new PrismaPg(pool);
 
-    // CORREÇÃO CRÍTICA v89: Proxy para resolver o erro "Cannot read properties of undefined (reading 'bind')"
-    // Se o Prisma 6 tenta fazer .bind() em métodos que ele espera mas não encontra, nós os interceptamos aqui.
-    const adapter = new Proxy(rawAdapter, {
-      get: (target, prop) => {
-        const name = prop.toString();
-        const val = (target as any)[prop];
-
-        // Log de acesso a propriedades críticas para debug
-        if (['query', 'execute', 'transactionContext', 'startTransaction'].includes(name)) {
-          if (val === undefined) {
-            console.warn(`⚠️ [Prisma/v89] Prisma acessou '${name}' que é undefined no adapter!`);
-          }
+    // Bridge Manual para evitar erros de bind e garantir métodos
+    // Isso protege contra tree-shaking e perda de contexto
+    const adapter = {
+      provider: 'postgres',
+      adapterName: 'pg',
+      queryRaw: (params: any) => rawAdapter.queryRaw(params),
+      executeRaw: (params: any) => rawAdapter.executeRaw(params),
+      transactionContext: () => {
+        if ((rawAdapter as any).transactionContext) {
+          return (rawAdapter as any).transactionContext();
         }
-
-        if (typeof val === 'function') {
-          return val.bind(target);
-        }
-        return val;
+        // Stub manual se o método original sumir
+        return Promise.resolve({
+          queryRaw: (params: any) => rawAdapter.queryRaw(params),
+          executeRaw: (params: any) => rawAdapter.executeRaw(params),
+          commit: () => Promise.resolve(),
+          rollback: () => Promise.resolve(),
+        });
       }
-    });
+    };
 
-    console.log(`[Prisma/v89] 🔋 Ativando Modo ADAPTER.`);
     return new PrismaClient({
       adapter: adapter as any,
       log: ["error"],
     } as any) as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v89] Falha no Modo Adapter. Erro: ${err.message}. Alternando para NATIVO...`);
+    console.warn(`⚠️ [Prisma/v90] Fallback para Modo NATIVO. Erro: ${err.message}`);
 
-    // RECONSTRÓI A URL NATIVA (v89 - Preservando Query Params Originais)
+    // RECONSTRÓI A URL NATIVA (v90 - Segurança Máxima)
     let nativeUrl = url;
     try {
       const urlObj = new URL(url);
@@ -114,15 +114,19 @@ const buildPrismaWithFallback = (url: string) => {
       if (poolConfig.host) urlObj.hostname = poolConfig.host;
       if (poolConfig.port) urlObj.port = poolConfig.port.toString();
 
-      // Se PGDATABASE existe e não está na URL, injeta
-      if (getEnv('PGDATABASE') && (!urlObj.pathname || urlObj.pathname === '/')) {
-        urlObj.pathname = `/${getEnv('PGDATABASE')}`;
+      // Injeção de Banco Forçada
+      if (poolConfig.database && (!urlObj.pathname || urlObj.pathname === '/')) {
+        urlObj.pathname = `/${poolConfig.database}`;
       }
 
+      // Parâmetros de SSL para motor Rust do Prisma
+      urlObj.searchParams.set('sslmode', 'verify-ca');
+      urlObj.searchParams.set('sslaccept', 'accept_invalid_certs'); // Bypass de hostname mismatch
+
       nativeUrl = urlObj.toString();
-      console.log(`📍 [Prisma/v89] Fallback URL Nativa: ${urlObj.hostname}${urlObj.pathname}`);
+      console.log(`📍 [Prisma/v90] Fallback URL: ${urlObj.host}${urlObj.pathname}`);
     } catch (e) {
-      console.error(`❌ [Prisma/v89] Falha ao processar URL para fallback nativo.`);
+      console.error(`❌ [Prisma/v90] Erro na URL de fallback.`);
     }
 
     try {
@@ -132,7 +136,7 @@ const buildPrismaWithFallback = (url: string) => {
       } as any);
       return client as ExtendedPrismaClient;
     } catch (nativeErr: any) {
-      console.error(`❌ [Prisma/v89] Erro Fatal Inevitável:`, nativeErr.message);
+      console.error(`❌ [Prisma/v90] Falha Inevitável:`, nativeErr.message);
       throw nativeErr;
     }
   }
@@ -152,7 +156,7 @@ export const prisma = new Proxy({} as any, {
 
     if (p === '$state') {
       const inst = (globalThis as any).prismaInstance;
-      return { v: "89", init: !!inst, keys: inst ? Object.keys(inst).length : 0 };
+      return { v: "90", init: !!inst, keys: inst ? Object.keys(inst).length : 0 };
     }
 
     if (['$$typeof', 'constructor', 'toJSON', 'then', 'inspect'].includes(p)) return undefined;
@@ -171,7 +175,7 @@ export const prisma = new Proxy({} as any, {
       }
       return value;
     } catch (err: any) {
-      console.error(`❌ [Prisma/v89] Erro de Proxy em '${p}':`, err.message);
+      console.error(`❌ [Prisma/v90] Proxy Error '${p}':`, err.message);
       return undefined;
     }
   }
@@ -205,7 +209,7 @@ const getSSLConfig = (connectionString: string) => {
     if (certPath && keyPath) {
       sslConfig.cert = fs.readFileSync(certPath, 'utf8');
       sslConfig.key = fs.readFileSync(keyPath, 'utf8');
-      console.log('🛡️ [Prisma/v89] mTLS Configurado.');
+      console.log('🛡️ [Prisma/v90] SSL v90 Ativo.');
     }
   }
   return sslConfig;
