@@ -99,10 +99,10 @@ export async function POST(request: NextRequest) {
             const u = new URL(url.replace(/['']/g, ""));
             console.log(`[PANIC/v99.3] 🔧 Parsing URL: Host=${u.hostname} Port=${u.port} User=${u.username}`);
 
-            // v99.9: Ghost Strategy (One-Way SSL)
-            // Certificados estão inválidos (Recriados). Não enviamos nada para evitar 'unknown ca'.
-            // Confiamos apenas na senha e encryption.
-            console.log(`[PANIC/v99.9] 👻 SSL Ghost Mode (RejectUnauthorized: False, No Certs).`);
+            // v99.10: Final Strategy (SSL Restore + User Warning)
+            // O Banco EXIGE certificado. Se der erro, é porque o certificado é inválido.
+            const sslOptions = getMtlsOptions();
+            console.log(`[PANIC/v99.10] 🔒 SSL RESTAURADO (mTLS Mandatory).`);
 
             return {
                 user: u.username,
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
                 host: u.hostname,
                 port: parseInt(u.port) || 5432,
                 database: 'squarecloud',
-                ssl: { rejectUnauthorized: false }, // One-Way SSL
+                ssl: sslOptions,
                 connectionTimeoutMillis: 5000
             };
         } catch (e) {
