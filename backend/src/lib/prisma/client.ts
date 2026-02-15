@@ -25,10 +25,16 @@ declare global {
 export class OrionPgAdapter {
   readonly flavour = 'postgres';
   readonly provider = 'postgres'; // Compatibility
-  readonly adapterName = 'orion-pg-adapter-v99.6';
+  readonly adapterName = 'orion-pg-adapter-v99.7';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v99.6] Bridge forensic iniciada (No-SSL).`);
+    console.log(`[Adapter/v99.7] Bridge forensic iniciada (SSL Restored).`);
+    // Bind methods to this instance
+    this.query = this.query.bind(this);
+    this.execute = this.execute.bind(this);
+    this.startTransaction = this.startTransaction.bind(this);
+    this.close = this.close.bind(this);
+    this.dispose = this.dispose.bind(this);
   }
 
   // Métodos Auxiliares
@@ -87,14 +93,13 @@ export class OrionPgAdapter {
     return translated;
   }
 
-  // Implementação da Interface DriverAdapter (Arrow Functions)
-  query = async (params: any): Promise<any> => {
+  // v99.7: Refatoração para Método de Classe (Binding Fix)
+  async query(params: any): Promise<any> {
     try {
       const res = await this.pool.query(params.sql, params.args);
 
       if (params.sql.toLowerCase().includes('auth_credentials') || params.sql.toLowerCase().includes('select')) {
         const fieldDesc = res.fields.map(f => `${f.name}(${f.dataTypeID})`).join(', ');
-        // console.log(`[Adapter/v98.12] 📡 Query [${res.rowCount} rows]: ${fieldDesc}`);
       }
 
       return {
@@ -113,25 +118,25 @@ export class OrionPgAdapter {
         }),
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v98.12] Query Error:`, err.message);
+      console.error(`❌ [Adapter/v99.7] Query Error:`, err.message);
       return { ok: false, error: err };
     }
   }
 
-  execute = async (params: any): Promise<any> => {
+  async execute(params: any): Promise<any> {
     try {
       if (params.sql.trim().toUpperCase().startsWith('CREATE') || params.sql.trim().toUpperCase().startsWith('DROP')) {
-        console.log(`[Adapter/v98.12] 🛡️ DDL Detectado.`);
+        console.log(`[Adapter/v99.7] 🛡️ DDL Detectado.`);
       }
       const res = await this.pool.query(params.sql, params.args);
       return { ok: true, value: res.rowCount || 0 };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v98.12] Execute Error:`, err.message);
+      console.error(`❌ [Adapter/v99.7] Execute Error:`, err.message);
       return { ok: false, error: err };
     }
   }
 
-  startTransaction = async () => {
+  async startTransaction() {
     const client = await this.pool.connect();
     const adapter = this;
 
@@ -250,11 +255,10 @@ function getSSLConfig(connectionString: string) {
 // v99.3: Factory com Configuração Híbrida
 const createExtendedClient = (url: string) => {
   try {
-    // v99.6: SSL Disable Strategy
-    // "entre servidores nao precisa ter SSL"
+    // v99.7: SSL Restore Strategy (v99.5 Logic)
     const pool = new pg.Pool({
       connectionString: url,
-      ssl: false // Força conexão não criptografada
+      ssl: getSSLConfig(url) // Restaura mTLS e CA
     });
 
     const adapter = new OrionPgAdapter(pool);

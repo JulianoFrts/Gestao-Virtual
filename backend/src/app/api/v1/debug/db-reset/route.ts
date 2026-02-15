@@ -99,9 +99,11 @@ export async function POST(request: NextRequest) {
             const u = new URL(url.replace(/['"]/g, ""));
             console.log(`[PANIC/v99.3] 🔧 Parsing URL: Host=${u.hostname} Port=${u.port} User=${u.username}`);
 
-            // v99.6: SSL Disable Strategy
-            // "entre servidores nao precisa ter SSL" - Tentativa de conexão plain text.
-            console.log(`[PANIC/v99.6] 🔓 SSL DESATIVADO (User Strategy).`);
+            // v99.7: SSL Restore Strategy (v99.5 Logic)
+            // mTLS é obrigatório. SSL é obrigatório.
+            const sslOptions = getMtlsOptions();
+
+            console.log(`[PANIC/v99.7] 🔒 SSL RESTAURADO (Force mTLS + CA).`);
 
             return {
                 user: u.username,
@@ -109,7 +111,7 @@ export async function POST(request: NextRequest) {
                 host: u.hostname,
                 port: parseInt(u.port) || 5432,
                 database: 'squarecloud',
-                ssl: false, // Força conexão não criptografada
+                ssl: sslOptions,
                 connectionTimeoutMillis: 5000
             };
         } catch (e) {
