@@ -10,26 +10,34 @@ import {
 } from "../domain/production-config.repository";
 
 export class PrismaProductionRepository
-  implements ProductionRepository, ProductionConfigRepository
-{
+  implements ProductionRepository, ProductionConfigRepository {
   async save(progress: ProductionProgress): Promise<ProductionProgress> {
-    const { id, ...data } = progress;
-
-    const dataToSave = {
-      ...data,
+    const dataToSave: any = {
+      currentStatus: progress.currentStatus,
+      progressPercent: progress.progressPercent,
+      startDate: progress.startDate,
+      endDate: progress.endDate,
+      history: progress.history,
+      dailyProduction: progress.dailyProduction,
       requiresApproval: progress.requiresApproval,
       approvalReason: progress.approvalReason,
     };
 
-    if (id) {
+    if (progress.id) {
       const res = await prisma.mapElementProductionProgress.update({
-        where: { id },
-        data: dataToSave as any,
+        where: { id: progress.id },
+        data: dataToSave,
       });
       return new ProductionProgress(res as any);
     }
 
-    return this.performUpsert(progress.elementId, progress.activityId, dataToSave);
+    // Para novos registros, precisamos dos IDs de relação
+    return this.performUpsert(progress.elementId, progress.activityId, {
+      ...dataToSave,
+      projectId: progress.projectId,
+      elementId: progress.elementId,
+      activityId: progress.activityId,
+    });
   }
 
   private async performUpsert(
@@ -42,15 +50,18 @@ export class PrismaProductionRepository
     });
 
     if (existing) {
-      return (await prisma.mapElementProductionProgress.update({
+      const { projectId, elementId: elId, activityId: actId, ...updateData } = data;
+      const res = await prisma.mapElementProductionProgress.update({
         where: { id: existing.id },
-        data: data as any,
-      })) as unknown as ProductionProgress;
+        data: updateData,
+      });
+      return new ProductionProgress(res as any);
     }
 
-    return (await prisma.mapElementProductionProgress.create({
-      data: data as any,
-    })) as unknown as ProductionProgress;
+    const res = await prisma.mapElementProductionProgress.create({
+      data: data,
+    });
+    return new ProductionProgress(res as any);
   }
 
   async findById(id: string): Promise<ProductionProgress | null> {
@@ -72,7 +83,7 @@ export class PrismaProductionRepository
       where: { elementId },
       include: { activity: true }
     });
-    return results.map(res => new ProductionProgress({
+    return results.map((res: any) => new ProductionProgress({
       ...res,
       projectId: (res as any).projectId,
       currentStatus: res.currentStatus as ActivityStatus,
@@ -102,16 +113,16 @@ export class PrismaProductionRepository
     if (companyId) where.companyId = companyId;
 
     if (siteId && siteId !== "all") {
-       if (siteId === "none") {
-           where.OR = [
-               { documentId: null },
-               { document: { siteId: null } }
-           ];
-       } else {
-           // Filtering through the document relation is safer as towers are imported via KMZ (Document)
-           // which is linked to a Site.
-           where.document = { siteId };
-       }
+      if (siteId === "none") {
+        where.OR = [
+          { documentId: null },
+          { document: { siteId: null } }
+        ];
+      } else {
+        // Filtering through the document relation is safer as towers are imported via KMZ (Document)
+        // which is linked to a Site.
+        where.document = { siteId };
+      }
     }
 
     return await prisma.mapElementTechnicalData.findMany({
@@ -144,8 +155,8 @@ export class PrismaProductionRepository
     });
 
     return stages
-      .map((s) => s.productionActivityId)
-      .filter((id): id is string => !!id);
+      .map((s: any) => s.productionActivityId)
+      .filter((id: any): id is string => !!id);
   }
 
   async findSchedule(elementId: string, activityId: string): Promise<any> {
@@ -170,7 +181,7 @@ export class PrismaProductionRepository
         where: { productionActivityId: activityId },
       });
 
-      for (const stage of linkedStages) {
+      for (const stage of linkedStages as any[]) {
         await this.syncWorkStageItem(stage, activityId, projectId, updatedBy);
       }
     } catch (error) {
@@ -234,7 +245,7 @@ export class PrismaProductionRepository
       orderBy: { createdAt: "desc" },
     });
 
-    return results.map(res => new ProductionProgress(res as any));
+    return results.map((res: any) => new ProductionProgress(res as any));
   }
 
   // Schedule Implementation

@@ -49,11 +49,11 @@ $unifiedStart = Join-Path $root "squarecloud.unified.start.cjs"
 $unifiedApp = Join-Path $root "squarecloud.unified.app"
 $deployId = Get-Date -Format "yyyyMMdd-HHmmss"
 
-# Lê o script, substitui o placeholder e salva no deploy como start.js (Unix format)
+# Lê o script, substitui o placeholder e salva no deploy como start.cjs (Unix format)
 $startContent = Get-Content $unifiedStart -Raw
 $startContent = $startContent.Replace('[[DEPLOY_ID]]', $deployId)
-Save-UnixText (Join-Path $deployDir "start.js") $startContent
-Write-Host "  OK: start.js gerado (Unix Fix) com ID $deployId" -ForegroundColor Green
+Save-UnixText (Join-Path $deployDir "start.cjs") $startContent
+Write-Host "  OK: start.cjs gerado (Unix Fix) com ID $deployId" -ForegroundColor Green
 
 # 2b. Package JSON do Gateway (Unix format)
 $gwPackagePath = Join-Path $root "squarecloud.package.json"

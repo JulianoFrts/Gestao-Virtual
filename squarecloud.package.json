@@ -3,9 +3,9 @@
     "version": "1.0.0",
     "private": true,
     "description": "Gestao Virtual - Backend API + Frontend Unificado",
-    "main": "start.js",
+    "main": "start.cjs",
     "scripts": {
-        "start": "node start.js"
+        "start": "node start.cjs"
     },
     "dependencies": {
         "express": "^4.21.0",
