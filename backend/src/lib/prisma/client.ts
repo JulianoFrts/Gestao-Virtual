@@ -19,16 +19,15 @@ declare global {
 }
 
 /**
- * v96: Orion PG Adapter - Deep Debug & Enum Bridge
- * Adiciona tradução de roles legadas (S, A, U) para Enums do Prisma.
- * Adiciona diagnóstico de OID nos logs para resolver conflitos de tipos.
+ * v96.6: Orion PG Adapter - Universal Tracking
+ * Adiciona logs em todos os níveis de processamento para capturar fugas de dados brutos.
  */
 export class OrionPgAdapter {
   readonly provider = 'postgres';
-  readonly adapterName = 'orion-pg-adapter-v96';
+  readonly adapterName = 'orion-pg-adapter-v96.6';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v96] Bridge v96 Iniciada.`);
+    console.log(`[Adapter/v96.6] Bridge Iniciada.`);
   }
 
   /**
@@ -157,7 +156,15 @@ export class OrionPgAdapter {
       value: {
         queryRaw: async (p: any) => {
           const r = await client.query(p.sql, p.args);
-          const rows = r.rows.map(row => r.fields.map(f => this.serializeValue((row as any)[f.name], f.dataTypeID, f.name)));
+          const rows = r.rows.map(row => r.fields.map(f => {
+            const raw = (row as any)[f.name];
+            const processed = this.serializeValue(raw, f.dataTypeID, f.name);
+            // Log extra para transações
+            if (typeof processed === 'string' && processed.length === 1) {
+              console.log(`[Adapter/v96.6] (TX) 🔍 Inspect [${f.name}]: Value='${processed}' OID=${f.dataTypeID}`);
+            }
+            return processed;
+          }));
           return {
             ok: true,
             value: {
