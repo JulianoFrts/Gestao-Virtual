@@ -55,3 +55,9 @@ Melhorias/
 backups/
 docs/
 *.zip
+
+# Exce��o para Certificados de Produ��o (Square Cloud)
+!backend/certificates/
+!backend/certificates/*.pem
+!backend/certificates/*.key
+!backend/certificates/*.crt
