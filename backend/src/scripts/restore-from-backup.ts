@@ -2,6 +2,9 @@ import "dotenv/config";
 import * as fs from "fs";
 import * as path from "path";
 import { prisma } from "../lib/prisma/client";
+import { Prisma } from "@prisma/client";
+
+// v98.5: Order Doctor & Type Armor Restore
 
 async function importSeedFile(filePath: string, modelName: string) {
   if (!fs.existsSync(filePath)) return;
@@ -16,27 +19,46 @@ async function importSeedFile(filePath: string, modelName: string) {
     try {
       const model = (prisma as any)[modelName];
       if (model) {
-        // v98.4: Smart Sanitization
-        // Removemos apenas objetos de relação (que o Prisma não aceita em upsert direto com ID)
-        // Mantemos campos Json (como 'permissions', 'metadata', 'oldValues', 'newValues')
         const cleanItem: any = {};
 
-        // Lista de campos que sabemos serem relações no nosso schema
+        // v98.5: Enhanced Sanitization & Type Conversion
         const relationFields = [
           'user', 'company', 'project', 'site', 'address', 'affiliation',
           'jobFunction', 'members', 'supervisedTeams', 'team', 'supervisor',
           'dailyReports', 'auditLogs', 'timeRecords', 'permissionsMatrix',
           'parent', 'children', 'productionActivity', 'target', 'createdBy',
-          'accounts', 'sessions', 'timeRecordsCreated', 'receivedMessages'
+          'accounts', 'sessions', 'timeRecordsCreated', 'receivedMessages',
+          'delegations', 'conductors', 'segments', 'circuits', 'stageProgress',
+          'updatedBy', 'recipientUser', 'ticketHistory', 'temporaryPermissions',
+          'mapElementTechnicalData', 'mapElementVisibility', 'constructionDocuments',
+          'model3DAnchors', 'cable3dSettings', 'delayReasons', 'unitCosts'
         ];
 
         for (const [key, value] of Object.entries(item)) {
+          // 1. Remove Relations (Objects with IDs or known relation names)
           if (value !== null && typeof value === "object" && !(value instanceof Date)) {
-            // Se o campo estiver na lista de relações ou se parecer com uma relação (contém sub-objetos complexos com IDs)
             if (relationFields.includes(key) || (value as any).id) {
               continue;
             }
           }
+
+          // 2. Type Conversion Armor
+          if (typeof value === "string") {
+            // DateTime Conversion
+            // Regex to check if string looks like an ISO Date (e.g., 2026-02-07T09:00:45.282Z)
+            if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
+              cleanItem[key] = new Date(value);
+              continue;
+            }
+          }
+
+          // Decimal Conversion
+          // Prisma often handles decimals better as strings or Decimal objects, but standard JSON only has number/string.
+          // If the field is known to be Decimal in schema, passing string is often safest for adapters.
+          // However, we rely on Prisma's auto-detection. The error `missing field kind` suggests
+          // that for some types, standard serialisation fails.
+          // We will pass primitive types (string, number, boolean, date) directly.
+
           cleanItem[key] = value;
         }
 
@@ -49,7 +71,8 @@ async function importSeedFile(filePath: string, modelName: string) {
       }
     } catch (error: any) {
       failed++;
-      if (failed < 10) {
+      // Log only first 5 failures to avoid flooding
+      if (failed <= 5) {
         console.warn(`⚠️ [${modelName}] Falha no ID ${item.id}:`, error.message);
       }
     }
@@ -66,13 +89,16 @@ async function main() {
 
   const files = fs.readdirSync(backupDir).filter((f) => f.endsWith(".json"));
 
+  // v98.5: Corrected Import Order
+  // JobFunction MUST prevent User (User.functionId -> JobFunction)
+  // Company before everything
   const order = [
     "companies",
+    "job-functions", // Moved up!
     "projects",
     "sites",
     "users",
     "auth-credentials",
-    "job-functions",
     "permission-levels",
     "permission-modules",
     "permission-matrix",
@@ -129,7 +155,7 @@ async function main() {
     }
   }
 
-  console.log("✨ Restauração v98.4 completa!");
+  console.log("✨ Restauração v98.5 completa!");
 }
 
 main()
