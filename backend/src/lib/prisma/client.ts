@@ -24,10 +24,10 @@ declare global {
  */
 export class OrionPgAdapter {
   readonly flavour = 'postgres'; // Prisma 6 Requirement?
-  readonly adapterName = 'orion-pg-adapter-v98.9';
+  readonly adapterName = 'orion-pg-adapter-v98.10';
 
   constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v98.9] Bridge forensic iniciada.`);
+    console.log(`[Adapter/v98.10] Bridge forensic iniciada.`);
   }
 
   // Helper Interno (pode ficar como método privado)
@@ -251,7 +251,7 @@ const createExtendedClient = (url: string) => {
     });
 
     const adapter = new OrionPgAdapter(pool);
-    console.log('🔌 [Prisma/v98.9] Adaptador Orion ativado com sucesso.');
+    console.log('🔌 [Prisma/v98.10] Adaptador Orion ativado com sucesso.');
 
     return new PrismaClient({
       adapter,
@@ -267,8 +267,23 @@ const createExtendedClient = (url: string) => {
 
 const globalForPrisma = global as unknown as { prisma: ExtendedPrismaClient };
 
-// v98.7: Inicialização (Pós-Hoisting)
-const dbUrl = process.env.DATABASE_URL;
+// v98.10: Database Name Normalizer
+// Garante que a aplicação conecte no mesmo banco que o script de reset (squarecloud)
+const fixDatabaseUrl = (url: string) => {
+  try {
+    const u = new URL(url.replace(/['"]/g, ""));
+    // Se não tiver path, ou for /, ou for /postgres, forçamos /squarecloud
+    if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres") {
+      u.pathname = "/squarecloud";
+      console.log(`[Prisma/v98.10] 🔄 URL Ajustada: Banco alvo definido para '/squarecloud'.`);
+    }
+    return u.toString();
+  } catch (e) { return url; }
+};
+
+// v98.9: Inicialização (Pós-Hoisting)
+const rawDbUrl = process.env.DATABASE_URL;
+const dbUrl = rawDbUrl ? fixDatabaseUrl(rawDbUrl) : undefined;
 
 export const prisma = globalForPrisma.prisma || (dbUrl ? createExtendedClient(dbUrl) : new PrismaClient());
 
