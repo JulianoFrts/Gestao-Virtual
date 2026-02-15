@@ -20,29 +20,12 @@ async function cleanDatabase() {
     }
 
     const sslConfig: any = { rejectUnauthorized: false };
-    const certsRoot = path.join(__dirname, '../../'); // Assumindo raiz do backend
-
-    const findPath = (f: string) => [
-        path.join(certsRoot, 'certificates', f),
-        path.join(certsRoot, f)
-    ].find(p => fs.existsSync(p));
-
-    const ca = findPath('ca-certificate.crt') || findPath('ca.crt');
-    if (ca) sslConfig.ca = fs.readFileSync(ca, 'utf8');
-
-    const cert = findPath('certificate.pem') || findPath('client.crt');
-    const key = findPath('private-key.key') || findPath('client.key');
-
-    if (cert && key) {
-        sslConfig.cert = fs.readFileSync(cert, 'utf8');
-        sslConfig.key = fs.readFileSync(key, 'utf8');
-        console.log("🛡️ Certificados mTLS carregados.");
-    }
+    // v178: SSL Simplificado (Removed Certs)
 
     const urlObj = new URL(dbUrl);
     const candidates = [
+        dbUrl.replace(/\/([^\/?]+)(\?|$)/, '/gestaodb$2'),
         dbUrl.replace(/\/([^\/?]+)(\?|$)/, '/squarecloud$2'),
-        dbUrl.replace(/\/([^\/?]+)(\?|$)/, '/admin$2'),
         dbUrl.replace(/\/([^\/?]+)(\?|$)/, '/postgres$2'),
         dbUrl
     ];

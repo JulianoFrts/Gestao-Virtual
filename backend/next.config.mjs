@@ -29,7 +29,7 @@ const nextConfig = {
   },
 
   // Forçar @prisma/client a ser tratado como pacote externo (não incluído no bundle)
-  serverExternalPackages: ["@prisma/client"],
+  serverExternalPackages: ["@prisma/client", "pg", "@prisma/adapter-pg"],
 
   // Injetar variáveis de ambiente para o Prisma
   env: {

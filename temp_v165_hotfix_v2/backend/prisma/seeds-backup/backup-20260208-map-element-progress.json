@@ -1,0 +1,32 @@
+[
+  {
+    "id": "5e4e3cd3-c097-4b77-b940-3e62fad9f7ec",
+    "projectId": "2d98c054-c97a-482d-bf93-9cda18267c60",
+    "elementId": "22615d62-95d7-45e1-a1e4-61d42a2bbe27",
+    "activityId": "82fa6a4a-e10c-446a-b6bd-ddc0fc229b95",
+    "currentStatus": "FINISHED",
+    "progressPercent": "100",
+    "startDate": "2026-02-05T03:00:00.000Z",
+    "endDate": "2026-02-19T03:00:00.000Z",
+    "history": [
+      {
+        "status": "FINISHED",
+        "metadata": {
+          "notes": "231321",
+          "leadName": "none",
+          "foremanName": "none",
+          "finalEndDate": "2026-02-19T03:00:00.000Z",
+          "finalStartDate": "2026-02-05T03:00:00.000Z"
+        },
+        "changedBy": "cmlclts6n0000qcw8lt33kopx",
+        "timestamp": "2026-02-07T21:35:36.833Z",
+        "progressPercent": 100
+      }
+    ],
+    "dailyProduction": {},
+    "requiresApproval": false,
+    "approvalReason": null,
+    "updatedAt": "2026-02-07T21:35:36.833Z",
+    "createdAt": "2026-02-07T21:35:36.840Z"
+  }
+]

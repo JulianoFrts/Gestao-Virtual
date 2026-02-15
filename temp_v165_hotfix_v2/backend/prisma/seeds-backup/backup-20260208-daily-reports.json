@@ -1,0 +1,55 @@
+[
+  {
+    "id": "5400268f-01a8-4355-8ab4-fe8c82001825",
+    "teamId": null,
+    "userId": "cmlaw6nim002un8w8pss76kpr",
+    "companyId": null,
+    "reportDate": "2026-02-06T00:00:00.000Z",
+    "activities": "dsadsadsa",
+    "observations": "dsadsadas",
+    "createdBy": null,
+    "localId": "7e463127-cd89-4234-94ed-fb4b3091e6dc",
+    "syncedAt": null,
+    "subPoint": null,
+    "subPointType": null,
+    "metadata": {},
+    "createdAt": "2026-02-06T13:21:38.531Z",
+    "updatedAt": "2026-02-06T13:21:38.531Z"
+  },
+  {
+    "id": "ca3913bd-dc2c-46e9-801c-75ce30df6e05",
+    "teamId": null,
+    "userId": "cmlaw6mrb000hn8w8ktanncz4",
+    "companyId": null,
+    "reportDate": "2026-02-06T00:00:00.000Z",
+    "activities": "dasdsa",
+    "observations": "321312321",
+    "createdBy": null,
+    "localId": "ddd441d4-916d-4241-871f-d09ed1c9bdcb",
+    "syncedAt": null,
+    "subPoint": null,
+    "subPointType": null,
+    "metadata": {},
+    "createdAt": "2026-02-06T15:16:24.349Z",
+    "updatedAt": "2026-02-06T15:16:24.349Z"
+  },
+  {
+    "id": "d029477a-9584-4fcc-913b-69113693a322",
+    "teamId": null,
+    "userId": "cmlcltsmp0017qcw8po25tva7",
+    "companyId": null,
+    "reportDate": "2026-02-08T00:00:00.000Z",
+    "activities": "dsadsadsa",
+    "observations": "dsadsadsa",
+    "createdBy": null,
+    "localId": "b899bd5f-f87c-4d16-b128-ef949a6cec85",
+    "syncedAt": null,
+    "subPoint": null,
+    "subPointType": null,
+    "metadata": {
+      "isMultiSelection": false
+    },
+    "createdAt": "2026-02-08T01:34:59.998Z",
+    "updatedAt": "2026-02-08T01:34:59.998Z"
+  }
+]

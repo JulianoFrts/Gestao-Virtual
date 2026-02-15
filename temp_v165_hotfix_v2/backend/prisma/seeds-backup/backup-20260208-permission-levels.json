@@ -1,0 +1,122 @@
+[
+  {
+    "id": "2186f504-7ff9-4fea-90a2-02a4e629fa95",
+    "name": "HELPER_SYSTEM",
+    "rank": 2000,
+    "description": "N??vel de acesso para HELPER_SYSTEM",
+    "isSystem": true,
+    "createdAt": "2026-02-06T12:29:25.034Z"
+  },
+  {
+    "id": "307f8165-b611-4dc5-912f-051244c9b796",
+    "name": "SUPER_ADMIN_GOD",
+    "rank": 1500,
+    "description": "N??vel de acesso para SUPER_ADMIN_GOD",
+    "isSystem": true,
+    "createdAt": "2026-02-06T12:29:25.063Z"
+  },
+  {
+    "id": "419cb33b-bf8f-4998-8b23-956fa3766824",
+    "name": "SOCIO_DIRETOR",
+    "rank": 1000,
+    "description": "N??vel de acesso para SOCIO_DIRETOR",
+    "isSystem": true,
+    "createdAt": "2026-02-06T12:29:25.068Z"
+  },
+  {
+    "id": "a88690ea-9c78-4de5-a2a9-7999bc074a5f",
+    "name": "ADMIN",
+    "rank": 950,
+    "description": "N??vel de acesso para ADMIN",
+    "isSystem": true,
+    "createdAt": "2026-02-06T12:29:25.072Z"
+  },
+  {
+    "id": "d6b17075-09c8-49c9-81e8-2aff5584b588",
+    "name": "TI_SOFTWARE",
+    "rank": 900,
+    "description": "N??vel de acesso para TI_SOFTWARE",
+    "isSystem": true,
+    "createdAt": "2026-02-06T12:29:25.077Z"
+  },
+  {
+    "id": "93306787-8eb4-4779-a8cd-33fbe9ad147e",
+    "name": "MODERATOR",
+    "rank": 850,
+    "description": "N??vel de acesso para MODERATOR",
+    "isSystem": true,
+    "createdAt": "2026-02-06T12:29:25.081Z"
+  },
+  {
+    "id": "7f96261a-a8b4-4c51-9c68-27263e5e8db9",
+    "name": "MANAGER",
+    "rank": 850,
+    "description": "N??vel de acesso para MANAGER",
+    "isSystem": true,
+    "createdAt": "2026-02-06T12:29:25.085Z"
+  },
+  {
+    "id": "b5a4017f-3ee5-484c-af4b-98026ca471f7",
+    "name": "GESTOR_PROJECT",
+    "rank": 800,
+    "description": "N??vel de acesso para GESTOR_PROJECT",
+    "isSystem": true,
+    "createdAt": "2026-02-06T12:29:25.090Z"
+  },
+  {
+    "id": "806511c8-6cae-4b9f-8bfa-53bdb3fc6e6f",
+    "name": "GESTOR_CANTEIRO",
+    "rank": 700,
+    "description": "N??vel de acesso para GESTOR_CANTEIRO",
+    "isSystem": true,
+    "createdAt": "2026-02-06T12:29:25.094Z"
+  },
+  {
+    "id": "106ec8e1-a538-476a-9479-1ef013f89b8b",
+    "name": "SUPERVISOR",
+    "rank": 600,
+    "description": "N??vel de acesso para SUPERVISOR",
+    "isSystem": true,
+    "createdAt": "2026-02-06T12:29:25.098Z"
+  },
+  {
+    "id": "2eb1ba4a-8f33-4a78-abb6-94164268053d",
+    "name": "TECHNICIAN",
+    "rank": 400,
+    "description": "N??vel de acesso para TECHNICIAN",
+    "isSystem": true,
+    "createdAt": "2026-02-06T12:29:25.103Z"
+  },
+  {
+    "id": "c2939e18-a20f-4e68-8029-66ab9aff6898",
+    "name": "OPERATOR",
+    "rank": 300,
+    "description": "N??vel de acesso para OPERATOR",
+    "isSystem": true,
+    "createdAt": "2026-02-06T12:29:25.107Z"
+  },
+  {
+    "id": "20a82357-345b-42f9-bfb8-caca95db955d",
+    "name": "WORKER",
+    "rank": 100,
+    "description": "N??vel de acesso para WORKER",
+    "isSystem": true,
+    "createdAt": "2026-02-06T12:29:25.112Z"
+  },
+  {
+    "id": "db1786f0-2816-4a19-9810-326da17ee937",
+    "name": "USER",
+    "rank": 100,
+    "description": "N??vel de acesso para USER",
+    "isSystem": true,
+    "createdAt": "2026-02-06T12:29:25.117Z"
+  },
+  {
+    "id": "b70f60ab-8b5a-4ce0-ad56-7eeb959f0f18",
+    "name": "VIEWER",
+    "rank": 50,
+    "description": "N??vel de acesso para VIEWER",
+    "isSystem": true,
+    "createdAt": "2026-02-06T12:29:25.124Z"
+  }
+]

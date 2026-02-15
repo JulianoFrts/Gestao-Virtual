@@ -1,0 +1,14 @@
+# Dockerignore - Front-End
+node_modules
+dist
+.git
+.vscode
+*.md
+Dockerfile
+docker-compose*
+.env*
+!.env.production
+
+#BACKUPS
+./backups
+./docs

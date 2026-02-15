@@ -1,0 +1,31 @@
+Nome,Email,Telefone,Cargo,Senha,CPF,Matricula
+João da Silva 1,joao.silva1@exemplo.com,11999990001,Pedreiro,123456,123.456.789-01,MAT-2025001
+Maria Oliveira 2,maria.oliveira2@exemplo.com,11999990002,Servente,123456,234.567.890-12,MAT-2025002
+Pedro Santos 3,pedro.santos3@exemplo.com,11999990003,Eletricista,123456,345.678.901-23,MAT-2025003
+Ana Souza 4,ana.souza4@exemplo.com,11999990004,Encarregado,123456,456.789.012-34,MAT-2025004
+Carlos Lima 5,carlos.lima5@exemplo.com,11999990005,Mestre de Obras,123456,567.890.123-45,MAT-2025005
+Paulo Ferreira 6,paulo.ferreira6@exemplo.com,11999990006,Pedreiro,123456,678.901.234-56,MAT-2025006
+Lucas Rodrigues 7,lucas.rodrigues7@exemplo.com,11999990007,Servente,123456,789.012.345-67,MAT-2025007
+Marcos Costa 8,marcos.costa8@exemplo.com,11999990008,Pintor,123456,890.123.456-78,MAT-2025008
+Fernanda Alves 9,fernanda.alves9@exemplo.com,11999990009,Pedreiro,123456,901.234.567-89,MAT-2025009
+Juliana Gomes 10,juliana.gomes10@exemplo.com,11999990010,Servente,123456,012.345.678-90,MAT-2025010
+Rafael Ribeiro 11,rafael.ribeiro11@exemplo.com,11999990011,Eletricista,123456,123.456.789-10,MAT-2025011
+Bruno Martins 12,bruno.martins12@exemplo.com,11999990012,Encarregado,123456,234.567.890-21,MAT-2025012
+Gabriel Carvalho 13,gabriel.carvalho13@exemplo.com,11999990013,Pedreiro,123456,345.678.901-32,MAT-2025013
+Mariana Almeida 14,mariana.almeida14@exemplo.com,11999990014,Servente,123456,456.789.012-43,MAT-2025014
+Amanda Lopes 15,amanda.lopes15@exemplo.com,11999990015,Pintor,123456,567.890.123-54,MAT-2025015
+Rodrigo Soares 16,rodrigo.soares16@exemplo.com,11999990016,Pedreiro,123456,678.901.234-65,MAT-2025016
+Luiz Fernandes 17,luiz.fernandes17@exemplo.com,11999990017,Servente,123456,789.012.345-76,MAT-2025017
+Antônio Vieira 18,antonio.vieira18@exemplo.com,11999990018,Eletricista,123456,890.123.456-87,MAT-2025018
+Francisco Barbosa 19,francisco.barbosa19@exemplo.com,11999990019,Encarregado,123456,901.234.567-98,MAT-2025019
+José Rocha 20,jose.rocha20@exemplo.com,11999990020,Pedreiro,123456,012.345.678-09,MAT-2025020
+Adriana Dias 21,adriana.dias21@exemplo.com,11999990021,Servente,123456,123.456.789-11,MAT-2025021
+Patrícia Nascimento 22,patricia.nascimento22@exemplo.com,11999990022,Pintor,123456,234.567.890-22,MAT-2025022
+Aline Andrade 23,aline.andrade23@exemplo.com,11999990023,Pedreiro,123456,345.678.901-33,MAT-2025023
+Camila Moreira 24,camila.moreira24@exemplo.com,11999990024,Servente,123456,456.789.012-44,MAT-2025024
+Bruna Nunes 25,bruna.nunes25@exemplo.com,11999990025,Eletricista,123456,567.890.123-55,MAT-2025025
+Diego Marques 26,diego.marques26@exemplo.com,11999990026,Encarregado,123456,678.901.234-66,MAT-2025026
+Tiago Machado 27,tiago.machado27@exemplo.com,11999990027,Pedreiro,123456,789.012.345-77,MAT-2025027
+Felipe Silva 28,felipe.silva28@exemplo.com,11999990028,Servente,123456,890.123.456-88,MAT-2025028
+Roberto Santos 29,roberto.santos29@exemplo.com,11999990029,Pintor,123456,901.234.567-99,MAT-2025029
+Eduardo Oliveira 30,eduardo.oliveira30@exemplo.com,11999990030,Pedreiro,123456,012.345.678-00,MAT-2025030

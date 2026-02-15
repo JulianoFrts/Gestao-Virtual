@@ -1,0 +1,14 @@
+# Dockerignore - Back-End
+node_modules
+.next
+out
+build
+.git
+.vscode
+*.md
+Dockerfile
+docker-compose*
+.env*
+!.env.production
+prisma/dev.db
+prisma/dev.db-journal

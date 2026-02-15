@@ -1,0 +1,202 @@
+[
+  {
+    "id": "7ae7a80a-0c12-49af-ae13-7f9f13e58900",
+    "code": "companies.view",
+    "name": "Visualizar Empresas",
+    "category": "Corporativo",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "d4e604b6-ac3b-4acb-ada3-ecbf937cc6db",
+    "code": "companies.manage",
+    "name": "Gerenciar Empresas",
+    "category": "Corporativo",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "b390f789-5427-4ba2-9515-e5fa20bc3a01",
+    "code": "team_composition",
+    "name": "Composi??o de Equipe",
+    "category": "Equipes",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "835d8027-7b17-4ffc-bfc2-14467bacbcad",
+    "code": "employees.manage",
+    "name": "Gest?o de Funcion?rios",
+    "category": "Equipes",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "133df59c-0c5d-4bc3-a098-02a69d8c4725",
+    "code": "gapo.view",
+    "name": "M?dulo GAPO",
+    "category": "Controle Avan?ado",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "42dac104-7af3-48b2-be6f-482a7a18d2a2",
+    "code": "costs.view",
+    "name": "Gest?o de Custos",
+    "category": "Produ??o",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "2d9a8228-4b4c-44fd-9f0b-82cc8330cc64",
+    "code": "production.analytics",
+    "name": "Analytics de Produ??o",
+    "category": "Produ??o",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "6b6a39cb-85d6-491b-a8a6-a817322a04bc",
+    "code": "viewer_3d.view",
+    "name": "Visualizador 3D",
+    "category": "Ferramentas",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "8c50a27f-5921-4e4c-9fbe-e4877c236bff",
+    "code": "users.manage",
+    "name": "Gest?o de Usu?rios",
+    "category": "Administra??o",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "61f16aef-67c9-4316-87ab-718c9d5b5be5",
+    "code": "custom_su.manage",
+    "name": "Configurar Matriz SU",
+    "category": "Administra??o",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "6c80a24c-74cb-4e5c-af5c-c0a384ab2fc0",
+    "code": "dashboard",
+    "name": "Painel Geral",
+    "category": "Geral",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "bd1e649a-34c2-4d97-a333-f6a0ff5eaf62",
+    "code": "clock",
+    "name": "Bate-ponto (C?mera)",
+    "category": "Ponto Eletr?nico",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "4f5f28f1-4848-436e-9f8a-230f800e008f",
+    "code": "clock.manual_id",
+    "name": "Ponto via Matr?cula",
+    "category": "Ponto Eletr?nico",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "9459e2c3-4669-40dd-9777-285501e0d35e",
+    "code": "daily_reports",
+    "name": "Relat?rios Di?rios",
+    "category": "Ponto Eletr?nico",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "0a7ef285-deff-4519-a9be-2e74357c80e3",
+    "code": "time_records.view",
+    "name": "Visualizar Registros",
+    "category": "Ponto Eletr?nico",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "d1a7663f-b393-4643-9a39-b6437f1ab995",
+    "code": "sites.view",
+    "name": "Visualizar Canteiros",
+    "category": "Corporativo",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "c6b73639-4afe-49ac-894e-e60f50742877",
+    "code": "projects.view",
+    "name": "Visualizar Obras",
+    "category": "Corporativo",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "74dbd69b-3aae-4e9c-9076-d68283963a70",
+    "code": "projects.manage",
+    "name": "Gerenciar Obras",
+    "category": "Corporativo",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "f67cb09f-4c85-488c-9c6e-8a5391f62812",
+    "code": "projects.progress",
+    "name": "Andamento de Projetos (Mapa)",
+    "category": "Graficos",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "458e46f3-c204-4124-9735-19258b41feb5",
+    "code": "work_progress.view",
+    "name": "Andamento da Obra (Graficos)",
+    "category": "Graficos",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "e072b609-c54d-4f41-8a19-e94966cab160",
+    "code": "audit_logs.view",
+    "name": "Logs de Auditoria",
+    "category": "Administra??o",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "f1d17e96-a48b-44e9-85c9-c98d5ab4c2fc",
+    "code": "db_hub.manage",
+    "name": "Database Hub",
+    "category": "Administra??o",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "b1a59edb-29d7-4b42-bca3-cf95b422dcdb",
+    "code": "settings.profile",
+    "name": "Editar Perfil",
+    "category": "Configura??es",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "7a82c5b1-1839-42b3-a1e6-80a6076dfb92",
+    "code": "settings.mfa",
+    "name": "Gerenciar MFA",
+    "category": "Configura??es",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  },
+  {
+    "id": "92263a54-94e5-4a11-bfb5-80e422442683",
+    "code": "support.ticket",
+    "name": "Chamados de Suporte",
+    "category": "Suporte",
+    "description": null,
+    "createdAt": "2026-02-06T12:19:01.121Z"
+  }
+]

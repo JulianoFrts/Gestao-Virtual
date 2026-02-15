@@ -1,81 +1,67 @@
 import { PrismaClient } from "@prisma/client";
-import fs from "fs";
-import path from "path";
 
-// v151: Naked Prisma (Reverting to v142 Success Pattern)
-// Removendo schema=public forçado para evitar "denied access".
-export type ExtendedPrismaClient = PrismaClient;
+// Estender o tipo do PrismaClient para incluir os novos modelos se o gerador falhar no reconhecimento
+export type ExtendedPrismaClient = PrismaClient & {
+  governanceAuditHistory: any;
+  routeHealthHistory: any;
+  projectPermissionDelegation: any;
+  permissionMatrix: any;
+  permissionLevel: any;
+  permissionModule: any;
+  taskQueue: any;
+};
 
 declare global {
   var prisma: ExtendedPrismaClient | undefined;
 }
 
-export class PrismaClientBuilder {
-  private static instance: ExtendedPrismaClient;
+const createPrismaClient = () => {
+  const connectionString = process.env.DATABASE_URL;
 
-  private static normalizeUrl(url: string): string {
-    if (!url) return "";
-    try {
-      const u = new URL(url.replace(/['"]/g, ""));
-      if (!u.port) {
-        const envPort = process.env.PGPORT || process.env.DB_PORT;
-        if (envPort) u.port = envPort;
-      }
-
-      u.pathname = "/squarecloud";
-
-      // v161: Forçando schema=public agressivamente para visibilidade das tabelas
-      u.searchParams.set('schema', 'public');
-      u.searchParams.set('sslmode', 'verify-ca');
-
-      const isSquare = fs.existsSync('/application');
-      const baseDir = isSquare ? '/application/backend' : process.cwd();
-
-      const getCertPath = (name: string) => {
-        const rootPath = path.join(baseDir, name);
-        const subPath = path.join(baseDir, 'certificates', name);
-        const certDir = path.join(baseDir, 'backend', 'certificates', name);
-
-        if (fs.existsSync(rootPath)) return rootPath;
-        if (fs.existsSync(subPath)) return subPath;
-        if (fs.existsSync(certDir)) return certDir;
-        return name;
-      };
-
-      // v151: Usando nomes extraídos pelo script de boot (client.crt, etc)
-      u.searchParams.set('sslcert', getCertPath('client.crt'));
-      u.searchParams.set('sslkey', getCertPath('client.key'));
-      u.searchParams.set('sslrootcert', getCertPath('ca.crt'));
-
-      return u.toString();
-    } catch (ignore) {
-      return url;
-    }
+  if (!connectionString) {
+    console.warn("⚠️ DATABASE_URL não definida. Retornando cliente vazio para fase de build.");
+    return new PrismaClient() as ExtendedPrismaClient;
   }
 
-  public static build(): ExtendedPrismaClient {
-    if (this.instance) return this.instance;
+  const maskedOriginal = connectionString.split('@')[1] || 'oculta';
+  console.log(`[Prisma] Inicializando Standard Client (sem Adapter) com URL: ${maskedOriginal}`);
 
-    const rawUrl = process.env.DATABASE_URL || "";
-    const normalizedUrl = this.normalizeUrl(rawUrl);
+  // O Prisma padrão lê automaticamente a DATABASE_URL do environment.
+  // A URL já contém sslmode e caminhos de certificado injetados pelo start.cjs.
 
-    try {
-      console.log(`🔌 [Prisma/v165] Schema Force Active (public).`);
+  return new PrismaClient({
+    log: ["error"],
+  }) as ExtendedPrismaClient;
+};
 
-      const client = new PrismaClient({
-        datasources: { db: { url: normalizedUrl } },
-        log: ["error"]
-      });
+// Singleton seguro
+const globalForPrisma = global as unknown as { prisma: ExtendedPrismaClient };
 
-      this.instance = client as any;
-      return this.instance;
-    } catch (err: any) {
-      console.error(`🚨 [Prisma/v151] Initialization error:`, err.message);
-      return new PrismaClient() as any;
-    }
+export const prisma = globalForPrisma.prisma || createPrismaClient();
+
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+
+export default prisma;
+
+// Funções auxiliares mantidas para compatibilidade
+export async function checkDatabaseConnection(): Promise<{
+  connected: boolean;
+  latency?: number;
+  error?: string;
+  dbName?: string;
+}> {
+  const startTime = Date.now();
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return { connected: true, latency: Date.now() - startTime };
+  } catch (error: any) {
+    return {
+      connected: false,
+      error: error instanceof Error ? error.message : "Erro desconhecido",
+    };
   }
 }
 
-const globalForPrisma = global as unknown as { prisma: ExtendedPrismaClient }
-export const prisma = globalForPrisma.prisma || PrismaClientBuilder.build();
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+export async function disconnectDatabase(): Promise<void> {
+  await prisma.$disconnect();
+}

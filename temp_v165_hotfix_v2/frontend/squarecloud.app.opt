@@ -1,0 +1,7 @@
+DISPLAY_NAME=Orion Frontend (Oto)
+DESCRIPTION=Interface do Sistema Orion - Versão Otimizada
+MAIN=server.cjs
+MEMORY=256
+VERSION=recommended
+SUBDOMAIN=gvirtual-app
+WEBSITE=true

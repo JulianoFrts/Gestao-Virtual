@@ -24,27 +24,17 @@ export async function POST(request: NextRequest) {
         try {
             const u = new URL(url.replace(/['"]/g, ""));
 
-            // 1. Normalização (P1010 Fix)
-            if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres" || u.pathname.toLowerCase() === "/gestao_db") {
-                u.pathname = "/squarecloud";
+            // 1. Normalização (v178 Fix)
+            if (!u.pathname || u.pathname === "/" || u.pathname.toLowerCase() === "/postgres" || u.pathname.toLowerCase() === "/squarecloud") {
+                u.pathname = "/gestaodb";
                 u.searchParams.set('schema', 'public');
             }
 
-            // 2. SSL/Cert Fallback Pattern
-            const paths = [
-                { cert: "/application/backend/certificates/certificate.pem", key: "/application/backend/certificates/private-key.key", ca: "/application/backend/certificates/ca-certificate.crt" },
-                { cert: "/application/backend/client.crt", key: "/application/backend/client.key", ca: "/application/backend/ca.crt" }
-            ];
-
-            let activePath = paths[0];
-            for (const p of paths) {
-                if (fs.existsSync(p.cert)) { activePath = p; break; }
-            }
-
-            u.searchParams.set('sslmode', 'verify-ca');
-            u.searchParams.set('sslcert', activePath.cert);
-            u.searchParams.set('sslkey', activePath.key);
-            u.searchParams.set('sslrootcert', activePath.ca);
+            // 2. SSL Simplificado (v178)
+            u.searchParams.set('sslmode', 'require');
+            u.searchParams.delete('sslcert');
+            u.searchParams.delete('sslkey');
+            u.searchParams.delete('sslrootcert');
 
             return u.toString();
         } catch (e) { return url; }
@@ -56,28 +46,9 @@ export async function POST(request: NextRequest) {
     const fs = require('fs');
     const path = require('path');
 
+    // v178: Simplificação (Sem mTLS)
     const getMtlsOptions = (url: string) => {
-        try {
-            const u = new URL(url);
-            const paths = [
-                { cert: "/application/backend/certificates/certificate.pem", key: "/application/backend/certificates/private-key.key", ca: "/application/backend/certificates/ca-certificate.crt" },
-                { cert: "/application/backend/client.crt", key: "/application/backend/client.key", ca: "/application/backend/ca.crt" }
-            ];
-
-            for (const p of paths) {
-                if (fs.existsSync(p.cert) && fs.existsSync(p.key)) {
-                    const ssl: any = {
-                        cert: fs.readFileSync(p.cert),
-                        key: fs.readFileSync(p.key),
-                        rejectUnauthorized: false,
-                        servername: u.hostname
-                    };
-                    if (fs.existsSync(p.ca)) ssl.ca = fs.readFileSync(p.ca);
-                    return ssl;
-                }
-            }
-            return { rejectUnauthorized: false, servername: u.hostname };
-        } catch (e) { return { rejectUnauthorized: false }; }
+        return { rejectUnauthorized: false };
     };
 
     const buildPoolConfig = (url: string) => {
@@ -88,7 +59,7 @@ export async function POST(request: NextRequest) {
                 password: decodeURIComponent(u.password),
                 host: u.hostname,
                 port: parseInt(u.port),
-                database: u.pathname.substring(1).split('?')[0] || 'squarecloud',
+                database: 'gestaodb', // v178: Forçado
                 ssl: getMtlsOptions(url),
                 connectionTimeoutMillis: 15000,
                 idleTimeoutMillis: 30000,
@@ -107,8 +78,8 @@ export async function POST(request: NextRequest) {
             console.log("🛡️ [v104] Supervisor de Permissões (Resiliência Ativa)...");
             const runSafe = async (q: string) => { try { await client.query(q); } catch (e: any) { console.warn(`⚠️ Ignorado (${q.split(' ')[0]}):`, e.message); } };
 
-            await runSafe('GRANT CONNECT ON DATABASE squarecloud TO squarecloud;');
-            await runSafe('GRANT ALL PRIVILEGES ON DATABASE squarecloud TO squarecloud;');
+            await runSafe('GRANT CONNECT ON DATABASE gestaodb TO squarecloud;');
+            await runSafe('GRANT ALL PRIVILEGES ON DATABASE gestaodb TO squarecloud;');
             await runSafe('CREATE SCHEMA IF NOT EXISTS public;');
             await runSafe('ALTER SCHEMA public OWNER TO squarecloud;');
             await runSafe('GRANT ALL ON SCHEMA public TO squarecloud;');

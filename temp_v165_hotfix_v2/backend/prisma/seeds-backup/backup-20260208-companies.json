@@ -1,0 +1,14 @@
+[
+  {
+    "id": "8233f349-110f-4795-a8ff-acef60f0fc58",
+    "name": "OrioN Energia S.A.",
+    "taxId": "12345678000199",
+    "address": "Paty do Alferes - RJ",
+    "phone": "99854544565",
+    "logoUrl": null,
+    "isActive": true,
+    "createdAt": "2026-02-07T17:44:54.704Z",
+    "updatedAt": "2026-02-07T23:38:32.389Z",
+    "jobFunctions": []
+  }
+]

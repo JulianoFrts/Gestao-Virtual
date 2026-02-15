@@ -180,8 +180,9 @@ async function probeAndStart() {
   const cleanUrlForProbe = (u) => u.split('?')[0];
 
   const candidates = [
-    connectionString.replace(/\/([^\/?]+)(\?|$)/, '/squarecloud$2'), // Prioridade 1
-    connectionString.replace(/\/([^\/?]+)(\?|$)/, '/admin$2'),       // Prioridade 2: Navicat mostrou admin
+  const candidates = [
+    connectionString.replace(/\/([^\/?]+)(\?|$)/, '/gestaodb$2'), // Prioridade 1 (v178)
+    connectionString.replace(/\/([^\/?]+)(\?|$)/, '/squarecloud$2'),
     connectionString.replace(/\/([^\/?]+)(\?|$)/, '/postgres$2'),    // Prioridade 3: Fallback
     connectionString                                                  // Original
   ];
@@ -196,7 +197,7 @@ async function probeAndStart() {
     // Configuração TLS relaxada para o Probe
     const probePool = new Pool({
       connectionString: cleanUrlForProbe(url),
-      ssl: { ...sslConfig, rejectUnauthorized: false },
+      ssl: { rejectUnauthorized: false },
       connectionTimeoutMillis: 5000
     });
 
@@ -211,32 +212,20 @@ async function probeAndStart() {
       client.release();
       await probePool.end();
 
-      if (dbName === 'squarecloud') break;
+      if (dbName === 'gestaodb') break;
     } catch (err) {
       console.log(`❌ Falha: ${err.message}`);
       await probePool.end();
     }
   }
 
-  // 🔥 Preparação de Certificados
+  // 🔥 Preparação de Certificados (IGNORADO v178)
   const absCert = path.join(__dirname, 'client.crt');
   const absKey = path.join(__dirname, 'client.key');
   const absCA = path.join(__dirname, 'ca.crt');
 
-  try {
-    if (fs.existsSync(clientCertPath)) fs.copyFileSync(clientCertPath, absCert);
-    if (fs.existsSync(clientKeyPath)) fs.copyFileSync(clientKeyPath, absKey);
-    if (fs.existsSync(caCertPath)) fs.copyFileSync(caCertPath, absCA);
-    fs.chmodSync(absCert, 0o644);
-    fs.chmodSync(absKey, 0o644);
-    fs.chmodSync(absCA, 0o644);
-    console.log('🔓 Chaves mTLS prontas.');
-  } catch (e) {
-    console.warn('⚠️ Erro certs:', e.message);
-  }
-
-  // URL para Aplicação (Full mTLS)
-  const sslParams = `&sslmode=verify-ca&sslcert=${absCert}&sslkey=${absKey}&sslrootcert=${absCA}`;
+  // URL para Aplicação (v178: Simplificado)
+  const sslParams = `&sslmode=require`;
   const cleanBaseUrl = finalUrl.split('?')[0];
   const finalAppUrl = `${cleanBaseUrl}?${sslParams.substring(1)}`;
 
@@ -249,7 +238,7 @@ async function probeAndStart() {
       PGPASSWORD: urlObj.password || 'XiDQiHYRqbA6eOPEABlOD40j',
       PGHOST: urlObj.hostname || 'square-cloud-db-968c164fe7f54e8495348c391f1f1afd.squareweb.app',
       PGPORT: urlObj.port || '7135',
-      PGDATABASE: urlObj.pathname.split('/')[1] || 'squarecloud'
+      PGDATABASE: 'gestaodb'
     };
   } catch (e) {
     console.warn('⚠️ Falha no parsing da URL via API. Usando fallbacks fixos.');
@@ -258,11 +247,11 @@ async function probeAndStart() {
       PGPASSWORD: 'XiDQiHYRqbA6eOPEABlOD40j',
       PGHOST: 'square-cloud-db-968c164fe7f54e8495348c391f1f1afd.squareweb.app',
       PGPORT: '7135',
-      PGDATABASE: 'squarecloud'
+      PGDATABASE: 'gestaodb'
     };
   }
 
-  console.log('📝 [V86] Ambiente Master Ativo (Cloudflare Armor + Shield Mode)...');
+  console.log('📝 [V178] Ambiente Master Ativo (Simplified SSL)...');
   try {
     // v86: Otimizado para Cloudflare + Square Cloud (Shield Active)
     const nextAuthUrl = process.env.NEXTAUTH_URL || 'https://gestao-api.squareweb.app';
@@ -275,10 +264,7 @@ async function probeAndStart() {
     ...process.env,
     ...pgEnvs,
     DATABASE_URL: finalAppUrl,
-    PGSSLCERT: absCert,
-    PGSSLKEY: absKey,
-    PGSSLROOTCERT: absCA,
-    PGSSLMODE: 'verify-ca',
+    PGSSLMODE: 'require',
     PRISMA_CLIENT_ENGINE_TYPE: 'library',
     PRISMA_CLI_QUERY_ENGINE_TYPE: 'library',
     PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK: '1',
