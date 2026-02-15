@@ -231,43 +231,61 @@ export async function POST(request: NextRequest) {
                     throw new Error("Sincronização falhou: Nenhuma tabela encontrada no schema public.");
                 }
 
-                // 5.5 GRANT NUCLEAR (v99.13) - Force Ownership & Privileges
-                console.log("🛡️ [v99.13] Aplicando Correção Nuclear de Permissões...");
+                // 5.5 ESTRATÉGIA SUPREMA (v99.20) - Force ALL Permissions
+                console.log("🛡️ [v99.20] Aplicando Estratégia de Permissões SUPREMA...");
                 try {
-                    // 1. Tentar assumir ownership do Schema (Crucial para Cloud DBs)
-                    await client.query('ALTER SCHEMA public OWNER TO squarecloud;');
-
-                    // 2. Garantir permissões básicas
-                    await client.query('GRANT USAGE, CREATE ON SCHEMA public TO squarecloud;');
+                    // Pre-Grant: Garantir que o banco aceite conexão
+                    await client.query('GRANT CONNECT ON DATABASE squarecloud TO squarecloud;');
                     await client.query('GRANT ALL PRIVILEGES ON DATABASE squarecloud TO squarecloud;');
 
-                    // 3. Forçar ownership de TODAS as tabelas (Loop Explícito)
+                    // Schema Public Ownership
+                    await client.query('ALTER SCHEMA public OWNER TO squarecloud;');
+                    await client.query('GRANT USAGE, CREATE ON SCHEMA public TO squarecloud;');
+                    await client.query('GRANT ALL ON SCHEMA public TO public;');
+
+                    // Tabelas e Sequências (Recursivo e Padrão)
+                    await client.query('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO squarecloud;');
+                    await client.query('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO squarecloud;');
+                    await client.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO squarecloud;');
+                    await client.query('ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO squarecloud;');
+
+                    // Role Public (Estratégia "Portas Abertas" v99.17)
+                    await client.query('GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO public;');
+                    await client.query('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO public;');
+
+                    // Forçar Ownership de cada objeto criado
                     await client.query(`
                         DO $$ DECLARE r RECORD;
                         BEGIN
                             FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
                                 EXECUTE 'ALTER TABLE public.' || quote_ident(r.tablename) || ' OWNER TO squarecloud';
-                                EXECUTE 'GRANT ALL PRIVILEGES ON TABLE public.' || quote_ident(r.tablename) || ' TO squarecloud';
+                            END LOOP;
+                            FOR r IN (SELECT relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind = 'S') LOOP
+                                EXECUTE 'ALTER SEQUENCE public.' || quote_ident(r.relname) || ' OWNER TO squarecloud';
                             END LOOP;
                         END $$;
                     `);
 
-                    // 4. Sequências (para IDs autoincrement)
-                    await client.query('GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO squarecloud;');
-
-                    console.log("☢️ [v99.13] Permissões nucleares aplicadas!");
-                } catch (nuclearErr: any) {
-                    console.warn("⚠️ Falha parcial no Nuclear Grant (esperado em ambientes restritos):", nuclearErr.message);
+                    console.log("☢️ [v99.20] Permissões supremas aplicadas!");
+                } catch (supremeErr: any) {
+                    console.warn("⚠️ Falha parcial no Supreme Grant:", supremeErr.message);
                 }
 
-                // 6. RESTORE (v97.7+)
+                // 6. RESTORE (v99.20)
                 console.log("📥 Iniciando restauração de dados...");
                 try {
-                    const restoreEnv = { ...process.env, DATABASE_URL: safeUrl };
-                    console.log("🔎 [RESTORE] Usando Connection String segura para o script...");
+                    // v99.20: Child Process URL RE-BUILD (Evitar Encoding excessivo)
+                    const u = new URL(dbUrl);
+                    u.pathname = "/squarecloud";
+                    const baseUrl = `${u.protocol}//${u.username}:${u.password}@${u.hostname}:${u.port}${u.pathname}`;
+
+                    // Construir a URL do restore de forma limpa
+                    const restoreUrl = `${baseUrl}?sslmode=verify-ca&sslcert=/application/backend/certificates/certificate.pem&sslkey=/application/backend/certificates/private-key.key&sslrootcert=/application/backend/certificates/ca-certificate.crt`;
+
+                    console.log("🔎 [RESTORE] Executando restore com URL Decoded.");
 
                     execSync('npx tsx src/scripts/restore-from-backup.ts', {
-                        env: restoreEnv,
+                        env: { ...process.env, DATABASE_URL: restoreUrl },
                         encoding: 'utf8',
                         maxBuffer: 20 * 1024 * 1024
                     });
