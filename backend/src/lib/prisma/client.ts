@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 import fs from "fs";
 import path from "path";
@@ -22,189 +23,7 @@ declare global {
  * v98.5: Orion PG Adapter - Forensic Mode
  * Dump total de OIDs e tradução bruta sem filtros.
  */
-export class OrionPgAdapter {
-  readonly flavour = 'postgres';
-  readonly provider = 'postgres'; // Compatibility
-  readonly adapterName = 'orion-pg-adapter-v99.9';
-
-  constructor(private pool: pg.Pool) {
-    console.log(`[Adapter/v99.9] Bridge forensic iniciada.`);
-  }
-
-  // Métodos Auxiliares
-  private mapColumnType(oid: number, fieldName?: string): any {
-    let kind = 6; // Default Text
-    switch (oid) {
-      case 16: kind = 5; break; // Bool
-      case 21:
-      case 23: kind = 0; break; // Int32
-      case 20: kind = 1; break; // Int64
-      case 700: kind = 2; break; // Float
-      case 701: kind = 3; break; // Double
-      case 1700: kind = 4; break; // Numeric
-      case 114:
-      case 3802: kind = 11; break; // Json
-      case 1082:
-      case 1114:
-      case 1184:
-      case 2950:
-      case 18:
-      case 25:
-      case 1043: kind = 6; break; // Text/UUID/Date
-    }
-    return { kind };
-  }
-
-  private translateEnum(fieldName: string, val: any): any {
-    const roleMap: Record<string, string> = {
-      'S': 'SUPER_ADMIN',
-      'A': 'ADMIN',
-      'U': 'USER',
-      'W': 'WORKER',
-      'T': 'TECHNICIAN',
-      'G': 'GUEST',
-      'M': 'MANAGER'
-    };
-
-    if (typeof val === 'string') {
-      const trimmed = val.trim().toUpperCase();
-      if (trimmed.length === 1) {
-        const mapped = roleMap[trimmed];
-        if (mapped) return mapped;
-      }
-    }
-    return val;
-  }
-
-  private serializeValue(val: any, oid: number, fieldName: string): any {
-    if (val === null || val === undefined) return null;
-
-    if (typeof val === 'string' && val.trim().length === 1) {
-      console.log(`[Adapter/v98.12] 🛡️ INTERCEPT: [${fieldName}] Raw='${val}' OID=${oid}`);
-    }
-
-    const translated = this.translateEnum(fieldName, val);
-    return translated;
-  }
-
-  // v99.9: Standard Methods (KISS)
-  async query(params: any): Promise<any> {
-    try {
-      const res = await this.pool.query(params.sql, params.args);
-
-      if (params.sql.toLowerCase().includes('auth_credentials') || params.sql.toLowerCase().includes('select')) {
-        const fieldDesc = res.fields.map(f => `${f.name}(${f.dataTypeID})`).join(', ');
-      }
-
-      return {
-        ok: true,
-        fields: res.fields.map((field) => ({
-          name: field.name,
-          columnType: this.mapColumnType(field.dataTypeID, field.name),
-        })),
-        rows: res.rows.map((row: any) => {
-          const serializedRow: any[] = [];
-          for (const field of res.fields) {
-            const val = row[field.name];
-            serializedRow.push(this.serializeValue(val, field.dataTypeID, field.name));
-          }
-          return serializedRow;
-        }),
-      };
-    } catch (err: any) {
-      console.error(`❌ [Adapter/v99.9] Query Error:`, err.message);
-      return { ok: false, error: err };
-    }
-  }
-
-  async execute(params: any): Promise<any> {
-    try {
-      if (params.sql.trim().toUpperCase().startsWith('CREATE') || params.sql.trim().toUpperCase().startsWith('DROP')) {
-        console.log(`[Adapter/v99.9] 🛡️ DDL Detectado.`);
-      }
-      const res = await this.pool.query(params.sql, params.args);
-      return { ok: true, value: res.rowCount || 0 };
-    } catch (err: any) {
-      console.error(`❌ [Adapter/v99.9] Execute Error:`, err.message);
-      return { ok: false, error: err };
-    }
-  }
-
-  async startTransaction() {
-    const client = await this.pool.connect();
-    const adapter = this;
-
-    try {
-      await client.query('BEGIN');
-    } catch (err) {
-      client.release();
-      throw err;
-    }
-
-    return {
-      pk: '',
-      options: { isolationLevel: 'Serializable', readOnly: false } as any,
-      query: async (params: any) => {
-        try {
-          const res = await client.query(params.sql, params.args);
-          return {
-            ok: true,
-            fields: res.fields.map((field) => ({
-              name: field.name,
-              columnType: adapter.mapColumnType(field.dataTypeID, field.name),
-            })),
-            rows: res.rows.map((row: any) => {
-              const serializedRow: any[] = [];
-              for (const field of res.fields) {
-                const val = row[field.name];
-                serializedRow.push(adapter.serializeValue(val, field.dataTypeID, field.name));
-              }
-              return serializedRow;
-            }),
-          };
-        } catch (err: any) {
-          return { ok: false, error: err };
-        }
-      },
-      execute: async (params: any) => {
-        try {
-          const res = await client.query(params.sql, params.args);
-          return { ok: true, value: res.rowCount || 0 };
-        } catch (err: any) {
-          return { ok: false, error: err };
-        }
-      },
-      commit: async () => {
-        try { await client.query('COMMIT'); } finally { client.release(); }
-        return { ok: true, value: undefined };
-      },
-      rollback: async () => {
-        try { await client.query('ROLLBACK'); } finally { client.release(); }
-        return { ok: true, value: undefined };
-      },
-      dispose: async () => {
-        client.release();
-        return { ok: true, value: undefined };
-      }
-    };
-  }
-
-  // Métodos Extras que o Prisma pode estar buscando
-  close = async () => {
-    // Não fechamos o pool global, mas satisfazemos a interface
-    return { ok: true, value: undefined };
-  }
-
-  dispose = async () => {
-    return { ok: true, value: undefined };
-  }
-
-  // Métodos de EventEmitter (Stubbing para Prisma)
-  on = (event: string, listener: (...args: any[]) => void): this => { return this; }
-  addListener = (event: string, listener: (...args: any[]) => void): this => { return this; }
-  removeListener = (event: string, listener: (...args: any[]) => void): this => { return this; }
-  emit = (event: string, ...args: any[]): boolean => { return true; }
-}
+// Custom Adapter Removido em favor do oficial v6.3.0
 
 // Helper Hoisted
 // v99.10: Helper SSL Robusto (Restored)
@@ -220,18 +39,20 @@ function getSSLConfig(connectionString: string) {
       return fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : null);
     };
 
-    const certPath = findPath('certificate.pem') || findPath('client.crt');
-    const keyPath = findPath('private-key.key') || findPath('client.key');
-    const caPath = findPath('ca-certificate.crt') || findPath('ca.crt');
+    const certPath = findPath('certificate.pem') || findPath('client.crt') || findPath('client.pem');
+    const keyPath = findPath('private-key.key') || findPath('client.key') || findPath('private.key');
+    const caPath = findPath('ca-certificate.crt') || findPath('ca.crt') || findPath('root.crt');
 
     if (certPath && keyPath) {
       sslConfig.cert = fs.readFileSync(certPath, 'utf8');
       sslConfig.key = fs.readFileSync(keyPath, 'utf8');
-      console.log(`🛡️ [Prisma/v99.10] mTLS Carregado: ${certPath}`);
+      console.log(`🛡️ [Prisma/v99.21] mTLS Carregado: ${certPath}`);
       if (caPath) {
         sslConfig.ca = fs.readFileSync(caPath, 'utf8');
-        console.log(`📜 [Prisma/v99.10] CA Bundle Carregado: ${caPath}`);
+        console.log(`📜 [Prisma/v99.21] CA Bundle Carregado: ${caPath}`);
       }
+    } else {
+      console.warn(`⚠️ [Prisma/v99.21] Certificados não encontrados em ${certsRoot}.`);
     }
   } catch (e) {
     console.warn(`⚠️ [Prisma/v99.10] Erro lendo certificados:`, e);
@@ -242,10 +63,9 @@ function getSSLConfig(connectionString: string) {
 // v99.3: Factory com Configuração Híbrida
 const createExtendedClient = (url: string) => {
   try {
-    // v99.18: Re-enable Adapter with mTLS Pool
-    console.log('🔌 [Prisma/v99.18] Reativando OrionPgAdapter (mTLS Bridge).');
+    // v99.23: Official PrismaPg Adapter
+    console.log('🔌 [Prisma/v99.23] Usando PrismaPg oficial (mTLS Bridge).');
 
-    // Criar Pool com SSL robusto
     const ssl = getSSLConfig(url);
     const pool = new pg.Pool({
       connectionString: url,
@@ -255,15 +75,15 @@ const createExtendedClient = (url: string) => {
       connectionTimeoutMillis: 5000
     });
 
-    const adapter = new OrionPgAdapter(pool);
+    const adapter = new PrismaPg(pool);
 
     return new PrismaClient({
       adapter: adapter as any,
       log: ["error"]
-    }) as ExtendedPrismaClient;
+    }) as unknown as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v99] Erro fatal na factory:`, err.message);
-    return new PrismaClient() as ExtendedPrismaClient;
+    console.warn(`⚠️ [Prisma/v99.23] Erro fatal na factory:`, err.message);
+    return new PrismaClient() as unknown as ExtendedPrismaClient;
   }
 };
 
