@@ -72,7 +72,13 @@ console.log('🚀 GESTÃO VIRTUAL — Servidor Unificado');
 console.log('==================================================');
 console.log(`📦 Backend Dir: ${backendDir}`);
 console.log(`📦 Frontend Dist: ${frontendDistDir}`);
-console.log(`🛠️ Flags: NUKE=${process.env.FORCE_NUKE_DB === 'true'}, RESTORE=${process.env.RESTORE_BACKUP === 'true'}`);
+console.log('');
+console.log('--------------------------------------------------');
+console.log('🛠️  CONFIGURAÇÃO DE BANCO DE DADOS:');
+console.log(`🔥 FORCE_NUKE_DB : ${process.env.FORCE_NUKE_DB === 'true' ? '✅ ATIVO (CUIDADO!)' : '❌ Inativo'}`);
+console.log(`📥 RESTORE_BACKUP: ${process.env.RESTORE_BACKUP === 'true' ? '✅ ATIVO' : '❌ Inativo'}`);
+console.log('--------------------------------------------------');
+console.log('');
 
 // ==========================================
 // 1. INSTALAR DEPENDÊNCIAS

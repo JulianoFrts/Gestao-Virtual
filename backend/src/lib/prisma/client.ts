@@ -63,7 +63,9 @@ export class OrionPgAdapter {
   }
 
   /**
-   * Tradutor de Roles Legadas: Se o banco retornar letras, convertemos para o Enum do Prisma.
+   * v96.5: Universal Enum Bridge
+   * Agora converte 'S', 'A', 'U' etc. em QUALQUER campo, 
+   * eliminando erros de inconsistência mesmo quando o nome do campo varia.
    */
   private translateEnum(fieldName: string, val: any): any {
     const roleMap: Record<string, string> = {
@@ -79,8 +81,7 @@ export class OrionPgAdapter {
     if (typeof val === 'string' && val.length === 1) {
       const mapped = roleMap[val.toUpperCase()];
       if (mapped) {
-        // Logamos sempre que houver uma tradução para confirmar que o bridge está agindo
-        console.log(`[Adapter/v96] 🔄 Auto-Tradução: ${fieldName} ('${val}' -> '${mapped}')`);
+        console.log(`[Adapter/v96.5] 🔄 Auto-Tradução Universal: ${fieldName} ('${val}' -> '${mapped}')`);
         return mapped;
       }
     }
@@ -90,20 +91,20 @@ export class OrionPgAdapter {
   private serializeValue(val: any, oid: number, fieldName: string): any {
     if (val === null || val === undefined) return null;
 
-    // Tratamento de Enums
+    // Tradução Universal
     const translated = this.translateEnum(fieldName, val);
 
-    // Diagnóstico Crítico: Se for uma string de 1 caractere, logamos para saber por que o 'S' está passando
+    // Inspeção Profunda (Aparece no log se o valor for suspeito)
     if (typeof translated === 'string' && translated.length === 1) {
-      console.log(`[Adapter/v96] 🔍 Inspect: Field '${fieldName}' = '${translated}' (OID: ${oid})`);
+      console.log(`[Adapter/v96.5] 🔍 Inspect [${fieldName}]: Value='${translated}' OID=${oid}`);
     }
 
-    // Diagnóstico de Alerta: Se o valor ainda for um dos problemáticos após a tradução
+    // Diagnóstico de Alerta
     if (typeof translated === 'string' && translated.length === 1 && ['S', 'A', 'U'].includes(translated.toUpperCase())) {
-      console.log(`[Adapter/v96] ⚠️ Alerta: Valor bruto detectado em '${fieldName}': '${translated}' (OID: ${oid})`);
+      console.log(`[Adapter/v96.5] ⚠️ Alerta Crítico: Valor bruto escapou em '${fieldName}': '${translated}' (OID: ${oid})`);
     }
 
-    // Serialização Quaint
+    // Serialização Quaint (Prisma 6)
     if (oid === 20 || oid === 1700) return translated.toString();
     if (translated instanceof Date) return translated.toISOString();
     if (oid === 16) return !!translated;
@@ -134,7 +135,7 @@ export class OrionPgAdapter {
         }
       };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v96] Query Error:`, err.message);
+      console.error(`❌ [Adapter/v96.5] Query Error:`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -144,7 +145,7 @@ export class OrionPgAdapter {
       const res = await this.pool.query(params.sql, params.args);
       return { ok: true, value: res.rowCount || 0 };
     } catch (err: any) {
-      console.error(`❌ [Adapter/v96] Execute Error:`, err.message);
+      console.error(`❌ [Adapter/v96.5] Execute Error:`, err.message);
       return { ok: false, error: err };
     }
   }
@@ -206,7 +207,7 @@ const buildPrismaWithFallback = (url: string) => {
       log: ["error"],
     } as any) as ExtendedPrismaClient;
   } catch (err: any) {
-    console.warn(`⚠️ [Prisma/v96] Falha Crítica. Usando Modo Nativo.`);
+    console.warn(`⚠️ [Prisma/v96.5] Falha Crítica. Usando Modo Nativo.`);
     return new PrismaClient({ datasources: { db: { url } } }) as ExtendedPrismaClient;
   }
 };
@@ -224,7 +225,7 @@ export const prisma = new Proxy({} as any, {
   get: (target, prop) => {
     if (typeof prop === 'symbol') return (target as any)[prop];
     const p = prop as string;
-    if (p === '$state') return { v: "96", status: (globalThis as any).prismaInstance ? 'active' : 'idle' };
+    if (p === '$state') return { v: "96.5", status: (globalThis as any).prismaInstance ? 'active' : 'idle' };
     if (['$$typeof', 'constructor', 'toJSON', 'then', 'inspect'].includes(p)) return undefined;
 
     try {
@@ -236,7 +237,7 @@ export const prisma = new Proxy({} as any, {
       }
       return value;
     } catch (err: any) {
-      console.error(`❌ [Prisma/v96] Proxy Error '${p}':`, err.message);
+      console.error(`❌ [Prisma/v96.5] Proxy Error '${p}':`, err.message);
       return undefined;
     }
   }
@@ -257,7 +258,7 @@ const getSSLConfig = (connectionString: string) => {
     if (cert && key) {
       sslConfig.cert = fs.readFileSync(cert, 'utf8');
       sslConfig.key = fs.readFileSync(key, 'utf8');
-      console.log('🛡️ [Prisma/v96] mTLS v96 Ativo.');
+      console.log('🛡️ [Prisma/v96.5] mTLS v96.5 Ativo.');
     }
   }
   return sslConfig;
