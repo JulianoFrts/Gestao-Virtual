@@ -2,9 +2,29 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./frontend/src/*"]
-    }
+      "@frontend/*": [
+        "./frontend/src/*"
+      ],
+      "@backend/*": [
+        "./backend/src/*"
+      ]
+    },
+    "skipLibCheck": true,
+    "moduleResolution": "bundler"
   },
-  "references": [{ "path": "./frontend/tsconfig.json" }],
-  "exclude": ["node_modules", "frontend/node_modules"]
+  "references": [
+    {
+      "path": "./frontend/tsconfig.json"
+    },
+    {
+      "path": "./backend/tsconfig.json"
+    }
+  ],
+  "exclude": [
+    "node_modules",
+    "frontend/node_modules",
+    "backend/node_modules",
+    "dist",
+    "archives"
+  ]
 }
