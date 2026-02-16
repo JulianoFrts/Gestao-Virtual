@@ -278,7 +278,6 @@ export default function AuditLogs() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyProgress, setHistoryProgress] = useState(0);
   const [historyTotal, setHistoryTotal] = useState(0);
-  const [showPlaywright, setShowPlaywright] = useState(false);
   const historyEventSource = React.useRef<EventSource | null>(null);
 
   // Estados para Streaming em Tempo Real
@@ -1371,24 +1370,19 @@ export default function AuditLogs() {
                 <CardDescription className="text-amber-500/60 font-bold uppercase text-[10px] tracking-widest">
                   Análise estática de código para conformidade estrutural.
                 </CardDescription>
-                <CardDescription className="text-amber-500/60 font-bold uppercase text-[10px] tracking-widest">
-                  Análise estática de código para conformidade estrutural.
-                </CardDescription>
               </div>
-
-              {/* Left Side Controls (Filters & Scan) */}
-              <div className="flex flex-1 items-center gap-3 overflow-x-auto pb-2 md:pb-0">
+              <div className="flex w-full md:w-auto items-center gap-3">
                 {/* Date Picker */}
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       variant={"outline"}
                       className={cn(
-                        "w-[180px] justify-start text-left font-normal border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10 text-amber-100 h-9 text-xs",
+                        "w-[240px] justify-start text-left font-normal border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10 text-amber-100",
                         !dateRange && "text-muted-foreground",
                       )}
                     >
-                      <CalendarIcon className="mr-2 h-3.5 w-3.5 text-amber-500" />
+                      <CalendarIcon className="mr-2 h-4 w-4 text-amber-500" />
                       {dateRange?.from ? (
                         dateRange.to ? (
                           <>
@@ -1403,7 +1397,7 @@ export default function AuditLogs() {
                       )}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
+                  <PopoverContent className="w-auto p-0" align="end">
                     <Calendar
                       initialFocus
                       mode="range"
@@ -1416,7 +1410,7 @@ export default function AuditLogs() {
                 </Popover>
 
                 {/* Order Select */}
-                <div className="w-[160px]">
+                <div className="w-[200px]">
                   <Select
                     onValueChange={(val) => {
                       const [key, dir] = val.split("-");
@@ -1427,9 +1421,22 @@ export default function AuditLogs() {
                     }}
                     defaultValue="lastDetectedAt-desc"
                   >
-                    <SelectTrigger className="border-amber-500/20 bg-amber-500/5 text-amber-100 h-9 text-xs">
+                    <SelectTrigger className="border-amber-500/20 bg-amber-500/5 text-amber-100">
                       <SelectValue placeholder="Ordenação" />
                     </SelectTrigger>
+                    {/* Barra de Progresso do Histórico */}
+                    {isLoadingHistory && (
+                      <div className="absolute top-14 right-0 w-full md:w-[450px] z-20 bg-black/80 backdrop-blur-md p-3 rounded-xl border border-amber-500/30 shadow-2xl">
+                        <div className="flex items-center justify-between w-full text-[10px] font-mono text-amber-500 mb-1.5 uppercase tracking-widest">
+                          <span className="animate-pulse">Sincronizando Relatório...</span>
+                          <div className="flex gap-2">
+                            <span className="text-white">{auditResults.length}/{historyTotal || "?"}</span>
+                            <span className="font-bold text-amber-400">({historyProgress || 0}%)</span>
+                          </div>
+                        </div>
+                        <Progress value={historyProgress || 0} className="h-1.5 w-full bg-amber-500/10" />
+                      </div>
+                    )}
                     <SelectContent>
                       <SelectItem value="lastDetectedAt-desc">
                         Mais Recentes
@@ -1449,48 +1456,8 @@ export default function AuditLogs() {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-            </CardHeader>
 
-              {/* Right Side Controls (Live & Playwright) */}
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={handleRunStreamingScan}
-                  disabled={isStreaming || isAuditing}
-                  className={cn(
-                    "relative overflow-hidden group border h-9 px-4 text-xs font-black uppercase tracking-widest transition-all shadow-lg hover:shadow-green-500/20",
-                    isStreaming
-                      ? "bg-green-500/20 text-green-400 border-green-500/50" // Active state
-                      : "bg-green-600 hover:bg-green-500 text-white border-green-400", // Idle state (Green button)
-                  )}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-                  {isStreaming ? (
-                    <>
-                      <span className="relative flex h-2 w-2 mr-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                      </span>
-                      Scan em Curso...
-                    </>
-                  ) : (
-                    <>
-                      <Play className="mr-2 h-3.5 w-3.5 fill-current" />
-                      Ao Vivo
-                    </>
-                  )}
-                </Button>
-
-                <Button
-                  onClick={() => setShowPlaywright(!showPlaywright)}
-                  className="bg-purple-600 hover:bg-purple-500 text-white border border-purple-400 h-9 px-4 text-xs font-black uppercase tracking-widest shadow-lg hover:shadow-purple-500/20 transition-all relative overflow-hidden group"
-                >
-                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-                  <Play className="mr-2 h-3.5 w-3.5 fill-current" />
-                  Playwright
-                </Button>
-              </div>
-
+                <div className="relative flex-1 md:w-64">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-500/50" />
                   <Input
                     placeholder="Filtrar arquivos ou violações..."
