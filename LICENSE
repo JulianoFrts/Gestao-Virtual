@@ -1,24 +1,55 @@
-This is free and unencumbered software released into the public domain.
+📜 Licença Proprietária
 
-Anyone is free to copy, modify, publish, use, compile, sell, or
-distribute this software, either in source code form or as a compiled
-binary, for any purpose, commercial or non-commercial, and by any
-means.
+Copyright © 2026 Juliano Freitas de Moraes
+Todos os direitos reservados.
 
-In jurisdictions that recognize copyright laws, the author or authors
-of this software dedicate any and all copyright interest in the
-software to the public domain. We make this dedication for the benefit
-of the public at large and to the detriment of our heirs and
-successors. We intend this dedication to be an overt act of
-relinquishment in perpetuity of all present and future rights to this
-software under copyright law.
+🔐 Aviso Legal
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
-OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-OTHER DEALINGS IN THE SOFTWARE.
+O software Gestão Virtual Online é um sistema proprietário de uso restrito, desenvolvido para gestão empresarial, operacional e estratégica aplicada ao setor de engenharia elétrica, subestações, linhas de transmissão de energia e empreendimentos eólicos.
 
-For more information, please refer to <https://unlicense.org>
+Este software e todo o seu código-fonte, arquitetura, estrutura de banco de dados, APIs, interfaces, documentação, identidade visual e demais componentes associados são propriedade exclusiva de Juliano Freitas de Moraes.
+
+🚫 Restrições
+
+É expressamente proibido, sem autorização formal e por escrito do titular:
+
+Copiar total ou parcialmente o código-fonte
+
+Modificar, adaptar ou criar obras derivadas
+
+Distribuir, sublicenciar ou comercializar
+
+Disponibilizar o sistema publicamente
+
+Realizar engenharia reversa
+
+Reproduzir a arquitetura ou lógica de negócio
+
+🏢 Uso Autorizado
+
+O uso deste software é restrito às entidades, colaboradores ou clientes formalmente autorizados mediante contrato específico.
+
+A utilização indevida poderá acarretar:
+
+Responsabilidade civil
+
+Penalidades contratuais
+
+Medidas judiciais cabíveis
+
+🛡️ Garantias e Responsabilidade
+
+O software é fornecido conforme contrato específico de prestação de serviços ou licenciamento.
+O autor não se responsabiliza por uso indevido, modificações não autorizadas ou integrações realizadas sem consentimento técnico.
+
+📩 Contato
+
+Solicitações de licenciamento, uso comercial ou integração devem ser encaminhadas para:
+
+Juliano Freitas de Moraes
+https://github.com/JulianoFrts
+
+🔒 Observação Importante
+
+Este repositório é privado.
+O acesso não implica cessão de direitos.
