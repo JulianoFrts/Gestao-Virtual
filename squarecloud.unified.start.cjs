@@ -399,8 +399,8 @@ async function syncSchemaAndSeeds(commonEnv, finalAppUrl, finalNakedUrl, success
         shouldNuke ||
         process.env.RUN_SEEDS === 'true' ||
         process.env.FORCE_DB_PUSH === 'true' ||
-        process.env.FORCE_SEED === 'true' ||
-        isNeon // Forçar check no Neon sempre (o prisma db push é rápido se nada mudou)
+        process.env.FORCE_SEED === 'true'
+        // isNeon // Check for Neon removed as requested
     );
 
     console.log(`🛡️ [v200] EXECUTANDO BOOSTER SQL NO BANCO DESTINO: ${isNeon ? 'NEON' : 'SQUARE'}...`);

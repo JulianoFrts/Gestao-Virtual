@@ -26,7 +26,7 @@ legacyPaths.forEach(p => {
     try {
       fs.rmSync(fullPath, { recursive: true, force: true });
     } catch (e) {
-      console.warn(`⚠️ Não foi possível remover1 ${p}:`, e.message);
+      console.warn(`⚠️ Não foi possível remover ${p}:`, e.message);
     }
   }
 });
