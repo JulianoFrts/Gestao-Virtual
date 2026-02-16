@@ -7,13 +7,13 @@ async function main() {
   const repository = new PrismaGovernanceRepository();
   const governanceService = new GovernanceService(repository);
   const auditor = new ArchitecturalAuditor(governanceService);
-  
+
   try {
     const { results: auditResults } = await auditor.runFullAudit();
 
     const count = auditResults.length;
     if (count > 0) {
-      console.log("\n--- RESUMO DA AUDITORIA ---");
+      console.log("\n---  RESUMO DA AUDITORIA  ---");
       console.log(`Total de apontamentos: ${count}`);
     }
   } catch (error) {
