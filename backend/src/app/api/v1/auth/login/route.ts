@@ -29,44 +29,60 @@ const loginSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const parseResult = await parseLoginRequest(request);
-    if (parseResult.error)
-      return NextResponse.json({ error: parseResult.error, issues: parseResult.issues }, { status: HTTP_STATUS.BAD_REQUEST });
+
+    if (parseResult.error) {
+      return NextResponse.json(
+        { error: parseResult.error, issues: parseResult.issues },
+        { status: HTTP_STATUS.BAD_REQUEST }
+      );
+    }
 
     const { email, password } = parseResult.data!;
-
     logger.info("Tentativa de login recebida", { email: email.substring(0, 3) + "..." });
 
-    try {
-      const user = await authService.verifyCredentials(email, password);
-      if (!user) {
-        logger.warn("Credenciais inválidas", { email: email.substring(0, 3) + "..." });
-        return NextResponse.json({ error: "Credenciais inválidas" }, { status: HTTP_STATUS.UNAUTHORIZED });
-      }
+    const result = await executeLogin(email, password);
 
-      logger.info("Usuário verificado no banco. Gerando token...", { userId: user.id });
+    if (result.error) {
+      return NextResponse.json({ error: result.error }, { status: HTTP_STATUS.UNAUTHORIZED });
+    }
 
-      // 4. Gerar Token JWT via Helper
-      const token = await generateToken({
-        id: user.id!,
-        email: user.email!,
-        name: user.name!,
-        role: user.role!,
-        status: user.status!,
-        companyId: undefined,
-        projectId: undefined,
-      });
+    return NextResponse.json(result.data);
 
-      logger.info("Login realizado com sucesso", { email: email.substring(0, 3) + "...", userId: user.id });
+  } catch (error: any) {
+    logger.error("Erro no endpoint de login legado", { error });
+    return handleApiError(error, "src/app/api/v1/auth/login/route.ts#POST");
+  }
+}
 
-      // 3. Calcular permissões efetivas para o frontend
-      const permissions = await userService.getPermissionsMap(
-        user.role!,
-        user.id,
-        undefined // Token não deve ser passado aqui
-      );
-      // 5. Retornar dados no formato esperado pelo frontend legado + novas permissões
-      // 5. Retornar dados no formato direto (plano) esperado pelo frontend legado
-      return NextResponse.json({
+async function executeLogin(email: string, password: string) {
+  try {
+    const user = await authService.verifyCredentials(email, password);
+
+    if (!user) {
+      logger.warn("Credenciais inválidas", { email: email.substring(0, 3) + "..." });
+      return { error: "Credenciais inválidas" };
+    }
+
+    logger.info("Usuário verificado no banco. Gerando token...", { userId: user.id });
+
+    const token = await generateToken({
+      id: user.id!,
+      email: user.email!,
+      name: user.name!,
+      role: user.role!,
+      status: user.status!,
+      companyId: undefined,
+      projectId: undefined,
+    });
+
+    const permissions = await userService.getPermissionsMap(
+      user.role!,
+      user.id,
+      undefined
+    );
+
+    return {
+      data: {
         user: {
           id: user.id,
           email: user.email,
@@ -76,22 +92,19 @@ export async function POST(request: NextRequest) {
           companyId: undefined,
           projectId: undefined,
         },
-        permissions, // Frontend usará isso via Signals
+        permissions,
         access_token: token,
         token_type: "bearer",
         expires_in: SESSION_MAX_AGE,
-      });
-    } catch (dbError: any) {
-      logger.error("ERRO CRÍTICO NO BANCO/TOKEN DURANTE LOGIN", {
-        message: dbError.message,
-        stack: dbError.stack,
-        code: dbError.code
-      });
-      throw dbError; // Será capturado pelo catch externo e handled pelo handleApiError
-    }
-  } catch (error: any) {
-    logger.error("Erro no endpoint de login legado", { error });
-    return handleApiError(error, "src/app/api/v1/auth/login/route.ts#POST");
+      }
+    };
+  } catch (dbError: any) {
+    logger.error("ERRO CRÍTICO NO BANCO/TOKEN DURANTE LOGIN", {
+      message: dbError.message,
+      stack: dbError.stack,
+      code: dbError.code
+    });
+    throw dbError;
   }
 }
 

@@ -1,9 +1,0 @@
-DISPLAY_NAME=Gestao Virtual API
-DESCRIPTION=API do Sistema Gestão Virtual (Next.js)
-MAIN=squarecloud.start.cjs
-MEMORY=1024
-VERSION=recommended
-START=node squarecloud.start.cjs
-AUTORESTART=true
-SUBDOMAIN=gestao-api
-WEBSITE=true

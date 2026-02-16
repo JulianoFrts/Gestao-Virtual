@@ -55,7 +55,9 @@ export async function getCurrentSession(): Promise<Session | null> {
   // Strategy 1: NextAuth Cookie
   try {
     const session = await auth();
-    if (session?.user) return await enrichSession(session);
+    // Removido o enrichSession redundante que buscava dados no banco em cada req.
+    // O NextAuth já traz os dados mapeados via callbacks no JWT.
+    if (session?.user) return session;
   } catch (err) {
     console.error("[AUTH] Erro auth():", err);
   }

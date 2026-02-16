@@ -28,6 +28,7 @@ export default defineConfig(({ mode: _mode }) => ({
     react(),
     tailwindcss(),
     VitePWA({
+      disable: _mode === 'development', // Desabilitar PWA em dev para velocidade
       registerType: 'prompt',
       injectRegister: 'auto',
       workbox: {

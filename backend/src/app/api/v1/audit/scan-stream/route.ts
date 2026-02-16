@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
 
     if (!token) {
       return new Response(
-        JSON.stringify({ error: "Token não fornecido. Use ?token=xxx" }),
+        JSON.stringify({ error: "Usuario não autorizado!" }),
         { status: 401, headers: { "Content-Type": "application/json" } },
       );
     }
@@ -110,7 +110,11 @@ export async function GET(request: NextRequest) {
             });
 
             // Pequeno delay para efeito visual de streaming real
-            await new Promise((resolve) => setTimeout(resolve, 50));
+            const min = 200;
+            const max = 500;
+            const delay = min + Math.random() * (max - min);
+
+            await new Promise((resolve) => setTimeout(resolve, delay));
           }
 
           // Enviar resumo final

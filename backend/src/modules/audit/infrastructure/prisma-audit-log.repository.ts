@@ -3,11 +3,21 @@ import { AuditLogRepository } from "../domain/audit-log.repository";
 
 export class PrismaAuditLogRepository implements AuditLogRepository {
   async findMany(where: any, take: number, orderBy: any): Promise<any[]> {
+    // Otimização: Não trazer JSONs pesados (newValues/oldValues) na listagem
     return prisma.auditLog.findMany({
       where,
       take,
       orderBy,
-      include: {
+      select: {
+        id: true,
+        action: true,
+        entity: true,
+        entityId: true,
+        createdAt: true,
+        ipAddress: true,
+        route: true,
+        userAgent: true,
+        // user: join simplificado
         user: {
           select: {
             name: true,

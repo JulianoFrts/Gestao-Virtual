@@ -22,10 +22,12 @@ const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
   productionBrowserSourceMaps: false,
 
-  // Limita uso de CPU/Memória na geração estática
+  // Limita uso de CPU/Memória na geração estática (APENAS PROD)
   experimental: {
-    workerThreads: false,
-    cpus: 1,
+    // Em dev, queremos usar workers para velocidade
+    workerThreads: process.env.NODE_ENV === 'production' ? false : true,
+    cpus: process.env.NODE_ENV === 'production' ? 1 : undefined,
+    optimizePackageImports: ["lucide-react", "date-fns"], // Tree shaking
   },
 
   // Forçar @prisma/client a ser tratado como pacote externo (não incluído no bundle)

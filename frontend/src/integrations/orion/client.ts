@@ -8,6 +8,8 @@
 const API_URL = import.meta.env.VITE_API_URL || "https://api.gestaovirtual.com/api/v1";
 const DB_MODE = import.meta.env.VITE_DB_MODE || 'orion_db';
 
+console.log('[ORION CLIENT] Initialized with:', { API_URL, DB_MODE });
+
 export const isLocalMode = DB_MODE === 'local';
 
 interface ApiResponse<T> {

@@ -1,9 +1,0 @@
-DISPLAY_NAME=Gestao Virtual
-DESCRIPTION=Sistema Gestão Virtual (API + Frontend Unificado)
-MAIN=start.cjs
-MEMORY=3072
-VERSION=recommended
-START=node start.cjs
-AUTORESTART=true
-SUBDOMAIN=gestao-virtual
-WEBSITE=true

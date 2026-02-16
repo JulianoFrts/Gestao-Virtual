@@ -1,4 +1,4 @@
-import { openApiSpec } from "../lib/docs/openapi";
+import { openApiSpec } from "../lib/docs/openapi.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";

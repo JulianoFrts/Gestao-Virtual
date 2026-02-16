@@ -40,7 +40,8 @@
     }
   },
   "include": [
-    "*.ts",
+    "src/**/*.js",
+    "src/**/*.ts",
     // ".next/types/**/*.ts",
     // ".next/dev/types/**/*.ts",
     "next-env.d.ts",

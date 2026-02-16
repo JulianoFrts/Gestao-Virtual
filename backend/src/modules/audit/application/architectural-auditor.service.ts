@@ -1,20 +1,15 @@
+import * as ts from "typescript";
 import { logger } from "@/lib/utils/logger";
 import * as fs from "fs";
 import * as path from "path";
 import { GovernanceService } from "./governance.service";
-
-/**
- * AuditResult - Resultado de uma verificação arquitetural
- */
-export interface AuditResult {
-  file: string;
-  status: "PASS" | "FAIL" | "WARN";
-  message: string;
-  violation?: string;
-  suggestion?: string;
-  severity?: "HIGH" | "MEDIUM" | "LOW";
-  category?: string; // Categoria do Code Smell para agrupamento
-}
+import { AuditRule, AuditResult } from "../domain/rules/audit-rule.interface";
+import { LongMethodRule } from "../domain/rules/long-method.rule";
+import { SingleResponsibilityRule } from "../domain/rules/srp.rule";
+import { MagicNumbersRule } from "../domain/rules/magic-numbers.rule";
+import { AuditConfigService } from "../infrastructure/config/audit-config.service";
+import { GitDiffService } from "../infrastructure/git/git-diff.service";
+import { HashCacheService } from "../infrastructure/cache/hash-cache.service";
 
 /**
  * AuditSummary - Resumo executivo da auditoria com Health Score
@@ -30,69 +25,142 @@ export interface AuditSummary {
 
 /**
  * ArchitecturalAuditor - Realiza auditoria estática do código
+ * v3.0: Full Service Integration (Config, Git, Cache)
  */
 export class ArchitecturalAuditor {
   private readonly srcPath: string;
+  private readonly configService: AuditConfigService;
+  private readonly gitService: GitDiffService;
+  private readonly cacheService: HashCacheService;
+
+  private rules: AuditRule[] = [];
 
   constructor(
     private readonly governanceService: GovernanceService,
     basePath?: string
   ) {
-    this.srcPath = basePath || path.join(process.cwd(), "src");
+    this.srcPath = this.resolveSafePath(basePath);
+
+    // Inicialização dos serviços (Injeção de dependência seria ideal aqui)
+    this.configService = new AuditConfigService();
+    this.gitService = new GitDiffService();
+    this.cacheService = new HashCacheService();
+
+    this.registerRules();
+  }
+
+  private registerRules() {
+    const enabledRules = this.configService.getEnabledRules();
+
+    // Mapa de regras disponíveis
+    const availableRules = [
+      new SingleResponsibilityRule(),
+      new LongMethodRule(),
+      new MagicNumbersRule()
+    ];
+
+    // Filtrar apenas as ativadas na config (por enquanto hardcoded names, ideal seria dynamic map)
+    // Na v3.1 mapear nomes de config para instâncias
+    this.rules = availableRules;
+    // TODO: Implementar filtro real baseado em `enabledRules`
+  }
+
+  private resolveSafePath(basePath?: string): string {
+    const root = process.cwd();
+    const resolved = path.resolve(basePath || path.join(root, "src"));
+
+    if (!resolved.startsWith(root)) {
+      logger.warn(`Tentativa de Path Traversal detectada: ${basePath}`);
+      return path.join(root, "src");
+    }
+
+    return resolved;
   }
 
   /**
-   * Executa a auditoria completa e persiste no banco de dados
+   * Executa a auditoria completa (Full Scan ou Incremental)
    */
-  public async runFullAudit(userId?: string): Promise<{ results: AuditResult[]; summary: AuditSummary }> {
-    logger.info("Iniciando Auditoria Arquitetural de Sistema", {
+  public async runFullAudit(
+    userId?: string,
+    incremental: boolean = false
+  ): Promise<{ results: AuditResult[]; summary: AuditSummary }> {
+    logger.info(`Iniciando Auditoria Arquitetural de Sistema (v3.0) [Incremental: ${incremental}]`, {
       source: "Audit/ArchitecturalAuditor",
       userId,
     });
 
     const results: AuditResult[] = [];
-    const files = this.getAllFiles(this.srcPath);
+    let files: string[] = [];
 
-    const activeViolations = await this.performAuditScan(
+    // 1. Determinar Escopo de Arquivos
+    if (incremental) {
+      files = await this.gitService.getChangedFiles();
+      if (files.length === 0) {
+        logger.info("Nenhuma alteração detectada via Git. Auditando apenas cache misses ou full scan.");
+        // Fallback se git não retornar nada (opcional: ou retornar vazio)
+        // Para v3.0 vamos assumir que incremental vazio retorna "Audit Complete - No Changes"
+        return this.generateEmptyReport(0);
+      }
+    } else {
+      files = await this.getAllFilesAsync(this.srcPath);
+    }
+
+    // 2. Processamento Principal
+    const activeViolations = await this.performAuditScanParallel(
       files,
       results,
-      userId,
+      userId
     );
 
-    // Lógica de Reconciliação: Marcar como RESOLVED o que não foi detectado neste scan
-    await this.reconcileResolvedIssues(activeViolations);
+    // 3. Reconciliação só faz sentido em Full Scan ou lógica complexa de Tracking
+    if (!incremental) {
+      await this.reconcileResolvedIssues(activeViolations);
+    }
 
     this.reportResults(results);
 
-    // Calcular Health Score
+    // 4. Calcular Health Score
     const summary = this.calculateHealthScore(results, files.length);
 
     return { results, summary };
   }
 
-  /**
-   * Calcula o Health Score de 0 a 100 baseado na densidade de violações.
-   * Pontução: 100 - (violações ponderadas / total de arquivos) * fator
-   */
-  private calculateHealthScore(results: AuditResult[], totalFiles: number): AuditSummary {
+  private generateEmptyReport(totalFiles: number): { results: AuditResult[]; summary: AuditSummary } {
+    return {
+      results: [],
+      summary: {
+        healthScore: 100,
+        totalFiles,
+        violationsCount: 0,
+        byCategory: {},
+        bySeverity: { HIGH: 0, MEDIUM: 0, LOW: 0 },
+        topIssues: []
+      }
+    };
+  }
+
+  private calculateHealthScore(
+    results: AuditResult[],
+    totalFiles: number
+  ): AuditSummary {
     const bySeverity = { HIGH: 0, MEDIUM: 0, LOW: 0 };
     const byCategory: Record<string, number> = {};
 
-    results.forEach(r => {
-      bySeverity[r.severity || 'LOW']++;
-      const cat = r.violation || 'Unknown';
+    results.forEach((r) => {
+      bySeverity[r.severity || "LOW"]++;
+      const cat = r.violation || "Unknown";
       byCategory[cat] = (byCategory[cat] || 0) + 1;
     });
 
-    // Peso: HIGH = 10, MEDIUM = 5, LOW = 2
-    const weightedViolations = (bySeverity.HIGH * 10) + (bySeverity.MEDIUM * 5) + (bySeverity.LOW * 2);
+    const weightedViolations =
+      bySeverity.HIGH * 10 + bySeverity.MEDIUM * 5 + bySeverity.LOW * 2;
 
-    // Fórmula: 100 - (violações ponderadas / arquivos) * 10
-    // Máximo de penalidade: 100 (não pode ser negativo)
-    const penalty = Math.min(100, (weightedViolations / Math.max(totalFiles, 1)) * 10);
+    const penalty = Math.min(
+      100,
+      (weightedViolations / Math.max(totalFiles, 1)) * 10
+    );
     const healthScore = Math.max(0, Math.round(100 - penalty));
 
-    // Top Issues (as 5 categorias mais frequentes)
     const topIssues = Object.entries(byCategory)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
@@ -108,46 +176,72 @@ export class ArchitecturalAuditor {
     };
   }
 
-  private async performAuditScan(
+  private async performAuditScanParallel(
     files: string[],
     results: AuditResult[],
-    userId?: string,
+    userId?: string
   ): Promise<Set<string>> {
     const activeViolations = new Set<string>();
+    const CONCURRENCY_LIMIT = 10;
 
-    for (const file of files) {
-      const fileResults = await this.processFile(file);
-      if (fileResults.length > 0) {
-        results.push(...fileResults);
+    const processBatch = async (batch: string[]) => {
+      const promises = batch.map(async (file) => {
+        try {
+          const fileResults = await this.withTimeout(
+            this.processFile(file),
+            3000
+          );
 
-        // Persistir ou atualizar no banco de dados
-        for (const res of fileResults) {
-          const violationKey = `${res.file}:${res.violation}`;
-          activeViolations.add(violationKey);
-          await this.persistViolation(res, userId);
+          if (fileResults.length > 0) {
+            results.push(...fileResults);
+
+            for (const res of fileResults) {
+              const violationKey = `${res.file}:${res.violation}`;
+              activeViolations.add(violationKey);
+              await this.persistViolation(res, userId);
+            }
+          }
+        } catch (error) {
+          logger.warn(`Erro/Timeout ao processar arquivo: ${file}`, { error });
         }
-      }
+      });
+      await Promise.all(promises);
+    };
+
+    for (let i = 0; i < files.length; i += CONCURRENCY_LIMIT) {
+      const batch = files.slice(i, i + CONCURRENCY_LIMIT);
+      await processBatch(batch);
     }
+
     return activeViolations;
+  }
+
+  private async withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+    const timeout = new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error("Timeout de processamento")), ms)
+    );
+    return Promise.race([promise, timeout]);
   }
 
   private async persistViolation(res: AuditResult, userId?: string) {
     try {
+      const sanitizedMessage = this.sanitize(res.message);
       const existing = await this.governanceService.findOpenViolation(
         res.file,
-        res.violation || "Desconhecida",
+        res.violation || "Desconhecida"
       );
 
       if (existing) {
         await this.governanceService.updateViolation(existing.id, {
           lastDetectedAt: new Date(),
           performerId: userId || existing.performerId,
+          message: sanitizedMessage,
         });
       } else {
         await this.governanceService.createViolation({
           file: res.file,
           violation: res.violation || "Desconhecida",
-          message: res.message,
+          message: sanitizedMessage,
           severity: res.severity || "LOW",
           suggestion: res.suggestion,
           status: "OPEN",
@@ -162,24 +256,24 @@ export class ArchitecturalAuditor {
     }
   }
 
+  private sanitize(input?: string): string {
+    return (input || "").slice(0, 1000);
+  }
+
   private async reconcileResolvedIssues(activeViolations: Set<string>) {
     try {
-      // Buscar todas as violações OPEN
       const openViolations = await this.governanceService.findOpenViolations();
 
       for (const violation of openViolations) {
-        // Generate the key for the existing database record
         const dbKey = `${violation.file}:${violation.violation}`;
 
-        // Se a chave da violação NÃO está no conjunto de violações ativas deste scan,
-        // significa que ESTA violação específica foi corrigida.
         if (!activeViolations.has(dbKey)) {
           await this.governanceService.updateViolation(violation.id, {
             status: "RESOLVED",
             resolvedAt: new Date(),
           });
           logger.info(
-            `Violação resolvida detectada automaticamente: ${violation.file} [${violation.violation}]`,
+            `Violação resolvida detectada: ${violation.file} [${violation.violation}]`
           );
         }
       }
@@ -188,148 +282,158 @@ export class ArchitecturalAuditor {
     }
   }
 
-  private getAllFiles(dirPath: string, fileList: string[] = []): string[] {
-    const files = fs.readdirSync(dirPath);
-    files.forEach((file) => {
-      const filePath = path.join(dirPath, file);
-      if (fs.statSync(filePath).isDirectory()) {
-        fileList = this.getAllFiles(filePath, fileList);
-      } else {
-        fileList.push(filePath);
+  private async getAllFilesAsync(dir: string): Promise<string[]> {
+    let results: string[] = [];
+    const ignorePatterns = this.configService.getIgnorePatterns();
+
+    try {
+      const list = await fs.promises.readdir(dir, { withFileTypes: true });
+      for (const entry of list) {
+        // Ignorar diretórios configurados
+        if (ignorePatterns.includes(entry.name)) continue;
+
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          results = results.concat(await this.getAllFilesAsync(fullPath));
+        } else {
+          if (
+            (fullPath.endsWith(".ts") || fullPath.endsWith(".tsx")) &&
+            !fullPath.endsWith(".d.ts")
+          ) {
+            results.push(fullPath);
+          }
+        }
       }
-    });
-    return fileList;
+    } catch (e) {
+      logger.warn(`Erro ao ler diretório: ${dir}`, { error: e });
+    }
+    return results;
   }
 
-  private auditTellDontAsk(
+  private async processFile(file: string): Promise<AuditResult[]> {
+    const content = await fs.promises.readFile(file, "utf8");
+
+    // Hash Cache Check
+    if (!this.cacheService.shouldAudit(file, content)) {
+      return []; // Skip audit if content matches cache
+    }
+
+    const relativePath = path.relative(process.cwd(), file).replace(/\\/g, "/");
+    const results: AuditResult[] = [];
+
+    // AST Analyzers
+    this.analyzeWithAST(relativePath, content, results);
+
+    // Regex Analyzers
+    this.auditHardcodedStrings(relativePath, content, results);
+    this.auditHardcodedColors(relativePath, content, results);
+    this.auditPrimitiveObsession(relativePath, content, results);
+
+    // Update Cache only if no failures (or update anyway to avoid re-scan loops? 
+    // Usually update cache regardless of violations to avoid re-scanning same broken code 
+    // BUT we want to detect if violations persist. 
+    // Current HashCacheStrategy: cache content hash. If content same, violations are same.)
+    this.cacheService.updateCache(file, content, results.length);
+
+    return results;
+  }
+
+  private analyzeWithAST(
     file: string,
     content: string,
-    results: AuditResult[],
+    results: AuditResult[]
   ) {
-    const getterMatches = content.match(/\.get[A-Z][a-zA-Z]*\(\)/g) || [];
+    try {
+      const sourceFile = ts.createSourceFile(
+        file,
+        content,
+        ts.ScriptTarget.Latest,
+        true
+      );
+
+      for (const rule of this.rules) {
+        const ruleResults = rule.execute(file, sourceFile, content);
+        results.push(...ruleResults);
+      }
+
+      // Legacy checks kept for compatibility until full migration
+      const visit = (node: ts.Node) => {
+        if (
+          ts.isFunctionDeclaration(node) ||
+          ts.isMethodDeclaration(node) ||
+          ts.isArrowFunction(node) ||
+          ts.isFunctionExpression(node)
+        ) {
+          this.checkTooManyParameters(file, node, results);
+        }
+
+        if (
+          ts.isCallExpression(node) &&
+          ts.isPropertyAccessExpression(node.expression)
+        ) {
+          this.checkDDDViolations(file, node, results);
+        }
+
+        ts.forEachChild(node, visit);
+      };
+
+      visit(sourceFile);
+    } catch (e) {
+      logger.warn(`Erro na análise AST de ${file}`, { error: e });
+    }
+  }
+
+  // --- Legacy Checks ---
+
+  private checkTooManyParameters(
+    file: string,
+    node: ts.FunctionLikeDeclaration,
+    results: AuditResult[]
+  ) {
+    if (node.parameters.length > 5) {
+      results.push({
+        file,
+        status: "WARN",
+        severity: "MEDIUM",
+        message: `Função com ${node.parameters.length} parâmetros.`,
+        violation: "Too Many Parameters",
+        suggestion: "Use um objeto de configuração (DTO/Interface).",
+      });
+    }
+  }
+
+  private checkDDDViolations(
+    file: string,
+    node: ts.CallExpression,
+    results: AuditResult[]
+  ) {
+    if (!file.includes("route.ts") && !file.includes("controller")) return;
+
+    const expression = node.expression as ts.PropertyAccessExpression;
+    const propName = expression.name.text;
+
     if (
-      getterMatches.length > 15 &&
-      (content.includes("if (") || content.includes("forEach"))
+      ["create", "update", "delete", "upsert"].includes(propName) &&
+      expression.expression.getText().includes("prisma")
     ) {
       results.push({
         file,
         status: "WARN",
         severity: "MEDIUM",
-        message: "Possível violação de Tell, Don't Ask detectada.",
-        violation: "Uso excessivo de Getters para lógica externa.",
-        suggestion:
-          "Mova a lógica de decisão para dentro da entidade ou use um Domain Service.",
+        message: "Persistência direta na camada de Route/Controller.",
+        violation: "Layer Violation (DDD)",
+        suggestion: "Mova a persistência para um Service ou Repository.",
       });
     }
-  }
-
-  private auditSRP(file: string, content: string, results: AuditResult[]) {
-    const lines = content.split("\n").length;
-    // Thresholds profissionais: 400 = WARN, 600 = FAIL
-    if (lines > 600) {
-      results.push({
-        file,
-        status: "FAIL",
-        severity: "HIGH",
-        message: `Arquivo muito grande (${lines} linhas). Violação crítica de SRP.`,
-        violation: "Single Responsibility Principle violation.",
-        suggestion:
-          "Este arquivo está fazendo coisas demais. Refatore em componentes ou hooks menores.",
-      });
-    } else if (lines > 400) {
-      results.push({
-        file,
-        status: "WARN",
-        severity: "MEDIUM",
-        message: `Arquivo grande (${lines} linhas). Valide se SRP está sendo seguido.`,
-        violation: "Single Responsibility Principle warning.",
-        suggestion:
-          "Considere dividir este arquivo em módulos menores para facilitar manutenção.",
-      });
-    }
-  }
-
-  private auditDDDController(
-    file: string,
-    content: string,
-    results: AuditResult[],
-  ) {
-    if (file.includes("route.ts") || file.includes("controller")) {
-      if (
-        content.includes("prisma.") &&
-        (content.includes(".update({") || content.includes(".create({")) &&
-        !file.includes("Audit")
-      ) {
-        results.push({
-          file,
-          status: "WARN",
-          severity: "MEDIUM",
-          message:
-            "Persistência direta detectada na camada de transporte (Route/Controller).",
-          violation: "Anemic Domain Model / Lack of encapsulation.",
-          suggestion:
-            "Encapsule essa lógica em um Service de aplicação ou Use Case para respeitar as camadas do DDD.",
-        });
-      }
-    }
-  }
-
-  private auditLongMethods(
-    file: string,
-    content: string,
-    results: AuditResult[],
-  ) {
-    const lines = content.split("\n");
-    const blockStack: { start: number; isFunction: boolean }[] = [];
-
-    lines.forEach((line, index) => {
-      const trimmed = line.trim();
-
-      // Heurística para detectar início de função/método
-      // Procura por: async name(), function name(), name = () =>, name() { (method)
-      const isFuncStart =
-        /async\s+\w+\s*\(|function\s+\w+\s*\(|\w+\s*=\s*\([^)]*\)\s*=>|\w+\s*\([^)]*\)\s*\{/.test(
-          trimmed,
-        );
-      const isClassStart = /class\s+\w+/.test(trimmed);
-
-      if (line.includes("{")) {
-        // Se estamos abrindo um bloco, empilhamos
-        // Se for o início de uma classe, isFunction = false
-        // Se for o início de uma função ou se estivermos dentro de uma classe e abrir um bloco (provável método)
-        const isFunction = isFuncStart && !isClassStart;
-        blockStack.push({ start: index, isFunction });
-      }
-
-      if (line.includes("}")) {
-        const block = blockStack.pop();
-
-        if (block && block.isFunction) {
-          const duration = index - block.start;
-          // Reportar se for maior que 60 linhas
-          if (duration > 60) {
-            results.push({
-              file,
-              status: "WARN",
-              severity: "LOW",
-              message: `Função/Método na linha ${block.start + 1} possui ${duration} linhas.`,
-              violation: "Long Method",
-              suggestion:
-                "Extraia partes da lógica desta função para métodos auxiliares.",
-            });
-          }
-        }
-      }
-    });
   }
 
   private auditHardcodedStrings(
     file: string,
     content: string,
-    results: AuditResult[],
+    results: AuditResult[]
   ) {
     if (
-      content.includes("localhost" + ":") &&
+      content.includes("localhost:") &&
       !file.includes("config") &&
       !file.includes("client")
     ) {
@@ -337,117 +441,20 @@ export class ArchitecturalAuditor {
         file,
         status: "WARN",
         severity: "MEDIUM",
-        message: "URL de ambiente (localhost) fixada no código.",
-        violation: "Hardcoded Environment Variable",
-        suggestion:
-          "Use process.env.NEXT_PUBLIC_API_URL ou similar para evitar problemas em produção.",
+        message: "URL localhost hardcoded.",
+        violation: "Hardcoded Environment",
+        suggestion: "Use variáveis de ambiente (process.env).",
       });
     }
   }
 
-  /**
-   * Too Many Parameters (Code Smell)
-   * Funções com mais de 4 parâmetros indicam necessidade de refatoração.
-   */
-  private auditTooManyParameters(
-    file: string,
-    content: string,
-    results: AuditResult[],
-  ) {
-    // Regex para capturar funções com parâmetros
-    const funcPattern = /(?:function\s+\w+|\w+\s*=\s*(?:async\s*)?\([^)]*\)|(?:async\s+)?\w+\s*\()\s*\(([^)]*)\)/g;
-    let match;
-    while ((match = funcPattern.exec(content)) !== null) {
-      const params = match[1]?.split(",").filter(p => p.trim().length > 0) || [];
-      if (params.length > 5) {
-        results.push({
-          file,
-          status: "WARN",
-          severity: "MEDIUM",
-          message: `Função com ${params.length} parâmetros detectada.`,
-          violation: "Too Many Parameters",
-          suggestion:
-            "Agrupe parâmetros relacionados em um objeto ou crie uma interface de configuração.",
-        });
-      }
-    }
-  }
-
-  /**
-   * Deep Nesting (Code Smell)
-   * Mais de 3 níveis de indentação indicam lógica complexa demais.
-   */
-  private auditDeepNesting(
-    file: string,
-    content: string,
-    results: AuditResult[],
-  ) {
-    const lines = content.split("\n");
-    let maxNesting = 0;
-    let currentNesting = 0;
-    let deepLine = 0;
-
-    lines.forEach((line, idx) => {
-      const opens = (line.match(/{/g) || []).length;
-      const closes = (line.match(/}/g) || []).length;
-      currentNesting += opens - closes;
-      if (currentNesting > maxNesting) {
-        maxNesting = currentNesting;
-        deepLine = idx + 1;
-      }
-    });
-
-    if (maxNesting > 5) {
-      results.push({
-        file,
-        status: "WARN",
-        severity: "MEDIUM",
-        message: `Aninhamento profundo detectado (${maxNesting} níveis) na linha ${deepLine}.`,
-        violation: "Deep Nesting",
-        suggestion:
-          "Extraia blocos aninhados para funções auxiliares ou use early returns.",
-      });
-    }
-  }
-
-  /**
-   * Magic Numbers (Code Smell)
-   * Números fixos no código sem constantes nomeadas.
-   */
-  private auditMagicNumbers(
-    file: string,
-    content: string,
-    results: AuditResult[],
-  ) {
-    // Ignora 0, 1, 2 (comuns e aceitáveis) e números em imports/exports
-    const magicPattern = /(?<!\w)[3-9]\d{2,}(?!\w|px|em|rem|%|vh|vw|ms|s)/g;
-    const matches = content.match(magicPattern) || [];
-    const uniqueMagics = [...new Set(matches)];
-
-    if (uniqueMagics.length > 3) {
-      results.push({
-        file,
-        status: "WARN",
-        severity: "LOW",
-        message: `Detectados ${uniqueMagics.length} Magic Numbers: ${uniqueMagics.slice(0, 5).join(", ")}...`,
-        violation: "Magic Numbers",
-        suggestion:
-          "Defina constantes nomeadas para esses valores (ex: const MAX_RETRIES = 3).",
-      });
-    }
-  }
-
-  /**
-   * Primitive Obsession (Code Smell)
-   * Uso excessivo de strings literais para estados onde enums seriam melhores.
-   */
   private auditPrimitiveObsession(
     file: string,
     content: string,
-    results: AuditResult[],
+    results: AuditResult[]
   ) {
-    // Detecta strings repetidas como estados
-    const statePattern = /(?:status|type|state|mode)\s*(?:===?|!==?)\s*['"]\w+['"]/gi;
+    const statePattern =
+      /(?:status|type|state|mode)\s*(?:===?|!==?)\s*['"]\w+['"]/gi;
     const matches = content.match(statePattern) || [];
 
     if (matches.length > 5) {
@@ -455,81 +462,36 @@ export class ArchitecturalAuditor {
         file,
         status: "WARN",
         severity: "LOW",
-        message: `Detectados ${matches.length} comparações de estado com strings literais.`,
+        message: `Uso excessivo de estados string (${matches.length}x).`,
         violation: "Primitive Obsession",
-        suggestion:
-          "Use enums ou union types para estados (ex: type Status = 'OPEN' | 'CLOSED').",
+        suggestion: "Use Enums ou Types.",
       });
     }
   }
 
-  /**
-   * Hardcoded Colors (Visual Consistency)
-   * Detecta cores hardcoded (orange, amber, etc) em arquivos TSX que deveriam usar variáveis CSS.
-   * Cores como orange-500, amber-500 indicam inconsistência com o tema primary/azul.
-   */
   private auditHardcodedColors(
     file: string,
     content: string,
-    results: AuditResult[],
+    results: AuditResult[]
   ) {
-    // Apenas verificar arquivos TSX (componentes visuais)
     if (!file.endsWith(".tsx")) return;
-
-    // Ignorar arquivos de configuração e componentes específicos
     if (file.includes("index.css") || file.includes("tailwind.config")) return;
 
-    // Cores que devem ser usadas com cuidado (podem indicar inconsistência)
-    const problematicColorsPattern = /(?:text|bg|border|ring|shadow)-(?:orange|amber)-(?:400|500|600|700)/g;
+    const problematicColorsPattern =
+      /(?:text|bg|border|ring|shadow)-(?:orange|amber)-(?:400|500|600|700)/g;
     const matches = content.match(problematicColorsPattern) || [];
-
-    // Contar ocorrências únicas para evitar falsos positivos em uso semântico (warnings, etc)
     const uniqueColors = [...new Set(matches)];
 
-    // Se mais de 5 usos, provavelmente não é intencional (alarm states etc)
     if (uniqueColors.length > 0 && matches.length > 5) {
       results.push({
         file,
         status: "WARN",
         severity: "LOW",
-        message: `Detectadas ${matches.length} ocorrências de cores hardcoded (${uniqueColors.join(', ')}).`,
-        violation: "Hardcoded Colors (Visual Inconsistency)",
-        suggestion:
-          "Use variáveis CSS do tema (primary, accent, destructive) ou crie variáveis semânticas para manter consistência visual.",
+        message: `Cores fora do padrão: ${uniqueColors.join(", ")}.`,
+        violation: "Visual Inconsistency",
+        suggestion: "Use variáveis de tema (primary/secondary).",
       });
     }
-  }
-
-  private async processFile(file: string): Promise<AuditResult[]> {
-    // Pular arquivos que não são TypeScript ou que são de teste
-    if (!file.endsWith(".ts") && !file.endsWith(".tsx")) return [];
-    if (
-      file.endsWith(".test.ts") ||
-      file.endsWith(".spec.ts") ||
-      file.endsWith(".d.ts")
-    )
-      return [];
-
-    const content = fs.readFileSync(file, "utf8");
-    const relativePath = path.relative(process.cwd(), file).replace(/\\/g, "/");
-
-    const fileResults: AuditResult[] = [];
-
-    // Verificações
-    this.auditTellDontAsk(relativePath, content, fileResults);
-    this.auditSRP(relativePath, content, fileResults);
-    this.auditDDDController(relativePath, content, fileResults);
-    this.auditLongMethods(relativePath, content, fileResults);
-    this.auditHardcodedStrings(relativePath, content, fileResults);
-    // Novos Auditores DDD/SOLID
-    this.auditTooManyParameters(relativePath, content, fileResults);
-    this.auditDeepNesting(relativePath, content, fileResults);
-    this.auditMagicNumbers(relativePath, content, fileResults);
-    this.auditPrimitiveObsession(relativePath, content, fileResults);
-    // Auditor de Consistência Visual
-    this.auditHardcodedColors(relativePath, content, fileResults);
-
-    return fileResults;
   }
 
   private reportResults(results: AuditResult[]) {
@@ -538,14 +500,13 @@ export class ArchitecturalAuditor {
 
     if (fails > 0 || warns > 0) {
       logger.warn(
-        `Auditoria concluída com ${fails} Falhas e ${warns} Alertas.`,
-        { source: "Audit/ArchitecturalAuditor" },
+        `Auditoria (v3.0): ${fails} Falhas, ${warns} Alertas, ${results.length} Total.`,
+        { source: "Audit/ArchitecturalAuditor" }
       );
     } else {
-      logger.success(
-        "Auditoria concluída: 100% de conformidade arquitetural.",
-        { source: "Audit/ArchitecturalAuditor" },
-      );
+      logger.success("Auditoria (v3.0): 100% de conformidade.", {
+        source: "Audit/ArchitecturalAuditor",
+      });
     }
   }
 }

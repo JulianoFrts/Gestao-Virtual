@@ -74,6 +74,7 @@ export class PrismaGovernanceRepository implements GovernanceRepository {
   ): Promise<GovernanceAuditHistory[]> {
     return (prisma as any).governanceAuditHistory.findMany({
       where: filters,
+      take: 100, // Limite de segurança para performance em dev
       include: {
         performer: {
           select: {

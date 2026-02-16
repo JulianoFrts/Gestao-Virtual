@@ -180,7 +180,7 @@ async function probeAndStart() {
   const cleanUrlForProbe = (u) => u.split('?')[0];
 
   const candidates = [
-  const candidates = [
+
     connectionString.replace(/\/([^\/?]+)(\?|$)/, '/gestaodb$2'), // Prioridade 1 (v178)
     connectionString.replace(/\/([^\/?]+)(\?|$)/, '/squarecloud$2'),
     connectionString.replace(/\/([^\/?]+)(\?|$)/, '/postgres$2'),    // Prioridade 3: Fallback

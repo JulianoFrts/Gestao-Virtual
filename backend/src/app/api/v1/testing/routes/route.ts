@@ -33,10 +33,15 @@ async function checkSingleRouteHealth(route: string, userId: string) {
   const start = Date.now();
   try {
     const baseUrl = process.env.NEXTAUTH_URL || "http://127.0.0.1:3000";
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 2000); // Max 2s per route
+
     const response = await fetch(`${baseUrl}${route}`, {
       method: "HEAD",
       headers: { "x-internal-check": "true" },
+      signal: controller.signal,
     });
+    clearTimeout(id);
 
     const latency = Date.now() - start;
 

@@ -3,6 +3,7 @@
  */
 
 import type { ErrorCode } from "@/types/api";
+import { HTTP_STATUS } from "@/lib/constants";
 
 /**
  * Erro base da aplicação
@@ -32,17 +33,17 @@ export class AppError extends Error {
 
   private getStatusFromCode(code: ErrorCode): number {
     const statusMap: Record<ErrorCode, number> = {
-      VALIDATION_ERROR: 400,
-      UNAUTHORIZED: 401,
-      FORBIDDEN: 403,
-      NOT_FOUND: 404,
-      CONFLICT: 409,
-      RATE_LIMITED: 429,
-      INTERNAL_ERROR: 500,
-      DATABASE_ERROR: 500,
-      INVALID_CREDENTIALS: 401,
+      VALIDATION_ERROR: HTTP_STATUS.BAD_REQUEST,
+      UNAUTHORIZED: HTTP_STATUS.UNAUTHORIZED,
+      FORBIDDEN: HTTP_STATUS.FORBIDDEN,
+      NOT_FOUND: HTTP_STATUS.NOT_FOUND,
+      CONFLICT: HTTP_STATUS.CONFLICT,
+      RATE_LIMITED: HTTP_STATUS.TOO_MANY_REQUESTS,
+      INTERNAL_ERROR: HTTP_STATUS.INTERNAL_ERROR,
+      DATABASE_ERROR: HTTP_STATUS.INTERNAL_ERROR,
+      INVALID_CREDENTIALS: HTTP_STATUS.UNAUTHORIZED,
     };
-    return statusMap[code] || 500;
+    return statusMap[code] || HTTP_STATUS.INTERNAL_ERROR;
   }
 }
 

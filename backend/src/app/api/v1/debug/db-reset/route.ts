@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import pg from "pg";
+import { HTTP_STATUS } from "@/lib/constants";
+
 const Pool = pg.Pool || (pg as any).default?.Pool;
+
+// Constantes de configuração
+const DB_CONNECTION_TIMEOUT = 15000;
+const DB_IDLE_TIMEOUT = 30000;
+const MAX_BUFFER_SMALL = 10 * 1024 * 1024; // 10MB
+const MAX_BUFFER_LARGE = 20 * 1024 * 1024; // 20MB
 
 /**
  * PANIC RESET API - GESTÃO VIRTUAL
@@ -12,12 +20,12 @@ export async function POST(request: NextRequest) {
     const token = request.nextUrl.searchParams.get("token");
 
     if (token !== secret && token !== emergencyToken) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        return NextResponse.json({ error: "Unauthorized" }, { status: HTTP_STATUS.UNAUTHORIZED });
     }
 
     const dbUrl = process.env.DATABASE_URL;
     if (!dbUrl) {
-        return NextResponse.json({ error: "DATABASE_URL missing" }, { status: 500 });
+        return NextResponse.json({ error: "DATABASE_URL missing" }, { status: HTTP_STATUS.INTERNAL_ERROR });
     }
 
     const buildChildProcessUrl = (url: string) => {
@@ -61,8 +69,8 @@ export async function POST(request: NextRequest) {
                 port: parseInt(u.port),
                 database: 'gestaodb', // v178: Forçado
                 ssl: getMtlsOptions(url),
-                connectionTimeoutMillis: 15000,
-                idleTimeoutMillis: 30000,
+                connectionTimeoutMillis: DB_CONNECTION_TIMEOUT,
+                idleTimeoutMillis: DB_IDLE_TIMEOUT,
                 max: 1
             };
         } catch (e) { return { connectionString: url, ssl: { rejectUnauthorized: false } }; }
@@ -123,11 +131,11 @@ export async function POST(request: NextRequest) {
                     const output = execSync(`npx prisma migrate deploy --schema=prisma/schema.prisma`, {
                         env: { ...process.env, DATABASE_URL: finalDbUrl },
                         encoding: 'utf8',
-                        maxBuffer: 10 * 1024 * 1024
+                        maxBuffer: MAX_BUFFER_SMALL
                     });
                     return NextResponse.json({ message: "Migrated successfully", output });
                 } catch (migrateErr: any) {
-                    return NextResponse.json({ error: "Migrate failed", stdout: migrateErr.stdout?.toString(), stderr: migrateErr.stderr?.toString() }, { status: 500 });
+                    return NextResponse.json({ error: "Migrate failed", stdout: migrateErr.stdout?.toString(), stderr: migrateErr.stderr?.toString() }, { status: HTTP_STATUS.INTERNAL_ERROR });
                 }
             }
 
@@ -147,7 +155,7 @@ export async function POST(request: NextRequest) {
                     execSync(`npx prisma db push --accept-data-loss --schema=prisma/schema.prisma`, {
                         env: { ...process.env, DATABASE_URL: finalDbUrl },
                         encoding: 'utf8',
-                        maxBuffer: 10 * 1024 * 1024
+                        maxBuffer: MAX_BUFFER_SMALL
                     });
                 } catch (e) { console.warn("Fallback to Diff..."); }
 
@@ -156,7 +164,7 @@ export async function POST(request: NextRequest) {
                     execSync('npx tsx src/scripts/restore-from-backup.ts', {
                         env: { ...process.env, DATABASE_URL: finalDbUrl },
                         encoding: 'utf8',
-                        maxBuffer: 20 * 1024 * 1024
+                        maxBuffer: MAX_BUFFER_LARGE
                     });
                 } catch (e) { console.error("Restore failed."); }
 
@@ -164,12 +172,12 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ message: "Sync finished (v102)", tablesCreated: rowCount });
             }
 
-            return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+            return NextResponse.json({ error: "Invalid action" }, { status: HTTP_STATUS.BAD_REQUEST });
         } finally {
             client.release();
             await pool.end();
         }
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: error.message }, { status: HTTP_STATUS.INTERNAL_ERROR });
     }
 }

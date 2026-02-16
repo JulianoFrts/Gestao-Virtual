@@ -131,6 +131,45 @@ export default function AuditLogs() {
 
   // Novos estados para visualização modernizada
   const [streamViewMode, setStreamViewMode] = useState<"terminal" | "table">("table");
+  const [streamSortConfig, setStreamSortConfig] = useState<{
+    key: string;
+    direction: "asc" | "desc";
+  } | null>(null);
+
+  const handleSortStream = (key: string) => {
+    let direction: "asc" | "desc" = "asc";
+    if (
+      streamSortConfig &&
+      streamSortConfig.key === key &&
+      streamSortConfig.direction === "asc"
+    ) {
+      direction = "desc";
+    }
+    setStreamSortConfig({ key, direction });
+  };
+
+  const sortedStreamLogs = useMemo(() => {
+    const logs = streamLogs.filter((l) => l.type === "violation");
+    if (!streamSortConfig) return logs;
+
+    return [...logs].sort((a, b) => {
+      let aValue = a.data[streamSortConfig.key];
+      let bValue = b.data[streamSortConfig.key];
+
+      // Tratamento especial para severidade
+      if (streamSortConfig.key === "severity") {
+        const severityMap: Record<string, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 };
+        aValue = severityMap[aValue] || 0;
+        bValue = severityMap[bValue] || 0;
+      }
+
+      if (aValue < bValue)
+        return streamSortConfig.direction === "asc" ? -1 : 1;
+      if (aValue > bValue)
+        return streamSortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [streamLogs, streamSortConfig]);
 
   const handleSortAudit = (key: string) => {
     let direction: "asc" | "desc" = "asc";
@@ -166,23 +205,24 @@ export default function AuditLogs() {
     const violations = streamLogs.filter((l) => l.type === "violation");
     if (violations.length === 0) return "Nenhuma violação encontrada.";
 
-    let md = "# Relatório de Auditoria Orion\n\n";
-    md += "| N° | Severidade | Arquivo | Violação | Sugestão |\n";
+    let md = "# Relatório de Auditoria Orion e demandas de refatorações e melhorias!\n\n";
+    md += "| N° | Severidade | Arquivo | Descrição do Problema | Plano de Refatoração |\n";
     md += "| :--- | :--- | :--- | :--- | :--- |\n";
     violations.forEach((v) => {
-      md += `| ${v.data.index} | ${v.data.severity} | ${v.data.file} | ${v.data.violation} | ${v.data.suggestion || '-'} |\n`;
+      md += `| ${v.data.index} | ${v.data.severity} | ${v.data.file} | **${v.data.violation}**: ${v.data.message || ''} | ${v.data.suggestion || '-'} |\n`;
     });
     return md;
   };
 
   const generateCSVReport = (data: any[]) => {
     if (data.length === 0) return "";
-    const headers = ["N", "Severidade", "Arquivo", "Violacao", "Sugestao"];
+    const headers = ["N", "Severidade", "Arquivo", "Tipo de Violacao", "Descricao", "Plano de Refatoracao"];
     const rows = data.map((v, i) => [
       i + 1,
       v.severity || v.data?.severity,
       v.file || v.data?.file,
       v.violation || v.data?.violation,
+      v.message || v.data?.message || "",
       v.suggestion || v.data?.suggestion || ""
     ]);
     return [headers, ...rows].map(row => row.join("\t")).join("\n");
@@ -699,7 +739,7 @@ export default function AuditLogs() {
       </div>
 
       <Tabs
-        defaultValue={defaultTab}
+        value={defaultTab}
         className="w-full"
         onValueChange={(val) => {
           setSearchParams({ tab: val });
@@ -1569,11 +1609,39 @@ export default function AuditLogs() {
                       <Table className="min-w-[1000px]">
                         <TableHeader className="sticky top-0 bg-[#0d1117] z-10 border-b border-amber-500/10">
                           <TableRow className="border-amber-500/10 h-10 hover:bg-transparent">
-                            <TableHead className="text-[9px] font-black uppercase text-amber-500/50 pl-6 w-12 text-center">N°</TableHead>
-                            <TableHead className="text-[9px] font-black uppercase text-amber-500/50 w-24">Severidade</TableHead>
-                            <TableHead className="text-[9px] font-black uppercase text-amber-500/50 w-[20%]">O que foi testado (Arquivo)</TableHead>
-                            <TableHead className="text-[9px] font-black uppercase text-amber-500/50 w-[25%]">Violação Detectada</TableHead>
-                            <TableHead className="text-[9px] font-black uppercase text-amber-500/50">Sugestão de Melhoria</TableHead>
+                            <TableHead
+                              className="text-[9px] font-black uppercase text-amber-500/50 pl-6 w-12 text-center cursor-pointer hover:text-amber-500 transition-colors"
+                              onClick={() => handleSortStream("index")}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                N° <SortIcon config={streamSortConfig} columnKey="index" />
+                              </div>
+                            </TableHead>
+                            <TableHead
+                              className="text-[9px] font-black uppercase text-amber-500/50 w-24 cursor-pointer hover:text-amber-500 transition-colors"
+                              onClick={() => handleSortStream("severity")}
+                            >
+                              <div className="flex items-center gap-1">
+                                Severidade <SortIcon config={streamSortConfig} columnKey="severity" />
+                              </div>
+                            </TableHead>
+                            <TableHead
+                              className="text-[9px] font-black uppercase text-amber-500/50 w-[20%] cursor-pointer hover:text-amber-500 transition-colors"
+                              onClick={() => handleSortStream("file")}
+                            >
+                              <div className="flex items-center gap-1">
+                                O que foi testado (Arquivo) <SortIcon config={streamSortConfig} columnKey="file" />
+                              </div>
+                            </TableHead>
+                            <TableHead
+                              className="text-[9px] font-black uppercase text-amber-500/50 w-[30%] cursor-pointer hover:text-amber-500 transition-colors"
+                              onClick={() => handleSortStream("violation")}
+                            >
+                              <div className="flex items-center gap-1">
+                                Descrição do Problema <SortIcon config={streamSortConfig} columnKey="violation" />
+                              </div>
+                            </TableHead>
+                            <TableHead className="text-[9px] font-black uppercase text-amber-500/50">Plano de Refatoração</TableHead>
                             <TableHead className="text-[9px] font-black uppercase text-amber-500/50 pr-6 text-right w-24">Ações</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -1586,37 +1654,52 @@ export default function AuditLogs() {
                               </TableCell>
                             </TableRow>
                           ) : (
-                            streamLogs.filter(l => l.type === 'violation').map((log, idx) => (
-                              <TableRow key={idx} className="border-amber-500/5 hover:bg-amber-500/5 group h-14">
-                                <TableCell className="pl-6 text-[10px] font-mono text-muted-foreground text-center">
+                            sortedStreamLogs.map((log, idx) => (
+                              <TableRow key={idx} className="border-amber-500/5 hover:bg-amber-500/5 group h-auto py-2">
+                                <TableCell className="pl-6 text-[10px] font-mono text-muted-foreground text-center align-top pt-4">
                                   {log.data.index}
                                 </TableCell>
-                                <TableCell>
+                                <TableCell className="align-top pt-4">
                                   <Badge
                                     className={cn(
-                                      "text-[8px] font-black px-1.5 py-0 border-0",
-                                      log.data.severity === 'HIGH' ? 'bg-red-500/20 text-red-500' :
-                                        log.data.severity === 'MEDIUM' ? 'bg-amber-500/20 text-amber-500' : 'bg-blue-500/20 text-blue-500'
+                                      "text-[8px] font-black px-1.5 py-0 border-0 shadow-lg",
+                                      log.data.severity === 'HIGH' ? 'bg-red-500/20 text-red-500 shadow-red-500/10' :
+                                        log.data.severity === 'MEDIUM' ? 'bg-amber-500/20 text-amber-500 shadow-amber-500/10' : 'bg-blue-500/20 text-blue-500 shadow-blue-500/10'
                                     )}
                                   >
                                     {log.data.severity}
                                   </Badge>
                                 </TableCell>
-                                <TableCell className="py-3">
-                                  <div className="flex flex-col">
-                                    <span className="text-[10px] font-mono text-blue-300 font-bold truncate max-w-xs" title={log.data.file}>
+                                <TableCell className="py-3 align-top">
+                                  <div className="flex flex-col gap-1">
+                                    <span className="text-[10px] font-mono text-blue-300 font-bold break-all group-hover:text-blue-200 transition-colors" title={log.data.file}>
                                       {log.data.file.split('/').pop()}
                                     </span>
-                                    <span className="text-[8px] font-mono text-muted-foreground italic truncate max-w-xs">
+                                    <span className="text-[8px] font-mono text-muted-foreground italic break-all opacity-60 group-hover:opacity-100 transition-opacity">
                                       {log.data.file}
                                     </span>
                                   </div>
                                 </TableCell>
-                                <TableCell className="text-xs text-foreground font-medium italic">
-                                  {log.data.violation}
+                                <TableCell className="text-xs text-foreground font-medium py-3 align-top">
+                                  <div className="flex flex-col gap-1.5">
+                                    <div className="flex items-center gap-2">
+                                      <ShieldAlert className="w-3 h-3 text-red-400/70" />
+                                      <span className="text-[10px] font-black uppercase text-red-400/70 tracking-tight">
+                                        {log.data.violation}
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2" title={log.data.message}>
+                                      {log.data.message || "Nenhuma descrição detalhada disponível."}
+                                    </p>
+                                  </div>
                                 </TableCell>
-                                <TableCell className="text-xs text-amber-100/70">
-                                  {log.data.suggestion || '--'}
+                                <TableCell className="py-3 align-top">
+                                  <div className="flex items-start gap-2 bg-cyan-950/30 border border-cyan-500/10 p-2.5 rounded-lg group-hover:border-cyan-500/20 transition-colors">
+                                    <Zap className="w-3.5 h-3.5 text-cyan-400 mt-0.5 shrink-0" />
+                                    <p className="text-[11px] text-cyan-200/80 leading-snug line-clamp-2" title={log.data.suggestion}>
+                                      {log.data.suggestion || "Nenhuma sugestão disponível."}
+                                    </p>
+                                  </div>
                                 </TableCell>
                                 <TableCell className="pr-6 text-right">
                                   <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1633,7 +1716,7 @@ export default function AuditLogs() {
                                       variant="ghost"
                                       size="sm"
                                       className="h-8 w-8 p-0 hover:bg-amber-500/20 text-amber-500 rounded-lg"
-                                      onClick={() => copyToClipboard(`Arquivo: ${log.data.file}\nViolação: ${log.data.violation}\nSugestão: ${log.data.suggestion}`)}
+                                      onClick={() => copyToClipboard(`Arquivo: ${log.data.file}\nViolação: ${log.data.violation}\nDescrição: ${log.data.message || ''}\nSugestão: ${log.data.suggestion || ''}`)}
                                       title="Copiar dados formatados"
                                     >
                                       <Copy className="w-4 h-4" />
@@ -1821,7 +1904,7 @@ export default function AuditLogs() {
                               className="h-8 w-8 p-0 hover:bg-amber-500/20 text-amber-500 opacity-0 group-hover:opacity-100 transition-opacity"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                copyToClipboard(`Arquivo: ${res.file}\nViolação: ${res.violation}\nSugestão: ${res.suggestion}`);
+                                copyToClipboard(`Arquivo: ${res.file}\nViolação: ${res.violation}\nDescrição: ${res.message}\nSugestão: ${res.suggestion}`);
                               }}
                               title="Copiar detalhes"
                             >

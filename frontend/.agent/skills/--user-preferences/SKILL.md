@@ -16,6 +16,7 @@ description: Regras de comunicação e preferências do usuário para o assisten
 - **Validações**: Sempre que for criar uma validação, verificar se ele segue o padrão de validações do projeto.
 - **Tratamento de Erros**: Sempre que for criar um tratamento de erro, verificar se ele segue o padrão de tratamento de erros do projeto.
 - **Tipagem**: Sempre que for criar uma tipagem, verificar se ele segue o padrão de tipagem do projeto. 
-- **DEPENDÊNCIAS**: Sempre verificar compatibilidade entre dependências. Priorizar versões estáveis (LTS) que funcionem bem entre si, em vez de simplesmente usar "a mais recente". Verificar matriz de compatibilidade (ex: Three.js com React Three Fiber) antes de atualizar.
-- **LÓGICA NO BACKEND**: **A regra de ouro é: quem faz a lógica é o Backend.** O Frontend deve apenas exibir dados e delegar decisões de negócio, filtros complexos e permissões para a API. Evitar duplicar ou criar lógicas complexas no cliente que deveriam estar protegidas ou centralizadas no servidor.
+- **DEPENDÊNCIAS**: **Evoluir Sempre**. Priorizar as versões estáveis (LTS) mais recentes. Nunca fazer downgrade. Manter `npm audit` com 0 vulnerabilidades. Evitar redundâncias e pastas temporárias.
+- **LÓGICA NO BACKEND & ARQUITETURA**: Seguir padrões **DDD, SOLID e Clean Code**. A regra de ouro é: quem faz a lógica é o Backend. O Frontend deve apenas exibir dados e delegar decisões de negócio, filtros complexos e permissões para a API.
 - **VERIFICAR ERROS**: Sempre verificar se contem erros antes de entregar uma tarefa. @current_problems 
+- **ORGANIZAÇÃO E LIMPEZA**: Seguir RIGOROSAMENTE a regra de **Workspace Organization**. Nunca deixar arquivos de dump, logs de build, scripts temporários ou ZIPs na raiz ou espalhados. Ao finalizar uma tarefa: apagar temporários e mover logs para `archives/`.

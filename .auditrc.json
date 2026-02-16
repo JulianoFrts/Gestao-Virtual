@@ -1,0 +1,18 @@
+{
+    "rules": {
+        "srp": true,
+        "long-method": true,
+        "magic-numbers": true,
+        "ddd-violation": true
+    },
+    "ignore": [
+        "node_modules",
+        ".next",
+        "dist",
+        "build",
+        "coverage",
+        ".git",
+        "test",
+        "__tests__"
+    ]
+}
