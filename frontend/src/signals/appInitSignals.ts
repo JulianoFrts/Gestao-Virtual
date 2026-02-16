@@ -1,5 +1,5 @@
 import { signal, computed } from "@preact/signals-react";
-import { isAuthLoadingSignal } from "./authSignals";
+import { isAuthLoadingSignal, currentUserSignal } from "./authSignals";
 import {
     isLoadingDataSignal,
     isSyncingInitialDataSignal,
@@ -91,6 +91,12 @@ export const appProgressSignal = computed(() => {
  */
 export const isAppReadySignal = computed(() => {
     const authReady = !isAuthLoadingSignal.value;
+    const user = currentUserSignal.value;
+
+    // Se a autenticação terminou e não há usuário, o app está pronto para roteamento (ex: p/ tela de login)
+    // Isso evita o travamento em 0% quando a sessão expira ou não existe.
+    if (authReady && !user) return true;
+
     const usersReady = hasUsersFetchedSignal.value;
     const teamsReady = hasTeamsFetchedSignal.value;
     const globalReady = hasGlobalDataFetchedSignal.value;
@@ -112,3 +118,4 @@ export const isAppReadySignal = computed(() => {
 
     return ready;
 });
+
