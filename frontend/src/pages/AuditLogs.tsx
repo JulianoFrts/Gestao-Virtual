@@ -1530,7 +1530,7 @@ export default function AuditLogs() {
                                 {log.data.severity}
                               </span>
                               <span className="text-cyan-400 shrink-0">
-                                {log.data.file.split("/").pop()}
+                                {log.data.file}
                               </span>
                               <span className="text-white/40">→</span>
                               <span className="text-white/60 truncate">
