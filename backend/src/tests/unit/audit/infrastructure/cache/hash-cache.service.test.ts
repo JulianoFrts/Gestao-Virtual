@@ -1,4 +1,4 @@
-import { HashCacheService } from "../../../../modules/audit/infrastructure/cache/hash-cache.service";
+import { HashCacheService } from "@/modules/audit/infrastructure/cache/hash-cache.service";
 
 describe("HashCacheService", () => {
     let service: HashCacheService;

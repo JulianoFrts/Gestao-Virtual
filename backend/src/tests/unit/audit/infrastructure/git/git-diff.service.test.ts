@@ -1,4 +1,4 @@
-import { GitDiffService } from "../../../../modules/audit/infrastructure/git/git-diff.service";
+import { GitDiffService } from "@/modules/audit/infrastructure/git/git-diff.service";
 import * as child_process from "child_process";
 import * as path from "path";
 

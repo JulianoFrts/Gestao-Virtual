@@ -10,7 +10,12 @@
       ]
     },
     "skipLibCheck": true,
-    "moduleResolution": "bundler"
+    "moduleResolution": "bundler",
+    "types": [
+      "node",
+      "d3-scale",
+      "three"
+    ]
   },
   "references": [
     {

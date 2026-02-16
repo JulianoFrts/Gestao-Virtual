@@ -1,4 +1,4 @@
-import { AuditConfigService } from "../../../../modules/audit/infrastructure/config/audit-config.service";
+import { AuditConfigService } from "@/modules/audit/infrastructure/config/audit-config.service";
 import * as fs from "fs";
 import * as path from "path";
 

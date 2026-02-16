@@ -20,3 +20,4 @@ description: Regras de comunicação e preferências do usuário para o assisten
 - **LÓGICA NO BACKEND & ARQUITETURA**: Seguir padrões **DDD, SOLID e Clean Code**. A regra de ouro é: quem faz a lógica é o Backend. O Frontend deve apenas exibir dados e delegar decisões de negócio, filtros complexos e permissões para a API.
 - **VERIFICAR ERROS**: Sempre verificar se contem erros antes de entregar uma tarefa. @current_problems 
 - **ORGANIZAÇÃO E LIMPEZA**: Seguir RIGOROSAMENTE a regra de **Workspace Organization**. Nunca deixar arquivos de dump, logs de build, scripts temporários ou ZIPs na raiz ou espalhados. Ao finalizar uma tarefa: apagar temporários e mover logs para `archives/`.
+- **LÓGICA DE IMPORTAÇÃO**: Aplicar a **Import Recognition Logic**. ELIMINAR caminhos relativos longos (`../../`). Usar obrigatoriamente ALIAS (`@/`) para garantir que o código não quebre ao mover pastas.
