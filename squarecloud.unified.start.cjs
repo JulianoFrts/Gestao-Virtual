@@ -392,15 +392,14 @@ function setupEnvironment(finalUrl) {
 
 async function syncSchemaAndSeeds(commonEnv, finalAppUrl, finalNakedUrl, success) {
     const isNeon = finalAppUrl.includes('neon.tech');
-    const shouldNuke = success && process.env.FORCE_NUKE_DB === 'true';
+    const shouldNuke = success && process.env.FORCE_NUKE_DB === 'false';
 
     // v203: shouldSync mais agressivo para Neon
     const shouldSync = success && (
         shouldNuke ||
-        process.env.RUN_SEEDS === 'true' ||
-        process.env.FORCE_DB_PUSH === 'true' ||
-        process.env.FORCE_SEED === 'true'
-        // isNeon // Check for Neon removed as requested
+        process.env.RUN_SEEDS === 'false' ||
+        process.env.FORCE_DB_PUSH === 'false' ||
+        process.env.FORCE_SEED === 'false'
     );
 
     console.log(`🛡️ [v200] EXECUTANDO BOOSTER SQL NO BANCO DESTINO: ${isNeon ? 'NEON' : 'SQUARE'}...`);
