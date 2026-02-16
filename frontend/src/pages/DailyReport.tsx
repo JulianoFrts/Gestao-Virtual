@@ -653,7 +653,6 @@ export default function DailyReport() {
                       </label>
                     )}
                   </div>
-                  DEBUG: BARRA DE ATIVIDADES PRESENTE
 
                   {/* QUICK ACTIVITY ADD BAR (YELLOW/RED) - IMPROVED VISIBILITY */}
                   <div className="w-full bg-amber-500/10 border-2 border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4 relative shadow-lg shadow-amber-500/5 my-4">
