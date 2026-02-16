@@ -654,65 +654,64 @@ export default function DailyReport() {
                     )}
                   </div>
 
-                  {/* QUICK ACTIVITY ADD BAR (YELLOW/RED) */}
-                  <div className="w-full bg-amber-500/5 border border-red-500/20 rounded-xl p-2 flex items-center gap-2 relative group transition-all hover:bg-amber-500/10 hover:border-red-500/30">
-                    <div className="absolute -top-2.5 left-4 px-2 bg-[#0c0c0e] text-[9px] font-bold text-amber-500 uppercase tracking-widest border border-red-500/20 rounded-full">
-                      Adicionar Atividade
+                  {/* QUICK ACTIVITY ADD BAR (YELLOW/RED) - IMPROVED VISIBILITY */}
+                  <div className="w-full bg-amber-500/10 border-2 border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4 relative shadow-lg shadow-amber-500/5 my-4">
+                    <div className="absolute -top-3 left-6 px-3 bg-amber-500 text-[10px] font-black text-black uppercase tracking-widest rounded-full shadow-md">
+                      Adicionar Atividade Rápida
                     </div>
 
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="ghost" className="flex-1 justify-start text-foreground hover:text-white hover:bg-white/5 h-10 px-3 font-normal border border-white/10 bg-black/20">
-                          <Search className="w-4 h-4 mr-2 text-amber-500" />
-                          <span className={quickActivityId ? "text-foreground font-medium" : ""}>
-                            {quickActivityId
-                              ? workStages.find(s => s.id === quickActivityId)?.name
-                              : "Buscar atividade para adicionar..."}
-                          </span>
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[400px] p-0 glass-card border-amber-500/20" align="start">
-                        <Command className="bg-transparent">
-                          <CommandInput placeholder="Filtrar atividades..." className="h-10" />
-                          <CommandList>
-                            <CommandEmpty>Nenhuma atividade encontrada.</CommandEmpty>
-                            <CommandGroup heading="Etapas de Obra">
-                              {workStages
-                                // .filter(s => !!s.parentId) // Relaxed filter: show all, or maybe show parents differently?
-                                // Let's show everything to be safe, or just leaf nodes if we can determine them.
-                                // If the user has a flat structure, !!s.parentId will be empty.
-                                // Better approach: Show all stages sort by name/sequence.
-                                .map((stage) => (
+                    <div className="flex-1 w-full flex items-center gap-2">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="flex-1 justify-start text-foreground hover:bg-white/5 h-12 px-4 font-medium border-amber-500/20 bg-black/40 rounded-xl"
+                          >
+                            <Search className="w-5 h-5 mr-3 text-amber-500" />
+                            <span className={quickActivityId ? "text-white" : "text-muted-foreground"}>
+                              {quickActivityId
+                                ? workStages.find(s => s.id === quickActivityId)?.name
+                                : "Escolha uma atividade para adicionar..."}
+                            </span>
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[450px] p-0 glass-card border-amber-500/30 shadow-2xl" align="start">
+                          <Command className="bg-[#0c0c0e] text-foreground">
+                            <CommandInput placeholder="Filtrar atividades por nome..." className="h-12 border-none focus:ring-0" />
+                            <CommandList className="max-h-[300px]">
+                              {isLoadingStages && <div className="p-4 text-center text-xs text-amber-500/50">Carregando atividades...</div>}
+                              {!isLoadingStages && workStages.length === 0 && <CommandEmpty>Nenhuma atividade encontrada para este projeto.</CommandEmpty>}
+                              <CommandGroup heading="Atividades Disponíveis">
+                                {workStages.map((stage) => (
                                   <CommandItem
                                     key={stage.id}
                                     value={stage.name}
-                                    onSelect={() => {
-                                      setQuickActivityId(stage.id);
-                                      // Auto-trigger add? Or wait for button? User said "red arrow indicates button to save".
-                                      // Let's Keep flow: Select -> Click Button to Add.
-                                    }}
-                                    className="cursor-pointer aria-selected:bg-amber-500/10"
+                                    onSelect={() => setQuickActivityId(stage.id)}
+                                    className="cursor-pointer aria-selected:bg-amber-500/20 py-3 px-4 transition-colors"
                                   >
-                                    <Check className={cn("mr-2 h-4 w-4 text-amber-500", quickActivityId === stage.id ? "opacity-100" : "opacity-0")} />
-                                    {stage.name}
+                                    <Check className={cn("mr-3 h-4 w-4 text-amber-500", quickActivityId === stage.id ? "opacity-100" : "opacity-0")} />
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">{stage.name}</span>
+                                      {stage.description && <span className="text-[10px] text-muted-foreground line-clamp-1">{stage.description}</span>}
+                                    </div>
                                   </CommandItem>
                                 ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
 
-                    <Button
-                      type="button" // Prevent form submit
-                      size="icon"
-                      onClick={handleQuickAdd}
-                      disabled={!quickActivityId}
-                      className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-lg w-10 h-10 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
-                      title="Adicionar Atividade à Lista"
-                    >
-                      <Plus className="w-5 h-5" />
-                    </Button>
+                      <Button
+                        type="button"
+                        onClick={handleQuickAdd}
+                        disabled={!quickActivityId}
+                        className="bg-red-600 hover:bg-red-500 text-white border border-red-400/30 rounded-xl w-14 h-12 transition-all hover:scale-105 active:scale-95 disabled:grayscale disabled:opacity-30 shadow-lg shadow-red-900/20"
+                        title="Confirmar Adição"
+                      >
+                        <Plus className="w-6 h-6 stroke-[3px]" />
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-12 gap-6">
@@ -731,7 +730,7 @@ export default function DailyReport() {
                         value={subPointType}
                         onValueChange={(val) =>
                           updateReportDraft({
-                            subPointType: val as 'GERAL' | 'TORRE' | 'VAO' | 'TRECHO',
+                            subPointType: val as 'GERAL' | 'TORRE' | 'VAO' | 'TRECHO' | 'ESTRUTURA',
                             isMultiSelection:
                               val === "TORRE" ? isMultiSelection : false,
                           })
