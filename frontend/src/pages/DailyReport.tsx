@@ -662,7 +662,7 @@ export default function DailyReport() {
 
                     <Popover>
                       <PopoverTrigger asChild>
-                        <Button variant="ghost" className="flex-1 justify-start text-muted-foreground hover:text-white hover:bg-transparent h-10 px-3 font-normal">
+                        <Button variant="ghost" className="flex-1 justify-start text-foreground hover:text-white hover:bg-white/5 h-10 px-3 font-normal border border-white/10 bg-black/20">
                           <Search className="w-4 h-4 mr-2 text-amber-500" />
                           <span className={quickActivityId ? "text-foreground font-medium" : ""}>
                             {quickActivityId
@@ -678,7 +678,10 @@ export default function DailyReport() {
                             <CommandEmpty>Nenhuma atividade encontrada.</CommandEmpty>
                             <CommandGroup heading="Etapas de Obra">
                               {workStages
-                                .filter(s => !!s.parentId) // Only child tasks
+                                // .filter(s => !!s.parentId) // Relaxed filter: show all, or maybe show parents differently?
+                                // Let's show everything to be safe, or just leaf nodes if we can determine them.
+                                // If the user has a flat structure, !!s.parentId will be empty.
+                                // Better approach: Show all stages sort by name/sequence.
                                 .map((stage) => (
                                   <CommandItem
                                     key={stage.id}
