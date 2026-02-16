@@ -207,9 +207,10 @@ const menuGroups: SidebarGroup[] = [
       {
         id: "audit_logs.view",
         icon: Zap,
-        label: "UI Live / Master Runner",
+        label: "Auditoria Master",
         path: "/audit-logs?tab=standards",
       },
+
       {
         id: "audit_logs.view",
         icon: ShieldCheck,

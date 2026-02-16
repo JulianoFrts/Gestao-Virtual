@@ -26,7 +26,7 @@ import { activeTaskIdsSignal, pendingTaskIdsSignal } from "./loaderSignals";
 const minDelayElapsedSignal = signal<boolean>(false);
 
 // Inicia o timer de delay mínimo ao carregar o módulo
-const MIN_INIT_TIME = 800; // ms
+const MIN_INIT_TIME = 200; // ms
 if (typeof window !== 'undefined') {
     setTimeout(() => {
         if (!minDelayElapsedSignal.value) {

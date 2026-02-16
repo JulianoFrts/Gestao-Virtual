@@ -130,13 +130,13 @@ export const GlobalInitializer = () => {
                 id: 'reports',
                 label: 'Relatórios Diários (RDO)',
                 action: async () => {
-                    // Simulando ou chamando refresh de reports
-                    await new Promise(r => setTimeout(r, 600));
+                    // Trigger inicial de cache se necessário
                     hasReportsFetchedSignal.value = true;
                 },
                 priority: 70,
                 dependencies: ['teams']
             });
+
 
             // --- NÍVEL 3: PRODUÇÃO E OPERAÇÃO (60-40) ---
             loader.add({
@@ -184,18 +184,20 @@ export const GlobalInitializer = () => {
                     hasAuditFetchedSignal.value = true;
                 },
                 priority: 30
+                // Removido dependências desnecessárias para carregar em paralelo
             });
+
 
             loader.add({
                 id: 'viewer3d',
                 label: 'Engenharia 3D',
                 action: async () => {
-                    await new Promise(r => setTimeout(r, 800));
                     has3dFetchedSignal.value = true;
                 },
                 priority: 20,
                 dependencies: ['projects']
             });
+
 
             loader.add({
                 id: 'messages',
@@ -209,11 +211,12 @@ export const GlobalInitializer = () => {
                 id: 'harmonization',
                 label: 'Finalizando...',
                 action: async () => {
-                    await new Promise(r => setTimeout(r, 300));
+                    // Removido delay de 300ms
                 },
                 priority: 1,
                 dependencies: ['users', 'projects', 'teams', 'employees', 'production', 'viewer3d', 'reports', 'messages', 'timeRecords', 'workStages', 'costs', 'audit']
             });
+
 
             loader.start();
         };
@@ -241,7 +244,8 @@ export const GlobalInitializer = () => {
         }, 25000);
 
         return () => clearTimeout(timer);
-    }, [refreshUsers, refreshTeams]);
+    }, []); // Dependência vazia para orquestrar apenas uma vez no "ciclo de vida logado"
+
 
     return null;
 };

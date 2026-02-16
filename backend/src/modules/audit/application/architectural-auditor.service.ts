@@ -74,7 +74,8 @@ export class ArchitecturalAuditor {
    */
   public async runFullAudit(
     userId?: string,
-    incremental: boolean = false
+    incremental: boolean = false,
+    onProgress?: (result: AuditResult) => void
   ): Promise<{ results: AuditResult[]; summary: AuditSummary }> {
     logger.info(`Iniciando Auditoria Arquitetural de Sistema (v3.1) [Incremental: ${incremental}]`, {
       source: "Auditoria/AuditorArquitetural",
@@ -93,7 +94,8 @@ export class ArchitecturalAuditor {
     const activeViolations = await this.performAuditScanParallel(
       files,
       results,
-      userId
+      userId,
+      onProgress
     );
 
     // Reconciliação
@@ -111,7 +113,8 @@ export class ArchitecturalAuditor {
   private async performAuditScanParallel(
     files: string[],
     results: AuditResult[],
-    userId?: string
+    userId?: string,
+    onProgress?: (result: AuditResult) => void
   ): Promise<Set<string>> {
     const activeViolations = new Set<string>();
     const CONCURRENCY_LIMIT = 10;
@@ -131,6 +134,10 @@ export class ArchitecturalAuditor {
               const violationKey = `${res.file}:${res.violation}`;
               activeViolations.add(violationKey);
               await this.persistViolation(res, userId);
+
+              if (onProgress) {
+                onProgress(res);
+              }
             }
           }
         } catch (error: any) {

@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server";
+import { ApiResponse } from "@/lib/utils/api/response";
+import { requireAuth } from "@/lib/auth/session";
 import { isGodRole } from "@/lib/constants/security";
 import { AuditStreamService } from "@/modules/audit/application/audit-stream.service";
 import { GovernanceService } from "@/modules/audit/application/governance.service";
@@ -34,20 +36,26 @@ async function validateTokenFromQuery(token: string) {
   }
 }
 
+export async function HEAD() {
+  return ApiResponse.noContent();
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const token = searchParams.get("token");
+    const { validateToken } = await import("@/lib/auth/session");
+    let currentUser;
 
-    if (!token) {
-      return new Response(JSON.stringify({ error: "Token não fornecido" }), {
-        status: CONSTANTS.HTTP.STATUS.UNAUTHORIZED,
-        headers: { "Content-Type": "application/json" },
-      });
+    const token = request.nextUrl.searchParams.get("token");
+    if (token) {
+      const session = await validateToken(token);
+      if (session?.user) currentUser = session.user;
     }
 
-    const user = await validateTokenFromQuery(token);
-    const stream = streamService.createScanStream(user.id);
+    if (!currentUser) {
+      currentUser = await requireAuth();
+    }
+
+    const stream = streamService.createScanStream(currentUser.id);
 
     return new Response(stream, {
       headers: {
@@ -58,7 +66,8 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    const message = error instanceof Error ? error.message : String(error);
+    return new Response(JSON.stringify({ error: message }), {
       status: CONSTANTS.HTTP.STATUS.UNAUTHORIZED,
       headers: { "Content-Type": "application/json" },
     });

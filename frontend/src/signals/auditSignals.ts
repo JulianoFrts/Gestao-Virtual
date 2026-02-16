@@ -1,5 +1,6 @@
 import { signal, computed } from "@preact/signals-react";
-// import { db } from "@/integrations/database"; // Removido em favor de SSE API
+import { orionApi } from "@/integrations/orion/client";
+import { currentUserSignal } from "./authSignals";
 
 export interface AuditLog {
   id: string;
@@ -32,29 +33,39 @@ export const auditFilters = signal({
 export const fetchAuditLogs = async () => {
   if (isLoadingAudit.value) return; // Evitar chamadas duplicadas
 
+  const token = orionApi.token;
+  const user = currentUserSignal.value;
+
+  console.log("[AuditSignals] Iniciando fetchAuditLogs...", { hasToken: !!token, hasUser: !!user });
+
+  if (!token || !user) {
+    console.debug("[AuditSignals] Skip fetch: No active session.");
+    return;
+  }
+
   isLoadingAudit.value = true;
   auditLogs.value = [];
   auditProgress.value = 0;
   totalAuditLogs.value = 0;
 
   try {
-    const token = localStorage.getItem("token") || localStorage.getItem("orion_token");
-    if (!token) throw new Error("Token não encontrado");
-
     // Construir URL absoluta para EventSource
     const envUrl = import.meta.env.VITE_API_URL || "/api/v1";
     const backendUrl = envUrl.startsWith("http")
       ? envUrl
       : `${window.location.origin}${envUrl.startsWith("/") ? "" : "/"}${envUrl}`;
 
-    // Adicionar filtros na URL se necessário (futuro)
-    const sseUrl = `${backendUrl}/audit_logs?token=${encodeURIComponent(token)}`;
+    // Conexão SSE segura. Passamos o token na URL como fallback para o middleware/EventSource
+    const sseUrl = `${backendUrl}/audit_logs?token=${token}`;
+    
+    console.log("[AuditSignals] Conectando ao SSE:", sseUrl);
+    const eventSource = new EventSource(sseUrl, { withCredentials: true });
 
-    const eventSource = new EventSource(sseUrl);
 
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        console.debug("[AuditSignals] SSE Message:", data.type, data);
 
         if (data.type === "start") {
           totalAuditLogs.value = data.total;
@@ -84,8 +95,8 @@ export const fetchAuditLogs = async () => {
       }
     };
 
-    eventSource.onerror = () => {
-      console.error("Erro na conexão SSE de Auditoria");
+    eventSource.onerror = (err) => {
+      console.error("[AuditSignals] Erro na conexão SSE de Auditoria:", err);
       eventSource.close();
       isLoadingAudit.value = false;
     };

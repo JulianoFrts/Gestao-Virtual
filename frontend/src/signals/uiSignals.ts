@@ -15,3 +15,8 @@ export const isFocusModeSignal = signal(false);
 export const setFocusMode = (isFocus: boolean) => {
   isFocusModeSignal.value = isFocus;
 };
+
+export const toggleFocusMode = () => {
+  isFocusModeSignal.value = !isFocusModeSignal.value;
+};
+

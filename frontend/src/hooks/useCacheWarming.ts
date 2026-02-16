@@ -131,15 +131,17 @@ export function useCacheWarming() {
                 },
             },
             {
-                entity: 'towerTechnicalData',
+                entity: 'towerTechnicalData' as any,
                 query: async () => {
                     const { data, error } = await db
-                        .from('tower_technical_data' as any)
-                        .select('*');
+                        .from('map_elements')
+                        .select('*')
+                        .eq('elementType', 'TOWER');
                     if (error) throw error;
                     return data;
                 },
             },
+
         ];
 
     /**

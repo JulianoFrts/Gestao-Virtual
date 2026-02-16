@@ -4,8 +4,10 @@
 
 import { auth } from "./auth";
 import type { Session } from "next-auth";
+import { decode } from "next-auth/jwt";
 import { headers } from "next/headers";
 import { jwtVerify } from "jose";
+
 import { prisma } from "@/lib/prisma/client";
 import type { Role, AccountStatus } from "@/types/database";
 import { UserService } from "@/modules/users/application/user.service";
@@ -67,13 +69,49 @@ export async function getCurrentSession(): Promise<Session | null> {
   return await getBearerSession();
 }
 
+
 export async function validateToken(token: string): Promise<Session | null> {
+
   try {
     const jwtSecret = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
-    if (!jwtSecret) return null;
 
-    const { payload } = await jwtVerify(token, new TextEncoder().encode(jwtSecret));
-    if (!payload?.sub && !payload?.id) return null;
+    if (!jwtSecret) {
+      console.error("[AUTH] NEXTAUTH_SECRET não configurado.");
+      return null;
+    }
+
+    let payload: any = null;
+
+    // 1. Tentar decodificar como NextAuth JWE (padrão v5)
+    try {
+      payload = await decode({ 
+        token, 
+        secret: jwtSecret,
+        salt: process.env.NEXTAUTH_SALT || "authjs.session-token"
+      });
+      if (payload) console.debug("[AUTH] Token decodificado via JWE");
+    } catch (e: any) {
+      console.debug("[AUTH] Falha ao decodificar JWE:", e.message);
+    }
+
+    // 2. Se falhar ou retornar null, tentar como JWS (HS256) - usado pelo login legado
+    if (!payload) {
+      try {
+        const secret = new TextEncoder().encode(jwtSecret);
+        const verified = await jwtVerify(token, secret);
+        payload = verified.payload;
+        if (payload) console.debug("[AUTH] Token decodificado via HS256 (Legado)");
+      } catch (e: any) {
+        console.debug("[AUTH] Falha ao decodificar HS256:", e.message);
+      }
+    }
+
+    if (!payload?.sub && !payload?.id) {
+       console.warn("[AUTH] Payload sem sub/id:", { hasPayload: !!payload });
+       return null;
+    }
+
+
 
     const userId = (payload.sub || payload.id) as string;
     const userData = await fetchUserSessionData(userId);
@@ -94,15 +132,16 @@ export async function validateToken(token: string): Promise<Session | null> {
         permissions: userData.permissions,
         ui: userData.ui,
       } as any,
-      expires: new Date(((payload.exp as number) || 0) * 1000).toISOString(),
+      expires: payload.exp ? new Date((payload.exp as number) * 1000).toISOString() : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     };
   } catch (error: any) {
     if (error.code !== "ERR_JWT_EXPIRED") {
-      console.warn("[AUTH] Token inválido validateToken:", error.message);
+      console.warn("[AUTH] Erro ao validar token:", error.message);
     }
     return null;
   }
 }
+
 
 async function getBearerSession(): Promise<Session | null> {
   try {
@@ -110,14 +149,31 @@ async function getBearerSession(): Promise<Session | null> {
     const authHeader = headersList.get("authorization");
     const bearerPrefix = "Bearer ";
 
-    if (!authHeader?.startsWith(bearerPrefix)) return null;
+    let token: string | null = null;
 
-    const token = authHeader.substring(bearerPrefix.length);
+    if (authHeader?.startsWith(bearerPrefix)) {
+      token = authHeader.substring(bearerPrefix.length);
+    } else {
+      // Suporte para token na query (EventSource/SSE) 
+      // Em Next.js Route Handlers, podemos extrair da URL se passarmos.
+      // Como getCurrentSession() não recebe o request, tentamos via cabeçalhos de URL original se presentes.
+      const xUrl = headersList.get("x-url") || headersList.get("referer");
+      if (xUrl) {
+        try {
+          const url = new URL(xUrl);
+          token = url.searchParams.get("token");
+        } catch (e) {}
+      }
+    }
+
+    if (!token) return null;
     return await validateToken(token);
   } catch (error: any) {
     return null;
   }
 }
+
+
 
 /**
  * Enriquece uma sessão existente

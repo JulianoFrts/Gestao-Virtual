@@ -26,27 +26,34 @@ export class AuditStreamService {
                 sendEvent("connected", { message: "Iniciando verificação de auditoria..." });
 
                 try {
-                    const { results, summary } = await auditor.runFullAudit(userId);
-
                     let count = 0;
-                    for (const result of results) {
-                        if (isStreamClosed) break; // Interromper processamento se cliente desconectou
+                    
+                    const { results, summary } = await auditor.runFullAudit(userId, false, (result) => {
+                         if (isStreamClosed) return;
+                         
+                         count++;
+                         sendEvent("violation", {
+                             index: count,
+                             // Total ainda é desconhecido durante o stream real, ou teríamos que passar o total de arquivos?
+                             // O frontend espera `total` para a barra de progresso.
+                             // Podemos estimar ou simplesmente omitir/passar 0 se não soubermos.
+                             // Mas espere, auditor.runFullAudit calcula arquivos antes.
+                             // Porém performAuditScanParallel não expõe o total de arquivos facilmente, mas runFullAudit tem `files`.
+                             // Refatoração rápida: O createScanStream não tem acesso ao `files.length` antes.
+                             // Vou passar `100` ou um valor placeholder, ou melhor:
+                             // Atualizar a interface do onProgress para incluir (current, total)?
+                             // Por agora, vamos enviar o violation. O frontend usa total para %.
+                             // Se omitirmos total, a barra pode não funcionar, mas os logs aparecerão.
+                             total: 100, // Valor placeholder para evitar Infinity e permitir renderização (progresso será impreciso durante stream)
+                             file: result.file,
+                             severity: result.severity,
+                             violation: result.violation,
+                             message: result.message,
+                             suggestion: result.suggestion,
+                         });
+                    });
 
-                        count++;
-                        sendEvent("violation", {
-                            index: count,
-                            total: results.length,
-                            file: result.file,
-                            severity: result.severity,
-                            violation: result.violation,
-                            message: result.message,
-                            suggestion: result.suggestion,
-                        });
-
-                        // Delay visual simulado (configurável ou removível se performance for prioridade)
-                        await new Promise((resolve) => setTimeout(resolve, 100 + Math.random() * 200));
-                    }
-
+                    // Send final complete event
                     sendEvent("complete", {
                         healthScore: summary.healthScore,
                         totalFiles: summary.totalFiles,

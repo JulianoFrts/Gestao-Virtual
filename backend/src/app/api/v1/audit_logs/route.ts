@@ -7,23 +7,27 @@ import { PrismaAuditLogRepository } from "@/modules/audit/infrastructure/prisma-
 // DI
 const auditLogService = new AuditLogService(new PrismaAuditLogRepository());
 
+export async function HEAD() {
+  return ApiResponse.noContent();
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const { validateToken } = await import("@/lib/auth/session");
+    const { validateToken, isUserAdmin } = await import("@/lib/auth/session");
     let currentUser;
 
-    // Suporte a Token na URL para SSE (EventSource não suporta headers customizados facilmente)
     const token = request.nextUrl.searchParams.get("token");
     if (token) {
       const session = await validateToken(token);
-      if (session?.user) currentUser = session.user;
+      if (session?.user) {
+        currentUser = session.user;
+      }
     }
 
     if (!currentUser) {
       currentUser = await requireAuth();
     }
 
-    const { isUserAdmin } = await import("@/lib/auth/session");
     const isAdmin = isUserAdmin(currentUser.role);
     const { CONSTANTS } = await import("@/lib/constants");
     const stream = generateAuditLogsStream(currentUser, isAdmin, CONSTANTS);
@@ -33,6 +37,7 @@ export async function GET(request: NextRequest) {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
       },
     });
   } catch (error) {

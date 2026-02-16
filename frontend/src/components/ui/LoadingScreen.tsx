@@ -1,6 +1,12 @@
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useSignals } from "@preact/signals-react/runtime";
+import { useState } from "react";
+import { ChevronDown, ChevronUp, Maximize2, Minimize2 } from "lucide-react";
+import { Button } from "./button";
+import { Switch } from "./switch";
+import { Label } from "./label";
+
 
 interface LoadingDetail {
     label: string;
@@ -16,11 +22,13 @@ interface LoadingScreenProps {
 
 export const LoadingScreen = ({ 
     isLoading, 
-    title = "CARREGANDO SISTEMA", 
-    message = "AGUARDE UM MOMENTO",
+    title = "GESTÃO VIRTUAL", 
+    message = "SINCRONIZAÇÃO DE DADOS",
     details = []
 }: LoadingScreenProps) => {
     useSignals();
+    const [isExpanded, setIsExpanded] = useState(true);
+
 
     const totalItems = details.length;
     const loadedItems = details.filter(d => !d.isLoading).length;
@@ -89,11 +97,39 @@ export const LoadingScreen = ({
 
                 {/* Status List */}
                 {showDetails && (
-                    <div className="w-full glass-card bg-white/2 backdrop-blur-2xl border border-white/5 rounded-3xl p-6 space-y-4 shadow-2xl">
-                        <div className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30 border-b border-white/5 pb-3 text-center">
-                            Status de Carregamento
+                    <div className="w-full glass-card bg-white/2 backdrop-blur-2xl border border-white/5 rounded-3xl p-6 space-y-4 shadow-2xl relative overflow-hidden">
+                        <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                            <div className="flex flex-col">
+                                <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30">
+                                    SINCRONIZAÇÃO DE DADOS
+                                </span>
+                                <span className="text-[7px] font-bold text-amber-500/50 flex items-center gap-1 uppercase tracking-widest mt-0.5">
+                                    <div className="w-1 h-1 bg-amber-500 rounded-full animate-pulse" />
+                                    Active Sync
+                                </span>
+                            </div>
+
+                            <div className="flex items-center gap-3 bg-white/5 px-3 py-1.5 rounded-xl border border-white/10 shadow-inner">
+                                <Switch 
+                                    id="sync-expand" 
+                                    checked={isExpanded}
+                                    onCheckedChange={(checked) => setIsExpanded(checked)}
+                                    className="data-[state=checked]:bg-primary"
+                                />
+                                <Label 
+                                    htmlFor="sync-expand" 
+                                    className="text-[9px] font-black uppercase tracking-widest cursor-pointer select-none text-white/70 hover:text-white transition-colors"
+                                >
+                                    {isExpanded ? 'DETALHES: ON' : 'DETALHES: OFF'}
+                                </Label>
+                            </div>
                         </div>
-                        <div className="space-y-2.5">
+
+                        <div className={cn(
+                            "space-y-2.5 transition-all duration-500 ease-in-out overflow-hidden",
+                            isExpanded ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
+                        )}>
+
                             {details.map((item, idx) => (
                                 <div key={idx} className="flex items-center justify-between text-xs px-2 py-1 rounded-lg transition-colors hover:bg-white/2">
                                     <span className={cn(

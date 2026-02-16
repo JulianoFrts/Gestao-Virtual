@@ -181,9 +181,9 @@ export default function Auth() {
       <div className="w-full max-w-lg animate-fade-in flex flex-col items-center">
         <div className="text-center mb-0 flex flex-col items-center">
           <img
-            src="/logo-orion.png"
+            src="/gestao_virtual_premium_logo.png"
             alt="GESTÃO VIRTUAL Logo"
-            className="w-[450px] md:w-[500px] h-auto drop-shadow-[0_0_25px_rgba(255,255,255,0.2)] animate-in fade-in zoom-in duration-1000"
+            className="w-[450px] md:w-[500px] h-auto drop-shadow-[0_0_25px_rgba(0,212,255,0.3)] animate-in fade-in zoom-in duration-1000"
           />
         </div>
 
@@ -194,7 +194,8 @@ export default function Auth() {
 
           <CardHeader className="text-center">
             <CardTitle className="text-2xl font-bold flex items-center justify-center gap-2 text-foreground">
-              {showMfaChallenge ? 'Verificação MFA' : mode === 'login' ? 'Bem-vindo' : 'Acesso Rápido'}
+              {showMfaChallenge ? 'Verificação MFA' : mode === 'login' ? 'Gestão Virtual' : 'Acesso Rápido'}
+
               {(mode === 'qr' || showMfaChallenge) && (
                 showMfaChallenge ? <ShieldCheck className="w-6 h-6 text-primary" /> : <QrCode className="w-6 h-6 text-primary" />
               )}

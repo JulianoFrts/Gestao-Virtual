@@ -12,18 +12,21 @@ export function useTowerTechnicalData(selectedProjectId: string) {
         if (!profile?.id || selectedProjectId === 'all') return;
 
         try {
-            const data: any = {
+            const dataUpdate: any = {
                 projectId: selectedProjectId,
                 companyId: profile.companyId,
-                objectId: objectId,
+                externalId: objectId,
+                elementType: 'TOWER',
                 [property]: value
             };
 
             const { error } = await orionApi
-                .from('tower_technical_data')
-                .upsert([data], { // Envolvendo em array conforme exigido pelo backend (route.ts:96)
-                    onConflict: 'project_id, object_id'
+                .from('map_elements')
+                .upsert([dataUpdate], {
+                    onConflict: 'projectId, externalId'
                 });
+
+
 
             if (error) throw error;
 

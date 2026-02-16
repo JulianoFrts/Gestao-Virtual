@@ -56,10 +56,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import GAPOValidationList from "@/components/gapo/GAPOValidationList";
 import { useAuth } from "@/contexts/AuthContext";
 import { isProtectedSignal, can } from "@/signals/authSignals";
+import { useSignals } from "@preact/signals-react/runtime";
 import { orionApi } from "@/integrations/orion/client";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
-import { setFocusMode } from "@/signals/uiSignals";
+import { setFocusMode, isFocusModeSignal } from "@/signals/uiSignals";
+
 import {
   Popover,
   PopoverContent,
@@ -72,13 +74,169 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+
 import { DateRange } from "react-day-picker";
 
 import { useSearchParams } from "react-router-dom";
 
-// ... (imports anteriores)
+const DiffViewer = ({ oldData, newData }: { oldData: any; newData: any }) => {
+  const sensitiveKeys = [
+    "password",
+    "token",
+    "secret",
+    "credential",
+    "auth",
+    "senha",
+    "key",
+    "access_token",
+  ];
+
+  const formatDisplayValue = (key: string, value: any) => {
+    if (value === null || value === undefined) {
+      return (
+        <Badge
+          variant="outline"
+          className="text-[10px] opacity-30 border-white/10 font-mono"
+        >
+          NULL
+        </Badge>
+      );
+    }
+
+    if (sensitiveKeys.some((k) => key.toLowerCase().includes(k))) {
+      return (
+        <span className="text-primary font-mono tracking-widest text-xs">
+          ••••••••
+        </span>
+      );
+    }
+
+    // ISO Date Check
+    if (
+      typeof value === "string" &&
+      value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
+    ) {
+      return (
+        <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+          <CalendarIcon className="w-3 h-3 text-primary/50" />
+          {format(new Date(value), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}
+        </span>
+      );
+    }
+
+    // UUID check
+    if (
+      typeof value === "string" &&
+      value.match(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      )
+    ) {
+      return (
+        <span
+          className="font-mono text-[10px] bg-black/40 px-1.5 py-0.5 rounded border border-white/5 text-blue-400 group-hover:text-blue-300 transition-colors"
+          title={value}
+        >
+          {value.substring(0, 8)}...{value.substring(value.length - 4)}
+        </span>
+      );
+    }
+
+    if (typeof value === "boolean") {
+      return (
+        <Badge
+          className={cn(
+            "text-[9px] font-black uppercase tracking-tighter",
+            value
+              ? "bg-green-500/20 text-green-400"
+              : "bg-red-500/20 text-red-400",
+          )}
+        >
+          {value ? "TRUE" : "FALSE"}
+        </Badge>
+      );
+    }
+
+    if (typeof value === "object") {
+      return (
+        <span className="text-[10px] font-mono text-muted-foreground italic truncate">
+          JSON Object
+        </span>
+      );
+    }
+
+    return (
+      <span className="text-xs font-bold text-foreground truncate">
+        {String(value)}
+      </span>
+    );
+  };
+
+  if (!oldData && !newData)
+    return (
+      <div className="p-8 text-center text-muted-foreground italic border-2 border-dashed border-white/5 rounded-2xl">
+        Sem dados para comparar
+      </div>
+    );
+
+  const allKeys = Array.from(
+    new Set([...Object.keys(oldData || {}), ...Object.keys(newData || {})]),
+  );
+  const changes = allKeys.filter(
+    (key) =>
+      JSON.stringify(oldData?.[key]) !== JSON.stringify(newData?.[key]),
+  );
+
+  return (
+    <div className="max-h-[60vh] overflow-y-auto pr-2 -mr-2">
+      <div
+        className={cn(
+          "grid gap-2 p-1",
+          changes.length > 4 ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1",
+        )}
+      >
+        {changes.length === 0 ? (
+          <div className="p-10 text-center space-y-2 col-span-full">
+            <p className="text-xs text-muted-foreground uppercase tracking-widest font-black opacity-30">
+              Nenhuma alteração detectada nos campos
+            </p>
+          </div>
+        ) : (
+          changes.map((key) => (
+            <div
+              key={key}
+              className="group flex flex-col items-stretch gap-px rounded-lg overflow-hidden border border-white/5 bg-white/2 hover:border-primary/20 transition-all duration-300"
+            >
+              <div className="p-1.5 bg-black/40 border-b border-white/5 flex items-center justify-between">
+                <span className="text-[8px] font-black uppercase text-primary/40 tracking-widest group-hover:text-primary transition-colors">
+                  {key}
+                </span>
+              </div>
+
+              <div className="flex-1 grid grid-cols-[1fr_auto_1fr] items-center">
+                <div className="p-2 bg-red-500/5 min-h-[40px] flex items-center justify-center">
+                  {formatDisplayValue(key, oldData?.[key])}
+                </div>
+
+                <div className="flex items-center justify-center px-2 bg-black/20 text-muted-foreground group-hover:text-primary transition-colors">
+                  <ArrowRight className="w-3 h-3" />
+                </div>
+
+                <div className="p-2 bg-green-500/5 min-h-[40px] flex items-center justify-center">
+                  {formatDisplayValue(key, newData?.[key])}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default function AuditLogs() {
+  useSignals();
   const { profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const defaultTab = searchParams.get("tab") || "audit";
@@ -120,6 +278,7 @@ export default function AuditLogs() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [historyProgress, setHistoryProgress] = useState(0);
   const [historyTotal, setHistoryTotal] = useState(0);
+  const [showPlaywright, setShowPlaywright] = useState(false);
   const historyEventSource = React.useRef<EventSource | null>(null);
 
   // Estados para Streaming em Tempo Real
@@ -308,6 +467,7 @@ export default function AuditLogs() {
     setHistoryTotal(0);
     setAuditResults([]);
 
+    console.log("[AuditLogs] Iniciando fetchAuditHistory SSE...");
     try {
       const token = localStorage.getItem("token") || localStorage.getItem("orion_token");
       if (!token) throw new Error("Token não encontrado");
@@ -324,7 +484,8 @@ export default function AuditLogs() {
         : `${window.location.origin}${envUrl.startsWith("/") ? "" : "/"}${envUrl}`;
       const sseUrl = `${backendUrl}/audit/architectural?${params.toString()}`;
 
-      const es = new EventSource(sseUrl);
+      const es = new EventSource(sseUrl, { withCredentials: true });
+
       historyEventSource.current = es;
 
       es.onmessage = (event) => {
@@ -359,8 +520,8 @@ export default function AuditLogs() {
       };
 
     } catch (error) {
-      console.error("Erro ao carregar histórico de auditoria:", error);
-      toast.error("Falha ao atualizar filtros de auditoria.");
+      console.error("[AuditLogs] Erro no catch de fetchAuditHistory:", error);
+      toast.error("Falha ao carregar histórico SSE.");
       setIsLoadingHistory(false);
     }
   };
@@ -372,6 +533,7 @@ export default function AuditLogs() {
 
   const handleRunArchitecturalAudit = async () => {
     setIsAuditing(true);
+    console.log("[AuditLogs] Disparando handleRunArchitecturalAudit (POST)...");
     try {
       const response = await (orionApi.post(
         "/audit/architectural",
@@ -411,6 +573,7 @@ export default function AuditLogs() {
     setStreamProgress(0);
     setFocusMode(true); // Ativa Modo Foco
 
+    console.log("[AuditLogs] Iniciando handleRunStreamingScan SSE...");
     try {
       // O token é armazenado como 'token' ou 'orion_token' no projeto
       const token =
@@ -437,14 +600,17 @@ export default function AuditLogs() {
       const backendUrl = envUrl.startsWith("http")
         ? envUrl
         : `${window.location.origin}${envUrl.startsWith("/") ? "" : "/"}${envUrl}`;
-      const sseUrl = `${backendUrl}/audit/scan-stream?token=${encodeURIComponent(token)}`;
-      console.log("[SSE] URL FINAL:", sseUrl);
+      const sseUrl = `${backendUrl}/audit/scan-stream?token=${token}`;
 
-      const eventSource = new EventSource(sseUrl);
+      console.log("[SSE] URL SEGURA (Auth via Cookies):", sseUrl);
+
+      const eventSource = new EventSource(sseUrl, { withCredentials: true });
+
 
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          console.debug("[AuditLogs:Scan] SSE Message:", data.type, data);
           setStreamLogs((prev) => [...prev, { type: data.type, data }]);
 
           if (data.type === "violation" && data.total) {
@@ -452,6 +618,7 @@ export default function AuditLogs() {
           }
 
           if (data.type === "complete") {
+            console.log("[AuditLogs:Scan] SSE Complete:", data);
             setHealthScore(data.healthScore);
             setBySeverity(data.bySeverity);
             setTopIssues(data.topIssues || []);
@@ -464,16 +631,18 @@ export default function AuditLogs() {
           }
 
           if (data.type === "error") {
+            console.error("[AuditLogs:Scan] SSE Business Error:", data.message);
             toast.error(data.message);
             eventSource.close();
             setIsStreaming(false);
           }
         } catch (e) {
-          console.error("Erro ao parsear SSE:", e);
+          console.error("[AuditLogs:Scan] Erro ao parsear SSE message:", e);
         }
       };
 
-      eventSource.onerror = () => {
+      eventSource.onerror = (err) => {
+        console.error("[AuditLogs:Scan] SSE Fatal Error (Connection):", err);
         eventSource.close();
         setIsStreaming(false);
         toast.error("Conexão com o servidor perdida.");
@@ -631,175 +800,26 @@ export default function AuditLogs() {
     }
   };
 
-  const DiffViewer = ({ oldData, newData }: { oldData: any; newData: any }) => {
-    const sensitiveKeys = [
-      "password",
-      "token",
-      "secret",
-      "credential",
-      "auth",
-      "senha",
-      "key",
-      "access_token",
-    ];
 
-    const formatDisplayValue = (key: string, value: any) => {
-      if (value === null || value === undefined) {
-        return (
-          <Badge
-            variant="outline"
-            className="text-[10px] opacity-30 border-white/10 font-mono"
-          >
-            NULL
-          </Badge>
-        );
-      }
-
-      if (sensitiveKeys.some((k) => key.toLowerCase().includes(k))) {
-        return (
-          <span className="text-primary font-mono tracking-widest text-xs">
-            ••••••••
-          </span>
-        );
-      }
-
-      // ISO Date Check
-      if (
-        typeof value === "string" &&
-        value.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
-      ) {
-        return (
-          <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
-            <CalendarIcon className="w-3 h-3 text-primary/50" />
-            {format(new Date(value), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}
-          </span>
-        );
-      }
-
-      // UUID check
-      if (
-        typeof value === "string" &&
-        value.match(
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-        )
-      ) {
-        return (
-          <span
-            className="font-mono text-[10px] bg-black/40 px-1.5 py-0.5 rounded border border-white/5 text-blue-400 group-hover:text-blue-300 transition-colors"
-            title={value}
-          >
-            {value.substring(0, 8)}...{value.substring(value.length - 4)}
-          </span>
-        );
-      }
-
-      if (typeof value === "boolean") {
-        return (
-          <Badge
-            className={cn(
-              "text-[9px] font-black uppercase tracking-tighter",
-              value
-                ? "bg-green-500/20 text-green-400"
-                : "bg-red-500/20 text-red-400",
-            )}
-          >
-            {value ? "TRUE" : "FALSE"}
-          </Badge>
-        );
-      }
-
-      if (typeof value === "object") {
-        return (
-          <span className="text-[10px] font-mono text-muted-foreground italic truncate">
-            JSON Object
-          </span>
-        );
-      }
-
-      return (
-        <span className="text-xs font-bold text-foreground truncate">
-          {String(value)}
-        </span>
-      );
-    };
-
-    if (!oldData && !newData)
-      return (
-        <div className="p-8 text-center text-muted-foreground italic border-2 border-dashed border-white/5 rounded-2xl">
-          Sem dados para comparar
-        </div>
-      );
-
-    const allKeys = Array.from(
-      new Set([...Object.keys(oldData || {}), ...Object.keys(newData || {})]),
-    );
-    const changes = allKeys.filter(
-      (key) =>
-        JSON.stringify(oldData?.[key]) !== JSON.stringify(newData?.[key]),
-    );
-
-    return (
-      <div className="max-h-[60vh] overflow-y-auto pr-2 -mr-2">
-        <div
-          className={cn(
-            "grid gap-2 p-1",
-            changes.length > 4 ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1",
-          )}
-        >
-          {changes.length === 0 ? (
-            <div className="p-10 text-center space-y-2 col-span-full">
-              <p className="text-xs text-muted-foreground uppercase tracking-widest font-black opacity-30">
-                Nenhuma alteração detectada nos campos
-              </p>
-            </div>
-          ) : (
-            changes.map((key) => (
-              <div
-                key={key}
-                className="group flex flex-col items-stretch gap-px rounded-lg overflow-hidden border border-white/5 bg-white/2 hover:border-primary/20 transition-all duration-300"
-              >
-                <div className="p-1.5 bg-black/40 border-b border-white/5 flex items-center justify-between">
-                  <span className="text-[8px] font-black uppercase text-primary/40 tracking-widest group-hover:text-primary transition-colors">
-                    {key}
-                  </span>
-                </div>
-
-                <div className="flex-1 grid grid-cols-[1fr_auto_1fr] items-center">
-                  <div className="p-2 bg-red-500/5 min-h-[40px] flex items-center justify-center">
-                    {formatDisplayValue(key, oldData?.[key])}
-                  </div>
-
-                  <div className="flex items-center justify-center px-2 bg-black/20 text-muted-foreground group-hover:text-primary transition-colors">
-                    <ArrowRight className="w-3 h-3" />
-                  </div>
-
-                  <div className="p-2 bg-green-500/5 min-h-[40px] flex items-center justify-center">
-                    {formatDisplayValue(key, newData?.[key])}
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    );
-  };
 
   return (
+    
     <div className="space-y-6 animate-fade-in p-2 md:p-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-black font-display tracking-tight text-foreground uppercase flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-primary/10">
-              <ShieldCheck className="w-8 h-8 text-primary" />
-            </div>
-            Central de Segurança
-          </h1>
-          <p className="text-muted-foreground mt-1 font-medium italic">
-            Auditoria completa e validações técnicas do sistema GESTÃO VIRTUAL.
-          </p>
+      {!isFocusModeSignal.value && (
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-black font-display tracking-tight text-foreground uppercase flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-primary/10">
+                <ShieldCheck className="w-8 h-8 text-primary" />
+              </div>
+              Central de Segurança
+            </h1>
+            <p className="text-muted-foreground mt-1 font-medium italic">
+              Auditoria completa e validações técnicas do sistema GESTÃO VIRTUAL.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       <Tabs
         value={defaultTab}
@@ -808,23 +828,25 @@ export default function AuditLogs() {
           setSearchParams({ tab: val });
         }}
       >
-        <TabsList className="glass-card mb-8 p-1 flex justify-start overflow-x-auto gap-2 border-white/5">
-          <TabsTrigger value="audit" className="gap-2 px-6 py-2">
-            <Database className="w-4 h-4" /> Trilha do Sistema
-          </TabsTrigger>
-          <TabsTrigger value="validation" className="gap-2 px-6 py-2">
-            <Activity className="w-4 h-4" /> Sanidade de Rotas
-          </TabsTrigger>
-          <TabsTrigger value="standards" className="gap-2 px-6 py-2">
-            <ShieldAlert className="w-4 h-4" /> Auditoria de Padrões
-          </TabsTrigger>
-          <TabsTrigger value="gapo" className="gap-2 px-6 py-2">
-            <CheckCircle2 className="w-4 h-4" /> Validação GAPO
-          </TabsTrigger>
-          <TabsTrigger value="checklist" className="gap-2 px-6 py-2">
-            <ShieldCheck className="w-4 h-4" /> Diretrizes de Segurança
-          </TabsTrigger>
-        </TabsList>
+        {!isFocusModeSignal.value && (
+          <TabsList className="glass-card mb-8 p-1 flex justify-start overflow-x-auto gap-2 border-white/5">
+            <TabsTrigger value="audit" className="gap-2 px-6 py-2">
+              <Database className="w-4 h-4" /> Trilha do Sistema
+            </TabsTrigger>
+            <TabsTrigger value="validation" className="gap-2 px-6 py-2">
+              <Activity className="w-4 h-4" /> Sanidade de Rotas
+            </TabsTrigger>
+            <TabsTrigger value="standards" className="gap-2 px-6 py-2">
+              <ShieldAlert className="w-4 h-4" /> Auditoria de Padrões
+            </TabsTrigger>
+            <TabsTrigger value="gapo" className="gap-2 px-6 py-2">
+              <CheckCircle2 className="w-4 h-4" /> Validação GAPO
+            </TabsTrigger>
+            <TabsTrigger value="checklist" className="gap-2 px-6 py-2">
+              <ShieldCheck className="w-4 h-4" /> Diretrizes de Segurança
+            </TabsTrigger>
+          </TabsList>
+        )}
 
         {/* ABA 1: TRILHA DO SISTEMA */}
         <TabsContent value="audit" className="space-y-6">
@@ -1248,7 +1270,6 @@ export default function AuditLogs() {
           </Dialog>
         </TabsContent>
 
-        {/* ABA 3: AUDITORIA DE PADRÕES (DETALHADA) */}
         <TabsContent value="standards" className="space-y-6">
           {/* HEALTH SCORE CARD */}
           {healthScore !== null && (
@@ -1350,19 +1371,24 @@ export default function AuditLogs() {
                 <CardDescription className="text-amber-500/60 font-bold uppercase text-[10px] tracking-widest">
                   Análise estática de código para conformidade estrutural.
                 </CardDescription>
+                <CardDescription className="text-amber-500/60 font-bold uppercase text-[10px] tracking-widest">
+                  Análise estática de código para conformidade estrutural.
+                </CardDescription>
               </div>
-              <div className="flex w-full md:w-auto items-center gap-3">
+
+              {/* Left Side Controls (Filters & Scan) */}
+              <div className="flex flex-1 items-center gap-3 overflow-x-auto pb-2 md:pb-0">
                 {/* Date Picker */}
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       variant={"outline"}
                       className={cn(
-                        "w-[240px] justify-start text-left font-normal border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10 text-amber-100",
+                        "w-[180px] justify-start text-left font-normal border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10 text-amber-100 h-9 text-xs",
                         !dateRange && "text-muted-foreground",
                       )}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4 text-amber-500" />
+                      <CalendarIcon className="mr-2 h-3.5 w-3.5 text-amber-500" />
                       {dateRange?.from ? (
                         dateRange.to ? (
                           <>
@@ -1377,7 +1403,7 @@ export default function AuditLogs() {
                       )}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="end">
+                  <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
                       initialFocus
                       mode="range"
@@ -1390,7 +1416,7 @@ export default function AuditLogs() {
                 </Popover>
 
                 {/* Order Select */}
-                <div className="w-[200px]">
+                <div className="w-[160px]">
                   <Select
                     onValueChange={(val) => {
                       const [key, dir] = val.split("-");
@@ -1401,22 +1427,9 @@ export default function AuditLogs() {
                     }}
                     defaultValue="lastDetectedAt-desc"
                   >
-                    <SelectTrigger className="border-amber-500/20 bg-amber-500/5 text-amber-100">
+                    <SelectTrigger className="border-amber-500/20 bg-amber-500/5 text-amber-100 h-9 text-xs">
                       <SelectValue placeholder="Ordenação" />
                     </SelectTrigger>
-                    {/* Barra de Progresso do Histórico */}
-                    {isLoadingHistory && (
-                      <div className="absolute top-14 right-0 w-full md:w-[450px] z-20 bg-black/80 backdrop-blur-md p-3 rounded-xl border border-amber-500/30 shadow-2xl">
-                        <div className="flex items-center justify-between w-full text-[10px] font-mono text-amber-500 mb-1.5 uppercase tracking-widest">
-                          <span className="animate-pulse">Sincronizando Relatório...</span>
-                          <div className="flex gap-2">
-                            <span className="text-white">{auditResults.length}/{historyTotal || "?"}</span>
-                            <span className="font-bold text-amber-400">({historyProgress || 0}%)</span>
-                          </div>
-                        </div>
-                        <Progress value={historyProgress || 0} className="h-1.5 w-full bg-amber-500/10" />
-                      </div>
-                    )}
                     <SelectContent>
                       <SelectItem value="lastDetectedAt-desc">
                         Mais Recentes
@@ -1436,8 +1449,48 @@ export default function AuditLogs() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+            </CardHeader>
 
-                <div className="relative flex-1 md:w-64">
+              {/* Right Side Controls (Live & Playwright) */}
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleRunStreamingScan}
+                  disabled={isStreaming || isAuditing}
+                  className={cn(
+                    "relative overflow-hidden group border h-9 px-4 text-xs font-black uppercase tracking-widest transition-all shadow-lg hover:shadow-green-500/20",
+                    isStreaming
+                      ? "bg-green-500/20 text-green-400 border-green-500/50" // Active state
+                      : "bg-green-600 hover:bg-green-500 text-white border-green-400", // Idle state (Green button)
+                  )}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+                  {isStreaming ? (
+                    <>
+                      <span className="relative flex h-2 w-2 mr-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                      </span>
+                      Scan em Curso...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="mr-2 h-3.5 w-3.5 fill-current" />
+                      Ao Vivo
+                    </>
+                  )}
+                </Button>
+
+                <Button
+                  onClick={() => setShowPlaywright(!showPlaywright)}
+                  className="bg-purple-600 hover:bg-purple-500 text-white border border-purple-400 h-9 px-4 text-xs font-black uppercase tracking-widest shadow-lg hover:shadow-purple-500/20 transition-all relative overflow-hidden group"
+                >
+                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+                  <Play className="mr-2 h-3.5 w-3.5 fill-current" />
+                  Playwright
+                </Button>
+              </div>
+
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-500/50" />
                   <Input
                     placeholder="Filtrar arquivos ou violações..."
@@ -1457,7 +1510,7 @@ export default function AuditLogs() {
                   ) : (
                     <Zap className="w-6 h-6 fill-current" />
                   )}
-                  SCAN
+                  EXECUTAR SCAN
                 </Button>
                 <Button
                   onClick={handleRunStreamingScan}
@@ -1469,432 +1522,470 @@ export default function AuditLogs() {
                   ) : (
                     <Play className="w-6 h-6 fill-current" />
                   )}
-                  LIVE
+                  AO VIVO
                 </Button>
               </div>
             </CardHeader>
+          </Card>
 
             {/* TERMINAL DE STREAMING EM TEMPO REAL - VISUAL PREMIUM */}
             {(isStreaming || streamLogs.length > 0) && (
-              <div className="px-6 py-5 border-b border-amber-500/10 space-y-4">
-                {/* Header com Status e Contadores */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {isStreaming ? (
-                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/30">
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-green-500">
-                          SCAN EM CURSO...
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30">
-                        <CheckCircle2 className="w-3 h-3 text-amber-500" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-amber-500">
-                          SCAN CONCLUÍDO
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Contadores em Tempo Real e Ações */}
-                  <div className="flex items-center gap-4">
-                    {(() => {
-                      const violations = streamLogs.filter(
-                        (l) => l.type === "violation",
-                      );
-                      const high = violations.filter(
-                        (l) => l.data.severity === "HIGH",
-                      ).length;
-                      const medium = violations.filter(
-                        (l) => l.data.severity === "MEDIUM",
-                      ).length;
-                      const low = violations.filter(
-                        (l) => l.data.severity === "LOW",
-                      ).length;
-                      return (
-                        <div className="flex items-center gap-6">
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-2 h-2 rounded-full bg-red-500" />
-                              <span className="text-xs font-bold text-red-100">
-                                {high}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-2 h-2 rounded-full bg-amber-500" />
-                              <span className="text-xs font-bold text-amber-100">
-                                {medium}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-2 h-2 rounded-full bg-blue-500" />
-                              <span className="text-xs font-bold text-blue-100">
-                                {low}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="h-4 w-px bg-white/10" />
-
-                          <div className="flex border border-white/10 rounded-lg overflow-hidden shrink-0">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className={cn("px-4 py-1 h-8 rounded-none text-[10px] uppercase font-black transition-all", streamViewMode === 'table' ? 'bg-amber-500 text-black hover:bg-amber-600' : 'hover:bg-white/5')}
-                              onClick={() => setStreamViewMode('table')}
-                            >
-                              <Activity className="w-3 h-3 mr-2" />
-                              Visualização em Tabela (Colunas)
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="px-4 py-1 h-8 rounded-none text-[10px] uppercase font-black transition-all hover:bg-red-500/20 text-red-400 hover:text-red-300 border-l border-white/10"
-                              onClick={() => setFocusMode(false)}
-                            >
-                              <Minimize2 className="w-3 h-3 mr-2" />
-                              Sair do Modo Foco
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className={cn("px-4 py-1 h-8 rounded-none text-[10px] uppercase font-black transition-all", streamViewMode === 'terminal' ? 'bg-amber-500 text-black hover:bg-amber-600' : 'hover:bg-white/5')}
-                              onClick={() => setStreamViewMode('terminal')}
-                            >
-                              <Play className="w-3 h-3 mr-2" />
-                              Terminal
-                            </Button>
-                          </div>
-
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 gap-2 border-green-500/20 bg-green-500/5 text-[10px] font-black uppercase tracking-widest hover:bg-green-500/20 text-green-400"
-                              onClick={() => copyToClipboard(generateCSVReport(streamLogs.filter(l => l.type === 'violation').map(l => l.data)))}
-                            >
-                              <Copy className="w-3 h-3" />
-                              Copiar para Excel/CSV
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 gap-2 border-amber-500/20 bg-amber-500/5 text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/20"
-                              onClick={() => copyToClipboard(generateMarkdownReport())}
-                            >
-                              <Info className="w-3 h-3" />
-                              Relatório Completo
-                            </Button>
-                          </div>
+              <><div key="streaming-results-wrapper">
+              <div className="streaming-engine-container">
+                <div className="px-6 py-5 border-b border-amber-500/10 space-y-4">
+                  {/* Header com Status e Contadores */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {isStreaming ? (
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/30">
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-green-500">
+                            SCAN EM CURSO...
+                          </span>
                         </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-
-                {/* Barra de Progresso Visual */}
-                {isStreaming && (
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-medium text-muted-foreground">
-                        Analisando arquivos...
-                      </span>
-                      <span className="font-black text-primary">
-                        {streamProgress}%
-                      </span>
-                    </div>
-                    <div className="h-2 bg-black/40 rounded-full overflow-hidden border border-white/5">
-                      <div
-                        className="h-full bg-linear-to-r from-amber-500 via-orange-500 to-red-500 rounded-full transition-all duration-300 ease-out relative"
-                        style={{ width: `${streamProgress}%` }}
-                      >
-                        <div className="absolute inset-0 bg-white/20 animate-pulse" />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Visualização de Resultados (Terminal ou Tabela) */}
-                {streamViewMode === "terminal" ? (
-                  <div className="bg-[#0d1117] rounded-xl overflow-hidden border border-white/10 shadow-2xl">
-                    {/* Terminal Header */}
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-[#161b22] border-b border-white/5">
-                      <div className="flex gap-1.5">
-                        <div className="w-3 h-3 rounded-full bg-red-500/80" />
-                        <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
-                        <div className="w-3 h-3 rounded-full bg-green-500/80" />
-                      </div>
-                      <span className="text-[10px] font-mono text-white/40 ml-2">
-                        orion-audit --stream --mode=deep
-                      </span>
-                    </div>
-
-                    {/* Terminal Content */}
-                    <div className="p-4 font-mono text-xs max-h-72 overflow-y-auto scroll-smooth">
-                      {streamLogs.map((log, idx) => (
-                        <div
-                          key={idx}
-                          className={cn(
-                            "py-1 flex items-start gap-2",
-                            log.type === "connected" && "text-green-400",
-                            log.type === "complete" && "text-green-400 font-bold",
-                            log.type === "error" && "text-red-500 font-bold",
-                          )}
-                        >
-                          {log.type === "connected" && (
-                            <>
-                              <span className="text-green-500">➜</span>
-                              <span className="text-green-400">
-                                {log.data.message}
-                              </span>
-                            </>
-                          )}
-                          {log.type === "violation" && (
-                            <>
-                              <span className="text-white/30 w-14 shrink-0">
-                                [{log.data.index}/{log.data.total}]
-                              </span>
-                              <span
-                                className={cn(
-                                  "w-16 shrink-0 font-bold",
-                                  log.data.severity === "HIGH" && "text-red-400",
-                                  log.data.severity === "MEDIUM" &&
-                                  "text-amber-400",
-                                  log.data.severity === "LOW" && "text-blue-400",
-                                )}
-                              >
-                                {log.data.severity}
-                              </span>
-                              <span className="text-cyan-400 shrink-0">
-                                {log.data.file}
-                              </span>
-                              <span className="text-white/40">→</span>
-                              <span className="text-white/60 truncate">
-                                {log.data.violation}
-                              </span>
-                            </>
-                          )}
-                          {log.type === "complete" && (
-                            <>
-                              <span className="text-green-500">✓</span>
-                              <span>
-                                Scan completo! Health Score:{" "}
-                                <span className="text-primary font-black">
-                                  {log.data.healthScore}
-                                </span>
-                                /100 | {log.data.violationsCount} violações
-                              </span>
-                            </>
-                          )}
-                          {log.type === "error" && (
-                            <>
-                              <span className="text-red-500">✗</span>
-                              <span>Erro: {log.data.message}</span>
-                            </>
-                          )}
+                      ) : (
+                        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30">
+                          <CheckCircle2 className="w-3 h-3 text-amber-500" />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-amber-500">
+                            SCAN CONCLUÍDO
+                          </span>
                         </div>
-                      ))}
-                      {isStreaming && (
-                        <div className="py-1 text-green-400 animate-pulse">▌</div>
                       )}
                     </div>
-                  </div>
-                ) : (
-                  <div className="glass-card rounded-xl overflow-hidden border border-amber-500/20 bg-black/40 shadow-2xl">
-                    <div className="max-h-[500px] overflow-y-auto overflow-x-auto">
-                      <Table className="min-w-[1000px]">
-                        <TableHeader className="sticky top-0 bg-[#0d1117] z-10 border-b border-amber-500/10">
-                          <TableRow className="border-amber-500/10 h-10 hover:bg-transparent">
-                            <TableHead
-                              className="text-[9px] font-black uppercase text-amber-500/50 pl-6 w-12 text-center cursor-pointer hover:text-amber-500 transition-colors"
-                              onClick={() => handleSortStream("index")}
-                            >
-                              <div className="flex items-center justify-center gap-1">
-                                N° <SortIcon config={streamSortConfig} columnKey="index" />
+
+                    {/* Contadores em Tempo Real e Ações */}
+                    <div className="flex items-center gap-4">
+                      {(() => {
+                        const violations = streamLogs.filter(
+                          (l) => l.type === "violation"
+                        );
+                        const high = violations.filter(
+                          (l) => l.data.severity === "HIGH"
+                        ).length;
+                        const medium = violations.filter(
+                          (l) => l.data.severity === "MEDIUM"
+                        ).length;
+                        const low = violations.filter(
+                          (l) => l.data.severity === "LOW"
+                        ).length;
+                        return (
+                          <div className="flex items-center gap-6">
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-2 h-2 rounded-full bg-red-500" />
+                                <span className="text-xs font-bold text-red-100">
+                                  {high}
+                                </span>
                               </div>
-                            </TableHead>
-                            <TableHead
-                              className="text-[9px] font-black uppercase text-amber-500/50 w-24 cursor-pointer hover:text-amber-500 transition-colors"
-                              onClick={() => handleSortStream("severity")}
-                            >
-                              <div className="flex items-center gap-1">
-                                Severidade <SortIcon config={streamSortConfig} columnKey="severity" />
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-2 h-2 rounded-full bg-amber-500" />
+                                <span className="text-xs font-bold text-amber-100">
+                                  {medium}
+                                </span>
                               </div>
-                            </TableHead>
-                            <TableHead
-                              className="text-[9px] font-black uppercase text-amber-500/50 w-[20%] cursor-pointer hover:text-amber-500 transition-colors"
-                              onClick={() => handleSortStream("file")}
-                            >
-                              <div className="flex items-center gap-1">
-                                O que foi testado (Arquivo) <SortIcon config={streamSortConfig} columnKey="file" />
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-2 h-2 rounded-full bg-blue-500" />
+                                <span className="text-xs font-bold text-blue-100">
+                                  {low}
+                                </span>
                               </div>
-                            </TableHead>
-                            <TableHead
-                              className="text-[9px] font-black uppercase text-amber-500/50 w-[30%] cursor-pointer hover:text-amber-500 transition-colors"
-                              onClick={() => handleSortStream("violation")}
-                            >
-                              <div className="flex items-center gap-1">
-                                Descrição do Problema <SortIcon config={streamSortConfig} columnKey="violation" />
+                            </div>
+
+                            <div className="h-4 w-px bg-white/10" />
+
+                            <div className="flex items-center gap-3 bg-white/5 px-4 py-1 rounded-xl border border-white/10 shrink-0">
+                              <div className="flex items-center gap-2">
+                                <Switch
+                                  id="focus-mode"
+                                  checked={isFocusModeSignal.value}
+                                  onCheckedChange={(checked) => setFocusMode(checked)}
+                                  className="data-[state=checked]:bg-primary" />
+                                <Label
+                                  htmlFor="focus-mode"
+                                  className="text-[10px] font-black uppercase tracking-widest cursor-pointer select-none"
+                                >
+                                  {isFocusModeSignal.value ? 'MODO FOCO: LIGADO' : 'MODO FOCO: DESLIGADO'}
+                                </Label>
                               </div>
-                            </TableHead>
-                            <TableHead className="text-[9px] font-black uppercase text-amber-500/50">Plano de Refatoração</TableHead>
-                            <TableHead className="text-[9px] font-black uppercase text-amber-500/50 pr-6 text-right w-24">Ações</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {streamLogs.filter(l => l.type === 'violation').length === 0 ? (
-                            <TableRow>
-                              <TableCell colSpan={6} className="py-24 text-center text-muted-foreground italic text-xs">
-                                <Activity className="w-8 h-8 text-amber-500/20 mx-auto mb-3 animate-pulse" />
-                                Aguardando detecções do scan em tempo real...
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            sortedStreamLogs.map((log, idx) => (
-                              <TableRow key={idx} className="border-amber-500/5 hover:bg-amber-500/5 group h-auto py-2">
-                                <TableCell className="pl-6 text-[10px] font-mono text-muted-foreground text-center align-top pt-4">
-                                  {log.data.index}
-                                </TableCell>
-                                <TableCell className="align-top pt-4">
-                                  <Badge
-                                    className={cn(
-                                      "text-[8px] font-black px-1.5 py-0 border-0 shadow-lg",
-                                      log.data.severity === 'HIGH' ? 'bg-red-500/20 text-red-500 shadow-red-500/10' :
-                                        log.data.severity === 'MEDIUM' ? 'bg-amber-500/20 text-amber-500 shadow-amber-500/10' : 'bg-blue-500/20 text-blue-500 shadow-blue-500/10'
-                                    )}
-                                  >
-                                    {log.data.severity}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="py-3 align-top">
-                                  <div className="flex flex-col gap-1">
-                                    <span className="text-[10px] font-mono text-blue-300 font-bold break-all group-hover:text-blue-200 transition-colors" title={log.data.file}>
-                                      {log.data.file.split('/').pop()}
-                                    </span>
-                                    <span className="text-[8px] font-mono text-muted-foreground italic break-all opacity-60 group-hover:opacity-100 transition-opacity">
-                                      {log.data.file}
-                                    </span>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="text-xs text-foreground font-medium py-3 align-top">
-                                  <div className="flex flex-col gap-1.5">
-                                    <div className="flex items-center gap-2">
-                                      <ShieldAlert className="w-3 h-3 text-red-400/70" />
-                                      <span className="text-[10px] font-black uppercase text-red-400/70 tracking-tight">
-                                        {log.data.violation}
-                                      </span>
-                                    </div>
-                                    <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2" title={log.data.message}>
-                                      {log.data.message || "Nenhuma descrição detalhada disponível."}
-                                    </p>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="py-3 align-top">
-                                  <div className="flex items-start gap-2 bg-cyan-950/30 border border-cyan-500/10 p-2.5 rounded-lg group-hover:border-cyan-500/20 transition-colors">
-                                    <Zap className="w-3.5 h-3.5 text-cyan-400 mt-0.5 shrink-0" />
-                                    <p className="text-[11px] text-cyan-200/80 leading-snug line-clamp-2" title={log.data.suggestion}>
-                                      {log.data.suggestion || "Nenhuma sugestão disponível."}
-                                    </p>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="pr-6 text-right">
-                                  <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 w-8 p-0 hover:bg-amber-500/20 text-blue-400 rounded-lg"
-                                      onClick={() => copyToClipboard(log.data.file)}
-                                      title="Copiar apenas o caminho do arquivo"
-                                    >
-                                      <Link className="w-4 h-4" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 w-8 p-0 hover:bg-amber-500/20 text-amber-500 rounded-lg"
-                                      onClick={() => copyToClipboard(`Arquivo: ${log.data.file}\nViolação: ${log.data.violation}\nDescrição: ${log.data.message || ''}\nSugestão: ${log.data.suggestion || ''}`)}
-                                      title="Copiar dados formatados"
-                                    >
-                                      <Copy className="w-4 h-4" />
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ))
-                          )}
-                        </TableBody>
-                      </Table>
+
+                              <div className="h-4 w-px bg-white/10 mx-1" />
+
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={cn("px-4 py-1 h-8 rounded-none text-[10px] uppercase font-black transition-all", streamViewMode === 'table' ? 'bg-amber-500 text-black hover:bg-amber-600' : 'hover:bg-white/5')}
+                                onClick={() => setStreamViewMode('table')}
+                              >
+                                <Activity className="w-3 h-3 mr-2" />
+                                Tabela
+                              </Button>
+
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className={cn("px-4 py-1 h-8 rounded-none text-[10px] uppercase font-black transition-all", streamViewMode === 'terminal' ? 'bg-amber-500 text-black hover:bg-amber-600' : 'hover:bg-white/5')}
+                                onClick={() => setStreamViewMode('terminal')}
+                              >
+                                <Play className="w-3 h-3 mr-2" />
+                                Terminal
+                              </Button>
+                            </div>
+
+
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 gap-2 border-green-500/20 bg-green-500/5 text-[10px] font-black uppercase tracking-widest hover:bg-green-500/20 text-green-400"
+                                onClick={() => copyToClipboard(generateCSVReport(streamLogs.filter(l => l.type === 'violation').map(l => l.data)))}
+                              >
+                                <Copy className="w-3 h-3" />
+                                Copiar para Excel/CSV
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 gap-2 border-amber-500/20 bg-amber-500/5 text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/20"
+                                onClick={() => copyToClipboard(generateMarkdownReport())}
+                              >
+                                <Info className="w-3 h-3" />
+                                Relatório Completo
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
-                )}
+
+                  {/* Barra de Progresso Visual */}
+                  {isStreaming && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-medium text-muted-foreground">
+                          Analisando arquivos...
+                        </span>
+                        <span className="font-black text-primary">
+                          {streamProgress}%
+                        </span>
+                      </div>
+                      <div className="h-2 bg-black/40 rounded-full overflow-hidden border border-white/5">
+                        <div
+                          className="h-full bg-linear-to-r from-amber-500 via-orange-500 to-red-500 rounded-full transition-all duration-300 ease-out relative"
+                          style={{ width: `${streamProgress}%` }}
+                        >
+                          <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Visualização de Resultados (Terminal ou Tabela) */}
+                  {streamViewMode === "terminal" ? (
+                    <div className="bg-[#0d1117] rounded-xl overflow-hidden border border-white/10 shadow-2xl">
+                      {/* Terminal Header */}
+                      <div className="flex items-center gap-2 px-4 py-2.5 bg-[#161b22] border-b border-white/5">
+                        <div className="flex gap-1.5">
+                          <div className="w-3 h-3 rounded-full bg-red-500/80" />
+                          <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
+                          <div className="w-3 h-3 rounded-full bg-green-500/80" />
+                        </div>
+                        <span className="text-[10px] font-mono text-white/40 ml-2">
+                          orion-audit --stream --mode=deep
+                        </span>
+                      </div>
+
+                      {/* Terminal Content */}
+                      <div className="p-4 font-mono text-xs max-h-72 overflow-y-auto scroll-smooth">
+                        {streamLogs.map((log, idx) => (
+                          <div
+                            key={idx}
+                            className={cn(
+                              "py-1 flex items-start gap-2",
+                              log.type === "connected" && "text-green-400",
+                              log.type === "complete" && "text-green-400 font-bold",
+                              log.type === "error" && "text-red-500 font-bold"
+                            )}
+                          >
+                            {log.type === "connected" && (
+                              <>
+                                <span className="text-green-500">➜</span>
+                                <span className="text-green-400">
+                                  {log.data.message}
+                                </span>
+                              </>
+                            )}
+                            {log.type === "violation" && (
+                              <>
+                                <span className="text-white/30 w-14 shrink-0">
+                                  [{log.data.index}/{log.data.total}]
+                                </span>
+                                <span
+                                  className={cn(
+                                    "w-16 shrink-0 font-bold",
+                                    log.data.severity === "HIGH" && "text-red-400",
+                                    log.data.severity === "MEDIUM" &&
+                                    "text-amber-400",
+                                    log.data.severity === "LOW" && "text-blue-400"
+                                  )}
+                                >
+                                  {log.data.severity}
+                                </span>
+                                <span className="text-cyan-400 shrink-0">
+                                  {log.data.file}
+                                </span>
+                                <span className="text-white/40">→</span>
+                                <span className="text-white/60 truncate">
+                                  {log.data.violation}
+                                </span>
+                              </>
+                            )}
+                            {log.type === "complete" && (
+                              <>
+                                <span className="text-green-500">✓</span>
+                                <span>
+                                  Scan completo! Health Score:{" "}
+                                  <span className="text-primary font-black">
+                                    {log.data.healthScore}
+                                  </span>
+                                  /100 | {log.data.violationsCount} violações
+                                </span>
+                              </>
+                            )}
+                            {log.type === "error" && (
+                              <>
+                                <span className="text-red-500">✗</span>
+                                <span>Erro: {log.data.message}</span>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                        {isStreaming && (
+                          <div className="py-1 text-green-400 animate-pulse">▌</div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="glass-card rounded-xl overflow-hidden border border-amber-500/20 bg-black/40 shadow-2xl">
+                      <div className="max-h-[500px] overflow-y-auto overflow-x-auto">
+                        <Table className="min-w-[1000px]">
+                          <TableHeader className="sticky top-0 bg-[#0d1117] z-10 border-b border-amber-500/10">
+                            <TableRow className="border-amber-500/10 h-10 hover:bg-transparent">
+                              <TableHead
+                                className="text-[9px] font-black uppercase text-amber-500/50 pl-6 w-12 text-center cursor-pointer hover:text-amber-500 transition-colors"
+                                onClick={() => handleSortStream("index")}
+                              >
+                                <div className="flex items-center justify-center gap-1">
+                                  N° <SortIcon config={streamSortConfig} columnKey="index" />
+                                </div>
+                              </TableHead>
+                              <TableHead
+                                className="text-[9px] font-black uppercase text-amber-500/50 w-24 cursor-pointer hover:text-amber-500 transition-colors"
+                                onClick={() => handleSortStream("severity")}
+                              >
+                                <div className="flex items-center gap-1">
+                                  Severidade <SortIcon config={streamSortConfig} columnKey="severity" />
+                                </div>
+                              </TableHead>
+                              <TableHead
+                                className="text-[9px] font-black uppercase text-amber-500/50 w-[20%] cursor-pointer hover:text-amber-500 transition-colors"
+                                onClick={() => handleSortStream("file")}
+                              >
+                                <div className="flex items-center gap-1">
+                                  O que foi testado (Arquivo) <SortIcon config={streamSortConfig} columnKey="file" />
+                                </div>
+                              </TableHead>
+                              <TableHead
+                                className="text-[9px] font-black uppercase text-amber-500/50 w-[30%] cursor-pointer hover:text-amber-500 transition-colors"
+                                onClick={() => handleSortStream("violation")}
+                              >
+                                <div className="flex items-center gap-1">
+                                  Descrição do Problema <SortIcon config={streamSortConfig} columnKey="violation" />
+                                </div>
+                              </TableHead>
+                              <TableHead className="text-[9px] font-black uppercase text-amber-500/50">Plano de Refatoração</TableHead>
+                              <TableHead className="text-[9px] font-black uppercase text-amber-500/50 pr-6 text-right w-24">Ações</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {streamLogs.filter(l => l.type === 'violation').length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={6} className="py-24 text-center text-muted-foreground italic text-xs">
+                                  <Activity className="w-8 h-8 text-amber-500/20 mx-auto mb-3 animate-pulse" />
+                                  Aguardando detecções do scan em tempo real...
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              sortedStreamLogs.map((log, idx) => (
+                                <TableRow key={idx} className="border-amber-500/5 hover:bg-amber-500/5 group h-auto py-2">
+                                  <TableCell className="pl-6 text-[10px] font-mono text-muted-foreground text-center align-top pt-4">
+                                    {log.data.index}
+                                  </TableCell>
+                                  <TableCell className="align-top pt-4">
+                                    <Badge
+                                      className={cn(
+                                        "text-[8px] font-black px-1.5 py-0 border-0 shadow-lg",
+                                        log.data.severity === 'HIGH' ? 'bg-red-500/20 text-red-500 shadow-red-500/10' :
+                                          log.data.severity === 'MEDIUM' ? 'bg-amber-500/20 text-amber-500 shadow-amber-500/10' : 'bg-blue-500/20 text-blue-500 shadow-blue-500/10'
+                                      )}
+                                    >
+                                      {log.data.severity}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="py-3 align-top">
+                                    <div className="flex flex-col gap-1">
+                                      <span className="text-[10px] font-mono text-blue-300 font-bold break-all group-hover:text-blue-200 transition-colors" title={log.data.file}>
+                                        {log.data.file.split('/').pop()}
+                                      </span>
+                                      <span className="text-[8px] font-mono text-muted-foreground italic break-all opacity-60 group-hover:opacity-100 transition-opacity">
+                                        {log.data.file}
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-xs text-foreground font-medium py-3 align-top">
+                                    <div className="flex flex-col gap-1.5">
+                                      <div className="flex items-center gap-2">
+                                        <ShieldAlert className="w-3 h-3 text-red-400/70" />
+                                        <span className="text-[10px] font-black uppercase text-red-400/70 tracking-tight">
+                                          {log.data.violation}
+                                        </span>
+                                      </div>
+                                      <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2" title={log.data.message}>
+                                        {log.data.message || "Nenhuma descrição detalhada disponível."}
+                                      </p>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="py-3 align-top">
+                                    <div className="flex items-start gap-2 bg-cyan-950/30 border border-cyan-500/10 p-2.5 rounded-lg group-hover:border-cyan-500/20 transition-colors">
+                                      <Zap className="w-3.5 h-3.5 text-cyan-400 mt-0.5 shrink-0" />
+                                      <p className="text-[11px] text-cyan-200/80 leading-snug line-clamp-2" title={log.data.suggestion}>
+                                        {log.data.suggestion || "Nenhuma sugestão disponível."}
+                                      </p>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="pr-6 text-right">
+                                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0 hover:bg-amber-500/20 text-blue-400 rounded-lg"
+                                        onClick={() => copyToClipboard(log.data.file)}
+                                        title="Copiar apenas o caminho do arquivo"
+                                      >
+                                        <Link className="w-4 h-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0 hover:bg-amber-500/20 text-amber-500 rounded-lg"
+                                        onClick={() => copyToClipboard(`Arquivo: ${log.data.file}\nViolação: ${log.data.violation}\nDescrição: ${log.data.message || ''}\nSugestão: ${log.data.suggestion || ''}`)}
+                                        title="Copiar dados formatados"
+                                      >
+                                        <Copy className="w-4 h-4" />
+                                      </Button>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              ))
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>)}
+                  </div>
+                </div>
               </div>
+            </>
             )}
 
-            <CardContent className="p-0 bg-black/5">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent border-amber-500/10 bg-amber-500/5">
-                      <TableHead
-                        className="font-bold text-[10px] uppercase tracking-widest pl-6 text-amber-500/70 cursor-pointer hover:text-amber-500 transition-colors"
-                        onClick={() => handleSortAudit("status")}
-                      >
-                        <div className="flex items-center gap-2">
-                          Auditor{" "}
-                          <SortIcon
-                            config={auditSortConfig}
-                            columnKey="status"
-                          />
-                        </div>
-                      </TableHead>
-                      <TableHead
-                        className="font-bold text-[10px] uppercase tracking-widest text-amber-500/70 cursor-pointer hover:text-amber-500 transition-colors"
-                        onClick={() => handleSortAudit("lastDetectedAt")}
-                      >
-                        <div className="flex items-center gap-2">
-                          Data{" "}
-                          <SortIcon
-                            config={auditSortConfig}
-                            columnKey="lastDetectedAt"
-                          />
-                        </div>
-                      </TableHead>
-                      <TableHead
-                        className="font-bold text-[10px] uppercase tracking-widest text-amber-500/70 cursor-pointer hover:text-amber-500 transition-colors"
-                        onClick={() => handleSortAudit("severity")}
-                      >
-                        <div className="flex items-center gap-2">
-                          Severidade{" "}
-                          <SortIcon
-                            config={auditSortConfig}
-                            columnKey="severity"
-                          />
-                        </div>
-                      </TableHead>
-                      <TableHead
-                        className="font-bold text-[10px] uppercase tracking-widest text-amber-500/70 cursor-pointer hover:text-amber-500 transition-colors"
-                        onClick={() => handleSortAudit("file")}
-                      >
-                        <div className="flex items-center gap-2">
-                          Arquivos / Componente{" "}
-                          <SortIcon config={auditSortConfig} columnKey="file" />
-                        </div>
-                      </TableHead>
-                      <TableHead
-                        className="font-bold text-[10px] uppercase tracking-widest text-amber-500/70 cursor-pointer hover:text-amber-500 transition-colors"
-                        onClick={() => handleSortAudit("violation")}
-                      >
-                        <div className="flex items-center gap-2">
-                          Violação Sugerida{" "}
-                          <SortIcon
-                            config={auditSortConfig}
-                            columnKey="violation"
-                          />
-                        </div>
-                      </TableHead>
-                      <TableHead className="font-bold text-[10px] uppercase tracking-widest pr-6 text-amber-500/70">
-                        Opção de Melhoria
+
+              {/* ABA 3: AUDITORIA DE PADRÕES */}
+              <Card className="glass-card mt-8 shadow-2xl border-amber-500/10 bg-black/20">
+
+                <CardContent className="p-0 bg-black/5">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="hover:bg-transparent border-amber-500/10 bg-amber-500/5">
+                          <TableHead
+                            className="font-bold text-[10px] uppercase tracking-widest pl-6 text-amber-500/70 cursor-pointer hover:text-amber-500 transition-colors"
+                            onClick={() => handleSortAudit("status")}
+                          >
+                            <div className="flex items-center gap-2">
+                              Auditor{" "}
+                              <SortIcon
+                                config={auditSortConfig}
+                                columnKey="status" />
+                            </div>
+                          </TableHead>
+                          <TableHead
+                            className="font-bold text-[10px] uppercase tracking-widest text-amber-500/70 cursor-pointer hover:text-amber-500 transition-colors"
+                            onClick={() => handleSortAudit("lastDetectedAt")}
+                          >
+                            <div className="flex items-center gap-2">
+                              Data{" "}
+                              <SortIcon
+                                config={auditSortConfig}
+                                columnKey="lastDetectedAt" />
+                            </div>
+                          </TableHead>
+                          <TableHead
+                            className="font-bold text-[10px] uppercase tracking-widest text-amber-500/70 cursor-pointer hover:text-amber-500 transition-colors"
+                            onClick={() => handleSortAudit("severity")}
+                          >
+                            <div className="flex items-center gap-2">
+                              Severidade{" "}
+                              <SortIcon
+                                config={auditSortConfig}
+                                columnKey="severity" />
+                            </div>
+                          </TableHead>
+                          <TableHead
+                            className="font-bold text-[10px] uppercase tracking-widest text-amber-500/70 cursor-pointer hover:text-amber-500 transition-colors"
+                            onClick={() => handleSortAudit("file")}
+                          >
+                            <div className="flex items-center gap-2">
+                              Arquivos / Componente{" "}
+                              <SortIcon config={auditSortConfig} columnKey="file" />
+                            </div>
+                          </TableHead>
+                          <TableHead
+                            className="font-bold text-[10px] uppercase tracking-widest text-amber-500/70 cursor-pointer hover:text-amber-500 transition-colors"
+                            onClick={() => handleSortAudit("violation")}
+                          >
+                            <div className="flex items-center gap-2">
+                              Violação Sugerida{" "}
+                              <SortIcon
+                                config={auditSortConfig}
+                                columnKey="violation" />
+                            </div>
+                          </TableHead>
+                          <TableHead className="font-bold text-[10px] uppercase tracking-widest pr-6 text-right w-[100px]">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-[9px] hover:bg-cyan-500/20 hover:text-cyan-400 text-muted-foreground gap-1.5 uppercase font-black tracking-widest transition-all"
+                          onClick={() => {
+                            const textToCopy = filteredAuditResults
+                              .map(
+                                (res) =>
+                                  `[${res.severity}] ${res.file} - ${res.violation}: ${res.message} (Sugestão: ${res.suggestion})`,
+                              )
+                              .join("\n");
+                            copyToClipboard(textToCopy);
+                            toast.success(
+                              `${filteredAuditResults.length} itens copiados!`,
+                            );
+                          }}
+                          title={
+                            auditSearchTerm
+                              ? "Copiar resultados filtrados"
+                              : "Copiar todos os resultados"
+                          }
+                        >
+                          <Copy className="w-3 h-3" />
+                          {auditSearchTerm ? "Filtrados" : "Todos"}
+                        </Button>
                       </TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1902,7 +1993,7 @@ export default function AuditLogs() {
                     {filteredAuditResults.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={5}
+                          colSpan={6}
                           className="text-center py-24 text-amber-500/20 italic font-medium border-dashed border-amber-500/10"
                         >
                           {isAuditing
@@ -1994,316 +2085,331 @@ export default function AuditLogs() {
                               </p>
                             </div>
                           </TableCell>
-                          <TableCell className="pr-6 text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 hover:bg-amber-500/20 text-amber-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                copyToClipboard(`Arquivo: ${res.file}\nViolação: ${res.violation}\nDescrição: ${res.message}\nSugestão: ${res.suggestion}`);
-                              }}
-                              title="Copiar detalhes"
-                            >
-                              <Copy className="w-4 h-4" />
-                            </Button>
+                          <TableCell className="pr-6 text-right bg-blue-500/5 border-l border-blue-500/10">
+                            <div className="flex flex-col gap-2 items-end">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 hover:bg-cyan-500/20 text-cyan-400 opacity-0 group-hover:opacity-100 transition-all scale-90 group-hover:scale-100"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyToClipboard(
+                                    `Arquivo: ${res.file}\nViolação: ${res.violation}\nDescrição: ${res.message}\nSugestão: ${res.suggestion}`,
+                                  );
+                                }}
+                                title="Copiar detalhes completos"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))
                     )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* MODAL DE DETALHES DA AUDITORIA */}
-          <Dialog
-            open={!!selectedAuditResult}
-            onOpenChange={(open) => !open && setSelectedAuditResult(null)}
-          >
-            <DialogContent className="max-w-4xl glass-card border-amber-500/20 bg-background/95 backdrop-blur-xl">
-              <DialogHeader>
-                <div className="flex items-center gap-5 mb-2">
-                  <div
-                    className={cn(
-                      "p-5 rounded-[24px] shadow-2xl shadow-amber-500/20",
-                      selectedAuditResult?.status === "FAIL"
-                        ? "bg-red-500/20 text-red-500 border border-red-500/30"
-                        : "bg-amber-500/20 text-amber-500 border border-amber-500/30",
-                    )}
-                  >
-                    <ShieldAlert className="w-10 h-10" />
+                      </TableBody>
+                    </Table>
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between w-full">
-                      <DialogTitle className="text-3xl font-black uppercase tracking-tighter text-amber-500 leading-none">
-                        Detalhes da Violação Estrutural
-                      </DialogTitle>
-                      <Badge
-                        className={cn(
-                          "rounded-xl border-0 font-black px-4 py-2 text-xs shadow-xl",
-                          getSeverityStyle(selectedAuditResult?.severity),
-                        )}
-                      >
-                        SEVERIDADE: {selectedAuditResult?.severity}
-                      </Badge>
-                    </div>
-                    {(selectedAuditResult as any)?.files &&
-                      (selectedAuditResult as any)?.files?.length > 1 ? (
-                      <div className="mt-4 w-full">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-mono text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-                            <Database className="w-3 h-3" />{" "}
-                            {(selectedAuditResult as any)?.count} ARQUIVOS
-                            AFETADOS
-                          </span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-6 text-[10px] gap-2 hover:bg-white/10 border-white/10 bg-black/20"
-                            onClick={() => {
-                              if ((selectedAuditResult as any)?.files) {
-                                navigator.clipboard.writeText(
-                                  (selectedAuditResult as any)?.files.join(
-                                    "\n",
-                                  ),
-                                );
-                                toast.success(
-                                  "Lista de arquivos copiada para a área de transferência!",
-                                );
-                              }
-                            }}
-                          >
-                            <Copy className="w-3 h-3" /> COPIAR LISTA
-                          </Button>
-                        </div>
-                        <div className="bg-black/40 rounded-xl border border-white/5 overflow-hidden shadow-inner">
-                          <div className="max-h-[140px] overflow-y-auto p-2 space-y-1">
-                            {(selectedAuditResult as any)?.files?.map(
-                              (file: string, i: number) => (
-                                <div
-                                  key={i}
-                                  className="text-[10px] font-mono text-cyan-100/70 break-all py-1.5 border-b border-white/5 last:border-0 hover:bg-white/5 px-2 rounded transition-colors select-all"
-                                >
-                                  {file}
-                                </div>
-                              ),
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <DialogDescription className="font-mono text-xs font-bold text-muted-foreground mt-2 uppercase tracking-widest flex items-center gap-2">
-                        <Database className="w-3 h-3" /> ARQUIVO:{" "}
-                        {selectedAuditResult?.file}
-                      </DialogDescription>
-                    )}
-                  </div>
-                </div>
-              </DialogHeader>
-
-              {selectedAuditResult && (
-                <div className="space-y-8 pt-6">
-                  <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-6">
-                    <div className="space-y-6">
-                      <div className="p-6 rounded-[24px] bg-black/40 border border-white/5 space-y-2">
-                        <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest">
-                          Tipo de Violação
-                        </span>
-                        <p className="text-sm font-black text-foreground uppercase">
-                          {selectedAuditResult.violation || "Desconhecida"}
-                        </p>
-                      </div>
-                      <div className="p-6 rounded-[24px] bg-black/40 border border-white/5 space-y-2">
-                        <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest">
-                          Estado de Scan
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <Activity className="w-4 h-4 text-green-500" />
-                          <p className="text-sm font-black text-green-500 uppercase">
-                            Monitoramento Ativo
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-8 rounded-[32px] bg-black/60 border-2 border-amber-500/10 shadow-inner space-y-4">
-                      <div className="flex items-center gap-2">
-                        <Info className="w-5 h-5 text-amber-500" />
-                        <span className="text-xs font-black text-amber-500 uppercase tracking-widest">
-                          Descrição do Problema
-                        </span>
-                      </div>
-                      <p className="text-lg font-bold text-foreground leading-relaxed">
-                        {selectedAuditResult.message}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="p-10 rounded-[40px] bg-cyan-500/5 border-2 border-cyan-500/20 shadow-2xl relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-8 opacity-10">
-                      <Zap className="w-32 h-32 text-cyan-400 rotate-12" />
-                    </div>
-                    <div className="flex items-start gap-6 relative z-10">
-                      <div className="p-4 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 text-cyan-400">
-                        <Zap className="w-10 h-10 fill-cyan-400" />
-                      </div>
-                      <div className="space-y-3">
-                        <span className="text-xs font-black text-cyan-400 uppercase tracking-[0.2em]">
-                          Plano de Refatoração Recomendado
-                        </span>
-                        <p className="text-xl font-mono text-cyan-50 font-bold leading-relaxed">
-                          {selectedAuditResult.suggestion}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end pt-2">
-                    <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-30">
-                      ORION ARCHITECTURAL AUDITOR V2.4 //{" "}
-                      {format(new Date(), "yyyy")}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </DialogContent>
-          </Dialog>
-        </TabsContent >
-
-        <TabsContent value="checklist" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="glass-card border-white/5 overflow-hidden border-linear-to-b from-primary/20 to-transparent">
-              <CardHeader className="bg-primary/5 border-b border-white/5 p-6">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-3 text-xl font-black uppercase tracking-tight">
-                    <ShieldCheck className="w-6 h-6 text-primary" />
-                    Auditoria de Segurança
-                  </CardTitle>
-                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-black">
-                    REPORT V3.0
-                  </Badge>
-                </div>
-                <CardDescription className="text-muted-foreground mt-2 italic font-medium">
-                  Checklist de conformidade técnica e LGPD - Gestão Virtual Online.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="divide-y divide-white/5">
-                  {[
-                    { id: 1, title: "Autenticação e Sessões", severity: "CRÍTICO", details: ["Tokens expostos em tela/logs", "Sessões sem expiração renovável"], suggestion: "Implementar httpOnly cookies e expiração curta via middleware." },
-                    { id: 2, title: "Controle de Acesso (RBAC)", severity: "CRÍTICO", details: ["Perfis com privilégios excessivos visíveis", "Falta de MFA para cargos diretivos"], suggestion: "Implementar matriz RBAC estrita e 2FA para perfis 'GOD'." },
-                    { id: 3, title: "Exposição de Dados (LGPD)", severity: "ALTO", details: ["Nomes completos em dashboards públicos", "Dados sensíveis sem anonimização"], suggestion: "Utilizar helper formatNameForLGPD() e aplicar máscaras em campos sensíveis." },
-                    { id: 4, title: "Validação de Dados", severity: "MÉDIO", details: ["Campos com 'Invalid Date' (RangeError)", "Falta de sanitização em inputs de texto"], suggestion: "Corrigir funções de manipulação de datas e integrar Zod no backend." },
-                    { id: 5, title: "Dashboard e Métricas", severity: "BAIXO", details: ["Relatórios acessíveis sem filtro de perfil"], suggestion: "Implementar filtros de acesso por ID de Empresa/Canteiro no signal." }
-                  ].map((item) => (
-                    <div key={item.id} className="p-6 space-y-4 hover:bg-white/2 transition-all group">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-black text-xs">0{item.id}</div>
-                          <h3 className="font-bold text-lg tracking-tight group-hover:text-primary transition-colors">{item.title}</h3>
-                        </div>
-                        <Badge className={`${item.severity === 'CRÍTICO' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
-                          item.severity === 'ALTO' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
-                            'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                          } font-black text-[10px] tracking-widest`}>
-                          {item.severity}
-                        </Badge>
-                      </div>
-                      <div className="pl-11 space-y-3">
-                        <div className="space-y-1.5">
-                          {item.details.map((detail, idx) => (
-                            <div key={idx} className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <XCircle className="w-3.5 h-3.5 text-red-500/50" />
-                              {detail}
-                            </div>
-                          ))}
-                        </div>
-                        <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 text-primary-foreground text-xs font-bold flex items-start gap-3">
-                          <Zap className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                          <p className="leading-relaxed"><span className="text-primary mr-2 uppercase tracking-widest text-[9px]">Correção sugerida:</span> {item.suggestion}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="space-y-6">
-              <Card className="glass-card border-white/5 bg-linear-to-br from-primary/5 to-transparent relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
-                  <ShieldCheck className="w-40 h-40 text-primary" />
-                </div>
-                <CardHeader>
-                  <CardTitle className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
-                    <Activity className="w-6 h-6 text-primary" />
-                    Métricas de Resiliência
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-8">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-6 rounded-[24px] bg-black/40 border border-white/5 group hover:border-primary/30 transition-all">
-                      <span className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em]">Score de Segurança</span>
-                      <p className="text-4xl font-black mt-2 text-primary tracking-tighter">84<span className="text-sm opacity-50 ml-1">/100</span></p>
-                    </div>
-                    <div className="p-6 rounded-[24px] bg-black/40 border border-white/5 group hover:border-amber-500/30 transition-all">
-                      <span className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em]">Status Geral</span>
-                      <p className="text-2xl font-black mt-2 text-amber-500 uppercase italic">EM ALERTA</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-5 pt-4 border-t border-white/5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold">Criptografia em Repouso</span>
-                        <span className="text-[10px] text-muted-foreground uppercase">AES-256 GCM</span>
-                      </div>
-                      <Badge className="bg-green-500/20 text-green-400 border-green-500/30">ATIVO</Badge>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold">Monitoramento de Invasão</span>
-                        <span className="text-[10px] text-muted-foreground uppercase">SSE Master Runner</span>
-                      </div>
-                      <Badge className="bg-green-500/20 text-green-400 border-green-500/30">ESTÁVEL</Badge>
-                    </div>
-                    <div className="flex items-center justify-between opacity-50">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold">MFA Administrativo</span>
-                        <span className="text-[10px] text-muted-foreground uppercase">TOTP / SMS</span>
-                      </div>
-                      <Badge variant="outline" className="border-white/10 text-muted-foreground">DESATIVADO</Badge>
-                    </div>
-                  </div>
-
-                  <Button className="w-full py-6 rounded-2xl bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-widest shadow-xl shadow-primary/20 transition-all">
-                    GERAR RELATÓRIO PDF
-                  </Button>
                 </CardContent>
               </Card>
 
-              <div className="p-8 rounded-[40px] bg-black/40 border border-white/5 flex items-center gap-6 group">
-                <div className="w-16 h-16 rounded-3xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-glow">
-                  <ShieldCheck className="w-8 h-8" />
+              {/* MODAL DE DETALHES DA AUDITORIA */}
+              <Dialog
+                open={!!selectedAuditResult}
+                onOpenChange={(open) => !open && setSelectedAuditResult(null)}
+              >
+                <DialogContent className="max-w-4xl glass-card border-amber-500/20 bg-background/95 backdrop-blur-xl">
+                  <DialogHeader>
+                    <div className="flex items-center gap-5 mb-2">
+                      <div
+                        className={cn(
+                          "p-5 rounded-[24px] shadow-2xl shadow-amber-500/20",
+                          selectedAuditResult?.status === "FAIL"
+                            ? "bg-red-500/20 text-red-500 border border-red-500/30"
+                            : "bg-amber-500/20 text-amber-500 border border-amber-500/30"
+                        )}
+                      >
+                        <ShieldAlert className="w-10 h-10" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between w-full">
+                          <DialogTitle className="text-3xl font-black uppercase tracking-tighter text-amber-500 leading-none">
+                            Detalhes da Violação Estrutural
+                          </DialogTitle>
+                          <Badge
+                            className={cn(
+                              "rounded-xl border-0 font-black px-4 py-2 text-xs shadow-xl",
+                              getSeverityStyle(selectedAuditResult?.severity)
+                            )}
+                          >
+                            SEVERIDADE: {selectedAuditResult?.severity}
+                          </Badge>
+                        </div>
+                        {(selectedAuditResult as any)?.files &&
+                          (selectedAuditResult as any)?.files?.length > 1 ? (
+                          <div className="mt-4 w-full">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-mono text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+                                <Database className="w-3 h-3" />{" "}
+                                {(selectedAuditResult as any)?.count} ARQUIVOS
+                                AFETADOS
+                              </span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 text-[10px] gap-2 hover:bg-white/10 border-white/10 bg-black/20"
+                                onClick={() => {
+                                  if ((selectedAuditResult as any)?.files) {
+                                    navigator.clipboard.writeText(
+                                      (selectedAuditResult as any)?.files.join(
+                                        "\n"
+                                      )
+                                    );
+                                    toast.success(
+                                      "Lista de arquivos copiada para a área de transferência!"
+                                    );
+                                  }
+                                } }
+                              >
+                                <Copy className="w-3 h-3" /> COPIAR LISTA
+                              </Button>
+                            </div>
+                            <div className="bg-black/40 rounded-xl border border-white/5 overflow-hidden shadow-inner">
+                              <div className="max-h-[140px] overflow-y-auto p-2 space-y-1">
+                                {(selectedAuditResult as any)?.files?.map(
+                                  (file: string, i: number) => (
+                                    <div
+                                      key={i}
+                                      className="text-[10px] font-mono text-cyan-100/70 break-all py-1.5 border-b border-white/5 last:border-0 hover:bg-white/5 px-2 rounded transition-colors select-all"
+                                    >
+                                      {file}
+                                    </div>
+                                  )
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <DialogDescription className="font-mono text-xs font-bold text-muted-foreground mt-2 uppercase tracking-widest flex items-center gap-2">
+                            <Database className="w-3 h-3" /> ARQUIVO:{" "}
+                            {selectedAuditResult?.file}
+                          </DialogDescription>
+                        )}
+                      </div>
+                    </div>
+                  </DialogHeader>
+
+                  {selectedAuditResult && (
+                    <div className="space-y-8 pt-6">
+                      <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr] gap-6">
+                        <div className="space-y-6">
+                          <div className="p-6 rounded-[24px] bg-black/40 border border-white/5 space-y-2">
+                            <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest">
+                              Tipo de Violação
+                            </span>
+                            <p className="text-sm font-black text-foreground uppercase">
+                              {selectedAuditResult.violation || "Desconhecida"}
+                            </p>
+                          </div>
+                          <div className="p-6 rounded-[24px] bg-black/40 border border-white/5 space-y-2">
+                            <span className="text-[10px] font-black uppercase text-amber-500 tracking-widest">
+                              Estado de Scan
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <Activity className="w-4 h-4 text-green-500" />
+                              <p className="text-sm font-black text-green-500 uppercase">
+                                Monitoramento Ativo
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="p-8 rounded-[32px] bg-black/60 border-2 border-amber-500/10 shadow-inner space-y-4">
+                          <div className="flex items-center gap-2">
+                            <Info className="w-5 h-5 text-amber-500" />
+                            <span className="text-xs font-black text-amber-500 uppercase tracking-widest">
+                              Descrição do Problema
+                            </span>
+                          </div>
+                          <p className="text-lg font-bold text-foreground leading-relaxed">
+                            {selectedAuditResult.message}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="p-10 rounded-[40px] bg-cyan-500/5 border-2 border-cyan-500/20 shadow-2xl relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-8 opacity-10">
+                          <Zap className="w-32 h-32 text-cyan-400 rotate-12" />
+                        </div>
+                        <div className="flex items-start gap-6 relative z-10">
+                          <div className="p-4 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 text-cyan-400">
+                            <Zap className="w-10 h-10 fill-cyan-400" />
+                          </div>
+                          <div className="space-y-3">
+                            <span className="text-xs font-black text-cyan-400 uppercase tracking-[0.2em]">
+                              Plano de Refatoração Recomendado
+                            </span>
+                            <p className="text-xl font-mono text-cyan-50 font-bold leading-relaxed">
+                              {selectedAuditResult.suggestion}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-2">
+                        <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-30">
+                          ORION ARCHITECTURAL AUDITOR V2.4 //{" "}
+                          {format(new Date(), "yyyy")}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
+            </TabsContent><TabsContent value="gapo" className="space-y-6">
+                <Card className="glass-card border-white/5">
+                  <CardHeader className="border-b border-white/5">
+                    <CardTitle className="flex items-center gap-2 text-xl font-black uppercase tracking-tight">
+                      <CheckCircle2 className="w-6 h-6 text-primary" />
+                      Validação GAPO
+                    </CardTitle>
+                    <CardDescription className="text-muted-foreground italic">
+                      Verificação de conformidade com os padrões GAPO (Gestão de Alocação e Produção de Obras).
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <GAPOValidationList />
+                  </CardContent>
+                </Card>
+              </TabsContent><TabsContent value="checklist" className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <Card className="glass-card border-white/5 overflow-hidden border-linear-to-b from-primary/20 to-transparent">
+                    <CardHeader className="bg-primary/5 border-b border-white/5 p-6">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="flex items-center gap-3 text-xl font-black uppercase tracking-tight">
+                          <ShieldCheck className="w-6 h-6 text-primary" />
+                          Auditoria de Segurança
+                        </CardTitle>
+                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-black">
+                          REPORT V3.0
+                        </Badge>
+                      </div>
+                      <CardDescription className="text-muted-foreground mt-2 italic font-medium">
+                        Checklist de conformidade técnica e LGPD - Gestão Virtual Online.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="divide-y divide-white/5">
+                        {[
+                          { id: 1, title: "Autenticação e Sessões", severity: "CRÍTICO", details: ["Tokens expostos em tela/logs", "Sessões sem expiração renovável"], suggestion: "Implementar httpOnly cookies e expiração curta via middleware." },
+                          { id: 2, title: "Controle de Acesso (RBAC)", severity: "CRÍTICO", details: ["Perfis com privilégios excessivos visíveis", "Falta de MFA para cargos diretivos"], suggestion: "Implementar matriz RBAC estrita e 2FA para perfis 'GOD'." },
+                          { id: 3, title: "Exposição de Dados (LGPD)", severity: "ALTO", details: ["Nomes completos em dashboards públicos", "Dados sensíveis sem anonimização"], suggestion: "Utilizar helper formatNameForLGPD() e aplicar máscaras em campos sensíveis." },
+                          { id: 4, title: "Validação de Dados", severity: "MÉDIO", details: ["Campos com 'Invalid Date' (RangeError)", "Falta de sanitização em inputs de texto"], suggestion: "Corrigir funções de manipulação de datas e integrar Zod no backend." },
+                          { id: 5, title: "Dashboard e Métricas", severity: "BAIXO", details: ["Relatórios acessíveis sem filtro de perfil"], suggestion: "Implementar filtros de acesso por ID de Empresa/Canteiro no signal." }
+                        ].map((item) => (
+                          <div key={item.id} className="p-6 space-y-4 hover:bg-white/2 transition-all group">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-black text-xs">0{item.id}</div>
+                                <h3 className="font-bold text-lg tracking-tight group-hover:text-primary transition-colors">{item.title}</h3>
+                              </div>
+                              <Badge className={`${item.severity === 'CRÍTICO' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
+                                item.severity === 'ALTO' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
+                                  'bg-blue-500/20 text-blue-400 border-blue-500/30'} font-black text-[10px] tracking-widest`}>
+                                {item.severity}
+                              </Badge>
+                            </div>
+                            <div className="pl-11 space-y-3">
+                              <div className="space-y-1.5">
+                                {item.details.map((detail, idx) => (
+                                  <div key={idx} className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <XCircle className="w-3.5 h-3.5 text-red-500/50" />
+                                    {detail}
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 text-primary-foreground text-xs font-bold flex items-start gap-3">
+                                <Zap className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                                <p className="leading-relaxed"><span className="text-primary mr-2 uppercase tracking-widest text-[9px]">Correção sugerida:</span> {item.suggestion}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <div className="space-y-6">
+                    <Card className="glass-card border-white/5 bg-linear-to-br from-primary/5 to-transparent relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+                        <ShieldCheck className="w-40 h-40 text-primary" />
+                      </div>
+                      <CardHeader>
+                        <CardTitle className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
+                          <Activity className="w-6 h-6 text-primary" />
+                          Métricas de Resiliência
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-8">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="p-6 rounded-[24px] bg-black/40 border border-white/5 group hover:border-primary/30 transition-all">
+                            <span className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em]">Score de Segurança</span>
+                            <p className="text-4xl font-black mt-2 text-primary tracking-tighter">84<span className="text-sm opacity-50 ml-1">/100</span></p>
+                          </div>
+                          <div className="p-6 rounded-[24px] bg-black/40 border border-white/5 group hover:border-amber-500/30 transition-all">
+                            <span className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em]">Status Geral</span>
+                            <p className="text-2xl font-black mt-2 text-amber-500 uppercase italic">EM ALERTA</p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-5 pt-4 border-t border-white/5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex flex-col">
+                              <span className="text-sm font-bold">Criptografia em Repouso</span>
+                              <span className="text-[10px] text-muted-foreground uppercase">AES-256 GCM</span>
+                            </div>
+                            <Badge className="bg-green-500/20 text-green-400 border-green-500/30">ATIVO</Badge>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex flex-col">
+                              <span className="text-sm font-bold">Monitoramento de Invasão</span>
+                              <span className="text-[10px] text-muted-foreground uppercase">SSE Master Runner</span>
+                            </div>
+                            <Badge className="bg-green-500/20 text-green-400 border-green-500/30">ESTÁVEL</Badge>
+                          </div>
+                          <div className="flex items-center justify-between opacity-50">
+                            <div className="flex flex-col">
+                              <span className="text-sm font-bold">MFA Administrativo</span>
+                              <span className="text-[10px] text-muted-foreground uppercase">TOTP / SMS</span>
+                            </div>
+                            <Badge variant="outline" className="border-white/10 text-muted-foreground">DESATIVADO</Badge>
+                          </div>
+                        </div>
+
+                        <Button className="w-full py-6 rounded-2xl bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-widest shadow-xl shadow-primary/20 transition-all">
+                          GERAR RELATÓRIO PDF
+                        </Button>
+                      </CardContent>
+                    </Card>
+
+                    <div className="p-8 rounded-[40px] bg-black/40 border border-white/5 flex items-center gap-6 group">
+                      <div className="w-16 h-16 rounded-3xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-glow">
+                        <ShieldCheck className="w-8 h-8" />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-lg uppercase tracking-tight">Compromisso com a LGPD</h4>
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          Todos os acessos à Central de Segurança são registrados e vinculados ao CPF do operador para fins de auditoria forense.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-black text-lg uppercase tracking-tight">Compromisso com a LGPD</h4>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    Todos os acessos à Central de Segurança são registrados e vinculados ao CPF do operador para fins de auditoria forense.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </TabsContent>
-      </Tabs >
+              </TabsContent>
+            </Tabs>
 
       {/* DIALOG DE DETALHES DO LOG */}
-      < Dialog
-        open={!!selectedLog
-        }
+      <Dialog
+        open={!!selectedLog}
         onOpenChange={(open) => !open && setSelectedLog(null)}
       >
         <DialogContent className="max-w-3xl glass-card border-primary/20 bg-background/95 backdrop-blur-xl">
@@ -2418,17 +2524,27 @@ export default function AuditLogs() {
                 <label className="text-[10px] font-black uppercase text-muted-foreground">
                   Comparativo de Dados
                 </label>
-                <div className="p-1 rounded-xl bg-black/20 border border-white/5">
-                  <DiffViewer
-                    oldData={selectedLog.old_data}
-                    newData={selectedLog.new_data}
-                  />
+                <div className="p-4 rounded-xl bg-black/40 border border-white/5 overflow-auto max-h-[400px]">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <h5 className="text-[10px] font-black uppercase text-red-400/70 border-b border-red-500/10 pb-2">Estado Anterior</h5>
+                      <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap leading-tight">
+                        {JSON.stringify(selectedLog.old_data, null, 2)}
+                      </pre>
+                    </div>
+                    <div className="space-y-3">
+                      <h5 className="text-[10px] font-black uppercase text-green-400/70 border-b border-green-500/10 pb-2">Novo Estado</h5>
+                      <pre className="text-[10px] font-mono text-foreground whitespace-pre-wrap leading-tight">
+                        {JSON.stringify(selectedLog.new_data, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           )}
         </DialogContent>
-      </Dialog >
-    </div >
+      </Dialog>
+    </div>
   );
 }
