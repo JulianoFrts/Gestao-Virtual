@@ -74,7 +74,7 @@ interface Tower {
 interface DailyReportDraft {
   employeeId: string;
   teamIds: string[];
-  subPointType: 'GERAL' | 'TORRE' | 'VAO' | 'TRECHO';
+  subPointType: 'GERAL' | 'TORRE' | 'VAO' | 'TRECHO' | 'ESTRUTURA';
   subPoint: string;
   subPointEnd: string;
   isMultiSelection: boolean;
