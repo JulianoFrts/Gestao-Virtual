@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
@@ -9,6 +9,7 @@ import {
   UserScope,
 } from "@/utils/permissionHelpers";
 import { isProtectedSignal, can, show } from "@/signals/authSignals";
+import { logoUrlSignal, logoWidthSignal, initSettings } from "@/signals/settingsSignals";
 import { ShieldCheck } from "lucide-react";
 import {
   Home,
@@ -79,26 +80,26 @@ const menuGroups: SidebarGroup[] = [
     ],
   },
   {
-    title: "Produção, Planejamento e Custos",
+    title: "Produção & Custos", // Encurtado para limpar visual
     items: [
       {
         id: "projects.progress",
         icon: Map,
-        label: "Andamento de Projetos",
+        label: "Andamento (Mapa)",
         path: "/project-progress",
         requiresProject: true,
       },
       {
         id: "projects.progress",
         icon: ClipboardList,
-        label: "Planejamento e Grelha",
+        label: "Planejamento",
         path: "/producao",
         requiresProject: true,
       },
       {
         id: "projects.progress",
         icon: PieChart,
-        label: "Analytics da Obra",
+        label: "Analytics",
         path: "/producao/analytics",
         requiresProject: true,
       },
@@ -159,7 +160,7 @@ const menuGroups: SidebarGroup[] = [
       {
         id: "employees.manage",
         icon: Users,
-        label: "Funcionários (Employers)",
+        label: "Funcionários",
         path: "/employees",
       },
       {
@@ -171,7 +172,7 @@ const menuGroups: SidebarGroup[] = [
       {
         id: "team_composition",
         icon: PieChart,
-        label: "Composição de Equipes",
+        label: "Composição",
         path: "/team-composition",
       },
       {
@@ -283,48 +284,40 @@ function SidebarGroupItem({
   const hasActiveChild = visibleItems.some(
     (item) => location.pathname === item.path,
   );
-  const [isExpanded, setIsExpanded] = React.useState(
-    hasActiveChild || !isCollapsible,
-  );
+  const [isExpanded, setIsExpanded] = React.useState(true); 
 
   if (visibleItems.length === 0) return null;
 
   return (
     <div
-      className="space-y-2 animate-fade-in"
-      style={{ animationDelay: `${groupIdx * 0.1}s` }}
+      className="space-y-1 animate-fade-in mb-4" 
+      style={{ animationDelay: `${groupIdx * 0.05}s` }}
     >
-      <button
+      <div
         onClick={() => isCollapsible && setIsExpanded(!isExpanded)}
         className={cn(
-          "w-full px-4 flex items-center justify-between group/title transition-all py-2 rounded-lg",
+          "w-full px-4 flex items-center justify-between group/title transition-all py-1.5 select-none",
           isCollapsible
-            ? "cursor-pointer hover:bg-sidebar-accent text-sidebar-foreground hover:text-white"
-            : "cursor-default text-sidebar-foreground/60",
+            ? "cursor-pointer text-sidebar-foreground/50 hover:text-sidebar-foreground"
+            : "cursor-default text-sidebar-foreground/50",
         )}
       >
-        <h3 className="text-[11px] font-bold uppercase tracking-widest flex items-center gap-2 mb-0 transition-colors leading-none">
+        <h3 className="text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-colors leading-none">
           {group.title}
-          {!isCollapsible && (
-            <div className="flex-1 h-px bg-sidebar-border w-24 opacity-20" />
-          )}
         </h3>
         {isCollapsible && (
-          <div className="flex items-center gap-2">
-            <div className="h-px bg-sidebar-border w-4 opacity-20" />
-            <ChevronDown
-              className={cn(
-                "h-3 w-3 text-sidebar-foreground/30 transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1)",
-                isExpanded ? "rotate-180 text-primary" : "rotate-0",
-              )}
-            />
-          </div>
+          <ChevronDown
+            className={cn(
+              "h-3 w-3 text-sidebar-foreground/20 transition-transform duration-300",
+              isExpanded ? "rotate-180" : "rotate-0",
+            )}
+          />
         )}
-      </button>
+      </div>
 
       <div
         className={cn(
-          "space-y-1 overflow-hidden transition-all duration-500 ease-in-out",
+          "space-y-0.5 overflow-hidden transition-all duration-300 ease-in-out",
           isCollapsible && !isExpanded
             ? "max-h-0 opacity-0"
             : "max-h-[800px] opacity-100",
@@ -340,29 +333,22 @@ function SidebarGroupItem({
               to={item.path}
               onClick={(e) => handleNavClick(e, item)}
               className={cn(
-                "flex items-center gap-3 px-4 py-2 rounded-xl font-medium transition-all duration-300 group/nav relative overflow-hidden mx-1",
+                "flex items-center gap-3 px-4 py-2 mx-2 rounded-lg font-medium text-sm transition-all duration-200 group/nav relative overflow-hidden",
                 isActive
-                  ? "gradient-primary text-primary-foreground shadow-premium scale-[1.02]"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground hover:translate-x-1",
+                  ? "bg-primary/10 text-primary shadow-sm"
+                  : "text-sidebar-foreground/70 hover:bg-white/5 hover:text-sidebar-foreground",
               )}
-              style={{
-                animation: `fadeIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards`,
-                animationDelay: `${groupIdx * 0.1 + itemIdx * 0.05}s`,
-                opacity: 0,
-              }}
             >
               <Icon
                 className={cn(
-                  "h-5 w-5 transition-transform duration-300",
-                  isActive
-                    ? "scale-105"
-                    : "group-hover/nav:scale-110 group-hover/nav:text-primary",
+                  "h-4 w-4 shrink-0 transition-transform duration-300",
+                   isActive ? "text-primary" : "text-sidebar-foreground/50 group-hover/nav:text-sidebar-foreground"
                 )}
               />
-              <span className="text-sm leading-tight">{item.label}</span>
-
-              {!isActive && (
-                <div className="absolute inset-0 bg-linear-to-r from-primary/20 via-primary/5 to-transparent -translate-x-full group-hover/nav:translate-x-full transition-transform duration-1000 opacity-30" />
+              <span className="truncate">{item.label}</span>
+              
+              {isActive && (
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-3/4 bg-primary rounded-r-full" />
               )}
             </NavLink>
           );
@@ -378,6 +364,15 @@ export function Sidebar({ isOpen, onClose, desktopOpen = true }: SidebarProps) {
   const navigate = useNavigate();
   const { employees } = useEmployees();
   const { teams } = useTeams();
+
+  // Initialize Settings (Logo, etc)
+  useEffect(() => {
+    if (profile?.companyId) {
+        initSettings(profile.companyId);
+    } else {
+        initSettings(); // Local load only
+    }
+  }, [profile?.companyId]);
 
   // Project Selection Modal State
   const [modalState, setModalState] = React.useState<{
@@ -427,7 +422,7 @@ export function Sidebar({ isOpen, onClose, desktopOpen = true }: SidebarProps) {
       {/* Backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-foreground/30 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm lg:hidden"
           onClick={onClose}
         />
       )}
@@ -435,29 +430,43 @@ export function Sidebar({ isOpen, onClose, desktopOpen = true }: SidebarProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 bg-sidebar-background/60 backdrop-blur-2xl shadow-premium transform transition-all duration-300 ease-in-out lg:z-auto border-r border-white/5 overflow-hidden",
+          "fixed inset-y-0 left-0 z-50 bg-sidebar-background/80 backdrop-blur-2xl shadow-2xl transform transition-all duration-300 ease-in-out lg:z-auto border-r border-white/5 overflow-hidden flex flex-col",
           isOpen ? "translate-x-0" : "-translate-x-full",
-          desktopOpen ? "lg:translate-x-0 lg:w-72 lg:static" : "lg:-translate-x-full lg:w-0 lg:absolute"
+          desktopOpen ? "lg:translate-x-0 lg:w-64 lg:static" : "lg:-translate-x-full lg:w-0 lg:absolute"
         )}
       >
-        <div className="flex h-full flex-col">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
-            <div className="flex items-center justify-start w-full px-2 py-2">
-              <Logo className="w-full max-w-[180px]" />
-            </div>
+        {/* Header containing Logo */}
+        <div className="flex-none p-6 border-b border-white/5 flex flex-col items-center justify-center min-h-[100px] relative">
+            {logoUrlSignal.value ? (
+                <img 
+                    src={logoUrlSignal.value} 
+                    alt="Logo" 
+                    className="object-contain transition-all duration-500"
+                    style={{ 
+                        width: `${logoWidthSignal.value}px`,
+                        maxWidth: '100%',
+                        maxHeight: '80px'
+                    }}
+                />
+            ) : (
+                // Fallback Text Logo if no image -> USANDO A ORIGINAL COM A TORRE
+                <div style={{ transform: `scale(${Math.min(logoWidthSignal.value / 180, 1.3)})` }} className="transition-transform duration-300">
+                    <Logo />
+                </div>
+            )}
+
             <Button
               variant="ghost"
               size="icon"
               onClick={onClose}
-              className="lg:hidden text-sidebar-foreground hover:bg-sidebar-accent h-9 w-9"
+              className="absolute top-2 right-2 lg:hidden text-sidebar-foreground hover:bg-sidebar-accent h-8 w-8 rounded-full"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4" />
             </Button>
-          </div>
+        </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide">
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto py-6 space-y-2 scrollbar-hide px-2">
             {menuGroups.map((group, groupIdx) => (
               <SidebarGroupItem
                 key={groupIdx}
@@ -469,11 +478,12 @@ export function Sidebar({ isOpen, onClose, desktopOpen = true }: SidebarProps) {
                 handleNavClick={handleNavClick}
               />
             ))}
-          </nav>
-          {/* Footer */}
-          <div className="p-4 border-t border-white/5 bg-sidebar-background/20 backdrop-blur-xl">
-            <div className="flex items-center gap-3 px-2">
-              <div className="w-10 h-10 rounded-2xl gradient-primary flex items-center justify-center shadow-glow shrink-0 border border-white/10 overflow-hidden">
+        </nav>
+
+        {/* Footer */}
+        <div className="flex-none p-4 border-t border-white/5 bg-black/20">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl gradient-primary flex items-center justify-center shadow-lg shrink-0 border border-white/10 overflow-hidden">
                 {profile?.image ? (
                   <img
                     src={profile.image}
@@ -481,38 +491,30 @@ export function Sidebar({ isOpen, onClose, desktopOpen = true }: SidebarProps) {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <span className="font-bold text-primary-foreground text-lg uppercase">
+                  <span className="font-bold text-white text-sm">
                     {displayName.charAt(0)}
                   </span>
                 )}
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 overflow-hidden">
                 <div className="flex items-center gap-1.5">
-                  <p
-                    className={cn(
-                      "text-sm font-bold truncate leading-none",
-                      isProtectedUser(profile as UserScope)
-                        ? "text-orange-400 drop-shadow-[0_0_8px_rgba(249,115,22,0.3)]"
-                        : "text-sidebar-foreground",
-                    )}
-                  >
+                  <p className="text-sm font-bold truncate text-white leading-tight">
                     {displayName}
                   </p>
                   {isProtectedUser(profile as UserScope) && (
-                    <ShieldCheck className="w-3 h-3 text-orange-500 shrink-0" />
+                    <ShieldCheck className="w-3 h-3 text-orange-400 shrink-0" />
                   )}
                 </div>
-                <span
-                  className={cn(
-                    "inline-block w-fit mt-1 px-2 py-0.5 rounded-full border text-[8px] font-bold uppercase tracking-tighter transition-all leading-tight",
-                    getRoleStyle(profile?.role || "worker"),
-                  )}
-                >
-                  {getRoleLabel(profile?.role || "worker")}
-                </span>
+                <div className="flex items-center gap-2 mt-0.5">
+                    <span className={cn(
+                        "inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wide leading-none",
+                        getRoleStyle(profile?.role || "worker")
+                    )}>
+                        {getRoleLabel(profile?.role || "worker")}
+                    </span>
+                </div>
               </div>
             </div>
-          </div>
         </div>
       </aside>
 

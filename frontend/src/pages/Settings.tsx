@@ -31,8 +31,20 @@ import {
   Image as ImageIcon,
   ZoomIn,
   Move,
+  UploadCloud,
+  Palette,
+  LayoutTemplate,
+  Settings2,
 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { isProtectedSignal } from "@/signals/authSignals";
+import { 
+    logoUrlSignal, 
+    logoWidthSignal, 
+    initSettings, 
+    saveSettings, 
+    isLoadingSettingsSignal 
+} from "@/signals/settingsSignals";
 import { getRoleStyle, getRoleLabel } from "@/utils/roleUtils";
 import { cn } from "@/lib/utils";
 import { MfaSetup } from "@/components/auth/MfaSetup";
@@ -410,6 +422,7 @@ export default function Settings() {
   };
 
   return (
+  const GeneralSettingsContent = (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <Card className="glass-card">
         <CardHeader>
@@ -606,8 +619,125 @@ export default function Settings() {
           </Button>
         </CardContent>
       </Card>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+         <h2 className="text-2xl font-bold tracking-tight">Configurações</h2>
+      </div>
+
+      <Tabs defaultValue="general" className="space-y-4">
+        <TabsList className="bg-black/20 border border-white/10">
+          <TabsTrigger value="general" className="gap-2">
+            <User className="w-4 h-4" />
+            Geral
+          </TabsTrigger>
+          {(profile?.role === 'HELPER_SYSTEM' || profile?.role === 'SUPER_ADMIN_GOD') && (
+            <TabsTrigger value="system" className="gap-2 text-purple-400 data-[state=active]:bg-purple-500/10 data-[state=active]:text-purple-300">
+                <Settings2 className="w-4 h-4" />
+                Sistema
+            </TabsTrigger>
+          )}
+        </TabsList>
+
+        <TabsContent value="general" className="space-y-4 focus-visible:outline-none">
+             {GeneralSettingsContent}
+        </TabsContent>
+
+        <TabsContent value="system" className="space-y-4 focus-visible:outline-none">
+            {/* ORGANIZATION SETTINGS */}
+            <Card className="glass-card border-purple-500/20 bg-purple-500/5">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-purple-400">
+                        <Palette className="w-5 h-5" />
+                        Personalização da Organização
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-4">
+                            <div className="w-24 h-24 bg-black/40 rounded-xl border border-white/10 flex items-center justify-center overflow-hidden relative group">
+                                {logoUrlSignal.value ? (
+                                    <img 
+                                        src={logoUrlSignal.value} 
+                                        className="object-contain w-full h-full p-2" 
+                                        alt="Logo Atual"
+                                    />
+                                ) : (
+                                    <span className="text-[10px] text-muted-foreground uppercase font-bold text-center p-2">Sem Logo</span>
+                                )}
+                            </div>
+                            <div className="flex-1 space-y-2">
+                                <Label>Logo do Sistema (NavBar)</Label>
+                                <div className="flex items-center gap-2">
+                                    <Button 
+                                        variant="outline" 
+                                        className="h-9 text-xs"
+                                        onClick={() => document.getElementById('org-logo-upload')?.click()}
+                                        disabled={isLoadingSettingsSignal.value}
+                                    >
+                                        <UploadCloud className="w-3.5 h-3.5 mr-2" />
+                                        {isLoadingSettingsSignal.value ? "Enviando..." : "Subir Nova Logo"}
+                                    </Button>
+                                    <input 
+                                        type="file" 
+                                        id="org-logo-upload" 
+                                        className="hidden" 
+                                        accept="image/png,image/jpeg,image/svg+xml"
+                                        onChange={async (e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file && profile?.companyId) {
+                                                const res = await saveSettings(profile.companyId, file);
+                                                if (res.success) {
+                                                    toast({ title: "Logo atualizada com sucesso!" });
+                                                } else {
+                                                    toast({ title: "Erro ao atualizar logo", description: res.error, variant: "destructive" });
+                                                }
+                                            }
+                                        }}
+                                    />
+                                </div>
+                                <p className="text-[10px] text-muted-foreground">Recomendado: PNG ou SVG com fundo transparente.</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4 pt-4 border-t border-white/5">
+                            <div className="flex items-center justify-between">
+                                <Label className="flex items-center gap-2">
+                                    <LayoutTemplate className="w-4 h-4" />
+                                    Tamanho da Logo ({logoWidthSignal.value}px)
+                                </Label>
+                            </div>
+                            <Slider 
+                                value={[logoWidthSignal.value]} 
+                                min={100} 
+                                max={260} 
+                                step={5}
+                                onValueChange={(val) => {
+                                    logoWidthSignal.value = val[0]; // Realtime preview
+                                }}
+                                onValueCommit={async (val) => {
+                                    if (profile?.companyId) {
+                                        await saveSettings(profile.companyId, null, val[0]);
+                                        toast({ title: "Preferência salva!" });
+                                    }
+                                }}
+                                className="w-full"
+                            />
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+        </TabsContent>
+      </Tabs>
+
+
+
 
       {/* Edit Profile Dialog */}
+
       <Dialog open={isEditingProfile} onOpenChange={setIsEditingProfile}>
         <DialogContent>
           <DialogHeader>
