@@ -10,6 +10,7 @@ import { UserService } from "@/modules/users/application/user.service";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
 import { AuthService } from "@/modules/auth/application/auth.service";
 import { PrismaAuthCredentialRepository } from "@/modules/auth/infrastructure/prisma-auth-credential.repository";
+import { SESSION_MAX_AGE } from "@/lib/constants";
 
 // Singleton services para a rota (usando o prisma global)
 const userService = new UserService(new PrismaUserRepository());
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
       },
       access_token: token,
       token_type: "bearer",
-      expires_in: 7 * 24 * 60 * 60,
+      expires_in: SESSION_MAX_AGE,
     });
   } catch (error) {
     return handleApiError(

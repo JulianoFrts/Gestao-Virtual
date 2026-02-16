@@ -16,12 +16,18 @@ export const API_PREFIX = `/api/${API_VERSION}`;
 export const DEFAULT_PAGE = 1;
 export const DEFAULT_LIMIT = 10;
 export const MAX_LIMIT = 100;
+export const BATCH_SIZE = 500;
+export const STREAM_THRESHOLD = 2000;
+export const THROTTLE_THRESHOLD = 5000;
+export const THROTTLE_MS = 50;
 
 // =============================================
 // AUTENTICAÇÃO
 // =============================================
 
 export const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // 30 dias em segundos
+export const MFA_TIME_STEP = 30; // 30 segundos
+export const MFA_WINDOW = 1; // +/- 1 step
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;
 export const BCRYPT_ROUNDS = 12;

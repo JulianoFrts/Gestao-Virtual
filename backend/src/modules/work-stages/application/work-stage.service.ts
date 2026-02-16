@@ -7,11 +7,31 @@ import {
 import { logger } from "@/lib/utils/logger";
 
 export class WorkStageService {
-  constructor(private readonly repository: WorkStageRepository) {}
+  constructor(private readonly repository: WorkStageRepository) { }
+
+  async findAll(params: {
+    siteId?: string | null;
+    projectId?: string | null;
+    companyId?: string | null;
+    linkedOnly?: boolean;
+  }): Promise<WorkStage[]> {
+    // Normalização de parâmetros vinda do controller
+    const siteId = (!params.siteId || params.siteId === 'all' || params.siteId === 'none' || params.siteId === 'undefined' || params.siteId === 'null') ? null : params.siteId;
+    const projectId = (!params.projectId || params.projectId === 'all' || params.projectId === 'undefined' || params.projectId === 'null') ? null : params.projectId;
+
+    if (!projectId && !siteId) {
+      return [];
+    }
+
+    return this.repository.findAll({
+      ...params,
+      siteId,
+      projectId
+    });
+  }
 
   async getStagesBySite(siteId: string): Promise<any[]> {
     const stages = await this.repository.findAllBySiteId(siteId);
-    // Map progress to match the expected format in the frontend hook
     return stages.map((s: any) => ({
       ...s,
       stage_progress: s.progress,
@@ -27,7 +47,41 @@ export class WorkStageService {
   }
 
   async createStage(data: CreateWorkStageDTO): Promise<WorkStage> {
-    return await this.repository.create(data);
+    // 1. Validação de obrigatoriedade
+    if (!data.name) {
+      throw new Error("Name is required");
+    }
+
+    const effectiveSiteId = (!data.siteId || data.siteId === 'all' || data.siteId === 'none') ? null : data.siteId;
+    const effectiveProjectId = (!data.projectId || data.projectId === 'all') ? null : data.projectId;
+
+    if (!effectiveSiteId && !effectiveProjectId) {
+      throw new Error("Site ID or Project ID is required");
+    }
+
+    // 2. Validação de Atividade de Produção (Regra de Negócio)
+    let productionActivityId = data.productionActivityId;
+    if (productionActivityId) {
+      // Mock validation logic from route
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(productionActivityId);
+      if (!isUuid) {
+        logger.warn(`[WorkStageService] Ignoring invalid/mock activityId: ${productionActivityId}`);
+        productionActivityId = null;
+      } else {
+        const exists = await this.repository.verifyActivityExists(productionActivityId);
+        if (!exists) {
+          logger.warn(`[WorkStageService] Activity ${productionActivityId} not found.`);
+          productionActivityId = null;
+        }
+      }
+    }
+
+    return await this.repository.create({
+      ...data,
+      siteId: effectiveSiteId,
+      projectId: effectiveProjectId,
+      productionActivityId
+    });
   }
 
   async update(id: string, data: Partial<CreateWorkStageDTO>): Promise<WorkStage> {
@@ -42,9 +96,6 @@ export class WorkStageService {
     return this.repository.saveProgress(data);
   }
 
-  /**
-   * Sincroniza o progresso de todas as etapas vinculadas a um projeto ou canteiro
-   */
   async syncStages(
     params: { siteId?: string; projectId?: string },
     companyId: string,
@@ -75,7 +126,6 @@ export class WorkStageService {
     }
 
     const results = [];
-
     const useSiteFilter = !!(siteId && siteId !== 'all');
 
     for (const stage of stages) {
@@ -84,39 +134,24 @@ export class WorkStageService {
         if (!effectiveProjectId) continue;
 
         const avgProgress = await this.calculateAverageProgress(
-          stage, 
-          effectiveProjectId, 
+          stage,
+          effectiveProjectId,
           useSiteFilter
         );
 
         await this.updateTodayProgress(stage.id, avgProgress);
-
         results.push({ stage: stage.name, progress: avgProgress });
       } catch (err: any) {
         logger.error(`Error syncing stage ${stage.id} (${stage.name}): ${err.message}`, {
-            trace: err.stack,
-            stageId: stage.id
+          trace: err.stack,
+          stageId: stage.id
         });
-        // Continue syncing other stages
       }
     }
 
     return results;
   }
 
-  // Keeping syncStagesBySite for backward compatibility if needed, but pointing to the new one
-  async syncStagesBySite(
-    siteId: string,
-    companyId: string,
-    isAdmin: boolean,
-  ): Promise<any[]> {
-    return this.syncStages({ siteId }, companyId, isAdmin);
-  }
-
-  /**
-   * Calcula o progresso médio ponderado de uma etapa com base nos elementos de produção.
-   * Usa a Regra dos 100%: sum(peso_i * progresso_i) / sum(peso_i)
-   */
   private async calculateAverageProgress(
     stage: WorkStage,
     projectId: string,
@@ -130,10 +165,7 @@ export class WorkStageService {
       useSiteFilter ? stage.site?.name : undefined,
     );
 
-    // result: { totalWeight, weightedProgress }
     if (!result || result.totalWeight === 0) return 0;
-    
-    // Progresso ponderado: sum(peso * progresso%) / sum(peso)
     return Math.min(100, result.weightedProgress / result.totalWeight);
   }
 

@@ -10,7 +10,7 @@ import {
 import * as authSession from "@/lib/auth/session";
 import { publicUserSelect, buildUserWhereClause } from "@/types/database";
 import { logger } from "@/lib/utils/logger";
-import { MESSAGES } from "@/lib/constants";
+import { MESSAGES, DEFAULT_PAGE, DEFAULT_LIMIT, BATCH_SIZE, STREAM_THRESHOLD, THROTTLE_THRESHOLD, THROTTLE_MS } from "@/lib/constants";
 import { isGodRole, SECURITY_RANKS } from "@/lib/constants/security";
 import { UserService } from "@/modules/users/application/user.service";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
@@ -53,8 +53,8 @@ export async function GET(request: NextRequest) {
     }
 
     const {
-      page = 1,
-      limit = 10,
+      page = DEFAULT_PAGE,
+      limit = DEFAULT_LIMIT,
       sortBy,
       sortOrder,
     } = paginationResult.data as {
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
           return ApiResponse.json({
             items: [profile],
             pagination: {
-              page: 1,
+              page: DEFAULT_PAGE,
               limit: 1,
               total: 1,
               pages: 1,
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
           });
         } catch (err: any) {
           if (err.message === "User not found") {
-            return ApiResponse.json({ items: [], pagination: { total: 0, limit: 1, page: 1, pages: 0 } });
+            return ApiResponse.json({ items: [], pagination: { total: 0, limit: 1, page: DEFAULT_PAGE, pages: 0 } });
           }
           throw err;
         }
@@ -140,8 +140,8 @@ export async function GET(request: NextRequest) {
     const total = await userRepository.count(where);
     const pages = Math.ceil(total / limit);
 
-    // Streaming para limites altos (> 2000)
-    if (limit > 2000) {
+    // Streaming para limites altos
+    if (limit > STREAM_THRESHOLD) {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         async start(controller) {
@@ -151,7 +151,7 @@ export async function GET(request: NextRequest) {
             );
 
             let totalSent = 0;
-            const batchSize = 500;
+            const batchSize = BATCH_SIZE;
             const skipStart = (page - 1) * limit;
             const maxToFetch = Math.min(limit, total - skipStart);
 
@@ -179,8 +179,8 @@ export async function GET(request: NextRequest) {
               controller.enqueue(encoder.encode(prefix + usersJson));
 
               totalSent += users.length;
-              if (maxToFetch > 5000)
-                await new Promise((resolve) => setTimeout(resolve, 50));
+              if (maxToFetch > THROTTLE_THRESHOLD)
+                await new Promise((resolve) => setTimeout(resolve, THROTTLE_MS));
             }
 
             const paginationJson = JSON.stringify({
@@ -189,7 +189,7 @@ export async function GET(request: NextRequest) {
               total,
               pages,
               hasNext: page < pages,
-              hasPrev: page > 1,
+              hasPrev: page > DEFAULT_PAGE,
             });
             controller.enqueue(
               encoder.encode(

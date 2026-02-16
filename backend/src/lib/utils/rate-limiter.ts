@@ -132,14 +132,14 @@ export function checkRateLimit(
   }
 
   // Incrementar contador
-  return incrementEntry(
+  return incrementEntry({
     entry,
     normalizedId,
     maxRequests,
     blockDurationMs,
     windowMs,
     now,
-  );
+  });
 }
 
 function handleBlockedEntry(
@@ -181,14 +181,17 @@ function createNewEntry(
   };
 }
 
-function incrementEntry(
-  entry: RateLimitEntry,
-  normalizedId: string,
-  maxRequests: number,
-  blockDurationMs: number,
-  windowMs: number,
-  now: number,
-): RateLimitResult {
+interface IncrementParams {
+  entry: RateLimitEntry;
+  normalizedId: string;
+  maxRequests: number;
+  blockDurationMs: number;
+  windowMs: number;
+  now: number;
+}
+
+function incrementEntry(params: IncrementParams): RateLimitResult {
+  const { entry, normalizedId, maxRequests, blockDurationMs, windowMs, now } = params;
   entry.count++;
 
   // Verificar se excedeu limite

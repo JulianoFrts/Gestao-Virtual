@@ -72,7 +72,7 @@ function formatForConsole(
   };
 
   const { colorCode, levelLabel } = getColorForLevel(level, colors);
-  return buildLogOutput(
+  return buildLogOutput({
     levelLabel,
     colorCode,
     message,
@@ -80,7 +80,7 @@ function formatForConsole(
     colors,
     context,
     error,
-  );
+  });
 }
 
 function getColorForLevel(
@@ -121,15 +121,18 @@ function getColorForLevel(
   return { colorCode, levelLabel };
 }
 
-function buildLogOutput(
-  levelLabel: string,
-  colorCode: string,
-  message: string,
-  timestamp: string,
-  colors: any,
-  context?: LogContext,
-  error?: any,
-): string {
+interface BuildLogParams {
+  levelLabel: string;
+  colorCode: string;
+  message: string;
+  timestamp: string;
+  colors: any;
+  context?: LogContext;
+  error?: any;
+}
+
+function buildLogOutput(params: BuildLogParams): string {
+  const { levelLabel, colorCode, message, timestamp, colors, context, error } = params;
   const source = context?.source ? `${context.source}` : "src";
   const userId = context?.userId ? `[${context.userId}] ` : "";
 

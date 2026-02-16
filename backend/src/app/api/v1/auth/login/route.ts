@@ -16,6 +16,7 @@ import { UserService } from "@/modules/users/application/user.service";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
 import { AuthService } from "@/modules/auth/application/auth.service";
 import { PrismaAuthCredentialRepository } from "@/modules/auth/infrastructure/prisma-auth-credential.repository";
+import { HTTP_STATUS, SESSION_MAX_AGE } from "@/lib/constants";
 
 const userService = new UserService(new PrismaUserRepository());
 const authService = new AuthService(userService, new PrismaAuthCredentialRepository());
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
   try {
     const parseResult = await parseLoginRequest(request);
     if (parseResult.error)
-      return NextResponse.json({ error: parseResult.error, issues: parseResult.issues }, { status: 400 });
+      return NextResponse.json({ error: parseResult.error, issues: parseResult.issues }, { status: HTTP_STATUS.BAD_REQUEST });
 
     const { email, password } = parseResult.data!;
 
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
       const user = await authService.verifyCredentials(email, password);
       if (!user) {
         logger.warn("Credenciais inválidas", { email: email.substring(0, 3) + "..." });
-        return NextResponse.json({ error: "Credenciais inválidas" }, { status: 401 });
+        return NextResponse.json({ error: "Credenciais inválidas" }, { status: HTTP_STATUS.UNAUTHORIZED });
       }
 
       logger.info("Usuário verificado no banco. Gerando token...", { userId: user.id });
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
         permissions, // Frontend usará isso via Signals
         access_token: token,
         token_type: "bearer",
-        expires_in: 7 * 24 * 60 * 60, // 7 dias em segundos
+        expires_in: SESSION_MAX_AGE,
       });
     } catch (dbError: any) {
       logger.error("ERRO CRÍTICO NO BANCO/TOKEN DURANTE LOGIN", {

@@ -2,7 +2,7 @@ import { UserRepository } from "../domain/user.repository";
 import { SystemAuditRepository } from "../../audit/domain/system-audit.repository";
 import { type Prisma } from "@prisma/client";
 import { isGodRole, isSystemOwner, SECURITY_RANKS } from "@/lib/constants/security";
-import { ROLE_LEVELS } from "@/lib/constants";
+import { ROLE_LEVELS, DEFAULT_PAGE } from "@/lib/constants";
 import { prisma } from "@/lib/prisma/client";
 import { UserPermissionService } from "./user-permission.service";
 import { UserSecurityService } from "./user-security.service";
@@ -74,7 +74,7 @@ export class UserService {
         total,
         pages,
         hasNext: page < pages,
-        hasPrev: page > 1,
+        hasPrev: page > DEFAULT_PAGE,
       },
     };
   }

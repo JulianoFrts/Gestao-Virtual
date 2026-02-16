@@ -129,6 +129,9 @@ export default function AuditLogs() {
     direction: "asc" | "desc";
   } | null>(null);
 
+  // Novos estados para visualização modernizada
+  const [streamViewMode, setStreamViewMode] = useState<"terminal" | "table">("terminal");
+
   const handleSortAudit = (key: string) => {
     let direction: "asc" | "desc" = "asc";
     if (
@@ -151,6 +154,25 @@ export default function AuditLogs() {
       direction = "desc";
     }
     setRouteSortConfig({ key, direction });
+  };
+
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Copiado para a área de transferência!");
+  };
+
+  const generateMarkdownReport = () => {
+    const violations = streamLogs.filter((l) => l.type === "violation");
+    if (violations.length === 0) return "Nenhuma violação encontrada.";
+
+    let md = "# Relatório de Auditoria Orion\n\n";
+    md += "| N° | Severidade | Arquivo | Violação | Sugestão |\n";
+    md += "| :--- | :--- | :--- | :--- | :--- |\n";
+    violations.forEach((v) => {
+      md += `| ${v.data.index} | ${v.data.severity} | ${v.data.file} | ${v.data.violation} | ${v.data.suggestion || '-'} |\n`;
+    });
+    return md;
   };
 
   const SortIcon = ({
@@ -1334,7 +1356,7 @@ export default function AuditLogs() {
                     )}
                   </div>
 
-                  {/* Contadores em Tempo Real */}
+                  {/* Contadores em Tempo Real e Ações */}
                   <div className="flex items-center gap-4">
                     {(() => {
                       const violations = streamLogs.filter(
@@ -1350,29 +1372,59 @@ export default function AuditLogs() {
                         (l) => l.data.severity === "LOW",
                       ).length;
                       return (
-                        <>
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-2 h-2 rounded-full bg-red-500" />
-                            <span className="text-xs font-bold text-red-400">
-                              {high}
-                            </span>
+                        <div className="flex items-center gap-6">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full bg-red-500" />
+                              <span className="text-xs font-bold text-red-100">
+                                {high}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full bg-amber-500" />
+                              <span className="text-xs font-bold text-amber-100">
+                                {medium}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-2 h-2 rounded-full bg-blue-500" />
+                              <span className="text-xs font-bold text-blue-100">
+                                {low}
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-2 h-2 rounded-full bg-amber-500" />
-                            <span className="text-xs font-bold text-amber-400">
-                              {medium}
-                            </span>
+
+                          <div className="h-4 w-px bg-white/10" />
+
+                          <div className="flex border border-white/10 rounded-lg overflow-hidden shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={cn("px-3 py-1 h-7 rounded-none text-[10px] uppercase font-black", streamViewMode === 'terminal' ? 'bg-amber-500 text-black hover:bg-amber-600' : 'hover:bg-white/5')}
+                              onClick={() => setStreamViewMode('terminal')}
+                            >
+                              Terminal
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={cn("px-3 py-1 h-7 rounded-none text-[10px] uppercase font-black", streamViewMode === 'table' ? 'bg-amber-500 text-black hover:bg-amber-600' : 'hover:bg-white/5')}
+                              onClick={() => setStreamViewMode('table')}
+                            >
+                              Tabela
+                            </Button>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-2 h-2 rounded-full bg-blue-500" />
-                            <span className="text-xs font-bold text-blue-400">
-                              {low}
-                            </span>
-                          </div>
-                          <div className="text-xs text-muted-foreground font-medium">
-                            Total: {violations.length}
-                          </div>
-                        </>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 gap-2 border-amber-500/20 bg-amber-500/5 text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/20"
+                            onClick={() => copyToClipboard(generateMarkdownReport())}
+                          >
+                            <Copy className="w-3 h-3" />
+                            Copiar Relatório
+                          </Button>
+                        </div>
                       );
                     })()}
                   </div>
@@ -1400,90 +1452,167 @@ export default function AuditLogs() {
                   </div>
                 )}
 
-                {/* Terminal Visual */}
-                <div className="bg-[#0d1117] rounded-xl overflow-hidden border border-white/10 shadow-2xl">
-                  {/* Terminal Header */}
-                  <div className="flex items-center gap-2 px-4 py-2.5 bg-[#161b22] border-b border-white/5">
-                    <div className="flex gap-1.5">
-                      <div className="w-3 h-3 rounded-full bg-red-500/80" />
-                      <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
-                      <div className="w-3 h-3 rounded-full bg-green-500/80" />
-                    </div>
-                    <span className="text-[10px] font-mono text-white/40 ml-2">
-                      orion-audit --stream --mode=deep
-                    </span>
-                  </div>
-
-                  {/* Terminal Content */}
-                  <div className="p-4 font-mono text-xs max-h-72 overflow-y-auto scroll-smooth">
-                    {streamLogs.map((log, idx) => (
-                      <div
-                        key={idx}
-                        className={cn(
-                          "py-1 flex items-start gap-2",
-                          log.type === "connected" && "text-green-400",
-                          log.type === "complete" && "text-green-400 font-bold",
-                          log.type === "error" && "text-red-500 font-bold",
-                        )}
-                      >
-                        {log.type === "connected" && (
-                          <>
-                            <span className="text-green-500">➜</span>
-                            <span className="text-green-400">
-                              {log.data.message}
-                            </span>
-                          </>
-                        )}
-                        {log.type === "violation" && (
-                          <>
-                            <span className="text-white/30 w-14 shrink-0">
-                              [{log.data.index}/{log.data.total}]
-                            </span>
-                            <span
-                              className={cn(
-                                "w-16 shrink-0 font-bold",
-                                log.data.severity === "HIGH" && "text-red-400",
-                                log.data.severity === "MEDIUM" &&
-                                "text-amber-400",
-                                log.data.severity === "LOW" && "text-blue-400",
-                              )}
-                            >
-                              {log.data.severity}
-                            </span>
-                            <span className="text-cyan-400 shrink-0">
-                              {log.data.file.split("/").pop()}
-                            </span>
-                            <span className="text-white/40">→</span>
-                            <span className="text-white/60 truncate">
-                              {log.data.violation}
-                            </span>
-                          </>
-                        )}
-                        {log.type === "complete" && (
-                          <>
-                            <span className="text-green-500">✓</span>
-                            <span>
-                              Scan completo! Health Score:{" "}
-                              <span className="text-primary font-black">
-                                {log.data.healthScore}
-                              </span>
-                              /100 | {log.data.violationsCount} violações
-                            </span>
-                          </>
-                        )}
-                        {log.type === "error" && (
-                          <>
-                            <span className="text-red-500">✗</span>
-                            <span>Erro: {log.data.message}</span>
-                          </>
-                        )}
+                {/* Visualização de Resultados (Terminal ou Tabela) */}
+                {streamViewMode === "terminal" ? (
+                  <div className="bg-[#0d1117] rounded-xl overflow-hidden border border-white/10 shadow-2xl">
+                    {/* Terminal Header */}
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-[#161b22] border-b border-white/5">
+                      <div className="flex gap-1.5">
+                        <div className="w-3 h-3 rounded-full bg-red-500/80" />
+                        <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
+                        <div className="w-3 h-3 rounded-full bg-green-500/80" />
                       </div>
-                    ))}
-                    {isStreaming && (
-                      <div className="py-1 text-green-400 animate-pulse">▌</div>
-                    )}
+                      <span className="text-[10px] font-mono text-white/40 ml-2">
+                        orion-audit --stream --mode=deep
+                      </span>
+                    </div>
+
+                    {/* Terminal Content */}
+                    <div className="p-4 font-mono text-xs max-h-72 overflow-y-auto scroll-smooth">
+                      {streamLogs.map((log, idx) => (
+                        <div
+                          key={idx}
+                          className={cn(
+                            "py-1 flex items-start gap-2",
+                            log.type === "connected" && "text-green-400",
+                            log.type === "complete" && "text-green-400 font-bold",
+                            log.type === "error" && "text-red-500 font-bold",
+                          )}
+                        >
+                          {log.type === "connected" && (
+                            <>
+                              <span className="text-green-500">➜</span>
+                              <span className="text-green-400">
+                                {log.data.message}
+                              </span>
+                            </>
+                          )}
+                          {log.type === "violation" && (
+                            <>
+                              <span className="text-white/30 w-14 shrink-0">
+                                [{log.data.index}/{log.data.total}]
+                              </span>
+                              <span
+                                className={cn(
+                                  "w-16 shrink-0 font-bold",
+                                  log.data.severity === "HIGH" && "text-red-400",
+                                  log.data.severity === "MEDIUM" &&
+                                  "text-amber-400",
+                                  log.data.severity === "LOW" && "text-blue-400",
+                                )}
+                              >
+                                {log.data.severity}
+                              </span>
+                              <span className="text-cyan-400 shrink-0">
+                                {log.data.file.split("/").pop()}
+                              </span>
+                              <span className="text-white/40">→</span>
+                              <span className="text-white/60 truncate">
+                                {log.data.violation}
+                              </span>
+                            </>
+                          )}
+                          {log.type === "complete" && (
+                            <>
+                              <span className="text-green-500">✓</span>
+                              <span>
+                                Scan completo! Health Score:{" "}
+                                <span className="text-primary font-black">
+                                  {log.data.healthScore}
+                                </span>
+                                /100 | {log.data.violationsCount} violações
+                              </span>
+                            </>
+                          )}
+                          {log.type === "error" && (
+                            <>
+                              <span className="text-red-500">✗</span>
+                              <span>Erro: {log.data.message}</span>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                      {isStreaming && (
+                        <div className="py-1 text-green-400 animate-pulse">▌</div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="glass-card rounded-xl overflow-hidden border border-amber-500/20 bg-black/40 shadow-2xl">
+                    <div className="max-h-[500px] overflow-y-auto overflow-x-auto">
+                      <Table className="min-w-[1000px]">
+                        <TableHeader className="sticky top-0 bg-[#0d1117] z-10 border-b border-amber-500/10">
+                          <TableRow className="border-amber-500/10 h-10 hover:bg-transparent">
+                            <TableHead className="text-[9px] font-black uppercase text-amber-500/50 pl-6 w-12 text-center">N°</TableHead>
+                            <TableHead className="text-[9px] font-black uppercase text-amber-500/50 w-24">Severidade</TableHead>
+                            <TableHead className="text-[9px] font-black uppercase text-amber-500/50 w-[20%]">O que foi testado (Arquivo)</TableHead>
+                            <TableHead className="text-[9px] font-black uppercase text-amber-500/50 w-[25%]">Violação Detectada</TableHead>
+                            <TableHead className="text-[9px] font-black uppercase text-amber-500/50">Sugestão de Melhoria</TableHead>
+                            <TableHead className="text-[9px] font-black uppercase text-amber-500/50 pr-6 text-right w-16">Ação</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {streamLogs.filter(l => l.type === 'violation').length === 0 ? (
+                            <TableRow>
+                              <TableCell colSpan={6} className="py-24 text-center text-muted-foreground italic text-xs">
+                                <Activity className="w-8 h-8 text-amber-500/20 mx-auto mb-3 animate-pulse" />
+                                Aguardando detecções do scan em tempo real...
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            streamLogs.filter(l => l.type === 'violation').map((log, idx) => (
+                              <TableRow key={idx} className="border-amber-500/5 hover:bg-amber-500/5 group h-14">
+                                <TableCell className="pl-6 text-[10px] font-mono text-muted-foreground text-center">
+                                  {log.data.index}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge
+                                    className={cn(
+                                      "text-[8px] font-black px-1.5 py-0 border-0",
+                                      log.data.severity === 'HIGH' ? 'bg-red-500/20 text-red-500' :
+                                        log.data.severity === 'MEDIUM' ? 'bg-amber-500/20 text-amber-500' : 'bg-blue-500/20 text-blue-500'
+                                    )}
+                                  >
+                                    {log.data.severity}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="py-3">
+                                  <div className="flex flex-col">
+                                    <span className="text-[10px] font-mono text-blue-300 font-bold truncate max-w-xs" title={log.data.file}>
+                                      {log.data.file.split('/').pop()}
+                                    </span>
+                                    <span className="text-[8px] font-mono text-muted-foreground italic truncate max-w-xs">
+                                      {log.data.file}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs text-foreground font-medium italic">
+                                  {log.data.violation}
+                                </TableCell>
+                                <TableCell className="text-xs text-amber-100/70">
+                                  {log.data.suggestion || '--'}
+                                </TableCell>
+                                <TableCell className="pr-6 text-right">
+                                  <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0 hover:bg-amber-500/20 text-amber-500 rounded-lg"
+                                      onClick={() => copyToClipboard(`Arquivo: ${log.data.file}\nViolação: ${log.data.violation}\nSugestão: ${log.data.suggestion}`)}
+                                      title="Copiar dados da violação"
+                                    >
+                                      <Copy className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1847,8 +1976,8 @@ export default function AuditLogs() {
                           <h3 className="font-bold text-lg tracking-tight group-hover:text-primary transition-colors">{item.title}</h3>
                         </div>
                         <Badge className={`${item.severity === 'CRÍTICO' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
-                            item.severity === 'ALTO' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
-                              'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                          item.severity === 'ALTO' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
+                            'bg-blue-500/20 text-blue-400 border-blue-500/30'
                           } font-black text-[10px] tracking-widest`}>
                           {item.severity}
                         </Badge>

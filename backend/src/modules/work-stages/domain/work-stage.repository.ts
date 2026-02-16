@@ -11,7 +11,10 @@ export interface WorkStageProgress {
 export interface WorkStage {
   id: string;
   name: string;
+  description?: string | null;
+  weight?: number;
   siteId: string | null;
+  projectId: string | null;
   productionActivityId: string | null;
   metadata?: any;
   site?: {
@@ -27,9 +30,13 @@ export interface WorkStage {
 
 export interface CreateWorkStageDTO {
   name: string;
+  description?: string | null;
   siteId: string | null;
+  projectId?: string | null;
   displayOrder: number;
-  productionActivityId?: string;
+  weight?: number;
+  parentId?: string | null;
+  productionActivityId?: string | null;
   metadata?: any;
 }
 
@@ -49,6 +56,12 @@ export interface WorkStageRepository {
     stageId: string,
     date: Date,
   ): Promise<WorkStageProgress | null>;
+  findAll(params: {
+    siteId?: string | null;
+    projectId?: string | null;
+    companyId?: string | null;
+    linkedOnly?: boolean;
+  }): Promise<WorkStage[]>;
   findAllBySiteId(siteId: string): Promise<WorkStage[]>;
   findAllByProjectId(projectId: string): Promise<WorkStage[]>;
   create(data: CreateWorkStageDTO): Promise<WorkStage>;
@@ -64,6 +77,7 @@ export interface WorkStageRepository {
     activityId: string,
     siteName?: string,
   ): Promise<{ totalWeight: number; weightedProgress: number }>;
+  verifyActivityExists(activityId: string): Promise<boolean>;
 }
 
 export class PrismaWorkStageRepository implements WorkStageRepository {
@@ -71,7 +85,7 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
     siteId: string,
     companyId?: string,
   ): Promise<WorkStage[]> {
-    return await prisma.workStage.findMany({
+    const stages = await prisma.workStage.findMany({
       where: {
         siteId,
         productionActivityId: { not: null },
@@ -81,13 +95,14 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
       },
       include: { site: { include: { project: true } } },
     });
+    return stages.map(s => this.mapToWorkStage(s));
   }
 
   async findLinkedStagesByProjectId(
     projectId: string,
     companyId?: string,
   ): Promise<WorkStage[]> {
-    return await prisma.workStage.findMany({
+    const stages = await prisma.workStage.findMany({
       where: {
         site: {
           projectId,
@@ -97,13 +112,13 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
       },
       include: { site: { include: { project: true } } },
     });
+    return stages.map(s => this.mapToWorkStage(s));
   }
 
   async saveProgress(
     progress: Partial<WorkStageProgress>,
   ): Promise<WorkStageProgress> {
     if (progress.id) {
-      // Build update data dynamically to avoid undefined values overriding or causing issues
       const updateData: any = {};
       if (
         progress.actualPercentage !== undefined &&
@@ -114,7 +129,6 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
       if (progress.notes !== undefined) {
         updateData.notes = progress.notes;
       }
-      // If explicit date update is needed
       if (progress.recordedDate) {
         updateData.recordedDate = progress.recordedDate;
       }
@@ -156,6 +170,49 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
       actualPercentage: Number(result.actualPercentage),
     } as WorkStageProgress;
   }
+
+  async findAll(params: {
+    siteId?: string | null;
+    projectId?: string | null;
+    companyId?: string | null;
+    linkedOnly?: boolean;
+  }): Promise<WorkStage[]> {
+    const { siteId, projectId, linkedOnly } = params;
+
+    const where: any = {};
+
+    if (linkedOnly) {
+      where.productionActivityId = { not: null };
+    }
+
+    if (siteId) {
+      where.siteId = siteId;
+    } else if (projectId) {
+      where.OR = [
+        { projectId: projectId },
+        { site: { projectId: projectId } }
+      ];
+    }
+
+    const stages = await prisma.workStage.findMany({
+      where,
+      include: {
+        progress: {
+          orderBy: { recordedDate: "desc" },
+          take: 1,
+        },
+        site: {
+          include: {
+            project: true
+          }
+        }
+      },
+      orderBy: { displayOrder: "asc" },
+    });
+
+    return stages.map(this.mapToWorkStage);
+  }
+
   async findAllBySiteId(siteId: string): Promise<WorkStage[]> {
     const stages = await prisma.workStage.findMany({
       where: { siteId },
@@ -194,37 +251,39 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
   private mapToWorkStage(s: any): WorkStage {
     return {
       ...s,
+      weight: s.weight ? Number(s.weight) : 1.0,
       progress: s.progress
         ? s.progress.map((p: any) => ({
-            ...p,
-            actualPercentage: Number(p.actualPercentage),
-          }))
+          ...p,
+          actualPercentage: Number(p.actualPercentage),
+        }))
         : [],
     };
   }
 
   async create(data: CreateWorkStageDTO): Promise<WorkStage> {
-    return await prisma.workStage.create({
+    const result = await prisma.workStage.create({
       data: {
         name: data.name,
+        description: data.description || null,
         siteId: data.siteId,
-        displayOrder: data.displayOrder,
+        projectId: data.projectId,
+        displayOrder: data.displayOrder || 0,
+        weight: data.weight || 1.0,
+        parentId: data.parentId || null,
         productionActivityId: data.productionActivityId,
         metadata: (data.metadata || {}) as any,
       },
     });
+    return this.mapToWorkStage(result);
   }
 
   async update(id: string, data: Partial<CreateWorkStageDTO>): Promise<WorkStage> {
-    const updateData: any = { ...data };
-    if (updateData.metadata) {
-       // metadata is handled generically
-    }
-    
-    return await prisma.workStage.update({
+    const result = await prisma.workStage.update({
       where: { id },
-      data: updateData,
+      data,
     });
+    return this.mapToWorkStage(result);
   }
 
   async listProgress(stageId?: string): Promise<WorkStageProgress[]> {
@@ -243,10 +302,7 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
     activityId: string,
     siteName?: string,
   ): Promise<any[]> {
-    // 1. Fetch ALL towers for the project first (safest approach)
     const elementFilter: any = { projectId, elementType: "TOWER" };
-    
-    // We fetch ID and metadata to filter in memory
     const elements = await prisma.mapElementTechnicalData.findMany({
       where: elementFilter,
       select: { id: true, metadata: true },
@@ -254,39 +310,25 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
 
     if (elements.length === 0) return [0, 0];
 
-    // 2. Filter in memory by siteName (trecho) if provided
-    // This solves case-sensitivity issues: "TRECHO 1" vs "Trecho 1"
     let targetElementIds = elements.map(e => e.id);
 
     if (siteName) {
       const normalizedSite = siteName.trim().toLowerCase();
-      
       const filteredElements = elements.filter(e => {
         const meta = e.metadata as any;
         const trecho = meta?.trecho || meta?.Trecho || meta?.site || "";
         return String(trecho).trim().toLowerCase() === normalizedSite;
       });
 
-      // If filtering found matches, use them. 
-      // If NO matches were found, it might be that towers don't have 'trecho' set. 
-      // In that case, we fallback to using ALL towers to avoid zeroing out progress erroneously 
-      // (assuming implied scope if metadata is missing).
-      // However, if some matched and some didn't, we respect the filter.
       if (filteredElements.length > 0) {
         targetElementIds = filteredElements.map(e => e.id);
       } else {
-         // OPTIONAL: If we want to be strict, we would return [0, 0].
-         // But user feedback says "it works sometimes", implying data consistency issues.
-         // If no towers match the site name, it's safer to return 0 elements 
-         // BUT we should log this or handle it. 
-         // For now, let's assume strict filtering: if provided siteName is not found, scope is empty.
-         targetElementIds = [];
+        targetElementIds = [];
       }
     }
 
     if (targetElementIds.length === 0) return [0, 0];
 
-    // 3. Aggregate progress for the target elements
     const progressStats = await prisma.mapElementProductionProgress.aggregate({
       where: {
         activityId,
@@ -298,19 +340,11 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
     return [targetElementIds.length, Number(progressStats?._sum?.progressPercent || 0)];
   }
 
-  /**
-   * Calcula o progresso ponderado dos elementos de produção.
-   * Usa o peso (weight) de cada torre/atividade para calcular: 
-   *   sum(peso * progresso%) / sum(peso)
-   * 
-   * Se não houver peso definido, assume peso 1.0 para cada elemento.
-   */
   async findProductionElementsWeighted(
     projectId: string,
     activityId: string,
     siteName?: string,
   ): Promise<{ totalWeight: number; weightedProgress: number }> {
-    // 1. Buscar todos os elementos (torres) do projeto
     const elementFilter: any = { projectId, elementType: "TOWER" };
     const elements = await prisma.mapElementTechnicalData.findMany({
       where: elementFilter,
@@ -319,7 +353,6 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
 
     if (elements.length === 0) return { totalWeight: 0, weightedProgress: 0 };
 
-    // 2. Filtrar por trecho (case-insensitive)
     let targetElements = elements;
     if (siteName) {
       const normalizedSite = siteName.trim().toLowerCase();
@@ -328,17 +361,16 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
         const trecho = meta?.trecho || meta?.Trecho || meta?.site || "";
         return String(trecho).trim().toLowerCase() === normalizedSite;
       });
-      // Se encontrou algo, usa; senão assume todos (fallback)
       if (filtered.length > 0) {
         targetElements = filtered;
+      } else {
+        targetElements = [];
       }
     }
 
     if (targetElements.length === 0) return { totalWeight: 0, weightedProgress: 0 };
 
     const targetElementIds = targetElements.map(e => e.id);
-
-    // 3. Buscar progresso individual de cada elemento
     const progressRecords = await prisma.mapElementProductionProgress.findMany({
       where: {
         activityId,
@@ -347,20 +379,16 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
       select: { elementId: true, progressPercent: true },
     });
 
-    // Criar mapa de progresso por elemento
     const progressMap = new Map<string, number>();
     for (const pr of progressRecords) {
       progressMap.set(pr.elementId, Number(pr.progressPercent || 0));
     }
 
-    // 4. Calcular soma ponderada
-    // Peso vem do metadata do elemento (se existir) ou é 1.0
     let totalWeight = 0;
     let weightedProgress = 0;
 
     for (const elem of targetElements) {
       const meta = elem.metadata as any;
-      // Tentar pegar peso do metadata (pesoEstrutura, peso, weight)
       const weight = Number(meta?.pesoEstrutura || meta?.peso || meta?.weight || 1.0);
       const progress = progressMap.get(elem.id) || 0;
 
@@ -369,5 +397,13 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
     }
 
     return { totalWeight, weightedProgress };
+  }
+
+  async verifyActivityExists(activityId: string): Promise<boolean> {
+    const exists = await prisma.productionActivity.findUnique({
+      where: { id: activityId },
+      select: { id: true }
+    });
+    return !!exists;
   }
 }

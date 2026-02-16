@@ -2,22 +2,11 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { checkRateLimit } from "@/lib/utils/rate-limiter";
 import { jwtVerify } from "jose";
+import { HTTP_STATUS } from "@/lib/constants";
 
 // =============================================
-// CONSTANTS (Avoid Magic Numbers)
+// HELPERS
 // =============================================
-const STATUS = {
-  OK: 200,
-  NO_CONTENT: 204,
-  REDIRECT: 301,
-  BAD_REQUEST: 400,
-  UNAUTHORIZED: 401,
-  FORBIDDEN: 403,
-  NOT_FOUND: 404,
-  TOO_MANY_REQUESTS: 429,
-  INTERNAL_ERROR: 500,
-};
-
 const INTERNAL_PROXY_KEY = process.env.INTERNAL_PROXY_KEY || '';
 const ALLOWED_ORIGINS = [
   process.env.NEXTAUTH_URL?.replace(/['"]/g, ""),
@@ -56,7 +45,7 @@ function applyHeaders(response: NextResponse, origin: string | null): void {
 }
 
 function handleCorsPreflight(request: NextRequest, origin: string | null): NextResponse {
-  const response = new NextResponse(null, { status: STATUS.NO_CONTENT });
+  const response = new NextResponse(null, { status: HTTP_STATUS.NO_CONTENT });
   applyHeaders(response, origin);
   return response;
 }
@@ -73,7 +62,7 @@ function handleSecurityCheck(request: NextRequest): NextResponse | null {
     console.warn(`[SECURITY] 🚫 Acesso Direto Bloqueado: ${request.headers.get("host")}`);
     return NextResponse.json(
       { success: false, message: "Acesso restrito: Use o domínio oficial." },
-      { status: STATUS.FORBIDDEN }
+      { status: HTTP_STATUS.FORBIDDEN }
     );
   }
 
@@ -85,7 +74,7 @@ function handleSecurityCheck(request: NextRequest): NextResponse | null {
     if (request.headers.get("x-forwarded-host")) {
       httpsUrl.host = request.headers.get("x-forwarded-host")!;
     }
-    return NextResponse.redirect(httpsUrl, STATUS.REDIRECT);
+    return NextResponse.redirect(httpsUrl, 301); // 301 Moved Permanently
   }
 
   return null;
@@ -105,7 +94,7 @@ function handleRateLimit(request: NextRequest, origin: string | null): NextRespo
   if (result.blocked) {
     const res = NextResponse.json(
       { success: false, message: "Muitas requisições", code: "RATE_LIMITED" },
-      { status: STATUS.TOO_MANY_REQUESTS }
+      { status: HTTP_STATUS.TOO_MANY_REQUESTS }
     );
     res.headers.set("Retry-After", String(Math.ceil((result.resetAt - Date.now()) / 1000)));
     applyHeaders(res, origin);
@@ -117,20 +106,20 @@ function handleRateLimit(request: NextRequest, origin: string | null): NextRespo
 async function handleApiAuth(request: NextRequest): Promise<NextResponse | null> {
   const authHeader = request.headers.get("authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return NextResponse.json({ success: false, message: "Não autenticado" }, { status: STATUS.UNAUTHORIZED });
+    return NextResponse.json({ success: false, message: "Não autenticado" }, { status: HTTP_STATUS.UNAUTHORIZED });
   }
 
   const token = authHeader.substring(7);
   const secret = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
 
-  if (!secret) return NextResponse.json({ success: false, message: "Erro configuração auth" }, { status: STATUS.INTERNAL_ERROR });
+  if (!secret) return NextResponse.json({ success: false, message: "Erro configuração auth" }, { status: HTTP_STATUS.INTERNAL_ERROR });
 
   try {
     await jwtVerify(token, new TextEncoder().encode(secret));
     return null;
   } catch (err: any) {
     const message = err.code === "ERR_JWT_EXPIRED" ? "Sessão expirada" : "Token inválido";
-    return NextResponse.json({ success: false, message }, { status: STATUS.UNAUTHORIZED });
+    return NextResponse.json({ success: false, message }, { status: HTTP_STATUS.UNAUTHORIZED });
   }
 }
 

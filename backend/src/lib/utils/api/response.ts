@@ -10,6 +10,7 @@ import type {
 } from "@/types/api";
 import { logger } from "@/lib/utils/logger";
 import { ZodError } from "zod";
+import { HTTP_STATUS } from "@/lib/constants";
 
 // =============================================
 // CLASSE PRINCIPAL
@@ -39,13 +40,13 @@ export class ApiResponse {
     };
   }
 
-  static json<T>(data: T, message?: string, status = 200): NextResponse {
+  static json<T>(data: T, message?: string, status: number = HTTP_STATUS.OK): NextResponse {
     return NextResponse.json(this.success(data, message), { status });
   }
 
   static errorJson(
     message: string,
-    status = 400,
+    status: number = HTTP_STATUS.BAD_REQUEST,
     errors?: string[],
     code?: ErrorCode,
   ): NextResponse {
@@ -53,41 +54,41 @@ export class ApiResponse {
   }
 
   static created<T>(data: T, message = "Criado com sucesso"): NextResponse {
-    return this.json(data, message, 201);
+    return this.json(data, message, HTTP_STATUS.CREATED);
   }
 
   static noContent(): NextResponse {
-    return new NextResponse(null, { status: 204 });
+    return new NextResponse(null, { status: HTTP_STATUS.NO_CONTENT });
   }
 
   static badRequest(
     message = "Requisição inválida",
     errors?: string[],
   ): NextResponse {
-    return this.errorJson(message, 400, errors, "VALIDATION_ERROR");
+    return this.errorJson(message, HTTP_STATUS.BAD_REQUEST, errors, "VALIDATION_ERROR");
   }
 
   static unauthorized(message = "Não autenticado"): NextResponse {
-    return this.errorJson(message, 401, undefined, "UNAUTHORIZED");
+    return this.errorJson(message, HTTP_STATUS.UNAUTHORIZED, undefined, "UNAUTHORIZED");
   }
 
   static forbidden(message = "Sem permissão para esta ação"): NextResponse {
-    return this.errorJson(message, 403, undefined, "FORBIDDEN");
+    return this.errorJson(message, HTTP_STATUS.FORBIDDEN, undefined, "FORBIDDEN");
   }
 
   static notFound(message = "Recurso não encontrado"): NextResponse {
-    return this.errorJson(message, 404, undefined, "NOT_FOUND");
+    return this.errorJson(message, HTTP_STATUS.NOT_FOUND, undefined, "NOT_FOUND");
   }
 
   static conflict(message = "Conflito com recurso existente"): NextResponse {
-    return this.errorJson(message, 409, undefined, "CONFLICT");
+    return this.errorJson(message, HTTP_STATUS.CONFLICT, undefined, "CONFLICT");
   }
 
   static tooManyRequests(
     message = "Muitas requisições. Tente novamente mais tarde.",
     retryAfter?: number,
   ): NextResponse {
-    const response = this.errorJson(message, 429, undefined, "RATE_LIMITED");
+    const response = this.errorJson(message, HTTP_STATUS.TOO_MANY_REQUESTS, undefined, "RATE_LIMITED");
 
     if (retryAfter) {
       response.headers.set("Retry-After", String(retryAfter));
@@ -100,7 +101,7 @@ export class ApiResponse {
     message = "Erro interno do servidor",
     errors?: string[],
   ): NextResponse {
-    return this.errorJson(message, 500, errors, "INTERNAL_ERROR");
+    return this.errorJson(message, HTTP_STATUS.INTERNAL_ERROR, errors, "INTERNAL_ERROR");
   }
 
   static validationError(errors: string[]): NextResponse {

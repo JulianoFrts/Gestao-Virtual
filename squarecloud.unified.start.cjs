@@ -332,7 +332,8 @@ function setupEnvironment(finalUrl) {
         console.log('🚀 Configurando DATABASE_URL para Neon...');
     } else {
         // v178: URLs com mTLS para Prisma (Usando caminhos absolutos)
-        const prismaSslParams = `&sslmode=require&sslcert=${clientCertPath}&sslkey=${clientKeyPath}&sslrootcert=${caCertPath}`;
+        // v207: Adicionado suporte para Supabase Pooler (PgBouncer) desativando o cache de statements
+        const prismaSslParams = `&sslmode=require&sslcert=${clientCertPath}&sslkey=${clientKeyPath}&sslrootcert=${caCertPath}&statement_cache_size=0&pgbouncer=true`;
         finalAppUrl = `${cleanBaseUrl}?${prismaSslParams.substring(1)}`;
         console.log('🛡️ Configurando DATABASE_URL com mTLS...');
     }
@@ -354,9 +355,12 @@ function setupEnvironment(finalUrl) {
 
     // Escrever .env no diretório do backend
     const nextAuthUrl = process.env.NEXTAUTH_URL || 'https://www.gestaovirtual.com';
+    const directUrl = process.env.DIRECT_URL || finalAppUrl.replace(':6543', ':5432').split('?')[0];
+
     try {
         fs.writeFileSync(path.join(backendDir, '.env'), [
             `DATABASE_URL="${finalAppUrl}"`,
+            `DIRECT_URL="${directUrl}"`,
             `PGHOST="${pgEnvs.PGHOST}"`,
             `PGPORT="${pgEnvs.PGPORT}"`,
             `PGUSER="${pgEnvs.PGUSER}"`,
@@ -380,6 +384,7 @@ function setupEnvironment(finalUrl) {
             ...process.env,
             ...pgEnvs,
             DATABASE_URL: finalAppUrl,
+            DIRECT_URL: directUrl,
             PGSSLMODE: 'require',
             NODE_ENV: 'production'
         }

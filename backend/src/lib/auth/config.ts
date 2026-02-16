@@ -15,9 +15,7 @@ import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user
 const userRepo = new PrismaUserRepository();
 const permissionService = new UserPermissionService(userRepo as any);
 
-const SESSION_MAX_AGE = 20 * 60 * 60; // 20 horas
-const MFA_TIME_STEP = 30; // 30 segundos
-const MFA_WINDOW = 1; // +/- 1 step
+import { SESSION_MAX_AGE, MFA_TIME_STEP, MFA_WINDOW } from "@/lib/constants";
 
 export const authConfig: NextAuthConfig = {
   session: {
