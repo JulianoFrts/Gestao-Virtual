@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma/client";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAdmin } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
+import { HTTP_STATUS } from "@/lib/constants";
 
 export async function POST(request: NextRequest) {
   try {
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
     // No Database Hub, retornamos a mensagem real mesmo em produção para ajudar no debug do SQL
     return ApiResponse.errorJson(
       error.message || "Erro desconhecido na execução do SQL",
-      500,
+      HTTP_STATUS.INTERNAL_ERROR,
       undefined,
       "DATABASE_ERROR",
     );

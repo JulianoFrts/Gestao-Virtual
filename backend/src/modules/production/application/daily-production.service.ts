@@ -1,22 +1,20 @@
 import { ProductionRepository } from "../domain/production.repository";
 import { ProductionProgress } from "../domain/production-progress.entity";
 import { logger } from "@/lib/utils/logger";
+import { RecordDailyProductionDTO } from "./dtos/record-daily-production.dto";
 
 export class DailyProductionService {
   private readonly logContext = {
     source: "src/modules/production/application/daily-production.service",
   };
 
-  constructor(private readonly repository: ProductionRepository) {}
+  constructor(private readonly repository: ProductionRepository) { }
 
   async recordDailyProduction(
-    elementId: string,
-    activityId: string,
-    projectId: string,
-    date: string,
-    data: any,
-    userId: string,
+    dto: RecordDailyProductionDTO,
   ): Promise<ProductionProgress> {
+    const { elementId, activityId, projectId, date, data, userId } = dto;
+
     logger.info(
       `Registrando produção diária: Elemento ${elementId}, Atividade ${activityId}, Data ${date}`,
       { ...this.logContext, userId },

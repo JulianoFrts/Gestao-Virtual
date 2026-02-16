@@ -1,4 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
+import { requireAuth } from "@/lib/auth/session";
 import fs from "fs";
 import path from "path";
 
@@ -6,24 +8,22 @@ const STORAGE_ROOT = path.join(process.cwd(), "storage", "3d-models");
 
 export async function DELETE(req: NextRequest) {
   try {
+    await requireAuth();
     const body = await req.json();
     const relPath = body.path;
 
     if (!relPath)
-      return NextResponse.json({ error: "Caminho ausente" }, { status: 400 });
+      return ApiResponse.badRequest("Caminho ausente");
     if (relPath.includes(".."))
-      return NextResponse.json({ error: "Caminho inválido" }, { status: 400 });
+      return ApiResponse.badRequest("Caminho inválido");
 
     const fullPath = path.join(STORAGE_ROOT, relPath.replace(/^models\//, ""));
     if (fs.existsSync(fullPath)) {
       fs.unlinkSync(fullPath);
-      return NextResponse.json({ data: { success: true }, error: null });
+      return ApiResponse.json({ success: true });
     }
-    return NextResponse.json(
-      { error: "Arquivo não encontrado" },
-      { status: 404 },
-    );
+    return ApiResponse.notFound("Arquivo não encontrado");
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return handleApiError(err, "src/app/api/v1/storage/3d-models/remove/route.ts#DELETE");
   }
 }

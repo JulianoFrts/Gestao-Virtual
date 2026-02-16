@@ -12,6 +12,7 @@ import { z } from "zod";
 import { emptyToUndefined } from "@/lib/utils/validators/schemas";
 import { PrismaSiteRepository } from "@/modules/sites/infrastructure/prisma-site.repository";
 import { SiteService } from "@/modules/sites/application/site.service";
+import { VALIDATION, API } from "@/lib/constants";
 
 // Inicialização do Service (Dependency Injection)
 const repository = new PrismaSiteRepository();
@@ -19,7 +20,7 @@ const service = new SiteService(repository);
 
 const createSiteSchema = z.object({
   projectId: z.string().uuid("ID do projeto deve ser um UUID válido"),
-  name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres").max(255),
+  name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres").max(VALIDATION.STRING.MAX_NAME),
   code: z
     .string()
     .optional()
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
     );
     if (!validation.success) return validation.response;
 
-    const { page = 1, limit = 10, projectId, search } = validation.data as any;
+    const { page = API.PAGINATION.DEFAULT_PAGE, limit = API.PAGINATION.DEFAULT_LIMIT, projectId, search } = validation.data as any;
 
     const { isUserAdmin: checkAdmin } = await import("@/lib/auth/session");
     const isAdmin = checkAdmin(user.role);

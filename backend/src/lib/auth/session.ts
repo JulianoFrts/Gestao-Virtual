@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma/client";
 import type { Role, AccountStatus } from "@/types/database";
 import { UserService } from "@/modules/users/application/user.service";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
+import { CONSTANTS } from "@/lib/constants";
 import { isGodRole, isSystemOwner, SECURITY_RANKS } from "@/lib/constants/security";
 
 const userService = new UserService(new PrismaUserRepository());
@@ -66,14 +67,8 @@ export async function getCurrentSession(): Promise<Session | null> {
   return await getBearerSession();
 }
 
-async function getBearerSession(): Promise<Session | null> {
+export async function validateToken(token: string): Promise<Session | null> {
   try {
-    const headersList = await headers();
-    const authHeader = headersList.get("authorization");
-
-    if (!authHeader?.startsWith("Bearer ")) return null;
-
-    const token = authHeader.substring(7);
     const jwtSecret = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
     if (!jwtSecret) return null;
 
@@ -103,10 +98,25 @@ async function getBearerSession(): Promise<Session | null> {
     };
   } catch (error: any) {
     if (error.code !== "ERR_JWT_EXPIRED") {
-      console.warn("[AUTH] Token inválido:", error.message);
+      console.warn("[AUTH] Token inválido validateToken:", error.message);
     }
+    return null;
   }
-  return null;
+}
+
+async function getBearerSession(): Promise<Session | null> {
+  try {
+    const headersList = await headers();
+    const authHeader = headersList.get("authorization");
+    const bearerPrefix = "Bearer ";
+
+    if (!authHeader?.startsWith(bearerPrefix)) return null;
+
+    const token = authHeader.substring(bearerPrefix.length);
+    return await validateToken(token);
+  } catch (error: any) {
+    return null;
+  }
 }
 
 /**

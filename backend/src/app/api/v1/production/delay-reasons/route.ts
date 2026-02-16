@@ -3,15 +3,16 @@ import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth } from "@/lib/auth/session";
 import { z } from "zod";
 import { ProductionConfigService } from "@/modules/production/application/production-config.service";
-import { PrismaProductionConfigRepository } from "@/modules/production/infrastructure/prisma-production-config.repository";
+import { PrismaProductionRepository } from "@/modules/production/infrastructure/prisma-production.repository";
+import { VALIDATION } from "@/lib/constants";
 
 // DI
-const configRepository = new PrismaProductionConfigRepository();
+const configRepository = new PrismaProductionRepository();
 const configService = new ProductionConfigService(configRepository);
 
 const delayReasonSchema = z.object({
-  code: z.string().min(1),
-  description: z.string().min(1),
+  code: z.string().min(1).max(VALIDATION.STRING.MAX_NAME),
+  description: z.string().min(1).max(VALIDATION.STRING.MAX_NAME),
   dailyCost: z.number().min(0),
   category: z
     .enum(["NONE", "OWNER", "CONTRACTOR", "PROJECT", "WORK"])
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     return ApiResponse.json(reasons);
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/production/delay-reasons/route.ts#GET");
   }
 }
 
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
     if (error.message.includes("Não é possível criar um motivo")) {
       return ApiResponse.badRequest(error.message);
     }
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/production/delay-reasons/route.ts#POST");
   }
 }
 
@@ -87,6 +88,6 @@ export async function DELETE(request: NextRequest) {
 
     return ApiResponse.json(null, "Motivo removido com sucesso");
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/production/delay-reasons/route.ts#DELETE");
   }
 }

@@ -1,48 +1,45 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib";
+import { NextRequest } from "next/server";
+import { PrismaProductionRepository } from "@/modules/production/infrastructure/prisma-production.repository";
+import { ProductionConfigService } from "@/modules/production/application/production-config.service";
 import { getCurrentSession } from "@/lib/auth/session";
+import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
+import { HTTP_STATUS, MESSAGES } from "@/lib/constants";
+
+const repository = new PrismaProductionRepository();
+const configService = new ProductionConfigService(repository);
 
 // GET: Fetch unit costs for a project
 export async function GET(req: NextRequest) {
   try {
     const session = await getCurrentSession();
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiResponse.unauthorized();
     }
 
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get("projectId");
 
     if (!projectId) {
-      return NextResponse.json(
-        { error: "Project ID required" },
-        { status: 400 },
-      );
+      return ApiResponse.badRequest("Project ID required");
     }
 
     // Multitenancy Check
     const { isUserAdmin } = await import("@/lib/auth/session");
     if (!isUserAdmin(session.user.role)) {
+      const { prisma } = await import("@/lib");
       const project = await (prisma as any).project.findFirst({
         where: { id: projectId, companyId: (session.user as any).companyId },
       });
       if (!project) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return ApiResponse.forbidden();
       }
     }
 
-    const costs = await (prisma as any).activityUnitCost.findMany({
-      where: { projectId },
-      include: { activity: true },
-    });
+    const costs = await configService.listUnitCosts(projectId);
 
-    return NextResponse.json(costs);
+    return ApiResponse.json(costs);
   } catch (error) {
-    console.error("Error fetching unit costs:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleApiError(error, "src/app/api/v1/production/costs/config/route.ts#GET");
   }
 }
 
@@ -51,57 +48,32 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getCurrentSession();
     if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return ApiResponse.unauthorized();
     }
 
     const body = await req.json();
     const { projectId, costs } = body;
 
     if (!projectId || !Array.isArray(costs)) {
-      return NextResponse.json({ error: "Invalid data" }, { status: 400 });
+      return ApiResponse.badRequest("Invalid data");
     }
 
     // Multitenancy Check
     const { isUserAdmin } = await import("@/lib/auth/session");
     if (!isUserAdmin(session.user.role)) {
+      const { prisma } = await import("@/lib");
       const project = await (prisma as any).project.findFirst({
         where: { id: projectId, companyId: (session.user as any).companyId },
       });
       if (!project) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return ApiResponse.forbidden();
       }
     }
 
-    const results = [];
+    const result = await configService.upsertUnitCosts(projectId, costs);
 
-    for (const cost of costs) {
-      const result = await (prisma as any).activityUnitCost.upsert({
-        where: {
-          projectId_activityId: {
-            projectId,
-            activityId: cost.activityId,
-          },
-        },
-        update: {
-          unitPrice: cost.unitPrice,
-          measureUnit: cost.measureUnit,
-        },
-        create: {
-          projectId,
-          activityId: cost.activityId,
-          unitPrice: cost.unitPrice,
-          measureUnit: cost.measureUnit || "UN",
-        },
-      });
-      results.push(result);
-    }
-
-    return NextResponse.json({ success: true, count: results.length });
+    return ApiResponse.json(result);
   } catch (error) {
-    console.error("Error saving unit costs:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleApiError(error, "src/app/api/v1/production/costs/config/route.ts#POST");
   }
 }

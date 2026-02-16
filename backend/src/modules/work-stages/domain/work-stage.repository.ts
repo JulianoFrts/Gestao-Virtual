@@ -78,6 +78,9 @@ export interface WorkStageRepository {
     siteName?: string,
   ): Promise<{ totalWeight: number; weightedProgress: number }>;
   verifyActivityExists(activityId: string): Promise<boolean>;
+  delete(id: string): Promise<void>;
+  reorder(updates: { id: string; displayOrder: number }[]): Promise<void>;
+  deleteBySite(siteId: string): Promise<void>;
 }
 
 export class PrismaWorkStageRepository implements WorkStageRepository {
@@ -405,5 +408,29 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
       select: { id: true }
     });
     return !!exists;
+  }
+
+  async delete(id: string): Promise<void> {
+    await prisma.workStage.delete({
+      where: { id }
+    });
+  }
+
+  async reorder(updates: { id: string; displayOrder: number }[]): Promise<void> {
+    // Usando transação para garantir que todos os updates ocorram ou nenhum
+    await prisma.$transaction(
+      updates.map((update) =>
+        prisma.workStage.update({
+          where: { id: update.id },
+          data: { displayOrder: update.displayOrder },
+        }),
+      ),
+    );
+  }
+
+  async deleteBySite(siteId: string): Promise<void> {
+    await prisma.workStage.deleteMany({
+      where: { siteId }
+    });
   }
 }

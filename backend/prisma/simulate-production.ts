@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 import dotenv from "dotenv";
+import { PASSWORD_HASHES } from "../src/lib/constants/business";
 
 dotenv.config();
 
@@ -25,7 +26,7 @@ async function main() {
   const companyId = project.companyId!;
 
   // 2. Usuário Sistema
-    let systemUser = await prisma.user.findFirst({
+  let systemUser = await prisma.user.findFirst({
     where: { authCredential: { email: "sistema@orion.pro" } },
   });
   if (!systemUser) {
@@ -34,17 +35,17 @@ async function main() {
         name: "SISTEMA ORION",
         isSystemAdmin: true,
         authCredential: {
-            create: {
-                email: "sistema@orion.pro",
-                password: "$2b$10$EpWa/z.6q.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1",
-                status: "ACTIVE",
-                role: "SUPER_ADMIN"
-            }
+          create: {
+            email: "sistema@orion.pro",
+            password: PASSWORD_HASHES.DEFAULT_SEED,
+            status: "ACTIVE",
+            role: "SUPER_ADMIN"
+          }
         },
         affiliation: {
-            create: {
-                companyId
-            }
+          create: {
+            companyId
+          }
         }
       },
     });
@@ -159,27 +160,27 @@ async function main() {
         workDate.setDate(workDate.getDate() + Math.floor(Math.random() * 10));
 
         await prisma.mapElementProductionProgress.upsert({
-            where: { elementId_activityId: { elementId: tower.id, activityId: act.id } },
-            create: {
-                projectId: project.id,
-                elementId: tower.id,
-                activityId: act.id,
-                currentStatus: isFinished ? "FINISHED" : "IN_PROGRESS",
-                progressPercent: isFinished ? 100 : 50,
-                startDate: pStart,
-                endDate: isFinished ? workDate : null,
-                dailyProduction: {
-                     [workDate.toISOString().split('T')[0]]: {
-                         date: workDate.toISOString(),
-                         teamId: team.id,
-                         workersCount: 4,
-                         hoursWorked: 8,
-                         producedQuantity: isFinished ? 1 : 0.5,
-                         leadName: team.supervisor?.name || "Encarregado Geral"
-                     }
-                }
-            },
-            update: {}
+          where: { elementId_activityId: { elementId: tower.id, activityId: act.id } },
+          create: {
+            projectId: project.id,
+            elementId: tower.id,
+            activityId: act.id,
+            currentStatus: isFinished ? "FINISHED" : "IN_PROGRESS",
+            progressPercent: isFinished ? 100 : 50,
+            startDate: pStart,
+            endDate: isFinished ? workDate : null,
+            dailyProduction: {
+              [workDate.toISOString().split('T')[0]]: {
+                date: workDate.toISOString(),
+                teamId: team.id,
+                workersCount: 4,
+                hoursWorked: 8,
+                producedQuantity: isFinished ? 1 : 0.5,
+                leadName: team.supervisor?.name || "Encarregado Geral"
+              }
+            }
+          },
+          update: {}
         });
       }
     }

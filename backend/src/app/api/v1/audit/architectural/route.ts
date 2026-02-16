@@ -51,24 +51,33 @@ export async function POST(_request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth();
+    const { validateToken, requireAuth } = await import("@/lib/auth/session");
+    let currentUser;
 
+    // Suporte a Token na URL para SSE
+    const token = request.nextUrl.searchParams.get("token");
+    if (token) {
+      const session = await validateToken(token);
+      if (session?.user) currentUser = session.user;
+    }
+
+    if (!currentUser) {
+      await requireAuth();
+    }
+    const { CONSTANTS } = await import("@/lib/constants");
     const searchParams = request.nextUrl.searchParams;
     const where = processAuditFilters(searchParams);
 
-    const violations = await governanceService.listViolationsWithFilters(where);
+    const stream = generateAuditStream(where, CONSTANTS);
 
-    // Manual sort to ensure Correct Severity Order (HIGH > MEDIUM > LOW)
-    const severityWeight = { CRITICAL: 3, HIGH: 2, MEDIUM: 1, LOW: 0 };
-    violations.sort((a: any, b: any) => {
-      const weightA =
-        severityWeight[a.severity as keyof typeof severityWeight] || 0;
-      const weightB =
-        severityWeight[b.severity as keyof typeof severityWeight] || 0;
-      return weightB - weightA; // Descending weight
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
     });
 
-    return ApiResponse.json(violations);
   } catch (error) {
     return handleApiError(
       error,
@@ -96,10 +105,80 @@ function processAuditFilters(searchParams: URLSearchParams): any {
       where.lastDetectedAt.gte = new Date(startDate);
     }
     if (endDate) {
+      const { CONSTANTS } = require("@/lib/constants");
       const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
+      end.setHours(
+        CONSTANTS.TIME.END_OF_DAY.HOURS,
+        CONSTANTS.TIME.END_OF_DAY.MINUTES,
+        CONSTANTS.TIME.END_OF_DAY.SECONDS,
+        CONSTANTS.TIME.END_OF_DAY.MS
+      );
       where.lastDetectedAt.lte = end;
     }
   }
   return where;
+}
+
+/**
+ * Função Auxiliar para gerar o Stream de Auditoria (SRP)
+ */
+function generateAuditStream(where: any, CONSTANTS: any): ReadableStream {
+  const encoder = new TextEncoder();
+
+  return new ReadableStream({
+    async start(controller) {
+      const sendEvent = (type: string, data: any) => {
+        try {
+          const event = `data: ${JSON.stringify({ type, ...data })}\n\n`;
+          controller.enqueue(encoder.encode(event));
+        } catch (e) {
+          // Cliente desconectou
+        }
+      };
+
+      try {
+        const total = await governanceService.countViolations(where);
+        sendEvent("start", { total });
+
+        const BATCH_SIZE = CONSTANTS.API.BATCH.SIZE;
+        let processed = 0;
+
+        while (processed < total) {
+          const violations = await governanceService.listViolationsWithFilters(
+            where,
+            BATCH_SIZE,
+            processed
+          );
+
+          if (violations.length === 0) break;
+
+          const weights = CONSTANTS.AUDIT.WEIGHTS;
+          violations.sort((a: any, b: any) => {
+            const weightA = weights[a.severity] ?? 0;
+            const weightB = weights[b.severity] ?? 0;
+            return weightB - weightA;
+          });
+
+          processed += violations.length;
+          const progress = Math.round((processed / total) * 100);
+
+          sendEvent("batch", {
+            items: violations,
+            current: processed,
+            total,
+            progress
+          });
+
+          await new Promise((resolve) => setTimeout(resolve, CONSTANTS.API.THROTTLE.MS));
+        }
+
+        sendEvent("complete", { total });
+      } catch (error: any) {
+        const message = error instanceof Error ? error.message : String(error);
+        sendEvent("error", { message });
+      } finally {
+        controller.close();
+      }
+    }
+  });
 }

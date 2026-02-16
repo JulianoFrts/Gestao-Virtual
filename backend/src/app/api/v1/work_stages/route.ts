@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getCurrentSession } from "@/lib/auth/session";
+import { NextRequest } from "next/server";
+import { requireAuth } from "@/lib/auth/session";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { HTTP_STATUS } from "@/lib/constants";
 import { WorkStageService } from "@/modules/work-stages/application/work-stage.service";
 import { PrismaWorkStageRepository } from "@/modules/work-stages/domain/work-stage.repository";
 
@@ -14,10 +13,7 @@ const workStageService = new WorkStageService(new PrismaWorkStageRepository());
  */
 export async function GET(req: NextRequest) {
   try {
-    const session = await getCurrentSession();
-    if (!session?.user) {
-      return ApiResponse.unauthorized();
-    }
+    await requireAuth();
 
     const { searchParams } = new URL(req.url);
     const siteId = searchParams.get("siteId");
@@ -32,7 +28,7 @@ export async function GET(req: NextRequest) {
       linkedOnly
     });
 
-    return NextResponse.json(stages);
+    return ApiResponse.json(stages);
   } catch (error) {
     return handleApiError(error, "src/app/api/v1/work_stages/route.ts#GET");
   }
@@ -44,11 +40,7 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const session = await getCurrentSession();
-    if (!session?.user) {
-      return ApiResponse.unauthorized();
-    }
-
+    await requireAuth();
     const body = await req.json();
 
     // O Service agora cuida da normalização, validação de UUID e existência

@@ -59,6 +59,7 @@ const ProductionAnalyticsPage = lazy(
   () => import("../modules/production/pages/ProductionAnalyticsPage"),
 );
 const CostsPage = lazy(() => import("../modules/costs/pages/CostsPage"));
+const DataIngestionPage = lazy(() => import("../modules/ingestion/pages/DataIngestionPage"));
 const Auth = lazy(() => import("../pages/Auth"));
 
 export interface RouteConfig {
@@ -266,6 +267,14 @@ export const routes: RouteConfig[] = [
     layout: "app",
     label: "Custos",
     icon: Coins,
+  },
+  {
+    path: "/ingestion",
+    element: <DataIngestionPage />,
+    moduleId: "data_ingestion",
+    layout: "app",
+    label: "Ingestão de Dados",
+    icon: Database,
   },
 
   // Fullscreen Routes

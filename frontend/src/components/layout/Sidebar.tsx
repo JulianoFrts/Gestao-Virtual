@@ -37,6 +37,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useTeams } from "@/hooks/useTeams";
+import { Logo } from "@/components/common/Logo";
 
 interface SidebarItem {
   id: string;
@@ -441,12 +442,8 @@ export function Sidebar({ isOpen, onClose, desktopOpen = true }: SidebarProps) {
         <div className="flex h-full flex-col">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
-            <div className="flex items-center justify-center w-full px-2 py-2">
-              <img
-                src="/logo-orion.png"
-                alt="Orion"
-                className="w-[180px] h-auto drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]"
-              />
+            <div className="flex items-center justify-start w-full px-2 py-2">
+              <Logo className="w-full max-w-[180px]" />
             </div>
             <Button
               variant="ghost"

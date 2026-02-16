@@ -14,6 +14,7 @@ export async function GET() {
 
     return NextResponse.json(session || {});
   } catch (error) {
-    return NextResponse.json({}, { status: 200 });
+    const { HTTP_STATUS } = await import("@/lib/constants");
+    return NextResponse.json({}, { status: HTTP_STATUS.OK });
   }
 }

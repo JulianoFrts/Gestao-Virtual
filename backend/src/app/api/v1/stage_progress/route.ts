@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
+import { requireAuth } from "@/lib/auth/session";
 import { WorkStageService } from "@/modules/work-stages/application/work-stage.service";
 import { PrismaWorkStageRepository } from "@/modules/work-stages/domain/work-stage.repository";
 
@@ -7,6 +8,7 @@ const service = new WorkStageService(new PrismaWorkStageRepository());
 
 export async function POST(req: NextRequest) {
   try {
+    await requireAuth();
     const body = await req.json();
     const {
       stage_id,
@@ -32,6 +34,7 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
+    await requireAuth();
     const { searchParams } = new URL(req.url);
     const stageId = searchParams.get("stage_id");
 

@@ -1,7 +1,7 @@
 import { GovernanceRepository } from "../domain/governance.repository";
 
 export class GovernanceService {
-  constructor(private readonly repository: GovernanceRepository) {}
+  constructor(private readonly repository: GovernanceRepository) { }
 
   async getHistory(type: string, limit: number) {
     const results: any = {};
@@ -35,7 +35,11 @@ export class GovernanceService {
     return this.repository.findOpenViolations();
   }
 
-  async listViolationsWithFilters(filters: any) {
-    return this.repository.findViolationsWithFilters(filters);
+  async listViolationsWithFilters(filters: any, take?: number, skip?: number) {
+    return this.repository.findViolationsWithFilters(filters, take, skip);
+  }
+
+  async countViolations(filters: any) {
+    return this.repository.countViolations(filters);
   }
 }

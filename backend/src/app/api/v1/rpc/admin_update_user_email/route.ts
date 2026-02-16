@@ -51,6 +51,6 @@ export async function POST(request: NextRequest) {
 
     return ApiResponse.json(updatedUser, "User email updated successfully");
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/rpc/admin_update_user_email/route.ts#POST");
   }
 }

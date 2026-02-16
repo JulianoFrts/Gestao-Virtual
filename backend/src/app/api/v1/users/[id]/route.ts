@@ -54,7 +54,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     return ApiResponse.json(user);
   } catch (error: any) {
     if (error.message === "User not found")
-      return ApiResponse.notFound(MESSAGES.USER.NOT_FOUND);
+      return ApiResponse.notFound(MESSAGES.ERROR.NOT_FOUND);
     return handleApiError(error, "src/app/api/v1/users/[id]/route.ts#GET");
   }
 }
@@ -69,24 +69,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const isAdmin = isUserAdmin(currentUser.role as string);
 
     const rawBody = await request.json();
-    const body: any = { ...rawBody };
-
-    // Transform snake_case to camelCase and normalize fields
-    if (body.company_id !== undefined) body.companyId = body.company_id;
-    if (body.project_id !== undefined) body.projectId = body.project_id;
-    if (body.site_id !== undefined) body.siteId = body.site_id;
-    if (body.function_id !== undefined) body.functionId = body.function_id;
-    if (body.registration_number !== undefined)
-      body.registrationNumber = body.registration_number;
-
-    if (body.labor_type !== undefined) body.laborType = body.labor_type;
-    if (body.iap_name !== undefined) body.iapName = body.iap_name;
-    if (body.birth_date !== undefined) body.birthDate = body.birth_date;
-
-    // Normalização de Nome (Frontend Gestão Virtual usa fullName)
-    if (body.fullName !== undefined && body.name === undefined) {
-      body.name = body.fullName;
-    }
+    const body = normalizeUserBody(rawBody);
 
     const validationResult = validate(updateUserSchema, body);
     if (!validationResult.success) {
@@ -119,9 +102,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     return ApiResponse.json(updatedUser, MESSAGES.SUCCESS.UPDATED);
   } catch (error: any) {
     if (error.message === "User not found")
-      return ApiResponse.notFound(MESSAGES.USER.NOT_FOUND);
+      return ApiResponse.notFound(MESSAGES.ERROR.NOT_FOUND);
     if (error.message === "Email already exists")
-      return ApiResponse.conflict(MESSAGES.USER.EMAIL_EXISTS);
+      return ApiResponse.conflict(MESSAGES.ERROR.CONFLICT);
 
     return handleApiError(error, "src/app/api/v1/users/[id]/route.ts#PUT");
   }
@@ -142,11 +125,42 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     return ApiResponse.noContent();
   } catch (error: any) {
     if (error.message === "User not found")
-      return ApiResponse.notFound(MESSAGES.USER.NOT_FOUND);
+      return ApiResponse.notFound(MESSAGES.ERROR.NOT_FOUND);
     if (error.message === "Cannot delete an administrator")
       return ApiResponse.forbidden(
         "Não é possível deletar outro administrador",
       );
     return handleApiError(error, "src/app/api/v1/users/[id]/route.ts#DELETE");
   }
+}
+
+/**
+ * Normaliza campos do body (snake_case -> camelCase e Legislação)
+ */
+function normalizeUserBody(rawBody: any): any {
+  const body: any = { ...rawBody };
+
+  const mapping: Record<string, string> = {
+    company_id: "companyId",
+    project_id: "projectId",
+    site_id: "siteId",
+    function_id: "functionId",
+    registration_number: "registrationNumber",
+    labor_type: "laborType",
+    iap_name: "iapName",
+    birth_date: "birthDate",
+  };
+
+  Object.entries(mapping).forEach(([legacy, modern]) => {
+    if (body[legacy] !== undefined && body[modern] === undefined) {
+      body[modern] = body[legacy];
+    }
+  });
+
+  // Normalização de Nome (Frontend Gestão Virtual usa fullName)
+  if (body.fullName !== undefined && body.name === undefined) {
+    body.name = body.fullName;
+  }
+
+  return body;
 }

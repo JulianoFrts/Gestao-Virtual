@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     return handleApiError(
       error,
-      "src/app/api/v1/work-stages/sync/route.ts#POST",
+      "src/app/api/v1/work_stages/sync/route.ts#POST",
     );
   }
 }

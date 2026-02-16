@@ -29,6 +29,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       updatedAt: task.updatedAt,
     });
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/task_queue/[id]/route.ts#GET");
   }
 }

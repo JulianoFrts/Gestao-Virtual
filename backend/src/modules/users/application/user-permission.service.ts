@@ -1,5 +1,5 @@
 import { isGodRole, isSystemOwner, getFlagsForRole, hasWildcardAccess, SECURITY_RANKS } from "@/lib/constants/security";
-import { ROLE_LEVELS } from "@/lib/constants";
+import { CONSTANTS, ROLE_LEVELS } from "@/lib/constants";
 import { PermissionRepository } from "../domain/permission.repository";
 
 export class UserPermissionService {
@@ -143,9 +143,9 @@ export class UserPermissionService {
     uiMap["canEditSensitiveData"] = level >= SECURITY_RANKS.GLOBAL || isGod;
 
     // Flags de Mapa e Interface Técnica
-    uiMap["map.canConfigCables"] = level >= 850 || isGod || !!perms["map.manage"];
-    uiMap["map.canEditTechnicalData"] = level >= 700 || isGod || !!perms["map.edit"];
-    uiMap["map.viewAdvancedLayers"] = level >= 400 || isHighLevel;
+    uiMap["map.canConfigCables"] = level >= CONSTANTS.ROLE_LEVELS.manager || isGod || !!perms["map.manage"];
+    uiMap["map.canEditTechnicalData"] = level >= CONSTANTS.ROLE_LEVELS.gestor_canteiro || isGod || !!perms["map.edit"];
+    uiMap["map.viewAdvancedLayers"] = level >= CONSTANTS.ROLE_LEVELS.technician || isHighLevel;
 
     return uiMap;
   }

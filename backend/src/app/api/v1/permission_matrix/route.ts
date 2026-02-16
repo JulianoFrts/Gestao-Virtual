@@ -18,10 +18,7 @@ export async function GET() {
 
     return ApiResponse.json(matrix);
   } catch (error) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/permission_matrix/route.ts#GET",
-    );
+    return handleApiError(error, "src/app/api/v1/permission_matrix/route.ts#GET");
   }
 }
 
@@ -41,9 +38,6 @@ export async function POST(request: NextRequest) {
 
     return ApiResponse.json(result);
   } catch (error) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/permission_matrix/route.ts#POST",
-    );
+    return handleApiError(error, "src/app/api/v1/permission_matrix/route.ts#POST");
   }
 }

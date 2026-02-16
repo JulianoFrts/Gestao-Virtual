@@ -55,7 +55,7 @@ export class PrismaMapElementRepository implements MapElementRepository {
       const results: MapElementTechnicalData[] = [];
       for (const el of elements) {
         const { id, ...data } = el;
-        
+
         if (id) {
           const updated = await tx.mapElementTechnicalData.update({
             where: { id },
@@ -65,11 +65,11 @@ export class PrismaMapElementRepository implements MapElementRepository {
         } else {
           // Upsert logic logic manually inside transaction
           const existing = await tx.mapElementTechnicalData.findUnique({
-            where: { 
-              projectId_externalId: { 
-                projectId: el.projectId, 
-                externalId: el.externalId 
-              } 
+            where: {
+              projectId_externalId: {
+                projectId: el.projectId,
+                externalId: el.externalId
+              }
             },
           });
 
@@ -168,5 +168,13 @@ export class PrismaMapElementRepository implements MapElementRepository {
       where: { projectId },
     });
     return result.count;
+  }
+
+  async getProjectCompanyId(projectId: string): Promise<string | null> {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { companyId: true },
+    });
+    return project?.companyId || null;
   }
 }

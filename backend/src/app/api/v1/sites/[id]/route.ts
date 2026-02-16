@@ -5,12 +5,13 @@ import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { SiteService } from "@/modules/sites/application/site.service";
 import { PrismaSiteRepository } from "@/modules/sites/infrastructure/prisma-site.repository";
+import { VALIDATION } from "@/lib/constants";
 
 // DI
 const siteService = new SiteService(new PrismaSiteRepository());
 
 const updateSiteSchema = z.object({
-  name: z.string().min(2).max(255).optional(),
+  name: z.string().min(2).max(VALIDATION.STRING.MAX_NAME).optional(),
   code: z
     .string()
     .optional()
@@ -42,8 +43,8 @@ interface RouteParams {
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const { id } = await params;
   try {
+    const { id } = await params;
     await requireAuth();
 
     const site = await siteService.getSiteById(id);
@@ -55,8 +56,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const { id } = await params;
   try {
+    const { id } = await params;
     await requireAdmin();
 
     const body = await request.json();
@@ -73,8 +74,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const { id } = await params;
   try {
+    const { id } = await params;
     await requireAdmin();
 
     await siteService.deleteSite(id);

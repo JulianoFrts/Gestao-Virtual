@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       source: "src/app/api/v1/production/schedule",
       userId: user?.id,
     });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/production/schedule/route.ts#POST");
   }
 }
 
@@ -105,7 +105,7 @@ export async function DELETE(request: NextRequest) {
       source: "src/app/api/v1/production/schedule",
       userId: user?.id,
     });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/production/schedule/route.ts#DELETE");
   }
 }
 
@@ -136,6 +136,6 @@ export async function GET(request: NextRequest) {
       source: "src/app/api/v1/production/schedule",
       userId: user?.id,
     });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/production/schedule/route.ts#GET");
   }
 }

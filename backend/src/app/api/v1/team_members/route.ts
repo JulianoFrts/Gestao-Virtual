@@ -5,6 +5,7 @@ import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { TeamService } from "@/modules/teams/application/team.service";
 import { PrismaTeamRepository } from "@/modules/teams/infrastructure/prisma-team.repository";
+import { API } from "@/lib/constants";
 
 // DI
 const teamService = new TeamService(new PrismaTeamRepository());
@@ -16,7 +17,7 @@ const querySchema = z.object({
   ),
   limit: z.preprocess(
     (val) => (val === "undefined" || !val || val === "0" ? undefined : val),
-    z.coerce.number().min(1).max(50000).default(10000),
+    z.coerce.number().min(1).max(API.BATCH.EXTREME).default(API.BATCH.LARGE),
   ),
   teamId: z.preprocess(
     (val) => (val === "undefined" || !val ? undefined : val),

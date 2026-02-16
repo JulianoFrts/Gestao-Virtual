@@ -7,6 +7,7 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,6 +47,7 @@ import {
   Link,
   Info,
   Copy,
+  Minimize2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -57,6 +59,7 @@ import { isProtectedSignal, can } from "@/signals/authSignals";
 import { orionApi } from "@/integrations/orion/client";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
+import { setFocusMode } from "@/signals/uiSignals";
 import {
   Popover,
   PopoverContent,
@@ -73,6 +76,8 @@ import { DateRange } from "react-day-picker";
 
 import { useSearchParams } from "react-router-dom";
 
+// ... (imports anteriores)
+
 export default function AuditLogs() {
   const { profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -82,6 +87,8 @@ export default function AuditLogs() {
   const {
     data: logs = [],
     isLoading,
+    progress,
+    total,
     refetch: refetchLogs,
   } = useAuditLogs(isGod ? undefined : (profile as any)?.companyId);
   const [searchTerm, setSearchTerm] = useState("");
@@ -101,7 +108,6 @@ export default function AuditLogs() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
 
-  // Estados para Health Score
   const [healthScore, setHealthScore] = useState<number | null>(null);
   const [bySeverity, setBySeverity] = useState<{
     HIGH: number;
@@ -109,6 +115,12 @@ export default function AuditLogs() {
     LOW: number;
   } | null>(null);
   const [topIssues, setTopIssues] = useState<string[]>([]);
+
+  // Estados para Streaming do Histórico (Relatório)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [historyProgress, setHistoryProgress] = useState(0);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const historyEventSource = React.useRef<EventSource | null>(null);
 
   // Estados para Streaming em Tempo Real
   const [isStreaming, setIsStreaming] = useState(false);
@@ -205,7 +217,7 @@ export default function AuditLogs() {
     const violations = streamLogs.filter((l) => l.type === "violation");
     if (violations.length === 0) return "Nenhuma violação encontrada.";
 
-    let md = "# Relatório de Auditoria Orion e demandas de refatorações e melhorias!\n\n";
+    let md = "# Relatório de Auditoria GESTÃO VIRTUAL e demandas de refatorações e melhorias!\n\n";
     md += "| N° | Severidade | Arquivo | Descrição do Problema | Plano de Refatoração |\n";
     md += "| :--- | :--- | :--- | :--- | :--- |\n";
     violations.forEach((v) => {
@@ -285,21 +297,71 @@ export default function AuditLogs() {
   }, []);
 
   // Fetch Audit History with Filters
-  const fetchAuditHistory = async () => {
+  // Fetch Audit History with Filters via SSE
+  const fetchAuditHistory = () => {
+    if (historyEventSource.current) {
+      historyEventSource.current.close();
+    }
+
+    setIsLoadingHistory(true);
+    setHistoryProgress(0);
+    setHistoryTotal(0);
+    setAuditResults([]);
+
     try {
+      const token = localStorage.getItem("token") || localStorage.getItem("orion_token");
+      if (!token) throw new Error("Token não encontrado");
+
       const params = new URLSearchParams();
       if (dateRange?.from)
         params.append("startDate", dateRange.from.toISOString());
       if (dateRange?.to) params.append("endDate", dateRange.to.toISOString());
+      params.append("token", token);
 
-      const auditResp = await (orionApi.get(
-        `/audit/architectural?${params.toString()}`,
-      ) as Promise<any>);
-      const auditData = auditResp.data?.data || auditResp.data || [];
-      setAuditResults(Array.isArray(auditData) ? auditData : []);
+      const envUrl = import.meta.env.VITE_API_URL || "/api/v1";
+      const backendUrl = envUrl.startsWith("http")
+        ? envUrl
+        : `${window.location.origin}${envUrl.startsWith("/") ? "" : "/"}${envUrl}`;
+      const sseUrl = `${backendUrl}/audit/architectural?${params.toString()}`;
+
+      const es = new EventSource(sseUrl);
+      historyEventSource.current = es;
+
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "start") {
+            setHistoryTotal(data.total);
+          }
+          if (data.type === "batch") {
+            setAuditResults(prev => [...prev, ...data.items]);
+            setHistoryProgress(data.progress);
+          }
+          if (data.type === "complete") {
+            setHistoryProgress(100);
+            setIsLoadingHistory(false);
+            es.close();
+          }
+          if (data.type === "error") {
+            toast.error(data.message);
+            setIsLoadingHistory(false);
+            es.close();
+          }
+        } catch (e) {
+          console.error("Erro parsing SSE history", e);
+        }
+      };
+
+      es.onerror = () => {
+        console.error("Erro conexão SSE History");
+        es.close();
+        setIsLoadingHistory(false);
+      };
+
     } catch (error) {
       console.error("Erro ao carregar histórico de auditoria:", error);
       toast.error("Falha ao atualizar filtros de auditoria.");
+      setIsLoadingHistory(false);
     }
   };
 
@@ -347,6 +409,7 @@ export default function AuditLogs() {
     setIsStreaming(true);
     setStreamLogs([]);
     setStreamProgress(0);
+    setFocusMode(true); // Ativa Modo Foco
 
     try {
       // O token é armazenado como 'token' ou 'orion_token' no projeto
@@ -733,7 +796,7 @@ export default function AuditLogs() {
             Central de Segurança
           </h1>
           <p className="text-muted-foreground mt-1 font-medium italic">
-            Auditoria completa e validações técnicas do sistema Orion.
+            Auditoria completa e validações técnicas do sistema GESTÃO VIRTUAL.
           </p>
         </div>
       </div>
@@ -775,17 +838,29 @@ export default function AuditLogs() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => refetchLogs()}
-              className="gap-2"
-            >
-              <RefreshCw
-                className={cn("w-4 h-4", isLoading && "animate-spin")}
-              />{" "}
-              Atualizar Trilha
-            </Button>
+            <div className="flex items-center gap-2">
+              {isLoading && (
+                <div className="flex flex-col items-end mr-4 min-w-[150px]">
+                  <div className="flex items-center gap-2 text-xs font-mono text-primary mb-1">
+                    <span className="animate-pulse">CARREGANDO TRILHA...</span>
+                    <span>{logs.length}/{total || "?"}</span>
+                    <span className="font-bold">({progress || 0}%)</span>
+                  </div>
+                  <Progress value={progress || 0} className="h-1.5 w-full bg-white/10" />
+                </div>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetchLogs()}
+                className="gap-2"
+              >
+                <RefreshCw
+                  className={cn("w-4 h-4", isLoading && "animate-spin")}
+                />{" "}
+                Atualizar Trilha
+              </Button>
+            </div>
           </div>
 
           <Card className="glass-card overflow-hidden">
@@ -1329,6 +1404,19 @@ export default function AuditLogs() {
                     <SelectTrigger className="border-amber-500/20 bg-amber-500/5 text-amber-100">
                       <SelectValue placeholder="Ordenação" />
                     </SelectTrigger>
+                    {/* Barra de Progresso do Histórico */}
+                    {isLoadingHistory && (
+                      <div className="absolute top-14 right-0 w-full md:w-[450px] z-20 bg-black/80 backdrop-blur-md p-3 rounded-xl border border-amber-500/30 shadow-2xl">
+                        <div className="flex items-center justify-between w-full text-[10px] font-mono text-amber-500 mb-1.5 uppercase tracking-widest">
+                          <span className="animate-pulse">Sincronizando Relatório...</span>
+                          <div className="flex gap-2">
+                            <span className="text-white">{auditResults.length}/{historyTotal || "?"}</span>
+                            <span className="font-bold text-amber-400">({historyProgress || 0}%)</span>
+                          </div>
+                        </div>
+                        <Progress value={historyProgress || 0} className="h-1.5 w-full bg-amber-500/10" />
+                      </div>
+                    )}
                     <SelectContent>
                       <SelectItem value="lastDetectedAt-desc">
                         Mais Recentes
@@ -1458,6 +1546,15 @@ export default function AuditLogs() {
                             >
                               <Activity className="w-3 h-3 mr-2" />
                               Visualização em Tabela (Colunas)
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="px-4 py-1 h-8 rounded-none text-[10px] uppercase font-black transition-all hover:bg-red-500/20 text-red-400 hover:text-red-300 border-l border-white/10"
+                              onClick={() => setFocusMode(false)}
+                            >
+                              <Minimize2 className="w-3 h-3 mr-2" />
+                              Sair do Modo Foco
                             </Button>
                             <Button
                               variant="ghost"

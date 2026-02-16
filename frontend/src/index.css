@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
 @import "tailwindcss";
 @theme {
   --font-sans: "Space Grotesk", "Inter", "ui-sans-serif", "system-ui", sans-serif;
@@ -216,6 +217,70 @@
       hsl(215 50% 10%) 100%);
   --shadow-glow: 0 0 30px hsl(38 92% 50% / 0.4);
 }
+
+.theme-construction {
+  --background: 0 0% 100%;
+  --foreground: 215 25% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 215 25% 10%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 215 25% 10%;
+  --primary: 199 89% 48%; /* Cyan Professional */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215 25% 40%; /* Darker for better contrast */
+  --accent: 38 92% 45%; /* Slightly darker Amber for contrast */
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 88%; /* Slightly darker border */
+  --input: 214.3 31.8% 88%;
+  --ring: 199 89% 48%;
+
+  --sidebar-background: 0 0% 100%;
+  --sidebar-foreground: 215 25% 15%; /* High contrast text */
+  --sidebar-primary: 199 89% 48%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 210 40% 96.1%;
+  --sidebar-accent-foreground: 199 89% 48%;
+  --sidebar-border: 214.3 31.8% 90%;
+  
+  --gradient-primary: linear-gradient(135deg, hsl(199 89% 48%) 0%, hsl(190 90% 40%) 100%);
+  --gradient-secondary: linear-gradient(135deg, hsl(0 0% 100%) 0%, hsl(210 40% 98%) 100%);
+  --gradient-hero: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(210 40% 96%) 100%);
+  --shadow-glow: 0 4px 20px -2px rgba(199, 89, 48, 0.15);
+}
+
+/* Professional Transitions & Effects */
+.hover-scale {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-scale:hover {
+  transform: scale(1.02);
+}
+
+.hover-lift-sm {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
+}
+
+.hover-lift-sm:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.btn-effect {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.btn-effect:active {
+  transform: scale(0.98);
+}
+
 
 .theme-midnight {
   --background: 225 60% 6%;

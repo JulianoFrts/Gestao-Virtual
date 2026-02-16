@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
 
     return ApiResponse.json(visibility);
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/map_element_visibility/route.ts#GET");
   }
 }
 
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       "Configurações de visibilidade atualizadas",
     );
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/map_element_visibility/route.ts#POST");
   }
 }
 
@@ -129,6 +129,6 @@ async function handleBulkUpdate(request: NextRequest) {
       `Visibilidade atualizada para ${result.count} elementos.`,
     );
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/map_element_visibility/route.ts#BULK_UPDATE");
   }
 }

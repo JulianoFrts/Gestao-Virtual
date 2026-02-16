@@ -1,6 +1,6 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
-import { Loader2, CheckCircle2, FileText } from 'lucide-react';
+import { Loader2, CheckCircle2, CircleCheck, FileText, Clock } from 'lucide-react';
 import { useSignals } from "@preact/signals-react/runtime";
 import { appProgressSignal, loadingModulesSignal } from '@/signals/appInitSignals';
 
@@ -34,36 +34,48 @@ export function LoadingScreen() {
               {/* Animated Glow Layers */}
               <div className="absolute inset-0 rounded-full bg-primary/5 blur-xl animate-pulse" />
 
-              <svg className="w-full h-full transform -rotate-90 drop-shadow-[0_0_15px_rgba(var(--primary-rgb),0.3)]" viewBox="0 0 100 100">
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="46"
-                  className="stroke-white/5 fill-none"
-                  strokeWidth="2"
-                />
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="46"
-                  className="stroke-primary fill-none transition-all duration-1000 ease-out"
-                  strokeWidth="3"
-                  strokeDasharray="289.03"
-                  strokeDashoffset={289.03 * (1 - progress / 100)}
-                  strokeLinecap="round"
-                  style={{ filter: 'drop-shadow(0 0 8px hsl(var(--primary)))' }}
-                />
-              </svg>
+              {/* Unified Rotating Container for Perfect Sync */}
+              <div className="absolute inset-0 animate-[spin_3s_linear_infinite]">
 
+                {/* 1. Module Status Indicators (The Ring of Dots) */}
+                {modules.map((m, i) => {
+                  const total = modules.length || 1;
+                  const angle = (i * (360 / total)) - 90;
+                  const isCompleted = m.status === 'completed';
+                  const isActive = m.status === 'loading';
+
+                  return (
+                    <div
+                      key={m.id}
+                      className="absolute inset-0"
+                      style={{ transform: `rotate(${angle}deg)` }}
+                    >
+                      <div
+                        className={cn(
+                          "absolute top-1/2 left-[96%] w-1.5 h-1.5 -ml-[3px] -mt-[3px] rounded-full transition-all duration-300",
+                          isCompleted ? "bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)] border border-emerald-200/50 scale-110" :
+                            isActive ? "bg-primary shadow-[0_0_8px_hsl(var(--primary))] scale-125" :
+                              "bg-primary/30"
+                        )}
+                        style={{
+                          transform: `rotate(-${angle}deg)` // Counter-rotate to keep lighting/shadow consistent if needed, mostly style choice here
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
               {/* Central Info - Responsive text */}
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <div className="flex items-baseline">
+
                   <span
                     className="font-black text-white tracking-tighter tabular-nums drop-shadow-glow"
                     style={{ fontSize: 'clamp(1.5rem, 4vh, 3rem)' }}
                   >
                     {Math.round(progress)}
                   </span>
+
                   <span
                     className="font-black text-primary/70 ml-0.5"
                     style={{ fontSize: 'clamp(0.75rem, 1.5vh, 1.25rem)' }}
@@ -80,7 +92,7 @@ export function LoadingScreen() {
                 className="font-black tracking-[0.2em] text-white italic drop-shadow-glow flex items-center justify-center gap-1"
                 style={{ fontSize: 'clamp(1.5rem, 4vh, 3.5rem)' }}
               >
-                {['G','E','S','T','Ã','O'].map((char, i) => (
+                {['G', 'E', 'S', 'T', 'Ã', 'O'].map((char, i) => (
                   <span key={i} className="animate-in slide-in-from-bottom-2 fade-in duration-500" style={{ animationDelay: `${i * 40}ms` }}>{char}</span>
                 ))}
               </h1>
@@ -132,7 +144,7 @@ export function LoadingScreen() {
                 key={step.id}
                 className={cn(
                   "flex items-center justify-between rounded-lg transition-all duration-500",
-                  step.status === 'completed' ? "bg-white/3 border border-white/5" : "bg-transparent"
+                  step.status === 'completed' ? "bg-white/3 border border-white/10" : "bg-transparent"
                 )}
                 style={{
                   padding: 'clamp(6px, 1vh, 12px) clamp(10px, 1.5vh, 16px)',
@@ -142,16 +154,16 @@ export function LoadingScreen() {
                 <div className="flex items-center gap-2">
                   <div className={cn(
                     "w-2 h-2 rounded-full transition-all duration-500",
-                    step.status === 'completed' ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" :
-                    step.status === 'loading' ? "bg-primary animate-pulse scale-110" : "bg-white/10"
+                    step.status === 'completed' ? "bg-emerald-500 shadow-[0_0_11px_rgba(16,185,129,0.5)]" :
+                      step.status === 'loading' ? "bg-primary animate-pulse scale-190" : "bg-white/10"
                   )} />
                   <span
                     className={cn(
                       "font-bold uppercase tracking-[0.15em] transition-all duration-500",
                       step.status === 'completed' ? "text-white/60" :
-                      step.status === 'loading' ? "text-primary brightness-110" : "text-white/10"
+                        step.status === 'loading' ? "text-primary brightness-110" : "text-white/10"
                     )}
-                    style={{ fontSize: 'clamp(0.5rem, 1vh, 0.75rem)' }}
+                    style={{ fontSize: 'clamp(0.5rem, 1vh, 0.75rem )' }}
                   >
                     {step.label}
                   </span>
@@ -161,6 +173,9 @@ export function LoadingScreen() {
                 )}
                 {step.status === 'completed' && (
                   <CheckCircle2 className="h-3 w-3 text-emerald-500/40" />
+                )}
+                {step.status !== 'loading' && step.status !== 'completed' && (
+                  <CircleCheck className="h-3 w-3 text-primary/60 animate-pulse" />
                 )}
               </div>
             ))}

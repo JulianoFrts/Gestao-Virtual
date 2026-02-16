@@ -1,12 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { ApiResponse, withErrorHandler } from "@/lib/utils/api/response";
+import { requireAuth } from "@/lib/auth/session";
 import fs from "fs/promises";
 import path from "path";
+import { CONSTANTS } from "@/lib/constants";
 
 const STORAGE_PATH = path.join(process.cwd(), "storage");
 
-export const POST = async (request: Request) => {
+export const POST = async (request: NextRequest) => {
   return withErrorHandler(async () => {
+    await requireAuth();
     const formData = await request.formData();
     const file = formData.get("file") as File;
 
@@ -22,21 +25,25 @@ export const POST = async (request: Request) => {
     await fs.mkdir(path.dirname(absolutePath), { recursive: true });
     await fs.writeFile(absolutePath, buffer);
 
-    // Retorna o caminho relativo (o bucket/path que o front espera)
     return ApiResponse.created({
       path: relativePath,
-      url: `/api/v1/storage/documents?path=${relativePath}`,
+      url: `${CONSTANTS.API.PREFIX}/storage/documents?path=${relativePath}`,
     });
   });
 };
 
-export const GET = async (request: Request) => {
+export const GET = async (request: NextRequest) => {
   return withErrorHandler(async () => {
+    await requireAuth();
     const { searchParams } = new URL(request.url);
     const filePath = searchParams.get("path");
 
     if (!filePath) {
       return ApiResponse.badRequest("Caminho não fornecido");
+    }
+
+    if (filePath.includes("..")) {
+      return ApiResponse.badRequest("Caminho inválido");
     }
 
     const absolutePath = path.join(STORAGE_PATH, filePath);

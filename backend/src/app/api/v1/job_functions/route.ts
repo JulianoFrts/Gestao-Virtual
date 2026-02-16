@@ -5,6 +5,7 @@ import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { JobFunctionService } from "@/modules/companies/application/job-function.service";
 import { PrismaJobFunctionRepository } from "@/modules/companies/infrastructure/prisma-job-function.repository";
+import { VALIDATION, API } from "@/lib/constants";
 
 // DI
 const jobFunctionService = new JobFunctionService(
@@ -13,7 +14,7 @@ const jobFunctionService = new JobFunctionService(
 
 const createJobFunctionSchema = z.object({
   companyId: z.string().uuid().optional().nullable(),
-  name: z.string().min(2).max(255),
+  name: z.string().min(2).max(VALIDATION.STRING.MAX_NAME),
   description: z.string().optional(),
   canLeadTeam: z.boolean().default(false),
   hierarchyLevel: z.number().int().min(0).default(0),
@@ -26,7 +27,7 @@ const querySchema = z.object({
   ),
   limit: z.preprocess(
     (val) => (val === null || val === "" ? undefined : val),
-    z.coerce.number().min(1).max(100).default(100),
+    z.coerce.number().min(1).max(API.PAGINATION.MAX_LIMIT).default(API.PAGINATION.DEFAULT_LIMIT),
   ),
   companyId: z
     .string()
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
     return ApiResponse.json(result);
   } catch (error) {
     logger.error("Erro ao listar cargos", { error });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/job_functions/route.ts#GET");
   }
 }
 
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     logger.error("Erro ao criar cargo", { error });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/job_functions/route.ts#POST");
   }
 }
 
@@ -133,6 +134,6 @@ export async function DELETE(request: NextRequest) {
     }
   } catch (error) {
     logger.error("Erro ao excluir cargo", { error });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/job_functions/route.ts#DELETE");
   }
 }

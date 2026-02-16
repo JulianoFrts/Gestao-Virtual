@@ -1,22 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
+import { handleApiError, ApiResponse } from "@/lib/utils/api/response";
+import { requireAuth } from "@/lib/auth/session";
+import { HTTP_STATUS } from "@/lib/constants";
 import fs from "fs";
 import path from "path";
 
 const STORAGE_ROOT = path.join(process.cwd(), "storage", "3d-models");
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const relPath = searchParams.get("path");
-
-  if (!relPath || relPath.includes("..")) {
-    return new NextResponse("Caminho inválido", { status: 400 });
-  }
-
-  const fullPath = path.join(STORAGE_ROOT, relPath.replace(/^models\//, ""));
-
   try {
+    await requireAuth();
+    const { searchParams } = new URL(req.url);
+    const relPath = searchParams.get("path");
+
+    if (!relPath || relPath.includes("..")) {
+      return ApiResponse.badRequest("Caminho inválido");
+    }
+
+    const fullPath = path.join(STORAGE_ROOT, relPath.replace(/^models\//, ""));
+
     if (!fs.existsSync(fullPath) || fs.statSync(fullPath).isDirectory()) {
-      return new NextResponse("Arquivo não encontrado", { status: 404 });
+      return ApiResponse.notFound("Arquivo não encontrado");
     }
 
     const fileBuffer = fs.readFileSync(fullPath);
@@ -38,6 +42,6 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (err: any) {
-    return new NextResponse(err.message, { status: 500 });
+    return handleApiError(err, "src/app/api/v1/storage/3d-models/get/route.ts#GET");
   }
 }

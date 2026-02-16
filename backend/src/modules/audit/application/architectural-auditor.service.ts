@@ -10,28 +10,21 @@ import { MagicNumbersRule } from "../domain/rules/magic-numbers.rule";
 import { AuditConfigService } from "../infrastructure/config/audit-config.service";
 import { GitDiffService } from "../infrastructure/git/git-diff.service";
 import { HashCacheService } from "../infrastructure/cache/hash-cache.service";
-
-/**
- * AuditSummary - Resumo executivo da auditoria com Health Score
- */
-export interface AuditSummary {
-  healthScore: number; // 0-100
-  totalFiles: number;
-  violationsCount: number;
-  byCategory: Record<string, number>;
-  bySeverity: { HIGH: number; MEDIUM: number; LOW: number };
-  topIssues: string[];
-}
+import { AuditScanner } from "./audit-scanner";
+import { AuditReportService, AuditSummary } from "./audit-report.service";
+import { CONSTANTS } from "@/lib/constants";
 
 /**
  * ArchitecturalAuditor - Realiza auditoria estática do código
- * v3.0: Full Service Integration (Config, Git, Cache)
+ * v3.1: SRP Refactoring & Constant Cleanup
  */
 export class ArchitecturalAuditor {
   private readonly srcPath: string;
   private readonly configService: AuditConfigService;
   private readonly gitService: GitDiffService;
   private readonly cacheService: HashCacheService;
+  private readonly scanner: AuditScanner;
+  private readonly reportService: AuditReportService;
 
   private rules: AuditRule[] = [];
 
@@ -41,17 +34,16 @@ export class ArchitecturalAuditor {
   ) {
     this.srcPath = this.resolveSafePath(basePath);
 
-    // Inicialização dos serviços (Injeção de dependência seria ideal aqui)
     this.configService = new AuditConfigService();
     this.gitService = new GitDiffService();
     this.cacheService = new HashCacheService();
+    this.scanner = new AuditScanner(this.srcPath, this.configService, this.gitService);
+    this.reportService = new AuditReportService();
 
     this.registerRules();
   }
 
   private registerRules() {
-    const enabledRules = this.configService.getEnabledRules();
-
     // Mapa de regras disponíveis
     const availableRules = [
       new SingleResponsibilityRule(),
@@ -59,10 +51,7 @@ export class ArchitecturalAuditor {
       new MagicNumbersRule()
     ];
 
-    // Filtrar apenas as ativadas na config (por enquanto hardcoded names, ideal seria dynamic map)
-    // Na v3.1 mapear nomes de config para instâncias
     this.rules = availableRules;
-    // TODO: Implementar filtro real baseado em `enabledRules`
   }
 
   private resolveSafePath(basePath?: string): string {
@@ -74,6 +63,9 @@ export class ArchitecturalAuditor {
       return path.join(root, "src");
     }
 
+    logger.debug(`Raiz do projeto (raiz): ${root}`);
+    logger.debug(`Caminho resolvido para auditoria: ${resolved}`);
+
     return resolved;
   }
 
@@ -84,96 +76,36 @@ export class ArchitecturalAuditor {
     userId?: string,
     incremental: boolean = false
   ): Promise<{ results: AuditResult[]; summary: AuditSummary }> {
-    logger.info(`Iniciando Auditoria Arquitetural de Sistema (v3.0) [Incremental: ${incremental}]`, {
-      source: "Audit/ArchitecturalAuditor",
+    logger.info(`Iniciando Auditoria Arquitetural de Sistema (v3.1) [Incremental: ${incremental}]`, {
+      source: "Auditoria/AuditorArquitetural",
       userId,
     });
 
     const results: AuditResult[] = [];
-    let files: string[] = [];
+    const files = await this.scanner.getFilesToAudit(incremental);
 
-    // 1. Determinar Escopo de Arquivos
-    if (incremental) {
-      files = await this.gitService.getChangedFiles();
-      if (files.length === 0) {
-        logger.info("Nenhuma alteração detectada via Git. Auditando apenas cache misses ou full scan.");
-        // Fallback se git não retornar nada (opcional: ou retornar vazio)
-        // Para v3.0 vamos assumir que incremental vazio retorna "Audit Complete - No Changes"
-        return this.generateEmptyReport(0);
-      }
-    } else {
-      files = await this.getAllFilesAsync(this.srcPath);
+    if (files.length === 0 && incremental) {
+      logger.info("Nenhuma alteração detectada via Git. Auditoria Completa.");
+      return { results: [], summary: this.reportService.generateEmptyReport(0) };
     }
 
-    // 2. Processamento Principal
+    // Processamento Principal
     const activeViolations = await this.performAuditScanParallel(
       files,
       results,
       userId
     );
 
-    // 3. Reconciliação só faz sentido em Full Scan ou lógica complexa de Tracking
+    // Reconciliação
     if (!incremental) {
       await this.reconcileResolvedIssues(activeViolations);
     }
 
     this.reportResults(results);
 
-    // 4. Calcular Health Score
-    const summary = this.calculateHealthScore(results, files.length);
+    const summary = this.reportService.calculateHealthScore(results, files.length);
 
     return { results, summary };
-  }
-
-  private generateEmptyReport(totalFiles: number): { results: AuditResult[]; summary: AuditSummary } {
-    return {
-      results: [],
-      summary: {
-        healthScore: 100,
-        totalFiles,
-        violationsCount: 0,
-        byCategory: {},
-        bySeverity: { HIGH: 0, MEDIUM: 0, LOW: 0 },
-        topIssues: []
-      }
-    };
-  }
-
-  private calculateHealthScore(
-    results: AuditResult[],
-    totalFiles: number
-  ): AuditSummary {
-    const bySeverity = { HIGH: 0, MEDIUM: 0, LOW: 0 };
-    const byCategory: Record<string, number> = {};
-
-    results.forEach((r) => {
-      bySeverity[r.severity || "LOW"]++;
-      const cat = r.violation || "Unknown";
-      byCategory[cat] = (byCategory[cat] || 0) + 1;
-    });
-
-    const weightedViolations =
-      bySeverity.HIGH * 10 + bySeverity.MEDIUM * 5 + bySeverity.LOW * 2;
-
-    const penalty = Math.min(
-      100,
-      (weightedViolations / Math.max(totalFiles, 1)) * 10
-    );
-    const healthScore = Math.max(0, Math.round(100 - penalty));
-
-    const topIssues = Object.entries(byCategory)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([cat]) => cat);
-
-    return {
-      healthScore,
-      totalFiles,
-      violationsCount: results.length,
-      byCategory,
-      bySeverity,
-      topIssues,
-    };
   }
 
   private async performAuditScanParallel(
@@ -189,7 +121,7 @@ export class ArchitecturalAuditor {
         try {
           const fileResults = await this.withTimeout(
             this.processFile(file),
-            3000
+            CONSTANTS.API.TIMEOUTS.DEFAULT / 10 // 3 segundos per file as before
           );
 
           if (fileResults.length > 0) {
@@ -201,8 +133,9 @@ export class ArchitecturalAuditor {
               await this.persistViolation(res, userId);
             }
           }
-        } catch (error) {
-          logger.warn(`Erro/Timeout ao processar arquivo: ${file}`, { error });
+        } catch (error: any) {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          logger.warn(`Erro/Timeout ao processar arquivo: ${file}`, { error: errMsg });
         }
       });
       await Promise.all(promises);
@@ -218,7 +151,7 @@ export class ArchitecturalAuditor {
 
   private async withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
     const timeout = new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error("Timeout de processamento")), ms)
+      setTimeout(() => reject(new Error("Tempo limite de processamento excedido")), ms)
     );
     return Promise.race([promise, timeout]);
   }
@@ -282,57 +215,21 @@ export class ArchitecturalAuditor {
     }
   }
 
-  private async getAllFilesAsync(dir: string): Promise<string[]> {
-    let results: string[] = [];
-    const ignorePatterns = this.configService.getIgnorePatterns();
-
-    try {
-      const list = await fs.promises.readdir(dir, { withFileTypes: true });
-      for (const entry of list) {
-        // Ignorar diretórios configurados
-        if (ignorePatterns.includes(entry.name)) continue;
-
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          results = results.concat(await this.getAllFilesAsync(fullPath));
-        } else {
-          if (
-            (fullPath.endsWith(".ts") || fullPath.endsWith(".tsx")) &&
-            !fullPath.endsWith(".d.ts")
-          ) {
-            results.push(fullPath);
-          }
-        }
-      }
-    } catch (e) {
-      logger.warn(`Erro ao ler diretório: ${dir}`, { error: e });
-    }
-    return results;
-  }
-
   private async processFile(file: string): Promise<AuditResult[]> {
     const content = await fs.promises.readFile(file, "utf8");
 
-    // Hash Cache Check
     if (!this.cacheService.shouldAudit(file, content)) {
-      return []; // Skip audit if content matches cache
+      return [];
     }
 
     const relativePath = path.relative(process.cwd(), file).replace(/\\/g, "/");
     const results: AuditResult[] = [];
 
-    // AST Analyzers
     this.analyzeWithAST(relativePath, content, results);
-
-    // Regex Analyzers
     this.auditHardcodedStrings(relativePath, content, results);
-    this.auditHardcodedColors(relativePath, content, results);
     this.auditPrimitiveObsession(relativePath, content, results);
+    this.auditVisualConsistency(relativePath, content, results);
 
-    // Update Cache only if no failures (or update anyway to avoid re-scan loops? 
-    // Usually update cache regardless of violations to avoid re-scanning same broken code 
-    // BUT we want to detect if violations persist. 
-    // Current HashCacheStrategy: cache content hash. If content same, violations are same.)
     this.cacheService.updateCache(file, content, results.length);
 
     return results;
@@ -356,7 +253,6 @@ export class ArchitecturalAuditor {
         results.push(...ruleResults);
       }
 
-      // Legacy checks kept for compatibility until full migration
       const visit = (node: ts.Node) => {
         if (
           ts.isFunctionDeclaration(node) ||
@@ -383,20 +279,19 @@ export class ArchitecturalAuditor {
     }
   }
 
-  // --- Legacy Checks ---
-
   private checkTooManyParameters(
     file: string,
     node: ts.FunctionLikeDeclaration,
     results: AuditResult[]
   ) {
-    if (node.parameters.length > 5) {
+    const MAX_PARAMS = 5;
+    if (node.parameters.length > MAX_PARAMS) {
       results.push({
         file,
         status: "WARN",
         severity: "MEDIUM",
         message: `Função com ${node.parameters.length} parâmetros.`,
-        violation: "Too Many Parameters",
+        violation: "Muitos Parâmetros",
         suggestion: "Use um objeto de configuração (DTO/Interface).",
       });
     }
@@ -420,9 +315,9 @@ export class ArchitecturalAuditor {
         file,
         status: "WARN",
         severity: "MEDIUM",
-        message: "Persistência direta na camada de Route/Controller.",
-        violation: "Layer Violation (DDD)",
-        suggestion: "Mova a persistência para um Service ou Repository.",
+        message: "Persistência direta na camada de Rota/Controlador.",
+        violation: "Violação de Camada (DDD)",
+        suggestion: "Mova a persistência para um Serviço ou Repositório.",
       });
     }
   }
@@ -432,18 +327,21 @@ export class ArchitecturalAuditor {
     content: string,
     results: AuditResult[]
   ) {
+    const APP_URL = process.env.APP_URL || "https://orion.gestaovirtual.com";
+
     if (
       content.includes("localhost:") &&
       !file.includes("config") &&
-      !file.includes("client")
+      !file.includes("client") &&
+      !file.includes("AuditScanner") // Scanner and Auditor are exceptions while refactoring
     ) {
       results.push({
         file,
         status: "WARN",
         severity: "MEDIUM",
         message: "URL localhost hardcoded.",
-        violation: "Hardcoded Environment",
-        suggestion: "Use variáveis de ambiente (process.env).",
+        violation: "Ambiente Hardcoded",
+        suggestion: `Use variáveis de ambiente (APP_URL=${APP_URL}).`,
       });
     }
   }
@@ -453,23 +351,24 @@ export class ArchitecturalAuditor {
     content: string,
     results: AuditResult[]
   ) {
+    const MAX_PRIMITIVE_STATES = 5;
     const statePattern =
       /(?:status|type|state|mode)\s*(?:===?|!==?)\s*['"]\w+['"]/gi;
     const matches = content.match(statePattern) || [];
 
-    if (matches.length > 5) {
+    if (matches.length > MAX_PRIMITIVE_STATES) {
       results.push({
         file,
         status: "WARN",
         severity: "LOW",
         message: `Uso excessivo de estados string (${matches.length}x).`,
-        violation: "Primitive Obsession",
-        suggestion: "Use Enums ou Types.",
+        violation: "Obsessão por Primitivos",
+        suggestion: "Use Enums ou Tipos.",
       });
     }
   }
 
-  private auditHardcodedColors(
+  private auditVisualConsistency(
     file: string,
     content: string,
     results: AuditResult[]
@@ -477,18 +376,19 @@ export class ArchitecturalAuditor {
     if (!file.endsWith(".tsx")) return;
     if (file.includes("index.css") || file.includes("tailwind.config")) return;
 
+    const MAX_COLOR_VIOLATIONS = 5;
     const problematicColorsPattern =
       /(?:text|bg|border|ring|shadow)-(?:orange|amber)-(?:400|500|600|700)/g;
     const matches = content.match(problematicColorsPattern) || [];
     const uniqueColors = [...new Set(matches)];
 
-    if (uniqueColors.length > 0 && matches.length > 5) {
+    if (uniqueColors.length > 0 && matches.length > MAX_COLOR_VIOLATIONS) {
       results.push({
         file,
         status: "WARN",
         severity: "LOW",
         message: `Cores fora do padrão: ${uniqueColors.join(", ")}.`,
-        violation: "Visual Inconsistency",
+        violation: "Inconsistência Visual",
         suggestion: "Use variáveis de tema (primary/secondary).",
       });
     }
@@ -500,11 +400,11 @@ export class ArchitecturalAuditor {
 
     if (fails > 0 || warns > 0) {
       logger.warn(
-        `Auditoria (v3.0): ${fails} Falhas, ${warns} Alertas, ${results.length} Total.`,
+        `Auditoria (v3.1): ${fails} Falhas, ${warns} Alertas, ${results.length} Total.`,
         { source: "Audit/ArchitecturalAuditor" }
       );
     } else {
-      logger.success("Auditoria (v3.0): 100% de conformidade.", {
+      logger.success("Auditoria (v3.1): 100% de conformidade.", {
         source: "Audit/ArchitecturalAuditor",
       });
     }

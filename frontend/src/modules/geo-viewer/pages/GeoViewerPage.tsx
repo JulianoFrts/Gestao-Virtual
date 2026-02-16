@@ -4,12 +4,12 @@ import { CompletedWorkModal } from '../components/CompletedWorkModal';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-    Select, 
-    SelectContent, 
-    SelectItem, 
-    SelectTrigger, 
-    SelectValue 
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue
 } from "@/components/ui/select";
 import { Building2, Briefcase, ChevronRight } from "lucide-react";
 import { cn } from '@/lib/utils';
@@ -53,7 +53,7 @@ export const GeoViewerPage = () => {
                         <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
                     </div>
                     <span className="text-[11px] font-black uppercase tracking-[0.3em] text-white/90">
-                        Orion <span className="text-primary">Viewer</span>
+                        GESTÃO VIRTUAL <span className="text-primary">Viewer</span>
                     </span>
                 </div>
 
@@ -121,7 +121,7 @@ export const GeoViewerPage = () => {
 
                         const { error } = await orionApi.from("tower_technical_data").insert(towersToUpdate);
                         if (error) throw error;
-                        
+
                         toast.success("Projeto Importado com Sucesso");
                         window.location.reload(); // Refresh to show new towers in Scene
                     } catch (err) {
@@ -129,13 +129,13 @@ export const GeoViewerPage = () => {
                         toast.error("Erro ao importar projeto");
                     }
                 }} />
-                <CompletedWorkModal 
+                <CompletedWorkModal
                     companyId={selectedCompanyId}
                     projectId={selectedProjectId}
                     onCompanyChange={setSelectedCompanyId}
                     onProjectChange={setSelectedProjectId}
                 />
-                
+
                 {/* Offline Toggle Badge */}
                 <div className="flex items-center gap-2 bg-black/40 backdrop-blur-xl border border-white/10 px-3 py-1.5 rounded-full self-end">
                     <div className={cn("w-1.5 h-1.5 rounded-full", isOffline ? "bg-red-500" : "bg-green-500")} />

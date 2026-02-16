@@ -22,9 +22,10 @@ export async function GET() {
             timestamp: new Date().toISOString()
         });
     } catch (error: any) {
+        const { HTTP_STATUS } = await import("@/lib/constants");
         return NextResponse.json({
             error: error.message,
             stack: error.stack
-        }, { status: 500 });
+        }, { status: HTTP_STATUS.INTERNAL_ERROR });
     }
 }

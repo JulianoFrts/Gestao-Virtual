@@ -14,10 +14,8 @@ export async function GET(request: NextRequest) {
     const modules = await service.listModules();
     return ApiResponse.json(modules);
   } catch (error: any) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/permission_modules/route.ts#GET",
-    );
+
+    return handleApiError(error, "src/app/api/v1/permission_modules/route.ts#GET");
   }
 }
 
@@ -30,10 +28,8 @@ export async function POST(request: NextRequest) {
     const count = await service.processModules(items);
     return ApiResponse.json({ count }, "Módulos processados com sucesso");
   } catch (error: any) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/permission_modules/route.ts#POST",
-    );
+
+    return handleApiError(error, "src/app/api/v1/permission_modules/route.ts#POST");
   }
 }
 
@@ -47,8 +43,9 @@ export async function DELETE(request: NextRequest) {
       return ApiResponse.badRequest("ID(s) não fornecidos");
     }
 
-    if (idsString.startsWith("in.")) {
-      idsString = idsString.substring(3);
+    const IN_PREFIX = "in.";
+    if (idsString.startsWith(IN_PREFIX)) {
+      idsString = idsString.substring(IN_PREFIX.length);
     }
 
     const ids = idsString.split(",");
@@ -56,9 +53,7 @@ export async function DELETE(request: NextRequest) {
 
     return ApiResponse.json({ count }, "Módulos removidos com sucesso");
   } catch (error: any) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/permission_modules/route.ts#DELETE",
-    );
+
+    return handleApiError(error, "src/app/api/v1/permission_modules/route.ts#DELETE");
   }
 }

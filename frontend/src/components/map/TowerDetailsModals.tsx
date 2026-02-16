@@ -2,6 +2,7 @@ import React from 'react';
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
@@ -17,7 +18,6 @@ interface TowerDetailsModalsProps {
 }
 
 export function TowerDetailsModals({ isOpen, onClose, tower }: TowerDetailsModalsProps) {
-    console.log("TowerDetailsModals Render - isOpen:", isOpen, "Tower:", tower?.name);
     if (!tower) return null;
 
     const handleNavigate = () => {
@@ -46,6 +46,9 @@ export function TowerDetailsModals({ isOpen, onClose, tower }: TowerDetailsModal
                                 <DialogTitle className="text-xl font-black italic tracking-tighter text-white uppercase leading-none">
                                     {tower.name}
                                 </DialogTitle>
+                                <DialogDescription className="sr-only">
+                                    Detalhes técnicos da estrutura {tower.name}
+                                </DialogDescription>
                             </DialogHeader>
                             <div className="flex items-center gap-2 mt-2">
                                 <span className="bg-white/10 text-[9px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-md text-emerald-400 border border-white/5">

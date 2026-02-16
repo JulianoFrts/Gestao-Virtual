@@ -75,10 +75,8 @@ export async function POST(request: NextRequest) {
       expires_in: SESSION_MAX_AGE,
     });
   } catch (error) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/rpc/login_funcionario/route.ts#POST",
-    );
+
+    return handleApiError(error, "src/app/api/v1/rpc/login_funcionario/route.ts#POST");
   }
 }
 

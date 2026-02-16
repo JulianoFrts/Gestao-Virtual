@@ -5,10 +5,11 @@ import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { ProjectService } from "@/modules/projects/application/project.service";
 import { PrismaProjectRepository } from "@/modules/projects/infrastructure/prisma-project.repository";
+import { VALIDATION } from "@/lib/constants";
 
 const updateProjectSchema = z.object({
   companyId: z.string().uuid().optional(),
-  name: z.string().min(2).max(255).optional(),
+  name: z.string().min(2).max(VALIDATION.STRING.MAX_NAME).optional(),
   code: z
     .string()
     .optional()

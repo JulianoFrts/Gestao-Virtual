@@ -1,10 +1,11 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { PrismaProductionRepository } from "@/modules/production/infrastructure/prisma-production.repository";
 import { ProductionService } from "@/modules/production/application/production.service";
+import { HTTP_STATUS } from "@/lib/constants";
 
 const repository = new PrismaProductionRepository();
 const service = new ProductionService(repository);
@@ -50,20 +51,21 @@ export async function POST(request: NextRequest) {
       (await repository.findElementProjectId(data.towerId)) ||
       "";
 
-    const updated = await service.recordDailyProduction(
-      data.towerId,
-      data.activityId,
-      elementProjectId,
-      data.workDate,
-      {
+    const updated = await service.recordDailyProduction({
+      towerId: data.towerId, // Map to elementId if needed by DTO, wait, DTO expects elementId
+      elementId: data.towerId,
+      activityId: data.activityId,
+      projectId: elementProjectId,
+      date: data.workDate,
+      data: {
         teamId: data.teamId,
         workersCount: data.workersCount,
         hoursWorked: data.hoursWorked,
         producedQuantity: data.producedQuantity,
         plannedQuantity: data.plannedQuantity,
       },
-      user.id,
-    );
+      userId: user.id,
+    } as any);
 
     return ApiResponse.json(updated, "Produção diária registrada com sucesso");
   } catch (error: any) {

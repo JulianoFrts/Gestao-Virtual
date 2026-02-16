@@ -7,8 +7,8 @@
  * que tenta fazer login diretamente via POST ao invés de usar NextAuth hooks.
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { handleApiError } from "@/lib/utils/api/response";
+import { NextRequest } from "next/server";
+import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { generateToken } from "@/lib/auth/token";
@@ -16,7 +16,7 @@ import { UserService } from "@/modules/users/application/user.service";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
 import { AuthService } from "@/modules/auth/application/auth.service";
 import { PrismaAuthCredentialRepository } from "@/modules/auth/infrastructure/prisma-auth-credential.repository";
-import { HTTP_STATUS, SESSION_MAX_AGE } from "@/lib/constants";
+import { SESSION_MAX_AGE, CONSTANTS } from "@/lib/constants";
 
 const userService = new UserService(new PrismaUserRepository());
 const authService = new AuthService(userService, new PrismaAuthCredentialRepository());
@@ -31,22 +31,19 @@ export async function POST(request: NextRequest) {
     const parseResult = await parseLoginRequest(request);
 
     if (parseResult.error) {
-      return NextResponse.json(
-        { error: parseResult.error, issues: parseResult.issues },
-        { status: HTTP_STATUS.BAD_REQUEST }
-      );
+      return ApiResponse.badRequest(parseResult.error, parseResult.issues);
     }
 
     const { email, password } = parseResult.data!;
-    logger.info("Tentativa de login recebida", { email: email.substring(0, 3) + "..." });
+    logger.info("Tentativa de login recebida", { email: email.substring(0, CONSTANTS.AUTH.LIMITS.PREVIEW_LENGTH) + "..." });
 
     const result = await executeLogin(email, password);
 
     if (result.error) {
-      return NextResponse.json({ error: result.error }, { status: HTTP_STATUS.UNAUTHORIZED });
+      return ApiResponse.unauthorized(result.error);
     }
 
-    return NextResponse.json(result.data);
+    return ApiResponse.json(result.data);
 
   } catch (error: any) {
     logger.error("Erro no endpoint de login legado", { error });
@@ -59,7 +56,7 @@ async function executeLogin(email: string, password: string) {
     const user = await authService.verifyCredentials(email, password);
 
     if (!user) {
-      logger.warn("Credenciais inválidas", { email: email.substring(0, 3) + "..." });
+      logger.warn("Credenciais inválidas", { email: email.substring(0, CONSTANTS.AUTH.LIMITS.PREVIEW_LENGTH) + "..." });
       return { error: "Credenciais inválidas" };
     }
 

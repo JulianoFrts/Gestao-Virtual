@@ -7,6 +7,9 @@ import { TimeRecordService } from "@/modules/production/application/time-record.
 import { PrismaTimeRecordRepository } from "@/modules/production/infrastructure/prisma-time-record.repository";
 
 // DI
+import { API } from "@/lib/constants";
+
+// DI
 const timeRecordService = new TimeRecordService(
   new PrismaTimeRecordRepository(),
 );
@@ -30,7 +33,7 @@ const querySchema = z.object({
   ),
   limit: z.preprocess(
     (val) => (val === null || val === "" ? undefined : val),
-    z.coerce.number().min(1).max(100).default(20),
+    z.coerce.number().min(1).max(API.PAGINATION.MAX_LIMIT).default(API.PAGINATION.DEFAULT_PAGE_SIZE),
   ),
   userId: z
     .string()
@@ -85,7 +88,7 @@ export async function GET(request: NextRequest) {
 
     return ApiResponse.json(result);
   } catch (error) {
-    return handleApiError(error, "src/app/api/v1/time-records/route.ts#GET");
+    return handleApiError(error, "src/app/api/v1/time_records/route.ts#GET");
   }
 }
 
@@ -105,7 +108,7 @@ export async function POST(request: NextRequest) {
       "Registro de ponto criado com sucesso",
     );
   } catch (error) {
-    return handleApiError(error, "src/app/api/v1/time-records/route.ts#POST");
+    return handleApiError(error, "src/app/api/v1/time_records/route.ts#POST");
   }
 }
 export async function PUT(request: NextRequest) {

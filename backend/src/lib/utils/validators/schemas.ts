@@ -5,8 +5,7 @@
  */
 
 import { z } from "zod";
-import { ROLE_LEVELS } from "@/lib/constants";
-import { refine } from "zod/v4";
+import { CONSTANTS, ROLE_LEVELS, ACCOUNT_STATUS } from "@/lib/constants";
 
 // ======================================================
 // HELPERS DE NORMALIZAÇÃO
@@ -45,8 +44,8 @@ export const stripOperator = (val: unknown) => {
 export const emailSchema = z
   .string()
   .email("Email inválido")
-  .min(5)
-  .max(255)
+  .min(CONSTANTS.VALIDATION.STRING.MIN_EMAIL, `Email deve ter no mínimo ${CONSTANTS.VALIDATION.STRING.MIN_EMAIL} caracteres`)
+  .max(CONSTANTS.VALIDATION.STRING.MAX_NAME)
   .transform((v) => v.toLowerCase().trim());
 
 /**
@@ -54,8 +53,8 @@ export const emailSchema = z
  */
 export const passwordSchema = z
   .string()
-  .min(6, "Senha deve ter no mínimo 6 caracteres")
-  .max(128);
+  .min(CONSTANTS.AUTH.PASSWORD.MIN_LENGTH, `Senha deve ter no mínimo ${CONSTANTS.AUTH.PASSWORD.MIN_LENGTH} caracteres`)
+  .max(CONSTANTS.AUTH.PASSWORD.MAX_LENGTH);
 
 /**
  * Senha simples (login)
@@ -67,8 +66,8 @@ export const simplePasswordSchema = z.string().min(1);
  */
 export const nameSchema = z
   .string()
-  .min(2, "Nome deve ter no mínimo 2 caracteres")
-  .max(32, "Nome deve ter no máximo 32 caracteres")
+  .min(CONSTANTS.VALIDATION.STRING.MIN_NAME, `Nome deve ter no mínimo ${CONSTANTS.VALIDATION.STRING.MIN_NAME} caracteres`)
+  .max(CONSTANTS.VALIDATION.STRING.MAX_NAME, `Nome deve ter no máximo ${CONSTANTS.VALIDATION.STRING.MAX_NAME} caracteres`)
   .transform((v) => v.trim());
 
 /**
@@ -142,7 +141,7 @@ export const cnpjSchema = z
 export const phoneSchema = z
   .string()
   .transform((v) => v.replace(/\D/g, ""))
-  .refine((v) => v.length === 10 || v.length === 11, "Telefone inválido");
+  .refine((v) => v.length === 10 || v.length === CONSTANTS.VALIDATION.CONTACT.PHONE_LENGTH, "Telefone inválido");
 
 // ======================================================
 // ENUMS
@@ -156,12 +155,7 @@ export const roleSchema = z
   })
   .transform((v) => v.toUpperCase()); // Return uppercase for database consistency
 
-export const accountStatusSchema = z.enum([
-  "ACTIVE",
-  "INACTIVE",
-  "SUSPENDED",
-  "PENDING_VERIFICATION",
-]);
+export const accountStatusSchema = z.nativeEnum(ACCOUNT_STATUS);
 
 // ======================================================
 // AUTH
@@ -287,11 +281,11 @@ export const updateProfileSchema = z.object({
 export const paginationSchema = z.object({
   page: z.preprocess(
     emptyToUndefined,
-    z.coerce.number().int().min(1).default(1),
+    z.coerce.number().int().min(1).default(CONSTANTS.API.PAGINATION.DEFAULT_PAGE),
   ),
   limit: z.preprocess(
     emptyToUndefined,
-    z.coerce.number().int().min(1).max(100000).default(10),
+    z.coerce.number().int().min(1).max(CONSTANTS.API.BATCH.EXTREME).default(CONSTANTS.API.PAGINATION.DEFAULT_LIMIT),
   ),
   sortBy: z.preprocess(emptyToUndefined, z.string().optional()),
   sortOrder: z.preprocess(

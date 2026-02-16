@@ -488,4 +488,37 @@ export class PrismaProductionRepository
       orderBy: { iap: "asc" },
     });
   }
+
+  async listUnitCosts(projectId: string): Promise<any[]> {
+    return await prisma.activityUnitCost.findMany({
+      where: { projectId },
+      include: { activity: true },
+    });
+  }
+
+  async upsertUnitCosts(projectId: string, costs: any[]): Promise<any> {
+    const results = [];
+    for (const cost of costs) {
+      const result = await prisma.activityUnitCost.upsert({
+        where: {
+          projectId_activityId: {
+            projectId,
+            activityId: cost.activityId,
+          },
+        },
+        update: {
+          unitPrice: cost.unitPrice,
+          measureUnit: cost.measureUnit,
+        },
+        create: {
+          projectId,
+          activityId: cost.activityId,
+          unitPrice: cost.unitPrice,
+          measureUnit: cost.measureUnit || "UN",
+        },
+      });
+      results.push(result);
+    }
+    return { success: true, count: results.length };
+  }
 }

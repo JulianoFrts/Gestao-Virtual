@@ -9,3 +9,9 @@ export const toggleSidebar = () => {
 export const setSidebarOpen = (isOpen: boolean) => {
   isSidebarOpenSignal.value = isOpen;
 };
+
+export const isFocusModeSignal = signal(false);
+
+export const setFocusMode = (isFocus: boolean) => {
+  isFocusModeSignal.value = isFocus;
+};

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { fakerPT_BR as faker } from "@faker-js/faker";
+import { JOB_HIERARCHY, PASSWORD_HASHES } from "../src/lib/constants/business";
 
 console.log("Using DATABASE_URL:", process.env.DATABASE_URL);
 const prisma = new PrismaClient({
@@ -58,13 +59,32 @@ async function main() {
 
   // 2. Job Functions (Transmission Line Specific)
   const functionsList = [
-    { name: "Encarregado de Linha Viva", level: 3 },
-    { name: "Montador de Torre", level: 2 },
-    { name: "Ajudante Geral", level: 1 },
-    { name: "Operador de Guindaste", level: 2 },
-    { name: "Topógrafo", level: 3 },
-    { name: "Técnico de Segurança", level: 3 },
-    { name: "Motorista de Caminhão", level: 2 },
+    { name: "Encarregado de Linha Viva", level: JOB_HIERARCHY.LEADER }, // 3? Leader is 4 in our const, Engineer 3. 
+    // Wait, let's map roughly. 
+    // "Encarregado" -> LEADER (4). The seed used 3. 
+    // "Montador" -> OPERATOR (6) or SKILLED (8). Seed used 2 (Coordinator??).
+    // The seed levels 1, 2, 3 seem inverted or different scale.
+    // 1 (Helper), 2 (Motorista/Montador/Operador), 3 (Encarregado/Topógrafo/Técnico).
+    // This seed uses 1 = LOWEST, 3 = HIGHEST (canLeadTeam >= 3).
+    // Our JOB_HIERARCHY has 1 = HIGHEST (Manager), 11 = LOWEST.
+    // I MUST NOT uses JOB_HIERARCHY blindly here if the logic is inverted.
+
+    // Let's check logic: `canLeadTeam: func.level >= 3`.
+    // If I use JOB_HIERARCHY (1=High), then `canLeadTeam: level <= 4` (Leader and above).
+
+    // So I should map:
+    // "Ajudante Geral" (old 1) -> JOB_HIERARCHY.HELPER (11)
+    // "Montador" (old 2) -> JOB_HIERARCHY.SKILLED (8) or JOB_HIERARCHY.OPERATOR (6)
+    // "Encarregado" (old 3) -> JOB_HIERARCHY.LEADER (4)
+
+    // New List using CONSTANTS:
+    { name: "Encarregado de Linha Viva", level: JOB_HIERARCHY.LEADER },
+    { name: "Montador de Torre", level: JOB_HIERARCHY.SKILLED },
+    { name: "Ajudante Geral", level: JOB_HIERARCHY.HELPER },
+    { name: "Operador de Guindaste", level: JOB_HIERARCHY.OPERATOR },
+    { name: "Topógrafo", level: JOB_HIERARCHY.TECHNICIAN },
+    { name: "Técnico de Segurança", level: JOB_HIERARCHY.TECHNICIAN },
+    { name: "Motorista de Caminhão", level: JOB_HIERARCHY.OPERATOR },
   ];
 
   const jobFunctions = [];
@@ -78,7 +98,7 @@ async function main() {
           name: func.name,
           companyId: company.id,
           hierarchyLevel: func.level,
-          canLeadTeam: func.level >= 3,
+          canLeadTeam: func.level <= JOB_HIERARCHY.LEADER, // Changed logic to match standard hierarchy
         },
       });
     }
@@ -95,32 +115,32 @@ async function main() {
     const lastName = faker.person.lastName();
     const randomJob =
       jobFunctions[Math.floor(Math.random() * jobFunctions.length)];
-    
+
     const email = faker.internet.email({ firstName, lastName }).toLowerCase();
-    
+
     await prisma.user.create({
-        data: {
-            name: `${firstName} ${lastName}`,
-            hierarchyLevel: 0,
-            functionId: randomJob.id,
-            authCredential: {
-                create: {
-                    email,
-                    password: "$2b$10$EpI/f.f Q.q.q.q.q.q.q",
-                    role: "USER",
-                    status: "ACTIVE"
-                }
-            },
-            affiliation: {
-                create: {
-                    companyId: company.id,
-                    projectId: project.id,
-                    siteId: site.id
-                }
-            },
-            registrationNumber: `REG-${1000 + i}`,
-            cpf: faker.number.int({ min: 10000000000, max: 99999999999 }).toString()
-        }
+      data: {
+        name: `${firstName} ${lastName}`,
+        hierarchyLevel: 0,
+        functionId: randomJob.id,
+        authCredential: {
+          create: {
+            email,
+            password: "$2b$10$EpI/f.f Q.q.q.q.q.q.q",
+            role: "USER",
+            status: "ACTIVE"
+          }
+        },
+        affiliation: {
+          create: {
+            companyId: company.id,
+            projectId: project.id,
+            siteId: site.id
+          }
+        },
+        registrationNumber: `REG-${1000 + i}`,
+        cpf: faker.number.int({ min: 10000000000, max: 99999999999 }).toString()
+      }
     });
 
     // usersData.push({ ... }); // Removed
@@ -295,13 +315,13 @@ async function main() {
             progressPercent: progress,
             startDate: new Date(),
             dailyProduction: {
-                 [new Date().toISOString().split('T')[0]]: {
-                     date: new Date().toISOString(),
-                     workersCount: Math.floor(Math.random() * 10) + 2,
-                     hoursWorked: 8,
-                     producedQuantity: Math.random() * 10,
-                     teamId: null,
-                 }
+              [new Date().toISOString().split('T')[0]]: {
+                date: new Date().toISOString(),
+                workersCount: Math.floor(Math.random() * 10) + 2,
+                hoursWorked: 8,
+                producedQuantity: Math.random() * 10,
+                teamId: null,
+              }
             }
           },
         });

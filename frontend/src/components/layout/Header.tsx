@@ -50,6 +50,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { QRScanner } from "@/components/auth/QRScanner";
+import { Logo } from "@/components/common/Logo";
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -139,11 +140,7 @@ export function Header({ onMenuClick, title: propTitle }: HeaderProps) {
             <Menu className="h-5 w-5" />
           </Button>
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center shadow-glow">
-              <span className="text-primary-foreground font-bold text-sm">
-                OP
-              </span>
-            </div>
+            <Logo variant="icon" size="sm" />
             <h1 className="font-display text-lg font-bold text-secondary-foreground">
               {title}
             </h1>
@@ -338,13 +335,13 @@ export function Header({ onMenuClick, title: propTitle }: HeaderProps) {
                           // Dynamic Color by Role
                           (roleUpper === "SUPER_ADMIN_GOD" ||
                             roleUpper === "SYSTEM_HELPER") &&
-                            "text-[#ea580c] font-extrabold drop-shadow-[0_0_8px_rgba(234,88,12,0.4)]",
+                          "text-[#ea580c] font-extrabold drop-shadow-[0_0_8px_rgba(234,88,12,0.4)]",
                           (roleUpper === "SUPER_ADMIN" ||
                             roleUpper === "SUPERADMIN") &&
-                            "text-[#f4a261] font-bold",
+                          "text-[#f4a261] font-bold",
                           roleUpper === "ADMIN" && "text-[#4dabf7] font-bold",
                           roleUpper === "TI_SOFTWARE" &&
-                            "text-[#00ff9c] font-bold font-mono tracking-tight",
+                          "text-[#00ff9c] font-bold font-mono tracking-tight",
                           ![
                             "SUPER_ADMIN_GOD",
                             "SYSTEM_HELPER",
@@ -353,8 +350,8 @@ export function Header({ onMenuClick, title: propTitle }: HeaderProps) {
                             "ADMIN",
                             "TI_SOFTWARE",
                           ].includes(roleUpper) &&
-                            isProtectedUser(profile as any) &&
-                            "text-orange-400 font-extrabold",
+                          isProtectedUser(profile as any) &&
+                          "text-orange-400 font-extrabold",
                         )}
                       >
                         {displayName}
@@ -374,7 +371,7 @@ export function Header({ onMenuClick, title: propTitle }: HeaderProps) {
                 <div className="mt-2">
                   {/* Premium Badge Logic for Dropdown */}
                   {roleUpper === "SUPER_ADMIN_GOD" ||
-                  roleUpper === "SYSTEM_HELPER" ? (
+                    roleUpper === "SYSTEM_HELPER" ? (
                     <div className="role-badge role-super-admin-god shadow-[0_0_20px_-5px_rgba(255,183,3,0.5)] scale-90 origin-left">
                       <span className="relative z-10">Super Admin God</span>
                       <span className="orb"></span>

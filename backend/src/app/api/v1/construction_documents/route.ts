@@ -7,6 +7,7 @@ import { Validator } from "@/lib/utils/api/validator";
 import { paginationQuerySchema } from "@/core/common/domain/common.schema";
 import { ConstructionDocumentService } from "@/modules/documents/application/document.service";
 import { PrismaDocumentRepository } from "@/modules/documents/infrastructure/prisma-document.repository";
+import { VALIDATION } from "@/lib/constants";
 
 // DI
 const documentService = new ConstructionDocumentService(
@@ -18,7 +19,7 @@ const createDocumentSchema = z.object({
   companyId: z.string().optional(),
   projectId: z.string().optional(),
   siteId: z.string().optional(),
-  name: z.string().min(1, "Nome do documento é obrigatório").max(255),
+  name: z.string().min(1, "Nome do documento é obrigatório").max(VALIDATION.STRING.MAX_NAME),
   documentType: z.string().min(1, "Tipo do documento é obrigatório"),
   fileUrl: z
     .string()
@@ -83,10 +84,7 @@ export async function GET(request: NextRequest) {
 
     return ApiResponse.json(result);
   } catch (error) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/construction_documents/route.ts#GET",
-    );
+    return handleApiError(error, "src/app/api/v1/construction_documents/route.ts#GET");
   }
 }
 
@@ -111,10 +109,7 @@ export async function POST(request: NextRequest) {
 
     return ApiResponse.created(document, "Documento criado com sucesso");
   } catch (error) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/construction_documents/route.ts#POST",
-    );
+    return handleApiError(error, "src/app/api/v1/construction_documents/route.ts#POST");
   }
 }
 
@@ -138,10 +133,7 @@ export async function PUT(request: NextRequest) {
 
     return ApiResponse.json(document, "Documento atualizado com sucesso");
   } catch (error) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/construction_documents/route.ts#PUT",
-    );
+    return handleApiError(error, "src/app/api/v1/construction_documents/route.ts#PUT");
   }
 }
 
@@ -169,9 +161,6 @@ export async function DELETE(request: NextRequest) {
 
     return ApiResponse.json(null, "Documento removido com sucesso");
   } catch (error) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/construction_documents/route.ts#DELETE",
-    );
+    return handleApiError(error, "src/app/api/v1/construction_documents/route.ts#DELETE");
   }
 }

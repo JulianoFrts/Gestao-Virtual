@@ -34,25 +34,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return ApiResponse.notFound("Perfil não encontrado");
     }
 
-    // Map to legacy profile structure (Anti-Corruption Layer)
-    const legacyProfile = {
-      id: user.id,
-      full_name: user.name,
-      email: (user as any).authCredential?.email,
-      registration_number: (user as any).registrationNumber,
-      cpf: (user as any).cpf,
-      phone: (user as any).phone,
-      company_id: (user as any).companyId,
-      project_id: (user as any).projectId,
-      site_id: (user as any).siteId,
-      function_id: (user as any).functionId,
-      hierarchy_level: (user as any).hierarchyLevel,
-      is_blocked: (user as any).status !== "ACTIVE",
-      is_system_admin: (user as any).role === Role.ADMIN,
-      created_at: (user as any).createdAt,
-      updated_at: (user as any).updatedAt,
-    };
-
+    const legacyProfile = mapToLegacyProfile(user);
     return ApiResponse.json(legacyProfile);
   } catch (error) {
     return handleApiError(error, "src/app/api/v1/profiles/[id]/route.ts#GET");
@@ -66,30 +48,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const isAdmin = currentUser.role === Role.ADMIN;
 
     const body = await request.json();
+    const mappedBody = mapLegacyToUnified(body);
 
-    // Map legacy field names to unified model
-    const mappedBody = {
-      name: body.full_name || body.name,
-      email: body.email,
-      phone: body.phone,
-      registrationNumber: body.registration_number,
-      cpf: body.cpf,
-      companyId: body.company_id,
-      projectId: body.project_id,
-      siteId: body.site_id,
-      functionId: body.function_id,
-      hierarchyLevel: body.hierarchy_level,
-      password: body.password,
-      role: body.role,
-      status: body.status,
-    };
-
-    // Remove undefined values
-    Object.keys(mappedBody).forEach(
-      (key) =>
-        (mappedBody as any)[key] === undefined &&
-        delete (mappedBody as any)[key],
-    );
 
     const validationResult = validate(updateUserSchema, mappedBody);
 
@@ -115,32 +75,64 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       currentUser.id,
     );
 
-    // Map back to legacy profile structure
-    const legacyProfile = {
-      id: updatedUser.id,
-      full_name: updatedUser.name,
-      email: (updatedUser as any).authCredential?.email,
-      registration_number: (updatedUser as any).registrationNumber,
-      cpf: (updatedUser as any).cpf,
-      phone: (updatedUser as any).phone,
-      company_id: (updatedUser as any).companyId,
-      project_id: (updatedUser as any).projectId,
-      site_id: (updatedUser as any).siteId,
-      function_id: (updatedUser as any).functionId,
-      hierarchy_level: (updatedUser as any).hierarchyLevel,
-      is_blocked: (updatedUser as any).status !== "ACTIVE",
-      is_system_admin: (updatedUser as any).role === Role.ADMIN,
-      created_at: (updatedUser as any).createdAt,
-      updated_at: (updatedUser as any).updatedAt,
-    };
-
+    const legacyProfile = mapToLegacyProfile(updatedUser);
     return ApiResponse.json(legacyProfile, "Perfil atualizado com sucesso");
   } catch (error: any) {
     return handleApiError(error, "src/app/api/v1/profiles/[id]/route.ts#PATCH");
   }
 }
 
-// Also support PUT for compatibility
 export async function PUT(request: NextRequest, context: RouteParams) {
   return PATCH(request, context);
+}
+
+/**
+ * Mapeador Anti-Corrupção: Model Unificado -> Perfil Legado
+ */
+function mapToLegacyProfile(user: any) {
+  return {
+    id: user.id,
+    full_name: user.name,
+    email: user.authCredential?.email,
+    registration_number: user.registrationNumber,
+    cpf: user.cpf,
+    phone: user.phone,
+    company_id: user.companyId,
+    project_id: user.projectId,
+    site_id: user.siteId,
+    function_id: user.functionId,
+    hierarchy_level: user.hierarchyLevel,
+    is_blocked: user.status !== "ACTIVE",
+    is_system_admin: user.role === Role.ADMIN,
+    created_at: user.createdAt,
+    updated_at: user.updatedAt,
+  };
+}
+
+/**
+ * Mapeador Anti-Corrupção: Perfil Legado -> Model Unificado
+ */
+function mapLegacyToUnified(body: any) {
+  const mapped = {
+    name: body.full_name || body.name,
+    email: body.email,
+    phone: body.phone,
+    registrationNumber: body.registration_number,
+    cpf: body.cpf,
+    companyId: body.company_id,
+    projectId: body.project_id,
+    siteId: body.site_id,
+    functionId: body.function_id,
+    hierarchyLevel: body.hierarchy_level,
+    password: body.password,
+    role: body.role,
+    status: body.status,
+  };
+
+  // Remove undefined values
+  Object.keys(mapped).forEach(
+    (key) => (mapped as any)[key] === undefined && delete (mapped as any)[key]
+  );
+
+  return mapped;
 }

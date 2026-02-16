@@ -151,9 +151,15 @@ function buildLogOutput(params: BuildLogParams): string {
   }
 
   if (error) {
-    output += `\n${colors.red}  Error: ${error.name}: ${error.message}${colors.reset}`;
-    if (!IS_PRODUCTION && error.stack) {
-      output += `\n  ${error.stack}`;
+    if (error instanceof Error) {
+      output += `\n${colors.red}  Error: ${error.name}: ${error.message}${colors.reset}`;
+      if (!IS_PRODUCTION && error.stack) {
+        output += `\n  ${error.stack}`;
+      }
+    } else if (typeof error === "string") {
+      output += `\n${colors.red}  Error: ${error}${colors.reset}`;
+    } else {
+      output += `\n${colors.red}  Error: ${JSON.stringify(error)}${colors.reset}`;
     }
   }
 

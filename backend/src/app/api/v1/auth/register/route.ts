@@ -12,12 +12,13 @@ import { AuthService } from "@/modules/auth/application/auth.service";
 import { UserService } from "@/modules/users/application/user.service";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
 import { PrismaSystemAuditRepository } from "@/modules/audit/infrastructure/prisma-system-audit.repository";
+import { PrismaAuthCredentialRepository } from "@/modules/auth/infrastructure/prisma-auth-credential.repository";
 
 // DI
 const userRepository = new PrismaUserRepository();
 const auditRepository = new PrismaSystemAuditRepository();
 const userService = new UserService(userRepository, auditRepository);
-const authService = new AuthService(userService);
+const authService = new AuthService(userService, new PrismaAuthCredentialRepository());
 
 export async function POST(request: NextRequest) {
   try {
@@ -58,8 +59,8 @@ export async function POST(request: NextRequest) {
     return ApiResponse.created({ user }, MESSAGES.SUCCESS.CREATED);
   } catch (error: any) {
     if (error.message === "Email already exists") {
-      return ApiResponse.conflict(MESSAGES.USER.EMAIL_EXISTS);
+      return ApiResponse.conflict("Email já está em uso");
     }
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/auth/register/route.ts#POST");
   }
 }

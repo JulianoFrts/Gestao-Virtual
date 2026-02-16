@@ -18,6 +18,13 @@ export const hasGlobalDataFetchedSignal = signal<boolean>(false);
 export const isTeamsLoadingSignal = signal<boolean>(false);
 export const hasTeamsFetchedSignal = signal<boolean>(false);
 
+// Status de carregamento de módulos adicionais (Mockados/Futuros)
+export const has3dFetchedSignal = signal<boolean>(false);
+export const hasReportsFetchedSignal = signal<boolean>(false);
+export const hasAuditFetchedSignal = signal<boolean>(false);
+export const hasCostsFetchedSignal = signal<boolean>(false);
+export const hasEmployeesFetchedSignal = signal<boolean>(false);
+
 // Computed para indicar se o sistema ainda está na fase crítica de sincronização inicial
 export const isSyncingInitialDataSignal = computed(() => {
     // Se não há usuário logado, não há o que sincronizar inicialmente.
@@ -26,6 +33,6 @@ export const isSyncingInitialDataSignal = computed(() => {
     // Agora consideramos a sincronização inicial como o combo de Usuários E Equipes
     const usersNotReady = !hasUsersFetchedSignal.value;
     const teamsNotReady = !hasTeamsFetchedSignal.value;
-    
+
     return usersNotReady || teamsNotReady;
 });

@@ -10,7 +10,7 @@ import {
 import * as authSession from "@/lib/auth/session";
 import { publicUserSelect, buildUserWhereClause } from "@/types/database";
 import { logger } from "@/lib/utils/logger";
-import { MESSAGES, DEFAULT_PAGE, DEFAULT_LIMIT, BATCH_SIZE, STREAM_THRESHOLD, THROTTLE_THRESHOLD, THROTTLE_MS } from "@/lib/constants";
+import { CONSTANTS } from "@/lib/constants";
 import { isGodRole, SECURITY_RANKS } from "@/lib/constants/security";
 import { UserService } from "@/modules/users/application/user.service";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
@@ -53,8 +53,8 @@ export async function GET(request: NextRequest) {
     }
 
     const {
-      page = DEFAULT_PAGE,
-      limit = DEFAULT_LIMIT,
+      page = CONSTANTS.API.PAGINATION.DEFAULT_PAGE,
+      limit = CONSTANTS.API.PAGINATION.DEFAULT_LIMIT,
       sortBy,
       sortOrder,
     } = paginationResult.data as {
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
           return ApiResponse.json({
             items: [profile],
             pagination: {
-              page: DEFAULT_PAGE,
+              page: CONSTANTS.API.PAGINATION.DEFAULT_PAGE,
               limit: 1,
               total: 1,
               pages: 1,
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
           });
         } catch (err: any) {
           if (err.message === "User not found") {
-            return ApiResponse.json({ items: [], pagination: { total: 0, limit: 1, page: DEFAULT_PAGE, pages: 0 } });
+            return ApiResponse.json({ items: [], pagination: { total: 0, limit: 1, page: CONSTANTS.API.PAGINATION.DEFAULT_PAGE, pages: 0 } });
           }
           throw err;
         }
@@ -141,69 +141,8 @@ export async function GET(request: NextRequest) {
     const pages = Math.ceil(total / limit);
 
     // Streaming para limites altos
-    if (limit > STREAM_THRESHOLD) {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        async start(controller) {
-          try {
-            controller.enqueue(
-              encoder.encode('{"success":true,"data":{"items":['),
-            );
-
-            let totalSent = 0;
-            const batchSize = BATCH_SIZE;
-            const skipStart = (page - 1) * limit;
-            const maxToFetch = Math.min(limit, total - skipStart);
-
-            while (totalSent < maxToFetch) {
-              const takeBatch = Math.min(batchSize, maxToFetch - totalSent);
-              const users = await userRepository.findAll({
-                where,
-                skip: skipStart + totalSent,
-                take: takeBatch,
-                orderBy: sortBy
-                  ? ({ [sortBy]: sortOrder || "asc" } as any)
-                  : [{ hierarchyLevel: "desc" }, { name: "asc" }],
-                select: publicUserSelect,
-              });
-
-              if (users.length === 0) break;
-
-              const flattenedUsers = users.map((u) =>
-                userService.flattenUser(u),
-              );
-              const usersJson = flattenedUsers
-                .map((u) => JSON.stringify(u))
-                .join(",");
-              const prefix = totalSent > 0 ? "," : "";
-              controller.enqueue(encoder.encode(prefix + usersJson));
-
-              totalSent += users.length;
-              if (maxToFetch > THROTTLE_THRESHOLD)
-                await new Promise((resolve) => setTimeout(resolve, THROTTLE_MS));
-            }
-
-            const paginationJson = JSON.stringify({
-              page,
-              limit,
-              total,
-              pages,
-              hasNext: page < pages,
-              hasPrev: page > DEFAULT_PAGE,
-            });
-            controller.enqueue(
-              encoder.encode(
-                `],"pagination":${paginationJson}},"timestamp":"${new Date().toISOString()}"}`,
-              ),
-            );
-            controller.close();
-          } catch (err) {
-            logger.error("Erro no streaming de usuários", { err });
-            controller.error(err);
-          }
-        },
-      });
-
+    if (limit > CONSTANTS.API.STREAM.THRESHOLD) {
+      const stream = generateUsersStream(where, page, limit, total, sortBy, sortOrder, CONSTANTS);
       return new Response(stream, {
         headers: {
           "Content-Type": "application/json",
@@ -247,10 +186,10 @@ export async function POST(request: NextRequest) {
       publicUserSelect,
       currentUser.id,
     );
-    return ApiResponse.created(user, MESSAGES.SUCCESS.CREATED);
+    return ApiResponse.created(user, CONSTANTS.HTTP.MESSAGES.SUCCESS.CREATED);
   } catch (error: any) {
     if (error.message === "Email already exists") {
-      return ApiResponse.conflict(MESSAGES.USER.EMAIL_EXISTS);
+      return ApiResponse.conflict(CONSTANTS.HTTP.MESSAGES.ERROR.CONFLICT);
     }
     return handleApiError(error, "src/app/api/v1/users/route.ts#POST");
   }
@@ -304,7 +243,7 @@ export async function PUT(request: NextRequest) {
       publicUserSelect,
       currentUser.id,
     );
-    return ApiResponse.json(updatedUser, MESSAGES.SUCCESS.UPDATED);
+    return ApiResponse.json(updatedUser, CONSTANTS.HTTP.MESSAGES.SUCCESS.UPDATED);
   } catch (error) {
     return handleApiError(error, "src/app/api/v1/users/route.ts#PUT");
   }
@@ -354,8 +293,85 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    return ApiResponse.json({ success: true }, MESSAGES.SUCCESS.DELETED);
+    return ApiResponse.json({ success: true }, CONSTANTS.HTTP.MESSAGES.SUCCESS.DELETED);
   } catch (error) {
     return handleApiError(error, "src/app/api/v1/users/route.ts#DELETE");
   }
+}
+
+/**
+ * Função Auxiliar para Streaming de Usuários (SRP)
+ */
+function generateUsersStream(
+  where: any,
+  page: number,
+  limit: number,
+  total: number,
+  sortBy: string | undefined,
+  sortOrder: string | undefined,
+  CONSTANTS: any
+): ReadableStream {
+  const encoder = new TextEncoder();
+  const pages = Math.ceil(total / limit);
+
+  return new ReadableStream({
+    async start(controller) {
+      try {
+        controller.enqueue(
+          encoder.encode('{"success":true,"data":{"items":['),
+        );
+
+        let totalSent = 0;
+        const batchSize = CONSTANTS.API.BATCH.SIZE;
+        const skipStart = (page - 1) * limit;
+        const maxToFetch = Math.min(limit, total - skipStart);
+
+        while (totalSent < maxToFetch) {
+          const takeBatch = Math.min(batchSize, maxToFetch - totalSent);
+          const users = await userRepository.findAll({
+            where,
+            skip: skipStart + totalSent,
+            take: takeBatch,
+            orderBy: sortBy
+              ? ({ [sortBy]: sortOrder || "asc" } as any)
+              : [{ hierarchyLevel: "desc" }, { name: "asc" }],
+            select: publicUserSelect,
+          });
+
+          if (users.length === 0) break;
+
+          const flattenedUsers = users.map((u) =>
+            userService.flattenUser(u),
+          );
+          const usersJson = flattenedUsers
+            .map((u) => JSON.stringify(u))
+            .join(",");
+          const prefix = totalSent > 0 ? "," : "";
+          controller.enqueue(encoder.encode(prefix + usersJson));
+
+          totalSent += users.length;
+          if (maxToFetch > CONSTANTS.API.THROTTLE.THRESHOLD)
+            await new Promise((resolve) => setTimeout(resolve, CONSTANTS.API.THROTTLE.MS));
+        }
+
+        const paginationJson = JSON.stringify({
+          page,
+          limit,
+          total,
+          pages,
+          hasNext: page < pages,
+          hasPrev: page > CONSTANTS.API.PAGINATION.DEFAULT_PAGE,
+        });
+        controller.enqueue(
+          encoder.encode(
+            `],"pagination":${paginationJson}},"timestamp":"${new Date().toISOString()}"}`,
+          ),
+        );
+        controller.close();
+      } catch (err) {
+        logger.error("Erro no streaming de usuários", { err });
+        controller.error(err);
+      }
+    },
+  });
 }

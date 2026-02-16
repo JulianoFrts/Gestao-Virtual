@@ -4,17 +4,19 @@ import { z } from "zod";
  * Common validation rules shared across the system
  */
 
+import { DEFAULT_PAGE, DEFAULT_LIMIT, MAX_LIMIT, BATCH_SIZE } from "@/lib/constants";
+
 export const idSchema = z.string().uuid("ID deve ser um UUID válido");
 export const optionalIdSchema = idSchema.optional().nullable();
 
 export const paginationQuerySchema = z.object({
   page: z.preprocess(
     (val) => (val === null || val === "" ? undefined : val),
-    z.coerce.number().int().min(1).default(1),
+    z.coerce.number().int().min(1).default(DEFAULT_PAGE),
   ),
   limit: z.preprocess(
     (val) => (val === null || val === "" ? undefined : val),
-    z.coerce.number().int().min(1).max(5000).default(100),
+    z.coerce.number().int().min(1).max(BATCH_SIZE).default(DEFAULT_LIMIT),
   ),
   sortBy: z.string().optional().nullable(),
   sortOrder: z.enum(["asc", "desc"]).default("asc"),

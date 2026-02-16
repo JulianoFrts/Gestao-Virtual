@@ -1,6 +1,20 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib";
-import { getCurrentSession } from "@/lib/auth/session";
+import { NextRequest } from "next/server";
+import { requireAuth } from "@/lib/auth/session";
+import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
+import { WorkStageService } from "@/modules/work-stages/application/work-stage.service";
+import { PrismaWorkStageRepository } from "@/modules/work-stages/domain/work-stage.repository";
+import { z } from "zod";
+import { VALIDATION } from "@/lib/constants";
+
+const repository = new PrismaWorkStageRepository();
+const service = new WorkStageService(repository);
+
+const updateWorkStageSchema = z.object({
+  name: z.string().min(2).max(VALIDATION.STRING.MAX_NAME).optional(),
+  description: z.string().optional().nullable(),
+  color: z.string().optional().nullable(),
+  order: z.number().int().optional(),
+});
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -9,100 +23,54 @@ interface Params {
 // GET: Fetch a single work stage
 export async function GET(req: NextRequest, { params }: Params) {
   try {
-    const session = await getCurrentSession();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    await requireAuth();
     const { id } = await params;
 
-    const stage = await (prisma as any).workStage.findUnique({
-      where: { id },
-      include: {
-        progress: {
-          orderBy: { recordedAt: "desc" },
-        },
-        children: true,
-      },
-    });
+    const stages = await service.findAll({ linkedOnly: false });
+    const stage = stages.find(s => s.id === id);
 
     if (!stage) {
-      return NextResponse.json({ error: "Stage not found" }, { status: 404 });
+      return ApiResponse.notFound("Stage not found");
     }
 
-    return NextResponse.json(stage);
+    return ApiResponse.json(stage);
   } catch (error) {
-    console.error("Error fetching work stage:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleApiError(error, "src/app/api/v1/work_stages/[id]/route.ts#GET");
   }
 }
 
 // PUT: Update a work stage
 export async function PUT(req: NextRequest, { params }: Params) {
   try {
-    const session = await getCurrentSession();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    await requireAuth();
     const { id } = await params;
     const body = await req.json();
-    const {
-      name,
-      description,
-      weight,
-      parentId,
-      displayOrder,
-      productionActivityId,
-      metadata
-    } = body;
+    const validation = updateWorkStageSchema.safeParse(body);
+    if (!validation.success) {
+      return ApiResponse.validationError(validation.error.errors.map(e => e.message));
+    }
 
-    const stage = await (prisma as any).workStage.update({
-      where: { id },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(description !== undefined && { description }),
-        ...(weight !== undefined && { weight }),
-        ...(parentId !== undefined && { parentId }),
-        ...(displayOrder !== undefined && { displayOrder }),
-        ...(productionActivityId !== undefined && { productionActivityId }),
-        ...(metadata !== undefined && { metadata }),
-      },
-    });
+    const stage = await service.update(id, validation.data);
 
-    return NextResponse.json(stage);
+    return ApiResponse.json(stage);
   } catch (error) {
-    console.error("Error updating work stage:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleApiError(error, "src/app/api/v1/work_stages/[id]/route.ts#PUT");
   }
 }
 
 // DELETE: Delete a work stage
 export async function DELETE(req: NextRequest, { params }: Params) {
   try {
-    const session = await getCurrentSession();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    // Apenas admins podem deletar? (Mantendo lógica original de requireAuth, mas poderia ser requireAdmin)
+    await requireAuth();
     const { id } = await params;
 
-    await (prisma as any).workStage.delete({
-      where: { id },
-    });
+    // WorkStageService doesn't have a delete method yet, let's create it or use repository
+    // For now using repository as the service is just a thin wrapper for simple CRUD
+    await repository.delete(id);
 
-    return NextResponse.json({ success: true });
+    return ApiResponse.json({ success: true }, "Etapa removida com sucesso");
   } catch (error) {
-    console.error("Error deleting work stage:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleApiError(error, "src/app/api/v1/work_stages/[id]/route.ts#DELETE");
   }
 }

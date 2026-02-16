@@ -59,26 +59,25 @@ export function ModeToggle() {
         </DropdownMenuLabel>
 
         <div className="grid grid-cols-1 gap-1">
-          {/* Renderiza Enterprise Premium destacado se existir */}
           {themePresets
-            .filter((t) => t.id === "enterprise")
+            .filter((t) => t.id === "construction")
             .map((t) => (
               <DropdownMenuItem
                 key={t.id}
                 onClick={() => setTheme(t.id as any)}
-                className={`flex items-center justify-between cursor-pointer p-3 rounded-lg m-1 transition-all ${theme === t.id ? "bg-primary/20 ring-1 ring-primary/50" : "hover:bg-white/5 border border-white/5"}`}
+                className={`flex items-center justify-between cursor-pointer p-3 rounded-lg m-1 transition-all ${theme === t.id ? "bg-cyan-500/10 ring-1 ring-cyan-500/50" : "hover:bg-black/5 border border-black/5"}`}
               >
                 <div className="flex items-center gap-3">
                   <div
                     className={`w-6 h-6 rounded-md shadow-sm ${t.previewColor}`}
                   />
                   <span
-                    className={`text-sm font-medium ${theme === t.id ? "text-primary" : ""}`}
+                    className={`text-sm font-medium ${theme === t.id ? "text-cyan-600" : ""}`}
                   >
                     {t.label}
                   </span>
                 </div>
-                <div className="w-2 h-2 rounded-full bg-slate-400" />
+                {theme === t.id && <div className="w-2 h-2 rounded-full bg-cyan-500" />}
               </DropdownMenuItem>
             ))}
         </div>

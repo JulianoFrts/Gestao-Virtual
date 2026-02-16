@@ -11,13 +11,14 @@ import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { CompanyService } from "@/modules/companies/application/company.service";
 import { PrismaCompanyRepository } from "@/modules/companies/infrastructure/prisma-company.repository";
+import { VALIDATION } from "@/lib/constants";
 
 // Injeção de Dependência (Manual devido ao Next.js Route handlers)
 const companyRepository = new PrismaCompanyRepository();
 const companyService = new CompanyService(companyRepository);
 
 const updateCompanySchema = z.object({
-  name: z.string().min(2).max(255).optional(),
+  name: z.string().min(2).max(VALIDATION.STRING.MAX_NAME).optional(),
   taxId: z.string().optional(),
   address: z.string().optional(),
   phone: z.string().optional(),
@@ -31,9 +32,9 @@ interface RouteParams {
 
 // GET - Buscar empresa
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const { id } = await params;
   try {
     await requireAuth();
+    const { id } = await params;
     const company = await companyService.getCompanyById(id);
     return ApiResponse.json(company);
   } catch (error: any) {
@@ -41,15 +42,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return ApiResponse.notFound("Empresa não encontrada");
     }
     logger.error("Erro ao buscar empresa", { error });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/companies/[id]/route.ts#GET");
   }
 }
 
 // PUT - Atualizar empresa
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const { id } = await params;
   try {
     await requireAdmin();
+    const { id } = await params;
 
     const body = await request.json();
     const data = updateCompanySchema.parse(body);
@@ -64,15 +65,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return ApiResponse.notFound("Empresa não encontrada");
     }
     logger.error("Erro ao atualizar empresa", { error });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/companies/[id]/route.ts#PUT");
   }
 }
 
 // DELETE - Remover empresa
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const { id } = await params;
   try {
     await requireAdmin();
+    const { id } = await params;
 
     await companyService.deleteCompany(id);
 
@@ -84,6 +85,6 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return ApiResponse.notFound("Empresa não encontrada");
     }
     logger.error("Erro ao remover empresa", { error });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/companies/[id]/route.ts#DELETE");
   }
 }

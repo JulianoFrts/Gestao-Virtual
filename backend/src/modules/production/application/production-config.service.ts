@@ -4,7 +4,7 @@ import {
 } from "../domain/production-config.repository";
 
 export class ProductionConfigService {
-  constructor(private readonly repository: ProductionConfigRepository) {}
+  constructor(private readonly repository: ProductionConfigRepository) { }
 
   // ==========================================
   // DELAY COST
@@ -82,5 +82,17 @@ export class ProductionConfigService {
     order?: number;
   }) {
     return this.repository.createActivity(data);
+  }
+
+  // ==========================================
+  // UNIT COSTS
+  // ==========================================
+
+  async listUnitCosts(projectId: string) {
+    return this.repository.listUnitCosts(projectId);
+  }
+
+  async upsertUnitCosts(projectId: string, costs: any[]) {
+    return this.repository.upsertUnitCosts(projectId, costs);
   }
 }

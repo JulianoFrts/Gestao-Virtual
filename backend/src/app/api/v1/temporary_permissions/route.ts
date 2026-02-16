@@ -11,6 +11,7 @@ import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { TemporaryPermissionService } from "@/modules/temporary-permissions/application/temporary-permission.service";
 import { PrismaTemporaryPermissionRepository } from "@/modules/temporary-permissions/infrastructure/prisma-temporary-permission.repository";
+import { API } from "@/lib/constants";
 
 // Inicialização do Service (Dependency Injection)
 const repository = new PrismaTemporaryPermissionRepository();
@@ -32,7 +33,7 @@ const updateTemporaryPermissionSchema = z.object({
 
 const querySchema = z.object({
   page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20),
+  limit: z.coerce.number().min(1).max(API.PAGINATION.MAX_LIMIT).default(API.PAGINATION.DEFAULT_PAGE_SIZE),
   userId: z
     .string()
     .optional()
@@ -70,10 +71,7 @@ export async function GET(request: NextRequest) {
 
     return ApiResponse.json(result);
   } catch (error) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/temporary_permissions/route.ts#GET",
-    );
+    return handleApiError(error, "src/app/api/v1/temporary_permissions/route.ts#GET");
   }
 }
 
@@ -93,10 +91,7 @@ export async function POST(request: NextRequest) {
       "Permissão temporária criada com sucesso",
     );
   } catch (error) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/temporary_permissions/route.ts#POST",
-    );
+    return handleApiError(error, "src/app/api/v1/temporary_permissions/route.ts#POST");
   }
 }
 
@@ -126,9 +121,6 @@ export async function PATCH(request: NextRequest) {
 
     return ApiResponse.badRequest("ID ou operação não especificada");
   } catch (error) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/temporary_permissions/route.ts#PATCH",
-    );
+    return handleApiError(error, "src/app/api/v1/temporary_permissions/route.ts#PATCH");
   }
 }

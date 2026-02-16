@@ -14,6 +14,6 @@ export async function GET() {
     // Retorna a constante ROLE_LEVELS definida no constants/index.ts
     return ApiResponse.json(ROLE_LEVELS);
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/user_roles/hierarchy/route.ts#GET");
   }
 }

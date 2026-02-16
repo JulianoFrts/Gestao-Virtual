@@ -40,5 +40,6 @@ export interface GovernanceRepository {
   createViolation(data: any): Promise<any>;
   updateViolation(id: string, data: any): Promise<any>;
   findOpenViolations(): Promise<any[]>;
-  findViolationsWithFilters(filters: any): Promise<GovernanceAuditHistory[]>;
+  findViolationsWithFilters(filters: any, take?: number, skip?: number): Promise<GovernanceAuditHistory[]>;
+  countViolations(filters: any): Promise<number>;
 }

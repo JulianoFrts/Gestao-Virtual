@@ -1,24 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
 import { orionApi } from "@/integrations/orion/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-
-export interface WorkStage {
-  id: string;
-  siteId: string;
-  parentId: string | null;
-  name: string;
-  description: string | null;
-  weight: number;
-  displayOrder: number;
-  productionActivityId?: string | null;
-  createdAt: Date;
-  progress?: {
-    actualPercentage: number;
-    plannedPercentage: number;
-  };
-  metadata?: any;
-}
+import {
+  workStagesSignal,
+  isWorkStagesLoadingSignal,
+  fetchWorkStages,
+  hasWorkStagesFetchedSignal,
+  type WorkStage
+} from "@/signals/workStageSignals";
 
 export interface CreateStageData {
   name: string;
@@ -35,69 +25,24 @@ export function useWorkStages(
   projectId?: string,
   linkedOnly?: boolean,
 ) {
-  const [stages, setStages] = useState<WorkStage[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const stages = workStagesSignal.value;
+  const isLoading = isWorkStagesLoadingSignal.value;
   const { toast } = useToast();
   const { profile } = useAuth();
 
   const loadStages = useCallback(async () => {
-    // If we don't even have a project, we can't load stages in the new model
-    if (!projectId && (!siteId || siteId === "all")) {
-      setStages([]);
-      setIsLoading(false);
-      return;
-    }
+    await fetchWorkStages(true, siteId, projectId);
+  }, [siteId, projectId]);
 
-    setIsLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (siteId && siteId !== "all") params.append("siteId", siteId);
-      if (projectId && projectId !== "all")
-        params.append("projectId", projectId);
-      if (profile?.companyId) params.append("companyId", profile.companyId);
-      if (linkedOnly) params.append("linkedOnly", "true");
-
-      const response = await orionApi.get(`/work-stages?${params.toString()}`);
-      const data = (response.data as unknown[]) || [];
-      const mapped: WorkStage[] = data.map((s: any) => {
-        const latestProgress = s.progress?.[0] || {
-          actualPercentage: 0,
-          plannedPercentage: 0,
-        };
-        return {
-          id: s.id,
-          siteId: s.siteId,
-          parentId: s.parentId,
-          name: s.name,
-          description: s.description,
-          weight: Number(s.weight),
-          displayOrder: s.displayOrder,
-          createdAt: new Date(s.createdAt),
-          progress: {
-            actualPercentage: Number(latestProgress.actualPercentage || 0),
-            plannedPercentage: Number(latestProgress.plannedPercentage || 0),
-          },
-          productionActivityId: s.productionActivityId,
-          metadata: s.metadata,
-        };
-      });
-
-      setStages(mapped);
-    } catch (error: any) {
-      console.error("Erro ao carregar etapas de obra:", error);
-      setStages([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [siteId, projectId, linkedOnly, profile?.companyId]);
-
-  useEffect(() => {
-    loadStages();
-  }, [loadStages]);
+  // Se as props mudarem, recarregamos
+  // Mas evitamos loop infinito se já estiver carregando
+  if ((siteId || projectId) && !isLoading && !hasWorkStagesFetchedSignal.value) {
+    fetchWorkStages(false, siteId, projectId).catch(console.error);
+  }
 
   const createStage = async (data: CreateStageData, silent = false) => {
     try {
-      const response = await orionApi.post("/work-stages", {
+      const response = await orionApi.post("/work_stages", {
         siteId,
         projectId, // Pass project context
         name: data.name,
@@ -162,7 +107,7 @@ export function useWorkStages(
     data: Partial<CreateStageData>,
   ) => {
     try {
-      await orionApi.put(`/work-stages/${stageId}`, data);
+      await orionApi.put(`/work_stages/${stageId}`, data);
 
       toast({
         title: "Etapa atualizada",
@@ -182,7 +127,7 @@ export function useWorkStages(
 
   const deleteStage = async (stageId: string) => {
     try {
-      await orionApi.delete(`/work-stages/${stageId}`);
+      await orionApi.delete(`/work_stages/${stageId}`);
 
       toast({
         title: "Etapa removida",
@@ -207,7 +152,7 @@ export function useWorkStages(
     notes?: string,
   ) => {
     try {
-      await orionApi.post("/stage-progress", {
+      await orionApi.post("/stage_progress", {
         stageId,
         actualPercentage: actual,
         plannedPercentage: planned,
@@ -233,7 +178,7 @@ export function useWorkStages(
 
   const deleteAllStages = async () => {
     try {
-      await orionApi.delete(`/work-stages/bulk?siteId=${siteId}`);
+      await orionApi.delete(`/work_stages/bulk?siteId=${siteId}`);
       toast({
         title: "Etapas removidas",
         description: "Todas as etapas foram removidas com sucesso.",
@@ -257,8 +202,8 @@ export function useWorkStages(
         displayOrder: index,
       }));
 
-      await orionApi.put("/work-stages/reorder", { updates });
-      setStages(reorderedStages);
+      await orionApi.put("/work_stages/reorder", { updates });
+      workStagesSignal.value = reorderedStages;
       return { success: true };
     } catch (error: any) {
       toast({
@@ -274,7 +219,7 @@ export function useWorkStages(
   const syncStages = async () => {
     // We now support syncing by project if siteId is 'all'
     try {
-      await orionApi.post("/work-stages/sync", {
+      await orionApi.post("/work_stages/sync", {
         siteId: siteId === "all" ? undefined : siteId,
         projectId,
       });

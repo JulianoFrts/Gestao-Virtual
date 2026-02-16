@@ -42,10 +42,7 @@ export async function GET(request: NextRequest) {
 
     return ApiResponse.json(settings);
   } catch (error) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/project_3d_cable_settings/route.ts#GET",
-    );
+    return handleApiError(error, "src/app/api/v1/project_3d_cable_settings/route.ts#GET");
   }
 }
 
@@ -79,9 +76,6 @@ export async function POST(request: NextRequest) {
     });
     return ApiResponse.json(result, "Configurações salvas com sucesso");
   } catch (error) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/project_3d_cable_settings/route.ts#POST",
-    );
+    return handleApiError(error, "src/app/api/v1/project_3d_cable_settings/route.ts#POST");
   }
 }

@@ -38,10 +38,7 @@ export async function DELETE(
 
     return ApiResponse.json(null, "Documento removido com sucesso");
   } catch (error) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/construction_documents/[id]/route.ts#DELETE",
-    );
+    return handleApiError(error, "src/app/api/v1/construction_documents/[id]/route.ts#DELETE");
   }
 }
 
@@ -70,10 +67,7 @@ export async function PUT(
 
     return ApiResponse.json(document, "Documento atualizado com sucesso");
   } catch (error) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/construction_documents/[id]/route.ts#PUT",
-    );
+    return handleApiError(error, "src/app/api/v1/construction_documents/[id]/route.ts#PUT");
   }
 }
 
@@ -96,9 +90,6 @@ export async function GET(
 
     return ApiResponse.json(document);
   } catch (error) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/construction_documents/[id]/route.ts#GET",
-    );
+    return handleApiError(error, "src/app/api/v1/construction_documents/[id]/route.ts#GET");
   }
 }

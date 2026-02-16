@@ -14,7 +14,7 @@ interface GAPOAuditDashboardProps {
 }
 
 export default function GAPOAuditDashboard({ projectId, siteId }: GAPOAuditDashboardProps) {
-    const { data: logs = [], isLoading } = useAuditLogs();
+    const { data: logs = [], isLoading, progress } = useAuditLogs();
 
     // Filter logs for operational tables only and by project/site context
     const operationalLogs = useMemo(() => {
@@ -41,11 +41,26 @@ export default function GAPOAuditDashboard({ projectId, siteId }: GAPOAuditDashb
     };
 
     return (
-        <Card className="glass-card">
+        <Card className="glass-card relative overflow-hidden">
+            {isLoading && (
+                <div className="absolute top-0 left-0 right-0 h-1 bg-primary/20 z-10">
+                    <div
+                        className="h-full bg-primary transition-all duration-300 ease-out"
+                        style={{ width: `${progress}%` }}
+                    />
+                </div>
+            )}
             <CardHeader className="border-b border-white/5">
-                <CardTitle className="flex items-center gap-2">
-                    <Activity className="w-5 h-5 text-primary" />
-                    Trilha de Auditoria Operacional
+                <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Activity className="w-5 h-5 text-primary" />
+                        Trilha de Auditoria Operacional
+                    </div>
+                    {isLoading && (
+                        <span className="text-[10px] font-mono text-primary animate-pulse">
+                            SINCRONIZANDO: {progress}%
+                        </span>
+                    )}
                 </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -60,9 +75,14 @@ export default function GAPOAuditDashboard({ projectId, siteId }: GAPOAuditDashb
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {isLoading ? (
+                        {isLoading && operationalLogs.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center py-10">Processando trilhas...</TableCell>
+                                <TableCell colSpan={5} className="text-center py-10">
+                                    <div className="flex flex-col items-center gap-2">
+                                        <Activity className="w-6 h-6 text-primary animate-spin" />
+                                        <span className="text-xs text-muted-foreground">Iniciando conexão segura...</span>
+                                    </div>
+                                </TableCell>
                             </TableRow>
                         ) : operationalLogs.length === 0 ? (
                             <TableRow>

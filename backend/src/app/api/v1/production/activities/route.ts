@@ -3,10 +3,20 @@ import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth } from "@/lib/auth/session";
 import { ProductionConfigService } from "@/modules/production/application/production-config.service";
 import { PrismaProductionRepository } from "@/modules/production/infrastructure/prisma-production.repository";
+import { z } from "zod";
+import { VALIDATION } from "@/lib/constants";
 
 // DI
 const productionRepository = new PrismaProductionRepository();
 const configService = new ProductionConfigService(productionRepository);
+
+const createActivitySchema = z.object({
+  name: z.string().min(2).max(VALIDATION.STRING.MAX_NAME),
+  description: z.string().optional(),
+  categoryId: z.string().uuid("ID da categoria é obrigatório e deve ser um UUID válido"),
+  weight: z.number().optional(),
+  order: z.number().optional(),
+});
 
 /**
  * GET - Lista atividades de produção (opcionalmente filtradas por categoria)
@@ -32,14 +42,12 @@ export async function POST(request: NextRequest) {
   try {
     await requireAuth();
     const body = await request.json();
+    const validation = createActivitySchema.safeParse(body);
+    if (!validation.success) {
+      return ApiResponse.validationError(validation.error.errors.map(e => e.message));
+    }
 
-    const activity = await configService.createActivity({
-      name: body.name,
-      description: body.description,
-      categoryId: body.categoryId,
-      weight: body.weight,
-      order: body.order,
-    });
+    const activity = await configService.createActivity(validation.data);
 
     return ApiResponse.created(activity, "Atividade criada com sucesso");
   } catch (error) {

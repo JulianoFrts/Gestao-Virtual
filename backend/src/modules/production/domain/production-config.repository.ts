@@ -24,4 +24,7 @@ export interface ProductionConfigRepository {
 
   listActivities(categoryId?: string): Promise<any[]>;
   createActivity(data: any): Promise<any>;
+
+  listUnitCosts(projectId: string): Promise<any[]>;
+  upsertUnitCosts(projectId: string, costs: any[]): Promise<any>;
 }

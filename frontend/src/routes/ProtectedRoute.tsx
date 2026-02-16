@@ -6,6 +6,7 @@ import { ShieldAlert } from "lucide-react";
 import { isProtectedSignal, can } from "@/signals/authSignals";
 import { useSignals } from "@preact/signals-react/runtime";
 import { Button } from "@/components/ui/button";
+import { LoadingScreen } from "@/components/shared/LoadingScreen";
 
 export interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -25,16 +26,7 @@ export function ProtectedRoute({
   const location = useLocation();
 
   if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-          <p className="animate-pulse text-sm font-medium text-muted-foreground">
-            Verificando acesso seguro...
-          </p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (!user) {

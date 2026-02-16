@@ -62,6 +62,8 @@ import {
 import { Check, ChevronsUpDown, Info, Search, Plus } from "lucide-react";
 import { useWorkStages } from "@/hooks/useWorkStages";
 import { useTowerProduction } from "@/modules/production/hooks/useTowerProduction";
+import { Progress } from "@/components/ui/progress";
+
 
 // Definir interface de torre para alinhar com o backend (MapElementTechnicalData)
 interface Tower {
@@ -94,6 +96,8 @@ export default function DailyReport() {
   useSignals();
   const isSidebarOpen = isSidebarOpenSignal.value;
   const { profile } = useAuth();
+  const { toast } = useToast();
+
   const isWorker = !isProtectedSignal.value && !can("daily_reports.manage");
   const workerEmployeeId = profile?.employeeId;
   const { teams } = useTeams(profile?.companyId);
@@ -195,52 +199,57 @@ export default function DailyReport() {
     }
   }, [workStages, effectiveSiteId, profile?.companyId, loadProductionData, sites]);
 
-  const { toast } = useToast();
+  const [previewData, setPreviewData] = React.useState<{
+    expandedTowers: string[];
+    finalLabel: string;
+    metrics: { towers: number; km: string };
+  }>({ expandedTowers: [], finalLabel: "", metrics: { towers: 0, km: "0.00" } });
+  const [isPreviewing, setIsPreviewing] = React.useState(false);
 
-  // Cálculo de totalizadores para vãos selecionados
-  const spanTotals = React.useMemo(() => {
-    if (subPointType !== "VAO") {
-      return { towers: 0, km: "0.00" };
+  const fetchPreview = React.useCallback(async () => {
+    const projectId = sites.find((s) => s.id === effectiveSiteId)?.projectId;
+    if (!projectId || subPointType === "GERAL" || !subPoint) {
+      setPreviewData({
+        expandedTowers: [],
+        finalLabel: "",
+        metrics: { towers: 0, km: "0.00" },
+      });
+      return;
     }
 
-    let selectedSpans: any[] = [];
+    if (isMultiSelection && !subPointEnd) return;
 
-    if (isMultiSelection && subPoint && subPointEnd) {
-      const startIdx = projectSpans.findIndex(s => s.id === subPoint);
-      const endIdx = projectSpans.findIndex(s => s.id === subPointEnd);
-
-      if (startIdx !== -1 && endIdx !== -1) {
-        const min = Math.min(startIdx, endIdx);
-        const max = Math.max(startIdx, endIdx);
-        selectedSpans = projectSpans.slice(min, max + 1);
+    setIsPreviewing(true);
+    try {
+      const response = await orionApi.post("/reports/metadata/preview", {
+        projectId,
+        subPointType,
+        subPoint,
+        subPointEnd,
+        isMultiSelection,
+      });
+      if (response.data) {
+        setPreviewData(response.data as any);
       }
-    } else if (subPoint) {
-      const singleSpan = projectSpans.find(s => s.id === subPoint);
-      if (singleSpan) selectedSpans = [singleSpan];
+    } catch (err) {
+      console.error("[DailyReport] Error fetching preview:", err);
+    } finally {
+      setIsPreviewing(false);
     }
+  }, [
+    effectiveSiteId,
+    subPointType,
+    subPoint,
+    subPointEnd,
+    isMultiSelection,
+    sites,
+  ]);
 
-    if (selectedSpans.length === 0) {
-      return { towers: 0, km: "0.00" };
-    }
+  React.useEffect(() => {
+    fetchPreview();
+  }, [fetchPreview]);
 
-    // Coletar todas as torres únicas (início e fim de cada vão)
-    const uniqueTowers = new Set<string>();
-    selectedSpans.forEach((span) => {
-      if (span.tower_start_id) uniqueTowers.add(span.tower_start_id);
-      if (span.tower_end_id) uniqueTowers.add(span.tower_end_id);
-    });
-
-    // Somar distâncias (span_length está em metros)
-    const totalMeters = selectedSpans.reduce(
-      (acc, span) => acc + (Number(span.span_length) || 0),
-      0,
-    );
-
-    return {
-      towers: uniqueTowers.size,
-      km: (totalMeters / 1000).toFixed(2),
-    };
-  }, [subPointType, subPoint, subPointEnd, isMultiSelection, projectSpans]);
+  const spanTotals = previewData.metrics;
 
   // Inicializar rascunho
   React.useEffect(() => {
@@ -318,64 +327,8 @@ export default function DailyReport() {
     setIsSaving(true);
 
     try {
-      let finalSubPoint = subPoint;
-      let expandedTowers: string[] = [];
-
-      // Processamento de Multi-Vão / Intervalo de Vãos
-      if (subPointType === "VAO" && subPoint) {
-        let selectedSpansData: any[] = [];
-
-        if (isMultiSelection && subPointEnd) {
-          const startIdx = projectSpans.findIndex(s => s.id === subPoint);
-          const endIdx = projectSpans.findIndex(s => s.id === subPointEnd);
-          if (startIdx !== -1 && endIdx !== -1) {
-            const min = Math.min(startIdx, endIdx);
-            const max = Math.max(startIdx, endIdx);
-            selectedSpansData = projectSpans.slice(min, max + 1);
-          }
-        } else {
-          const singleSpan = projectSpans.find(s => s.id === subPoint);
-          if (singleSpan) selectedSpansData = [singleSpan];
-        }
-
-        if (selectedSpansData.length > 0) {
-          finalSubPoint = isMultiSelection && subPointEnd
-            ? `${selectedSpansData[0].span_name} a ${selectedSpansData[selectedSpansData.length - 1].span_name}`
-            : selectedSpansData[0].span_name;
-
-          // Coletar torres únicas dos vãos selecionados
-          expandedTowers = Array.from(new Set(selectedSpansData.flatMap(s => [s.tower_start_id, s.tower_end_id])));
-        }
-      }
-
-      // Processamento de Intervalo de Torres
-      if (
-        isMultiSelection &&
-        subPointType === "TORRE" &&
-        subPoint &&
-        subPointEnd
-      ) {
-        const startIdx = projectTowers.findIndex(
-          (t) =>
-            t.id === subPoint ||
-            t.externalId?.toUpperCase() === subPoint.toUpperCase() ||
-            t.name?.toUpperCase() === subPoint.toUpperCase(),
-        );
-        const endIdx = projectTowers.findIndex(
-          (t) =>
-            t.id === subPointEnd ||
-            t.externalId?.toUpperCase() === subPointEnd.toUpperCase() ||
-            t.name?.toUpperCase() === subPointEnd.toUpperCase(),
-        );
-
-        if (startIdx !== -1 && endIdx !== -1) {
-          const min = Math.min(startIdx, endIdx);
-          const max = Math.max(startIdx, endIdx);
-          const range = projectTowers.slice(min, max + 1);
-          expandedTowers = range.map((t) => t.externalId || t.name);
-          finalSubPoint = `${projectTowers[min].name} a ${projectTowers[max].name}`;
-        }
-      }
+      const finalSubPoint = previewData.finalLabel || subPoint;
+      const expandedTowers = previewData.expandedTowers || [];
 
       // Consolidar nomes das atividades para o campo de texto
       const selectedActivityNames = selectedActivities
@@ -556,7 +509,7 @@ export default function DailyReport() {
               </div>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-8 border-4 border-red-600 p-4">
+              <form onSubmit={handleSubmit} className="space-y-8 border-4  border-amber-500/30 p-4">
                 <div className="space-y-8">
                   <div className="space-y-3">
                     <Label className="text-primary/80 font-bold uppercase text-[10px] tracking-widest pl-1">
@@ -937,11 +890,12 @@ export default function DailyReport() {
                                   </span>
                                 </div>
                                 <div className="h-1.5 w-24 bg-primary/10 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.4)] transition-all duration-1000"
-                                    style={{ width: `${parent.progress?.actualPercentage || 0}%` }}
+                                  <Progress 
+                                    value={parent.progress?.actualPercentage || 0} 
+                                    className="h-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.4)] transition-all duration-1000" 
                                   />
                                 </div>
+
                               </div>
 
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-4">

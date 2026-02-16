@@ -1,22 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
+import { requireAuth } from "@/lib/auth/session";
 import fs from "fs";
 import path from "path";
 
 const STORAGE_ROOT = path.join(process.cwd(), "storage", "3d-models");
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const relPath = searchParams.get("path") || "";
-
-  if (relPath.includes("..")) {
-    return NextResponse.json({ error: "Caminho inválido" }, { status: 400 });
-  }
-
-  const fullPath = path.join(STORAGE_ROOT, relPath.replace(/^models\//, ""));
-
   try {
+    await requireAuth();
+    const { searchParams } = new URL(req.url);
+    const relPath = searchParams.get("path") || "";
+
+    if (relPath.includes("..")) {
+      return ApiResponse.badRequest("Caminho inválido");
+    }
+
+    const fullPath = path.join(STORAGE_ROOT, relPath.replace(/^models\//, ""));
+
     if (!fs.existsSync(fullPath)) {
-      return NextResponse.json({ data: [], error: null });
+      return ApiResponse.json([]);
     }
 
     const stats = fs.statSync(fullPath);
@@ -37,13 +40,10 @@ export async function GET(req: NextRequest) {
           },
         };
       });
-      return NextResponse.json({ data, error: null });
+      return ApiResponse.json(data);
     }
-    return NextResponse.json(
-      { error: "O caminho não é um diretório" },
-      { status: 400 },
-    );
+    return ApiResponse.badRequest("O caminho não é um diretório");
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return handleApiError(err, "src/app/api/v1/storage/3d-models/list/route.ts#GET");
   }
 }

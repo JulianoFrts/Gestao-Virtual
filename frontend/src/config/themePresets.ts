@@ -14,30 +14,17 @@ export interface ThemePreset {
 
 export const themePresets: ThemePreset[] = [
     {
-        id: "orion-slate",
-        label: "Orion Slate (Premium)",
+        id: "construction",
+        label: "Construction Light",
         colors: {
-            primary: "text-primary",
-            border: "border-border/50",
-            bg: "bg-background",
-            glow: "shadow-glow",
-            icon: "text-primary",
-            text: "text-foreground"
-        },
-        previewColor: "bg-[#0A0F1A] border-primary border-2"
-    },
-    {
-        id: "enterprise",
-        label: "Enterprise Premium",
-        colors: {
-            primary: "text-slate-900",
-            border: "border-slate-200",
+            primary: "text-cyan-500",
+            border: "border-gray-200",
             bg: "bg-white",
-            glow: "shadow-slate-200",
-            icon: "text-slate-800",
+            glow: "shadow-cyan-500/20",
+            icon: "text-amber-500",
             text: "text-slate-900"
         },
-        previewColor: "bg-white border-slate-900 border-2"
+        previewColor: "bg-white border-cyan-500 border-2"
     },
     {
         id: "nebula",

@@ -23,16 +23,16 @@ interface Profile {
   avatarUrl: string | null;
   image?: string | null;
   role:
-    | "SUPER_ADMIN"
-    | "SUPER_ADMIN_GOD"
-    | "ADMIN"
-    | "TI_SOFTWARE"
-    | "GESTOR_PROJECT"
-    | "GESTOR_CANTEIRO"
-    | "SUPERVISOR"
-    | "WORKER"
-    | "VIEWER"
-    | "HELPER_SYSTEM";
+  | "SUPER_ADMIN"
+  | "SUPER_ADMIN_GOD"
+  | "ADMIN"
+  | "TI_SOFTWARE"
+  | "GESTOR_PROJECT"
+  | "GESTOR_CANTEIRO"
+  | "SUPERVISOR"
+  | "WORKER"
+  | "VIEWER"
+  | "HELPER_SYSTEM";
   registrationNumber?: string;
   employeeId?: string;
   companyId?: string;
@@ -128,10 +128,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const response = await localApi.get("/users/profile");
 
           if (response.data) {
-            console.log(
-              "[AuthContext] Fetched profile with permissions from /users/me:",
-              response.data,
-            );
             userData = response.data;
           } else {
             // Fallback se falhar
@@ -230,12 +226,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = localApi.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      setUser(
-        (session?.user as { id: string; email?: string } & Record<
-          string,
-          unknown
-        >) ?? null,
-      );
+      setUser(prev => {
+        const next = (session?.user as any) ?? null;
+        if (prev?.id === next?.id && prev !== null) return prev; // Manter referência se o ID for igual
+        return next;
+      });
       currentUserSignal.value = (session?.user as any) ?? null; // Sincronizar Signal
 
       if (session?.user) {

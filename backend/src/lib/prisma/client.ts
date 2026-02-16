@@ -9,6 +9,16 @@ export type ExtendedPrismaClient = PrismaClient & {
   permissionLevel: any;
   permissionModule: any;
   taskQueue: any;
+  dataIngestion: any;
+  activityUnitCost: any;  
+  activitySchedule: any;
+  activityStatus: any;
+  productionCategory: any;
+  mapElementTechnicalData: any;
+  mapElementProductionProgress: any;
+  tower: any; 
+  activity: any;
+  project: any;
 };
 
 declare global {

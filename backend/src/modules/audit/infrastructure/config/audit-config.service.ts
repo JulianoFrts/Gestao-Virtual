@@ -20,7 +20,8 @@ export class AuditConfigService {
         try {
             if (!fs.existsSync(this.configPath)) {
                 logger.info("Nenhum arquivo .auditrc.json encontrado. Usando padrões.");
-                return this.getDefaultConfig();
+                this.config = this.getDefaultConfig();
+                return this.config;
             }
 
             const content = fs.readFileSync(this.configPath, "utf-8");
@@ -30,7 +31,8 @@ export class AuditConfigService {
 
             if (!validation.success) {
                 logger.warn("Arquivo .auditrc.json inválido. Usando padrões.", { issues: validation.error.issues });
-                return this.getDefaultConfig();
+                this.config = this.getDefaultConfig();
+                return this.config;
             }
 
             this.config = validation.data;
@@ -38,7 +40,8 @@ export class AuditConfigService {
             return this.config;
         } catch (error) {
             logger.error("Erro ao carregar .auditrc.json", { error });
-            return this.getDefaultConfig();
+            this.config = this.getDefaultConfig();
+            return this.config;
         }
     }
 

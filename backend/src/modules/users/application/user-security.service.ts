@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { BCRYPT_ROUNDS } from "@/lib/constants";
+import { CONSTANTS } from "@/lib/constants";
 import { UserRepository } from "../domain/user.repository";
 import { SystemAuditRepository } from "../../audit/domain/system-audit.repository";
 
@@ -7,10 +7,10 @@ export class UserSecurityService {
   constructor(
     private readonly repository: UserRepository,
     private readonly auditRepository?: SystemAuditRepository,
-  ) {}
+  ) { }
 
   async hashPassword(password: string): Promise<string> {
-    return bcrypt.hash(password, BCRYPT_ROUNDS);
+    return bcrypt.hash(password, CONSTANTS.AUTH.PASSWORD.BCRYPT_ROUNDS);
   }
 
   async changePassword(

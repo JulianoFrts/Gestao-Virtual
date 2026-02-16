@@ -7,6 +7,7 @@ import { Validator } from "@/lib/utils/api/validator";
 import { paginationQuerySchema } from "@/core/common/domain/common.schema";
 import { PrismaMapElementRepository } from "@/modules/map-elements/infrastructure/prisma-map-element.repository";
 import { MapElementService } from "@/modules/map-elements/application/map-element.service";
+import { API } from "@/lib/constants";
 
 const repository = new PrismaMapElementRepository();
 const service = new MapElementService(repository);
@@ -76,7 +77,7 @@ export async function GET(request: NextRequest) {
 
     // System admins without companyId can get all elements (with limit)
     if (isSystemAdmin) {
-      const elements = await service.getAllElements(type, 10000);
+      const elements = await service.getAllElements(type, API.BATCH.LARGE);
       logger.info(
         `GET /api/v1/map_elements: Admin fetched ${elements.length} elements globally`,
       );
@@ -86,7 +87,7 @@ export async function GET(request: NextRequest) {
     return ApiResponse.badRequest("projectId ou companyId é obrigatório");
   } catch (error) {
     logger.error("Erro ao listar elementos do mapa", { error });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/map_elements/route.ts#GET");
   }
 }
 
@@ -95,46 +96,19 @@ export async function POST(request: NextRequest) {
     const user = await requireAuth();
     const body = await request.json();
 
-    // Import prisma for project lookup
-    const { prisma } = await import("@/lib/prisma/client");
-
-    // Inject companyId from logged user or from project if not provided
-    const enrichElement = async (el: any) => {
-      if (!el.companyId && !el.company_id) {
-        // First try user's companyId
-        if (user.companyId) {
-          el.companyId = user.companyId;
-        }
-        // If user has no companyId (admin), lookup from project
-        else if (el.projectId || el.project_id) {
-          const projectId = el.projectId || el.project_id;
-          const project = await prisma.project.findUnique({
-            where: { id: projectId },
-            select: { companyId: true },
-          });
-          if (project?.companyId) {
-            el.companyId = project.companyId;
-          }
-        }
-      }
-      return el;
-    };
-
     if (Array.isArray(body)) {
-      const enrichedBody = await Promise.all(body.map(enrichElement));
-      const results = await service.saveBatch(enrichedBody);
+      const results = await service.saveBatch(body);
       return ApiResponse.json(
         results,
         `${results.length} elementos processados.`,
       );
     }
 
-    const enrichedBody = await enrichElement(body);
-    const result = await service.saveElement(enrichedBody);
+    const result = await service.saveElement(body);
     return ApiResponse.json(result, "Elemento processado com sucesso.");
   } catch (error) {
     logger.error("Erro ao salvar elemento(s) do mapa", { error });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/map_elements/route.ts#POST");
   }
 }
 
@@ -166,6 +140,6 @@ export async function DELETE(request: NextRequest) {
     return ApiResponse.badRequest("id ou projectId obrigatório.");
   } catch (error) {
     logger.error("Erro ao remover elemento(s) do mapa", { error });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/map_elements/route.ts#DELETE");
   }
 }

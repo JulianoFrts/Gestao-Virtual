@@ -5,31 +5,39 @@ import { Sidebar } from './Sidebar';
 import { BackgroundMonitor } from '../shared/BackgroundMonitor';
 import { PermissionsModal } from '../shared/PermissionsModal';
 import { ConnectionBanner } from '../shared/ConnectionBanner';
-import { isSidebarOpenSignal } from '@/signals/uiSignals';
+import { isSidebarOpenSignal, isFocusModeSignal } from '@/signals/uiSignals';
 import { useSignals } from '@preact/signals-react/runtime';
+import { cn } from '@/lib/utils';
 
 export function AppLayout() {
   useSignals();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const desktopSidebarOpen = isSidebarOpenSignal.value;
+  const isFocusMode = isFocusModeSignal.value;
 
-  // Sync mobile state if needed, but usually they are separate
-  
   return (
     <div className="h-screen bg-background flex overflow-hidden">
       <BackgroundMonitor />
       <PermissionsModal />
-      <Sidebar 
-        isOpen={mobileSidebarOpen} 
-        onClose={() => setMobileSidebarOpen(false)} 
-        desktopOpen={desktopSidebarOpen}
-      />
+
+      {!isFocusMode && (
+        <Sidebar
+          isOpen={mobileSidebarOpen}
+          onClose={() => setMobileSidebarOpen(false)}
+          desktopOpen={desktopSidebarOpen}
+        />
+      )}
 
       <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
         <ConnectionBanner />
-        <Header onMenuClick={() => setMobileSidebarOpen(true)} />
+        {!isFocusMode && (
+          <Header onMenuClick={() => setMobileSidebarOpen(true)} />
+        )}
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <main className={cn(
+          "flex-1 overflow-y-auto",
+          !isFocusMode ? "p-4 md:p-6" : "p-0 bg-black/95"
+        )}>
           <Outlet />
         </main>
       </div>

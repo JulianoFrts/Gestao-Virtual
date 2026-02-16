@@ -5,6 +5,7 @@ import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { SystemMessageService } from "@/modules/common/application/system-message.service";
 import { PrismaSystemMessageRepository } from "@/modules/common/infrastructure/prisma-system-message.repository";
+import { API } from "@/lib/constants";
 
 // DI
 const systemMessageService = new SystemMessageService(
@@ -38,7 +39,7 @@ const querySchema = z.object({
   ),
   limit: z.preprocess(
     (val) => (val === null || val === "" ? undefined : val),
-    z.coerce.number().min(1).max(100).default(20),
+    z.coerce.number().min(1).max(API.PAGINATION.MAX_LIMIT).default(API.PAGINATION.DEFAULT_PAGE_SIZE),
   ),
   recipientUserId: z
     .string()
@@ -85,7 +86,7 @@ export async function GET(request: NextRequest) {
     return ApiResponse.json(result);
   } catch (error) {
     logger.error("Erro ao listar mensagens", { error });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/system_messages/route.ts#GET");
   }
 }
 
@@ -106,6 +107,6 @@ export async function POST(request: NextRequest) {
     return ApiResponse.created(message, "Mensagem enviada com sucesso");
   } catch (error) {
     logger.error("Erro ao criar mensagem", { error });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/system_messages/route.ts#POST");
   }
 }

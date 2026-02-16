@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 
     return ApiResponse.badRequest("projectId or companyId is required");
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/segments/route.ts#GET");
   }
 }
 
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       return ApiResponse.json(result);
     }
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/segments/route.ts#POST");
   }
 }
 
@@ -81,6 +81,6 @@ export async function DELETE(request: NextRequest) {
     await segmentService.deleteSegment(id);
     return ApiResponse.json(null, "Segment deleted");
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/segments/route.ts#DELETE");
   }
 }

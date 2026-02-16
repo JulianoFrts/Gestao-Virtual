@@ -71,10 +71,13 @@ export class PrismaGovernanceRepository implements GovernanceRepository {
 
   async findViolationsWithFilters(
     filters: any,
+    take: number = 100,
+    skip: number = 0
   ): Promise<GovernanceAuditHistory[]> {
     return (prisma as any).governanceAuditHistory.findMany({
       where: filters,
-      take: 100, // Limite de segurança para performance em dev
+      take,
+      skip,
       include: {
         performer: {
           select: {
@@ -86,5 +89,9 @@ export class PrismaGovernanceRepository implements GovernanceRepository {
       },
       orderBy: [{ severity: "asc" }, { lastDetectedAt: "desc" }],
     });
+  }
+
+  async countViolations(filters: any): Promise<number> {
+    return (prisma as any).governanceAuditHistory.count({ where: filters });
   }
 }

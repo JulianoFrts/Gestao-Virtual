@@ -38,9 +38,11 @@ export async function POST(request: NextRequest) {
       message: error.message,
       stack: error.stack,
     });
-    return handleApiError(
-      error,
-      "src/app/api/v1/rpc/move_team_member/route.ts#POST",
-    );
+
+    logger.error("[RPC ERR] Error in move_team_member:", {
+      message: error.message,
+      stack: error.stack,
+    });
+    return handleApiError(error, "src/app/api/v1/rpc/move_team_member/route.ts#POST");
   }
 }

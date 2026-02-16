@@ -5,6 +5,7 @@ import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { DailyReportService } from "@/modules/production/application/daily-report.service";
 import { PrismaDailyReportRepository } from "@/modules/production/infrastructure/prisma-daily-report.repository";
+import { API } from "@/lib/constants";
 
 // DI
 const dailyReportService = new DailyReportService(
@@ -33,7 +34,7 @@ const querySchema = z.object({
   ),
   limit: z.preprocess(
     (val) => (val === null || val === "" ? undefined : val),
-    z.coerce.number().min(1).max(100).default(20),
+    z.coerce.number().min(1).max(API.PAGINATION.MAX_LIMIT).default(API.PAGINATION.DEFAULT_PAGE_SIZE),
   ),
   teamId: z
     .string()
@@ -88,7 +89,7 @@ export async function GET(request: NextRequest) {
     return ApiResponse.json(result);
   } catch (error) {
     logger.error("Erro ao listar relatórios", { error });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/daily_reports/route.ts#GET");
   }
 }
 
@@ -118,6 +119,6 @@ export async function POST(request: NextRequest) {
     return ApiResponse.created(report, "Relatório criado com sucesso");
   } catch (error) {
     logger.error("Erro ao criar relatório", { error });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/daily_reports/route.ts#POST");
   }
 }

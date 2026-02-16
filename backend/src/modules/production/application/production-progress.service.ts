@@ -28,89 +28,96 @@ export class ProductionProgressService {
       siteId,
     );
 
-    return elements.map((el) => {
-      const metadata =
-        typeof el.metadata === "string"
-          ? JSON.parse(el.metadata)
-          : el.metadata || {};
+    return elements.map((el) => this.mapElementToProgressResponse(el));
+  }
 
-      // Mapeamento de campos técnicos de snake_case ou Excel para camelCase (Compatibilidade Frontend)
-      const technicalMapping: Record<string, string> = {
-        // Snake Case
-        tower_type: "towerType",
-        tipo_fundacao: "tipoFundacao",
-        total_concreto: "totalConcreto",
-        peso_armacao: "pesoArmacao",
-        peso_estrutura: "pesoEstrutura",
-        tramo_lancamento: "tramoLancamento",
-        tipificacao_estrutura: "tipificacaoEstrutura",
-        go_forward: "goForward",
-        technical_km: "technicalKm",
-        subtrecho: "trecho",
+  private mapElementToProgressResponse(el: any) {
+    const metadata =
+      typeof el.metadata === "string"
+        ? JSON.parse(el.metadata)
+        : el.metadata || {};
 
-        // Excel / PT-BR Variants (Maiúsculo e formats comuns)
-        "SUBTRECHO": "trecho",
-        "ESTRUTURA": "towerType",
-        "FUNÇÃO": "towerType",
-        "FUNCAO": "towerType",
-        "TIPO ESTRUTURA": "towerType",
-        "TIPO": "towerType",
-        "VÃO (M)": "goForward",
-        "VAO (M)": "goForward",
-        "VOL (M3)": "totalConcreto",
-        "VOL CONCRETO": "totalConcreto",
-        "AÇO (KG)": "pesoArmacao",
-        "ACO (KG)": "pesoArmacao",
-        "PESO ARMACAO": "pesoArmacao",
-        "TORRE (T)": "pesoEstrutura",
-        "PESO ESTRUTURA": "pesoEstrutura",
-        "PESO TORRE": "pesoEstrutura",
-      };
+    const mappedMetadata = this.normalizeTechnicalMetadata(metadata);
 
-      const mappedMetadata = { ...metadata };
+    return {
+      ...mappedMetadata,
+      id: el.id,
+      elementId: el.id,
+      objectId: el.externalId,
+      objectSeq: el.sequence,
+      elementType: el.elementType,
+      name: el.name,
+      latitude: el.latitude,
+      longitude: el.longitude,
+      elevation: el.elevation,
+      activityStatuses: (el.productionProgress || []).map((p: any) =>
+        this.mapProgressToDTO(p),
+      ),
+      activitySchedules: el.activitySchedules || [],
+    };
+  }
 
-      // Normalização: Tenta encontrar chaves correspondentes no metadata (case-insensitive)
-      const metadataKeys = Object.keys(metadata);
+  private mapProgressToDTO(p: any) {
+    const entity = new ProductionProgress(p);
+    return {
+      ...entity,
+      activityId: p.activityId,
+      activity: p.activity,
+      status: entity.currentStatus,
+      progressPercent: Number(entity.progressPercent),
+    };
+  }
 
-      Object.entries(technicalMapping).forEach(([sourceKey, targetKey]) => {
-        // Se a chave alvo já estiver preenchida no metadata original, pula
-        if (metadata[targetKey] !== undefined && mappedMetadata[targetKey] === undefined) {
-          mappedMetadata[targetKey] = metadata[targetKey];
-        }
+  private normalizeTechnicalMetadata(metadata: any) {
+    const technicalMapping: Record<string, string> = {
+      tower_type: "towerType",
+      tipo_fundacao: "tipoFundacao",
+      total_concreto: "totalConcreto",
+      peso_armacao: "pesoArmacao",
+      peso_estrutura: "pesoEstrutura",
+      tramo_lancamento: "tramoLancamento",
+      tipificacao_estrutura: "tipificacaoEstrutura",
+      go_forward: "goForward",
+      technical_km: "technicalKm",
+      subtrecho: "trecho",
+      SUBTRECHO: "trecho",
+      ESTRUTURA: "towerType",
+      "FUNÇÃO": "towerType",
+      FUNCAO: "towerType",
+      "TIPO ESTRUTURA": "towerType",
+      TIPO: "towerType",
+      "VÃO (M)": "goForward",
+      "VAO (M)": "goForward",
+      "VOL (M3)": "totalConcreto",
+      "VOL CONCRETO": "totalConcreto",
+      "AÇO (KG)": "pesoArmacao",
+      "ACO (KG)": "pesoArmacao",
+      "PESO ARMACAO": "pesoArmacao",
+      "TORRE (T)": "pesoEstrutura",
+      "PESO ESTRUTURA": "pesoEstrutura",
+      "PESO TORRE": "pesoEstrutura",
+    };
 
-        // Tenta achar a chave de origem no metadata
-        const matchingKey = metadataKeys.find(k => k.toUpperCase() === sourceKey.toUpperCase());
-        if (matchingKey && mappedMetadata[targetKey] === undefined) {
-          mappedMetadata[targetKey] = metadata[matchingKey];
-        }
-      });
+    const mappedMetadata = { ...metadata };
+    const metadataKeys = Object.keys(metadata);
 
-      return {
-        ...mappedMetadata,
-        id: el.id,
-        elementId: el.id,
-        objectId: el.externalId,
-        objectSeq: el.sequence,
-        elementType: el.elementType,
-        name: el.name,
-        latitude: el.latitude,
-        longitude: el.longitude,
-        elevation: el.elevation,
-        activityStatuses: (el.productionProgress || [])
-          // .filter((p: any) => linkedActivityIds.includes(p.activityId)) // REMOVED FILTER AS REQUESTED
-          .map((p: any) => {
-            const entity = new ProductionProgress(p);
-            return {
-              ...entity,
-              activityId: p.activityId,
-              activity: p.activity,
-              status: entity.currentStatus,
-              progressPercent: Number(entity.progressPercent),
-            };
-          }),
-        activitySchedules: el.activitySchedules || [],
-      };
+    Object.entries(technicalMapping).forEach(([sourceKey, targetKey]) => {
+      if (
+        metadata[targetKey] !== undefined &&
+        mappedMetadata[targetKey] === undefined
+      ) {
+        mappedMetadata[targetKey] = metadata[targetKey];
+      }
+
+      const matchingKey = metadataKeys.find(
+        (k) => k.toUpperCase() === sourceKey.toUpperCase(),
+      );
+      if (matchingKey && mappedMetadata[targetKey] === undefined) {
+        mappedMetadata[targetKey] = metadata[matchingKey];
+      }
     });
+
+    return mappedMetadata;
   }
 
   async getLogsByElement(
@@ -189,14 +196,7 @@ export class ProductionProgressService {
       { ...this.logContext, userId },
     );
 
-    let finalProjectId = projectId;
-    if (!finalProjectId) {
-      finalProjectId = await this.repository.findElementProjectId(elementId);
-    }
-
-    if (!finalProjectId) {
-      throw new Error(`ID do projeto não encontrado para o elemento ${elementId}. Certifique-se que o elemento existe.`);
-    }
+    const finalProjectId = await this.resolveProjectId(elementId, projectId);
 
     const { finalStartDate, finalEndDate } = await this.determineEffectiveDates(
       elementId,
@@ -205,47 +205,76 @@ export class ProductionProgressService {
       dates,
     );
 
-    const existing = await this.repository.findByElement(elementId);
-    const progressRecord = existing.find((p) => p.activityId === activityId);
-
-    let entity: ProductionProgress;
-
-    const enrichedMetadata = {
-      ...(metadata || {}),
+    const entity = await this.getOrCreateProgressEntity(
+      elementId,
+      activityId,
+      finalProjectId,
       finalStartDate,
       finalEndDate,
-    };
+    );
 
-    if (progressRecord) {
-      entity = new ProductionProgress(progressRecord);
-      entity.startDate = finalStartDate ? new Date(finalStartDate) : entity.startDate;
-      entity.endDate = finalEndDate ? new Date(finalEndDate) : entity.endDate;
-      entity.recordProgress(status, progress, enrichedMetadata, userId);
-    } else {
-      entity = new ProductionProgress({
-        projectId: finalProjectId as string,
-        elementId,
-        activityId,
-        currentStatus: status,
-        progressPercent: progress,
-        startDate: finalStartDate ? new Date(finalStartDate) : null,
-        endDate: finalEndDate ? new Date(finalEndDate) : null,
-        history: [],
-        dailyProduction: {},
-      });
-      entity.recordProgress(status, progress, enrichedMetadata, userId);
-    }
+    entity.recordProgress(
+      status,
+      progress,
+      { ...(metadata || {}), finalStartDate, finalEndDate },
+      userId,
+    );
 
     const saved = await this.repository.save(entity);
 
     await this.repository.syncWorkStages?.(
       elementId,
       activityId,
-      finalProjectId as string,
+      finalProjectId,
       userId,
     );
 
     return new ProductionProgress(saved);
+  }
+
+  private async resolveProjectId(
+    elementId: string,
+    projectId?: string | null,
+  ): Promise<string> {
+    const finalProjectId =
+      projectId || (await this.repository.findElementProjectId(elementId));
+
+    if (!finalProjectId) {
+      throw new Error(
+        `ID do projeto não encontrado para o elemento ${elementId}.`,
+      );
+    }
+    return finalProjectId;
+  }
+
+  private async getOrCreateProgressEntity(
+    elementId: string,
+    activityId: string,
+    projectId: string,
+    startDate?: string | null,
+    endDate?: string | null,
+  ): Promise<ProductionProgress> {
+    const existing = await this.repository.findByElement(elementId);
+    const record = existing.find((p) => p.activityId === activityId);
+
+    if (record) {
+      const entity = new ProductionProgress(record);
+      entity.startDate = startDate ? new Date(startDate) : entity.startDate;
+      entity.endDate = endDate ? new Date(endDate) : entity.endDate;
+      return entity;
+    }
+
+    return new ProductionProgress({
+      projectId,
+      elementId,
+      activityId,
+      currentStatus: "PENDING",
+      progressPercent: 0,
+      startDate: startDate ? new Date(startDate) : null,
+      endDate: endDate ? new Date(endDate) : null,
+      history: [],
+      dailyProduction: {},
+    });
   }
 
   async approveLog(

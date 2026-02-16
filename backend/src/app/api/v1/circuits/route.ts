@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
     return ApiResponse.json(circuits);
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/circuits/route.ts#GET");
   }
 }
 
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     const result = await circuitService.saveCircuit(body);
     return ApiResponse.json(result);
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/circuits/route.ts#POST");
   }
 }
 
@@ -56,6 +56,6 @@ export async function DELETE(request: NextRequest) {
     await circuitService.deleteCircuit(id);
     return ApiResponse.json(null, "Circuit deleted");
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/circuits/route.ts#DELETE");
   }
 }

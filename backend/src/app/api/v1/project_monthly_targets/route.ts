@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     const targets = await projectService.getMonthlyTargets(where);
     return ApiResponse.json(targets);
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/project_monthly_targets/route.ts#GET");
   }
 }
 
@@ -59,6 +59,6 @@ export async function POST(req: NextRequest) {
     const target = await projectService.createMonthlyTarget(body);
     return ApiResponse.json(target, "Meta mensal criada com sucesso");
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/project_monthly_targets/route.ts#POST");
   }
 }

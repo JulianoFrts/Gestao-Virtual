@@ -11,9 +11,11 @@ import { AuthService } from "@/modules/auth/application/auth.service";
 import { UserService } from "@/modules/users/application/user.service";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
 
+import { PrismaAuthCredentialRepository } from "@/modules/auth/infrastructure/prisma-auth-credential.repository";
+
 // DI
 const userService = new UserService(new PrismaUserRepository());
-const authService = new AuthService(userService);
+const authService = new AuthService(userService, new PrismaAuthCredentialRepository());
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,9 +49,7 @@ export async function POST(request: NextRequest) {
 
     return ApiResponse.json(user);
   } catch (error: any) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/rpc/resolve_login_identifier/route.ts#POST",
-    );
+
+    return handleApiError(error, "src/app/api/v1/rpc/resolve_login_identifier/route.ts#POST");
   }
 }

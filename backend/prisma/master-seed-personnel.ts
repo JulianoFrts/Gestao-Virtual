@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 import dotenv from "dotenv";
+import { fileURLToPath } from "url";
 import { DATA_PART_1 } from "./data-real-1";
 import { DATA_PART_2 } from "./data-real-2";
 import { DATA_PART_3 } from "./data-real-3";
@@ -9,18 +10,22 @@ import { DATA_PART_4 } from "./data-real-4";
 import { DATA_PART_5 } from "./data-real-5";
 import { DATA_PART_6 } from "./data-real-6";
 import { DATA_PART_7 } from "./data-real-7";
+import { JOB_HIERARCHY, PASSWORD_HASHES } from "../src/lib/constants/business";
 
 dotenv.config();
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  throw new Error("DATABASE_URL is not defined");
-}
+// Create a helper to get prisma client
+const getPrisma = () => {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is not defined");
+  }
+  const pool = new pg.Pool({ connectionString });
+  const adapter = new PrismaPg(pool);
+  return new PrismaClient({ adapter });
+};
 
-const pool = new pg.Pool({ connectionString });
-const adapter = new PrismaPg(pool);
-
-const prisma = new PrismaClient({ adapter });
+const globalPrisma = new PrismaClient(); // Keep for backward compatibility if needed outside
 
 interface Person {
   nGeral: number;
@@ -35,7 +40,7 @@ interface Person {
   placa?: string;
 }
 
-async function main() {
+export async function seedPersonnel(prisma: PrismaClient = globalPrisma) {
   const ALL_DATA: Person[] = [
     ...(DATA_PART_1 as Person[]),
     ...(DATA_PART_2 as Person[]),
@@ -75,20 +80,20 @@ async function main() {
       f.includes("SITE MANAGER") ||
       f.includes("RESIDENTE")
     )
-      return 1;
-    if (f.includes("COORDENADOR") || f.includes("SUPERVISOR")) return 2;
-    if (f.includes("ENGENHEIRO")) return 3;
-    if (f.includes("ENCARREGADO") || f.includes("LÍDER")) return 4;
-    if (f.includes("TECNICO") || f.includes("TOPOGRAFO")) return 5;
-    if (f.includes("MOTORISTA") || f.includes("OPERADOR")) return 6;
+      return JOB_HIERARCHY.MANAGER;
+    if (f.includes("COORDENADOR") || f.includes("SUPERVISOR")) return JOB_HIERARCHY.COORDINATOR;
+    if (f.includes("ENGENHEIRO")) return JOB_HIERARCHY.ENGINEER;
+    if (f.includes("ENCARREGADO") || f.includes("LÍDER")) return JOB_HIERARCHY.LEADER;
+    if (f.includes("TECNICO") || f.includes("TOPOGRAFO")) return JOB_HIERARCHY.TECHNICIAN;
+    if (f.includes("MOTORISTA") || f.includes("OPERADOR")) return JOB_HIERARCHY.OPERATOR;
     if (
       f.includes("PEDREIRO") ||
       f.includes("CARPINTEIRO") ||
       f.includes("ARMADOR")
     )
-      return 8;
-    if (f.includes("AJUDANTE") || f.includes("SERVENTE")) return 11;
-    return 10;
+      return JOB_HIERARCHY.SKILLED;
+    if (f.includes("AJUDANTE") || f.includes("SERVENTE")) return JOB_HIERARCHY.HELPER;
+    return JOB_HIERARCHY.DEFAULT;
   };
 
   for (const funcName of uniqueFunctions) {
@@ -96,13 +101,13 @@ async function main() {
       where: { companyId_name: { companyId, name: funcName } },
       update: {
         hierarchyLevel: getHierarchy(funcName),
-        canLeadTeam: getHierarchy(funcName) <= 4,
+        canLeadTeam: getHierarchy(funcName) <= JOB_HIERARCHY.LEADER,
       },
       create: {
         companyId,
         name: funcName,
         hierarchyLevel: getHierarchy(funcName),
-        canLeadTeam: getHierarchy(funcName) <= 4,
+        canLeadTeam: getHierarchy(funcName) <= JOB_HIERARCHY.LEADER,
         description: ALL_DATA.find((d) => d.funcao === funcName)?.moe || "MOD",
       },
     });
@@ -149,45 +154,45 @@ async function main() {
     });
 
     if (user) {
-        user = await prisma.user.update({
-            where: { id: user.id },
-            data: {
-                name: actualNome,
-                registrationNumber: person.matricula,
-                functionId: func?.id,
-                hierarchyLevel: func?.hierarchyLevel || 10,
-                affiliation: {
-                    upsert: {
-                        create: { projectId: project.id, companyId },
-                        update: { projectId: project.id }
-                    }
-                }
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          name: actualNome,
+          registrationNumber: person.matricula,
+          functionId: func?.id,
+          hierarchyLevel: func?.hierarchyLevel || JOB_HIERARCHY.DEFAULT,
+          affiliation: {
+            upsert: {
+              create: { projectId: project.id, companyId },
+              update: { projectId: project.id }
             }
-        });
+          }
+        }
+      });
     } else {
-        user = await prisma.user.create({
-            data: {
-                name: actualNome,
-                registrationNumber: person.matricula,
-                functionId: func?.id,
-                hierarchyLevel: func?.hierarchyLevel || 10,
-                // role e status movidos para AuthCredential
-                authCredential: {
-                    create: {
-                        email,
-                        password: "$2b$10$EpWa/z.6q.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1.1",
-                        role: person.moe === "MOI" ? "MANAGER" : "USER", // Role enum usually has USER, ADMIN, etc. Assuming USER for WORKER equivalent or verify Enum
-                        status: "ACTIVE"
-                    }
-                },
-                affiliation: {
-                    create: {
-                        projectId: project.id,
-                        companyId: companyId
-                    }
-                }
+      user = await prisma.user.create({
+        data: {
+          name: actualNome,
+          registrationNumber: person.matricula,
+          functionId: func?.id,
+          hierarchyLevel: func?.hierarchyLevel || JOB_HIERARCHY.DEFAULT,
+          // role e status movidos para AuthCredential
+          authCredential: {
+            create: {
+              email,
+              password: PASSWORD_HASHES.DEFAULT_SEED,
+              role: person.moe === "MOI" ? "MANAGER" : "USER", // Role enum usually has USER, ADMIN, etc. Assuming USER for WORKER equivalent or verify Enum
+              status: "ACTIVE"
             }
-        });
+          },
+          affiliation: {
+            create: {
+              projectId: project.id,
+              companyId: companyId
+            }
+          }
+        }
+      });
     }
 
     // Vincular ao Time correspondente à EAP
@@ -212,6 +217,10 @@ async function main() {
   console.log("Carga massiva e composições de equipes concluídas com sucesso!");
 }
 
-main()
-  .catch(console.error)
-  .finally(() => prisma.$disconnect());
+// Self-run only if called directly
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const prismaInstance = getPrisma();
+  seedPersonnel(prismaInstance)
+    .catch(console.error)
+    .finally(() => prismaInstance.$disconnect());
+}

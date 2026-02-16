@@ -5,6 +5,7 @@ import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { AccessControlService } from "@/modules/user-roles/application/access-control.service";
 import { PrismaAccessControlRepository } from "@/modules/user-roles/infrastructure/prisma-access-control.repository";
+import { API } from "@/lib/constants";
 
 // DI
 const accessService = new AccessControlService(
@@ -25,7 +26,7 @@ const querySchema = z.object({
   ),
   limit: z.preprocess(
     (val) => (val === null || val === "" ? undefined : val),
-    z.coerce.number().min(1).max(100).default(100),
+    z.coerce.number().min(1).max(API.PAGINATION.MAX_LIMIT).default(API.PAGINATION.DEFAULT_PAGE_SIZE),
   ),
   name: z
     .string()
@@ -50,10 +51,8 @@ export async function GET(request: NextRequest) {
 
     return ApiResponse.json(result);
   } catch (error) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/permission_levels/route.ts#GET",
-    );
+
+    return handleApiError(error, "src/app/api/v1/permission_levels/route.ts#GET");
   }
 }
 
@@ -70,9 +69,7 @@ export async function POST(request: NextRequest) {
 
     return ApiResponse.json(level, "Nível de permissão criado com sucesso");
   } catch (error) {
-    return handleApiError(
-      error,
-      "src/app/api/v1/permission_levels/route.ts#POST",
-    );
+
+    return handleApiError(error, "src/app/api/v1/permission_levels/route.ts#POST");
   }
 }

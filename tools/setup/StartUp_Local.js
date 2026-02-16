@@ -8,7 +8,8 @@ const __dirname = path.dirname(__filename);
 
 const isBackground =
   process.argv.includes("--bg") || process.argv.includes("-b");
-const logsDir = path.join(__dirname, ".logs");
+const rootDir = path.resolve(__dirname, "../../");
+const logsDir = path.join(rootDir, "archives/logs");
 
 const colors = {
   reset: "\x1b[0m",
@@ -24,7 +25,7 @@ function log(message, color = colors.reset) {
   console.log(`${color}${message}${colors.reset}`);
 }
 
-function startProcess(command, args, label, color, cwd = __dirname) {
+function startProcess(command, args, label, color, cwd = rootDir) {
   const env = {
     ...process.env,
     NODE_OPTIONS: "--max-old-space-size=4096", // Aumentar limite de memória para evitar travamentos
@@ -32,7 +33,7 @@ function startProcess(command, args, label, color, cwd = __dirname) {
   };
 
   if (isBackground) {
-    if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir);
+    if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
     const logFile = path.join(logsDir, `${label.toLowerCase()}.log`);
     const out = fs.openSync(logFile, "a");
     const err = fs.openSync(logFile, "a");
@@ -48,7 +49,7 @@ function startProcess(command, args, label, color, cwd = __dirname) {
 
     proc.unref();
     log(
-      `▶ ${label} iniciado em segundo plano. Logs em: .logs/${label.toLowerCase()}.log`,
+      `▶ ${label} iniciado em segundo plano. Logs em: archives/logs/${label.toLowerCase()}.log`,
       color,
     );
     return proc;
@@ -90,7 +91,7 @@ async function start() {
 
   try {
     // 0. Docker Check (Opcional - só se não usar --lite)
-    const isLite = process.argv.includes("--lite");
+    const isLite = process.argv.includes("--lite") || true; // Forcing lite for AI environment unless dockers are available
 
     if (!isLite) {
       log(
@@ -114,17 +115,20 @@ async function start() {
 
     log("\n⚡ Parando processos anteriores...", colors.red + colors.bright);
     try {
-      execSync("npm run dev:stop", { stdio: "ignore" });
+      execSync("npm run dev:stop", { stdio: "ignore", cwd: rootDir });
     } catch (e) { }
 
     // ... (rest of the code)
 
     // 1.1 Gerar Prisma Client (Fast skip se existir)
-    if (!isLite || !fs.existsSync(path.join(__dirname, "backend/node_modules/.prisma"))) {
-      log("\n�️ Passo 1.1: Gerando Prisma Client...", colors.yellow);
+    const backendDir = path.join(rootDir, "backend");
+    const frontendDir = path.join(rootDir, "frontend");
+
+    if (!isLite || !fs.existsSync(path.join(backendDir, "node_modules/.prisma"))) {
+      log("\n️ Passo 1.1: Gerando Prisma Client...", colors.yellow);
       try {
         execSync("npx prisma generate", {
-          cwd: path.join(__dirname, "backend"),
+          cwd: backendDir,
           stdio: "inherit",
         });
         log("✅ Prisma Client gerado.", colors.green);
@@ -134,9 +138,9 @@ async function start() {
     }
 
     // Comandos diretos usando node para evitar problemas com espaços no PATH/NPX do Windows
-    const nextBin = path.join(__dirname, "node_modules", "next", "dist", "bin", "next");
-    const viteBin = path.join(__dirname, "node_modules", "vite", "bin", "vite.js");
-    const tsxBin = path.join(__dirname, "node_modules", "tsx", "dist", "cli.mjs");
+    const nextBin = path.join(rootDir, "node_modules", "next", "dist", "bin", "next");
+    const viteBin = path.join(rootDir, "node_modules", "vite", "bin", "vite.js");
+    const tsxBin = path.join(rootDir, "node_modules", "tsx", "dist", "cli.mjs");
 
     log("\n⚡ Passo 2: Iniciando serviços (Modo Robusto)...", colors.yellow);
 
@@ -145,7 +149,7 @@ async function start() {
       [`"${nextBin}"`, "dev", "-p", "3000"],
       "BACKEND",
       colors.blue,
-      path.join(__dirname, "backend")
+      backendDir
     );
 
     const frontend = startProcess(
@@ -153,7 +157,7 @@ async function start() {
       [`"${viteBin}"`],
       "FRONTEND",
       colors.green,
-      path.join(__dirname, "frontend")
+      frontendDir
     );
 
     const worker = !isLite ? startProcess(

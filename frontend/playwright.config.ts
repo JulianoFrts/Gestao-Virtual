@@ -33,7 +33,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npm run dev:playwright',
-    url: 'http://localhost:5176',
+    url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI
   }
 })

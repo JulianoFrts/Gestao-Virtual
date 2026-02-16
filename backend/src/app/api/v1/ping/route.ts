@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
+import { ApiResponse } from "@/lib/utils/api/response";
 
 export async function GET() {
-  return NextResponse.json({ message: "pong" });
+  return ApiResponse.json({ message: "pong" });
 }

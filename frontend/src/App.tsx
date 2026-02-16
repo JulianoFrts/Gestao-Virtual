@@ -23,12 +23,21 @@ function AppRoutes() {
 
   return (
     <>
-      {user && <GlobalInitializer />}
-      {(!isReady || (isLoading && !user)) ? (
-        <LoadingScreen />
-      ) : (
-        <RouteRenderer />
+      {user && (
+        <React.Fragment>
+          <GlobalInitializer />
+          <div className="fixed top-4 right-4 z-50 pointer-events-none opacity-50">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-loader-circle h-3 w-3 animate-spin text-primary/50"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
+          </div>
+        </React.Fragment>
       )}
+      {
+        (!isReady || (isLoading && !user)) ? (
+          <LoadingScreen />
+        ) : (
+          <RouteRenderer />
+        )
+      }
     </>
   );
 }

@@ -1,20 +1,25 @@
 import { signal, computed } from "@preact/signals-react";
 import { isAuthLoadingSignal } from "./authSignals";
-import { 
-    isLoadingDataSignal, 
+import {
+    isLoadingDataSignal,
     isSyncingInitialDataSignal,
     isUsersLoadingSignal,
     hasUsersFetchedSignal,
     isTeamsLoadingSignal,
     hasTeamsFetchedSignal,
-    hasGlobalDataFetchedSignal
+    hasGlobalDataFetchedSignal,
+    has3dFetchedSignal,
+    hasReportsFetchedSignal,
+    hasAuditFetchedSignal,
+    hasCostsFetchedSignal
 } from "./syncSignals";
+import { hasSystemMessagesFetchedSignal } from "./monitoringSignals";
+import { hasTimeRecordsFetchedSignal } from "./timeSignals";
+import { hasWorkStagesFetchedSignal } from "./workStageSignals";
+import { activeTaskIdsSignal, pendingTaskIdsSignal } from "./loaderSignals";
 
 /**
  * appInitSignals - Orquestra o estado real de carregamento do sistema.
- * 
- * Este arquivo centraliza o progresso da LoadingScreen com base nos signals
- * de outros módulos e um delay mínimo de segurança para animações "wow".
  */
 
 // Signal para forçar um delay mínimo (prevenção de "flicker" rápido demais)
@@ -25,38 +30,50 @@ const MIN_INIT_TIME = 800; // ms
 if (typeof window !== 'undefined') {
     setTimeout(() => {
         if (!minDelayElapsedSignal.value) {
-            console.log("[AppInit] Animations delay elapsed.");
             minDelayElapsedSignal.value = true;
         }
     }, MIN_INIT_TIME);
-    
-    // Safety fallback: if everything else is ready, don't wait forever for the timer
 }
 
 /**
  * Representa os passos individuais de carregamento baseados em dados reais.
  */
 export const loadingModulesSignal = computed(() => {
-    const authLoading = isAuthLoadingSignal.value;
-    const dataLoading = isLoadingDataSignal.value;
-    const syncingInitial = isSyncingInitialDataSignal.value;
-    const minDelay = minDelayElapsedSignal.value;
-
-    const usersLoading = isUsersLoadingSignal.value;
+    const authFetched = !isAuthLoadingSignal.value;
     const usersFetched = hasUsersFetchedSignal.value;
-    const teamsLoading = isTeamsLoadingSignal.value;
     const teamsFetched = hasTeamsFetchedSignal.value;
     const globalFetched = hasGlobalDataFetchedSignal.value;
+    const fetched3d = has3dFetchedSignal.value;
+    const fetchedReports = hasReportsFetchedSignal.value;
+    const fetchedMessages = hasSystemMessagesFetchedSignal.value;
+    const fetchedTime = hasTimeRecordsFetchedSignal.value;
+    const fetchedStages = hasWorkStagesFetchedSignal.value;
+    const fetchedAudit = hasAuditFetchedSignal.value;
+    const fetchedCosts = hasCostsFetchedSignal.value;
+
+    const activeIds = activeTaskIdsSignal.value;
+    const pendingIds = pendingTaskIdsSignal.value;
+
+    const getStatus = (id: string, isFetched: boolean) => {
+        if (isFetched) return 'completed';
+        if (activeIds.includes(id)) return 'loading';
+        if (pendingIds.includes(id)) return 'pending';
+        return 'pending'; // Padrão se não estiver em nenhum (logo será adicionado)
+    };
 
     return [
-        { id: 'users', label: 'Usuários e Acessos', status: usersFetched ? 'completed' : (authLoading || usersLoading) ? 'loading' : 'pending' },
-        { id: 'projects', label: 'Obras e Projetos', status: globalFetched ? 'completed' : dataLoading ? 'loading' : 'pending' },
-        { id: 'employees', label: 'Funcionários', status: globalFetched ? 'completed' : dataLoading ? 'loading' : 'pending' },
-        { id: 'teams', label: 'Equipes e Lideranças', status: teamsFetched ? 'completed' : teamsLoading ? 'loading' : 'pending' },
-        { id: 'sites', label: 'Canteiros de Obra', status: globalFetched ? 'completed' : dataLoading ? 'loading' : 'pending' },
-        { id: 'production', label: 'Dados de Produção', status: globalFetched ? 'completed' : dataLoading ? 'loading' : 'pending' },
-        { id: 'viewer3d', label: 'Engenharia 3D', status: minDelay ? 'completed' : 'loading' },
-        { id: 'reports', label: 'Relatórios e Médias', status: minDelay ? 'completed' : 'loading' },
+        { id: 'users', label: 'Usuários e Acessos', status: getStatus('users', usersFetched) },
+        { id: 'functions', label: 'Funções e Cargos', status: getStatus('functions', globalFetched) },
+        { id: 'projects', label: 'Obras e Projetos', status: getStatus('projects', globalFetched) },
+        { id: 'employees', label: 'Funcionários', status: getStatus('employees', globalFetched) },
+        { id: 'teams', label: 'Equipes e Lideranças', status: getStatus('teams', teamsFetched) },
+        { id: 'reports', label: 'Relatórios Diários (RDO)', status: getStatus('reports', fetchedReports) },
+        { id: 'workStages', label: 'Etapas de Obra', status: getStatus('workStages', fetchedStages) },
+        { id: 'production', label: 'Dados de Produção', status: getStatus('production', globalFetched) },
+        { id: 'timeRecords', label: 'Ponto Eletrônico', status: getStatus('timeRecords', fetchedTime) },
+        { id: 'costs', label: 'Gestão de Custos', status: getStatus('costs', fetchedCosts) },
+        { id: 'audit', label: 'Logs de Auditoria', status: getStatus('audit', fetchedAudit) },
+        { id: 'viewer3d', label: 'Engenharia 3D', status: getStatus('viewer3d', fetched3d) },
     ];
 });
 
@@ -74,18 +91,24 @@ export const appProgressSignal = computed(() => {
  */
 export const isAppReadySignal = computed(() => {
     const authReady = !isAuthLoadingSignal.value;
-    const dataReady = !isLoadingDataSignal.value;
-    const syncReady = !isSyncingInitialDataSignal.value;
-    
-    // O timer de delay agora é apenas para o "wow factor" visual
-    // Não bloqueamos a entrada no sistema se os dados já estiverem prontos
-    const ready = authReady && dataReady && syncReady;
-    
-    if (ready) {
-        console.log("[AppInit] System data is ready.");
-        // Se já estamos prontos, forçamos o delay visual a terminar também
-        if (!minDelayElapsedSignal.value) minDelayElapsedSignal.value = true;
+    const usersReady = hasUsersFetchedSignal.value;
+    const teamsReady = hasTeamsFetchedSignal.value;
+    const globalReady = hasGlobalDataFetchedSignal.value;
+    const dim3Ready = has3dFetchedSignal.value;
+    const reportsReady = hasReportsFetchedSignal.value;
+    const messagesReady = hasSystemMessagesFetchedSignal.value;
+    const timeReady = hasTimeRecordsFetchedSignal.value;
+    const stagesReady = hasWorkStagesFetchedSignal.value;
+    const auditReady = hasAuditFetchedSignal.value;
+    const costsReady = hasCostsFetchedSignal.value;
+
+    const ready = authReady && usersReady && teamsReady && globalReady &&
+        dim3Ready && reportsReady && messagesReady && timeReady &&
+        stagesReady && auditReady && costsReady;
+
+    if (ready && !minDelayElapsedSignal.value) {
+        minDelayElapsedSignal.value = true;
     }
-    
+
     return ready;
 });

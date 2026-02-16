@@ -50,4 +50,5 @@ export interface MapElementRepository {
   ): Promise<MapElementTechnicalData[]>;
   delete(id: string): Promise<boolean>;
   deleteByProject(projectId: string): Promise<number>;
+  getProjectCompanyId(projectId: string): Promise<string | null>;
 }

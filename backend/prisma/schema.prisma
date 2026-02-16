@@ -1,5 +1,6 @@
 generator client {
   provider      = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
   binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
@@ -807,8 +808,22 @@ model Model3DAnchor {
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, projectId, towerId])
-  @@map("model_3d_anchors")
 }
+
+model DataIngestion {
+  id               String   @id @default(uuid())
+  filename         String
+  fileType         String   @map("file_type") // CSV, EXCEL, TXT, SVG
+  status           String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  recordsProcessed Int      @default(0) @map("records_processed")
+  errorMessage     String?  @map("error_message")
+  metadata         Json?    @default("{}") // Stores graph configs or generic data
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("data_ingestions")
+}
+
 
 model ProductionCategory {
   id          String               @id @default(uuid())

@@ -1,40 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib";
-import { getCurrentSession } from "@/lib/auth/session";
+import { NextRequest } from "next/server";
+import { requireAuth } from "@/lib/auth/session";
+import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
+import { PrismaWorkStageRepository } from "@/modules/work-stages/domain/work-stage.repository";
+
+const repository = new PrismaWorkStageRepository();
 
 // PUT: Reorder stages
 export async function PUT(req: NextRequest) {
   try {
-    const session = await getCurrentSession();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    await requireAuth();
     const body = await req.json();
     const { updates } = body;
-    // updates: { id: string, displayOrder: number }[]
 
     if (!Array.isArray(updates)) {
-      return NextResponse.json(
-        { error: "Invalid data format" },
-        { status: 400 },
-      );
+      return ApiResponse.badRequest("O formato dos dados é inválido. Esperado um array de atualizações.");
     }
 
-    // Update each stage's displayOrder
-    for (const update of updates) {
-      await (prisma as any).workStage.update({
-        where: { id: update.id },
-        data: { displayOrder: update.displayOrder },
-      });
-    }
+    await repository.reorder(updates);
 
-    return NextResponse.json({ success: true });
+    return ApiResponse.json({ success: true }, "Etapas reordenadas com sucesso");
   } catch (error) {
-    console.error("Error reordering work stages:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleApiError(error, "src/app/api/v1/work_stages/reorder/route.ts#PUT");
   }
 }

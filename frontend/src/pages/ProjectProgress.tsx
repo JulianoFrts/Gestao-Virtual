@@ -318,8 +318,7 @@ export const DEFAULT_PHASES: PhaseConfig[] = [
   },
 ];
 
-// Token Access
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPEBOX_API_KEY;
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_API_KEY;
 
 // Model URL
 const TOWER_MODEL_URL = `${window.location.origin}/models/towers/scene.gltf`;
@@ -565,7 +564,7 @@ export default function ProjectProgress() {
   const canSeeExecutivePanel =
     profile?.isSystemAdmin ||
     (profile?.permissionsMap as Record<string, boolean>)?.[
-      "system.All_Access"
+    "system.All_Access"
     ] ||
     ["SUPER_ADMIN_GOD", "HELPER_SYSTEM"].includes(profile?.role || "");
 
@@ -715,7 +714,7 @@ export default function ProjectProgress() {
           const s = settingsData.settings as Record<string, unknown>;
           if (s.scale) setScale(s.scale as number);
           if (s.towerElevation) setTowerElevation(s.towerElevation as number);
-          
+
           if (s.phases) {
             const loadedPhases = s.phases as PhaseConfig[];
             // Merge with defaults to ensure new fields (offsets) exist
@@ -725,7 +724,7 @@ export default function ProjectProgress() {
             });
             setPhases(mergedPhases);
           }
-          
+
           if (s.connections)
             setConnections(s.connections as { from: string; to: string }[]);
         }
@@ -768,14 +767,19 @@ export default function ProjectProgress() {
         });
 
         // 2. Save Tower Data - Batch POST (Upsert)
-        const towersToUpdate = towers.map((t, index) => {
+        // Ensure no duplicates by externalId (tower name) inside the same batch
+        const towersMap = new Map();
+
+        towers.forEach((t, index) => {
+          if (!t.name) return; // Skip invalid towers
+
           const groundElevation = individualAltitudes[t.name];
-          return {
+          const entry = {
             projectId: selectedProjectId,
-            externalId: t.name,
+            externalId: String(t.name),
             name: t.name,
             elementType: t.elementType || "TOWER",
-            type: t.type, // PERSIST THE SPECIFIC TYPE
+            type: t.type,
             latitude: t.coordinates.lat,
             longitude: t.coordinates.lng,
             elevation: t.coordinates.altitude,
@@ -792,13 +796,22 @@ export default function ProjectProgress() {
               ...(t.metadata || {}),
             },
           };
+
+          // If we have duplicates in the frontend list, the last one wins
+          towersMap.set(entry.externalId, entry);
         });
 
+        const towersToUpdate = Array.from(towersMap.values());
+
         if (towersToUpdate.length > 0) {
+          console.log(`[ProjectProgress] Sending batch update for ${towersToUpdate.length} towers/elements...`);
           const { error: towerError } = await orionApi
             .from("tower_technical_data")
             .insert(towersToUpdate);
-          if (towerError) throw new Error(towerError.message);
+          if (towerError) {
+            console.error("[ProjectProgress] Tower save error details:", towerError);
+            throw new Error(towerError.message);
+          }
         }
 
         if (!isAuto) {
@@ -885,7 +898,7 @@ export default function ProjectProgress() {
           position: [lng, lat, finalZ + 0.2] as [number, number, number], // Tiny offset to prevent clipping
           id: Date.now(),
         };
-        console.log("Debug Point Added:", point); 
+        console.log("Debug Point Added:", point);
         setDebugPoints((prev) => [...prev, point]);
         showToast({
           title: "Ponto de Debug Adicionado",
@@ -1049,10 +1062,10 @@ export default function ProjectProgress() {
               Math.cos((n.coordinates.lat * Math.PI) / 180);
             const x =
               Math.cos((tower.coordinates.lat * Math.PI) / 180) *
-                Math.sin((n.coordinates.lat * Math.PI) / 180) -
+              Math.sin((n.coordinates.lat * Math.PI) / 180) -
               Math.sin((tower.coordinates.lat * Math.PI) / 180) *
-                Math.cos((n.coordinates.lat * Math.PI) / 180) *
-                Math.cos((dLon * Math.PI) / 180);
+              Math.cos((n.coordinates.lat * Math.PI) / 180) *
+              Math.cos((dLon * Math.PI) / 180);
 
             const bearing = Math.atan2(y, x) * (180 / Math.PI);
             // Pointing arms perpendicular to the line.
@@ -1068,10 +1081,10 @@ export default function ProjectProgress() {
                 Math.cos((towerN.coordinates.lat * Math.PI) / 180);
               const x =
                 Math.cos((tower.coordinates.lat * Math.PI) / 180) *
-                  Math.sin((towerN.coordinates.lat * Math.PI) / 180) -
+                Math.sin((towerN.coordinates.lat * Math.PI) / 180) -
                 Math.sin((tower.coordinates.lat * Math.PI) / 180) *
-                  Math.cos((towerN.coordinates.lat * Math.PI) / 180) *
-                  Math.cos((dLon * Math.PI) / 180);
+                Math.cos((towerN.coordinates.lat * Math.PI) / 180) *
+                Math.cos((dLon * Math.PI) / 180);
               return Math.atan2(y, x) * (180 / Math.PI);
             });
 
@@ -1163,17 +1176,17 @@ export default function ProjectProgress() {
     // Accumulators for cross-span distance persistence
     const spacerAccumulatedDists: Record<string, number> = {};
     const sphereAccumulatedDists: Record<string, number> = {};
-    
+
     // Seed accumulators with a deterministic stagger based on phase index
     // This avoids all phases placing elements at the same distance, creating "vertical columns"
     phases.forEach((p, idx) => {
-        const staggerFactor = (idx % 3) / 3; // 0, 0.33, 0.66
-        if (p.spacerInterval) {
-            spacerAccumulatedDists[p.id] = p.spacerInterval * staggerFactor;
-        }
-        if (p.signalSphereInterval) {
-            sphereAccumulatedDists[`${p.id}-spheres`] = p.signalSphereInterval * ((idx + 1) % 3 / 3);
-        }
+      const staggerFactor = (idx % 3) / 3; // 0, 0.33, 0.66
+      if (p.spacerInterval) {
+        spacerAccumulatedDists[p.id] = p.spacerInterval * staggerFactor;
+      }
+      if (p.signalSphereInterval) {
+        sphereAccumulatedDists[`${p.id}-spheres`] = p.signalSphereInterval * ((idx + 1) % 3 / 3);
+      }
     });
     if (connections.length > 0) {
       const towerMap = new Map(
@@ -1204,10 +1217,10 @@ export default function ProjectProgress() {
               Math.cos((end.coordinates.lat * Math.PI) / 180);
             const x =
               Math.cos((start.coordinates.lat * Math.PI) / 180) *
-                Math.sin((end.coordinates.lat * Math.PI) / 180) -
+              Math.sin((end.coordinates.lat * Math.PI) / 180) -
               Math.sin((start.coordinates.lat * Math.PI) / 180) *
-                Math.cos((end.coordinates.lat * Math.PI) / 180) *
-                Math.cos((dLon * Math.PI) / 180);
+              Math.cos((end.coordinates.lat * Math.PI) / 180) *
+              Math.cos((dLon * Math.PI) / 180);
             const bearing = Math.atan2(y, x);
             const perpAngle = bearing + Math.PI / 2;
             const metersToLat = 1 / 111111;
@@ -1260,91 +1273,91 @@ export default function ProjectProgress() {
               const generateAnchorStructure = (center: { x: number; y: number; z: number }) => {
                 const sSize = (phase.spacerSize || 1.1) * 1.2; // Slightly larger at anchor
                 const anchorSpacing = spacing || 0.4;
-                
+
                 if (count === 4) {
-                    // Calculate 4 corners relative to center
-                    const corners = [0, 1, 2, 3].map((k) => {
-                        const bH = k === 0 || k === 2 ? -anchorSpacing / 2 : anchorSpacing / 2;
-                        const bV = k === 0 || k === 1 ? anchorSpacing / 2 : -anchorSpacing / 2;
-                        const kLat = Math.cos(perpAngle) * (bH * sSize) * metersToLat;
-                        const kLng = Math.sin(perpAngle) * (bH * sSize) * metersToLng;
-                        return [center.x + kLng, center.y + kLat, center.z + bV * sSize];
-                    });
+                  // Calculate 4 corners relative to center
+                  const corners = [0, 1, 2, 3].map((k) => {
+                    const bH = k === 0 || k === 2 ? -anchorSpacing / 2 : anchorSpacing / 2;
+                    const bV = k === 0 || k === 1 ? anchorSpacing / 2 : -anchorSpacing / 2;
+                    const kLat = Math.cos(perpAngle) * (bH * sSize) * metersToLat;
+                    const kLng = Math.sin(perpAngle) * (bH * sSize) * metersToLng;
+                    return [center.x + kLng, center.y + kLat, center.z + bV * sSize];
+                  });
 
-                    // Diagonal 1 (Black)
-                    newSpacers.push({
-                        path: [corners[0], corners[3]],
-                        color: [0, 0, 0], 
-                        thickness: 0.25,
-                        phaseId: phase.id,
-                    });
+                  // Diagonal 1 (Black)
+                  newSpacers.push({
+                    path: [corners[0], corners[3]],
+                    color: [0, 0, 0],
+                    thickness: 0.25,
+                    phaseId: phase.id,
+                  });
 
-                    // Diagonal 2 (Black)
-                    newSpacers.push({
-                        path: [corners[1], corners[2]],
-                        color: [0, 0, 0],
-                        thickness: 0.25,
-                        phaseId: phase.id,
-                    });
+                  // Diagonal 2 (Black)
+                  newSpacers.push({
+                    path: [corners[1], corners[2]],
+                    color: [0, 0, 0],
+                    thickness: 0.25,
+                    phaseId: phase.id,
+                  });
 
-                    // Box Outline (Closing the square)
-                    newSpacers.push({
-                        path: [corners[0], corners[1]], // Top
-                        color: [0, 0, 0], thickness: 0.25, phaseId: phase.id,
-                    });
-                    newSpacers.push({
-                        path: [corners[1], corners[2]], // Right
-                        color: [0, 0, 0], thickness: 0.25, phaseId: phase.id,
-                    });
-                     newSpacers.push({
-                        path: [corners[2], corners[3]], // Bottom
-                        color: [0, 0, 0], thickness: 0.25, phaseId: phase.id,
-                    });
-                     newSpacers.push({
-                        path: [corners[3], corners[0]], // Left
-                        color: [0, 0, 0], thickness: 0.25, phaseId: phase.id,
-                    });
+                  // Box Outline (Closing the square)
+                  newSpacers.push({
+                    path: [corners[0], corners[1]], // Top
+                    color: [0, 0, 0], thickness: 0.25, phaseId: phase.id,
+                  });
+                  newSpacers.push({
+                    path: [corners[1], corners[2]], // Right
+                    color: [0, 0, 0], thickness: 0.25, phaseId: phase.id,
+                  });
+                  newSpacers.push({
+                    path: [corners[2], corners[3]], // Bottom
+                    color: [0, 0, 0], thickness: 0.25, phaseId: phase.id,
+                  });
+                  newSpacers.push({
+                    path: [corners[3], corners[0]], // Left
+                    color: [0, 0, 0], thickness: 0.25, phaseId: phase.id,
+                  });
 
-                    // Central Rod (Orange Arrow) pointing UP to the tower arm
-                    // It needs to go from the lowered center back up to the original center
-                    newSpacers.push({
-                        path: [
-                            [center.x, center.y, center.z], 
-                            [center.x, center.y, center.z + 2.0], // Long rod up to tower
-                        ],
-                        color: [255, 140, 0], // Orange
-                        thickness: 0.6,
-                        phaseId: phase.id,
-                    });
+                  // Central Rod (Orange Arrow) pointing UP to the tower arm
+                  // It needs to go from the lowered center back up to the original center
+                  newSpacers.push({
+                    path: [
+                      [center.x, center.y, center.z],
+                      [center.x, center.y, center.z + 2.0], // Long rod up to tower
+                    ],
+                    color: [255, 140, 0], // Orange
+                    thickness: 0.6,
+                    phaseId: phase.id,
+                  });
 
-                    // Red Tips (Rings)
-                     corners.forEach((corner) => {
-                        newSpacers.push({
-                          path: [corner, [corner[0], corner[1], corner[2] + 0.05]], 
-                          color: [200, 0, 0], // Red
-                          thickness: 0.4, 
-                          phaseId: phase.id,
-                        });
-                      });
+                  // Red Tips (Rings)
+                  corners.forEach((corner) => {
+                    newSpacers.push({
+                      path: [corner, [corner[0], corner[1], corner[2] + 0.05]],
+                      color: [200, 0, 0], // Red
+                      thickness: 0.4,
+                      phaseId: phase.id,
+                    });
+                  });
 
                 } else {
-                    // Standard small plate for non-4 bundles
-                    // Just a small vertical bar to mark the spot
-                     newSpacers.push({
-                        path: [
-                            [center.x, center.y, center.z - 0.5],
-                            [center.x, center.y, center.z + 0.5],
-                        ],
-                        color: [0, 0, 0],
-                        thickness: 0.3,
-                        phaseId: phase.id,
-                    });
+                  // Standard small plate for non-4 bundles
+                  // Just a small vertical bar to mark the spot
+                  newSpacers.push({
+                    path: [
+                      [center.x, center.y, center.z - 0.5],
+                      [center.x, center.y, center.z + 0.5],
+                    ],
+                    color: [0, 0, 0],
+                    thickness: 0.3,
+                    phaseId: phase.id,
+                  });
                 }
               };
 
               // Apply a LARGE downward shift for the anchor structure (-1.5m)
               // This simulates the insulator string hanging down
-              const anchorZOffset = count === 4 ? -1.5 : 0; 
+              const anchorZOffset = count === 4 ? -1.5 : 0;
               generateAnchorStructure({ ...cp1, z: cp1.z + anchorZOffset });
               generateAnchorStructure({ ...cp2, z: cp2.z + anchorZOffset });
 
@@ -1354,17 +1367,17 @@ export default function ProjectProgress() {
               const groundDist = Math.sqrt(
                 Math.pow(
                   dx *
-                    111111 *
-                    Math.cos((start.coordinates.lat * Math.PI) / 180),
+                  111111 *
+                  Math.cos((start.coordinates.lat * Math.PI) / 180),
                   2,
                 ) + Math.pow(dy * 111111, 2),
               );
 
               const uLng = dx / Math.max(0.1, groundDist);
               const uLat = dy / Math.max(0.1, groundDist);
-              
+
               // Reduced gap to make cables touch the rings
-              const termOffset = 0.6; 
+              const termOffset = 0.6;
 
               const cp1_short = {
                 x: cp1.x + uLng * termOffset,
@@ -1405,23 +1418,23 @@ export default function ProjectProgress() {
               ) {
                 const phaseKey = `${phase.id}`;
                 if (spacerAccumulatedDists[phaseKey] === undefined) {
-                    spacerAccumulatedDists[phaseKey] = 0;
+                  spacerAccumulatedDists[phaseKey] = 0;
                 }
 
                 const safetyBuffer = 25; // meters
                 let placedInThisSpan = false;
 
                 for (let j = 1; j < centerPath.length - 1; j++) {
-                  const segDist = segmentDists[j] - segmentDists[j-1];
+                  const segDist = segmentDists[j] - segmentDists[j - 1];
                   spacerAccumulatedDists[phaseKey] += segDist;
 
                   const currentDistInSpan = segmentDists[j];
-                  
+
                   if (spacerAccumulatedDists[phaseKey] >= phase.spacerInterval) {
                     if (currentDistInSpan >= safetyBuffer && currentDistInSpan <= (totalSpanDist - safetyBuffer)) {
                       const pCurr = centerPath[j];
                       placedInThisSpan = true;
-                      
+
                       const sSize = phase.spacerSize || 1.1;
                       const polymericColor = phase.spacerColor || [180, 180, 185]; // Sync with config or default to professional grey
                       const clampThickness = (phase.spacerThickness || 0.2) * 1.5;
@@ -1432,14 +1445,14 @@ export default function ProjectProgress() {
                         let bH = 0;
                         let bV = 0;
                         if (count === 4) {
-                           bH = k === 0 || k === 2 ? -spacing / 2 : spacing / 2;
-                           bV = k === 0 || k === 1 ? spacing / 2 : -spacing / 2;
+                          bH = k === 0 || k === 2 ? -spacing / 2 : spacing / 2;
+                          bV = k === 0 || k === 1 ? spacing / 2 : -spacing / 2;
                         } else if (count === 3) {
-                           if (k === 0) { bH = 0; bV = spacing * 0.577; }
-                           else if (k === 1) { bH = -spacing / 2; bV = -spacing * 0.288; }
-                           else { bH = spacing / 2; bV = -spacing * 0.288; }
+                          if (k === 0) { bH = 0; bV = spacing * 0.577; }
+                          else if (k === 1) { bH = -spacing / 2; bV = -spacing * 0.288; }
+                          else { bH = spacing / 2; bV = -spacing * 0.288; }
                         } else if (count === 2) {
-                           bH = k === 0 ? -spacing / 2 : spacing / 2;
+                          bH = k === 0 ? -spacing / 2 : spacing / 2;
                         }
                         const kLat = Math.cos(perpAngle) * (bH * sSize) * metersToLat;
                         const kLng = Math.sin(perpAngle) * (bH * sSize) * metersToLng;
@@ -1451,7 +1464,7 @@ export default function ProjectProgress() {
                         for (let k = 0; k < count; k++) {
                           const p1 = conductorPoints[k];
                           const p2 = conductorPoints[(k + 1) % count];
-                          
+
                           // THE ARM (Structural)
                           newSpacers.push({
                             path: [p1, p2],
@@ -1461,22 +1474,22 @@ export default function ProjectProgress() {
                           });
 
                           // ADD "SHEDS" (Ribs) - Mimicking polymeric insulators
-                          const armVec = [p2[0]-p1[0], p2[1]-p1[1], p2[2]-p1[2]];
+                          const armVec = [p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]];
                           const shedCount = 3;
-                          for(let s=1; s<=shedCount; s++){
-                             const t = s / (shedCount + 1);
-                             const shedPos = [p1[0] + armVec[0]*t, p1[1] + armVec[1]*t, p1[2] + armVec[2]*t];
-                             const shedSize = (phase.spacerThickness || 0.2) * 2.5;
-                             // Visual "ring" shed
-                             newSpacers.push({
-                                path: [
-                                   [shedPos[0], shedPos[1], shedPos[2] - 0.05],
-                                   [shedPos[0], shedPos[1], shedPos[2] + 0.05]
-                                ],
-                                color: polymericColor.map(c => Math.max(0, c - 40)) as [number, number, number], // Slightly darker version for sheds
-                                thickness: shedSize,
-                                phaseId: phase.id
-                             });
+                          for (let s = 1; s <= shedCount; s++) {
+                            const t = s / (shedCount + 1);
+                            const shedPos = [p1[0] + armVec[0] * t, p1[1] + armVec[1] * t, p1[2] + armVec[2] * t];
+                            const shedSize = (phase.spacerThickness || 0.2) * 2.5;
+                            // Visual "ring" shed
+                            newSpacers.push({
+                              path: [
+                                [shedPos[0], shedPos[1], shedPos[2] - 0.05],
+                                [shedPos[0], shedPos[1], shedPos[2] + 0.05]
+                              ],
+                              color: polymericColor.map(c => Math.max(0, c - 40)) as [number, number, number], // Slightly darker version for sheds
+                              thickness: shedSize,
+                              phaseId: phase.id
+                            });
                           }
                         }
                       } else if (count === 2) {
@@ -1491,12 +1504,12 @@ export default function ProjectProgress() {
 
                       // ADD CLAMPS (Connection points)
                       conductorPoints.forEach(cp => {
-                         newSpacers.push({
-                            path: [cp, [cp[0], cp[1], cp[2] + 0.05]],
-                            color: [40, 40, 40], // Darker clamp
-                            thickness: clampThickness * 2,
-                            phaseId: phase.id
-                         });
+                        newSpacers.push({
+                          path: [cp, [cp[0], cp[1], cp[2] + 0.05]],
+                          color: [40, 40, 40], // Darker clamp
+                          thickness: clampThickness * 2,
+                          phaseId: phase.id
+                        });
                       });
 
                       spacerAccumulatedDists[phaseKey] = 0;
@@ -1512,57 +1525,57 @@ export default function ProjectProgress() {
                   const safeIdx = Math.max(1, Math.min(centerPath.length - 2, midIdx));
                   const pCurr = centerPath[safeIdx];
                   newSpacers.push({
-                      path: [[pCurr.x, pCurr.y, pCurr.z - 0.3], [pCurr.x, pCurr.y, pCurr.z + 0.3]],
-                      color: phase.spacerColor || [180, 180, 185], 
-                      thickness: (phase.spacerThickness || 0.2) * 2,
-                      phaseId: phase.id,
+                    path: [[pCurr.x, pCurr.y, pCurr.z - 0.3], [pCurr.x, pCurr.y, pCurr.z + 0.3]],
+                    color: phase.spacerColor || [180, 180, 185],
+                    thickness: (phase.spacerThickness || 0.2) * 2,
+                    phaseId: phase.id,
                   });
                 }
               }
 
               // Dedicated Signal Spheres Logic: FIXED 2 OR 3 UNITS PER SPAN
               if (phase.signalSpheresEnabled) {
-                  const phaseIndex = phases.findIndex(p => p.id === phase.id);
-                  // Rule: if span > 400m use 3 spheres, else 2.
-                  const sphereCount = totalSpanDist > 400 ? 3 : 2;
-                  
-                  // Proportional placement factors
-                  const basePositions = sphereCount === 3
-                    ? [0.25, 0.50, 0.75]
-                    : [0.33, 0.66];
+                const phaseIndex = phases.findIndex(p => p.id === phase.id);
+                // Rule: if span > 400m use 3 spheres, else 2.
+                const sphereCount = totalSpanDist > 400 ? 3 : 2;
 
-                  const positions = basePositions.map(p => {
-                      const jitter = ((phaseIndex % 3) - 1) * 0.05; // -0.05, 0, +0.05 per phase
-                      return p + jitter;
-                  });
+                // Proportional placement factors
+                const basePositions = sphereCount === 3
+                  ? [0.25, 0.50, 0.75]
+                  : [0.33, 0.66];
 
-                  positions.forEach(ratio => {
-                      const targetDist = totalSpanDist * ratio;
-                      let found = false;
-                      for (let j = 1; j < centerPath.length; j++) {
-                          if (segmentDists[j] >= targetDist && !found) {
-                              const pPrev = centerPath[j - 1];
-                              const pCurr = centerPath[j];
-                              
-                              // Interpolate within segment for precise placement
-                              const segLen = segmentDists[j] - segmentDists[j-1];
-                              const t = segLen > 0 ? (targetDist - segmentDists[j-1]) / segLen : 0;
-                              
-                              const interpNode = {
-                                  x: pPrev.x + (pCurr.x - pPrev.x) * t,
-                                  y: pPrev.y + (pCurr.y - pPrev.y) * t,
-                                  z: pPrev.z + (pCurr.z - pPrev.z) * t
-                              };
+                const positions = basePositions.map(p => {
+                  const jitter = ((phaseIndex % 3) - 1) * 0.05; // -0.05, 0, +0.05 per phase
+                  return p + jitter;
+                });
 
-                              newSignalSpheres.push({
-                                  position: [interpNode.x, interpNode.y, interpNode.z + 0.22],
-                                  color: phase.signalSphereColor || [255, 140, 0],
-                                  radius: phase.signalSphereSize || 0.6
-                              });
-                              found = true;
-                          }
-                      }
-                  });
+                positions.forEach(ratio => {
+                  const targetDist = totalSpanDist * ratio;
+                  let found = false;
+                  for (let j = 1; j < centerPath.length; j++) {
+                    if (segmentDists[j] >= targetDist && !found) {
+                      const pPrev = centerPath[j - 1];
+                      const pCurr = centerPath[j];
+
+                      // Interpolate within segment for precise placement
+                      const segLen = segmentDists[j] - segmentDists[j - 1];
+                      const t = segLen > 0 ? (targetDist - segmentDists[j - 1]) / segLen : 0;
+
+                      const interpNode = {
+                        x: pPrev.x + (pCurr.x - pPrev.x) * t,
+                        y: pPrev.y + (pCurr.y - pPrev.y) * t,
+                        z: pPrev.z + (pCurr.z - pPrev.z) * t
+                      };
+
+                      newSignalSpheres.push({
+                        position: [interpNode.x, interpNode.y, interpNode.z + 0.22],
+                        color: phase.signalSphereColor || [255, 140, 0],
+                        radius: phase.signalSphereSize || 0.6
+                      });
+                      found = true;
+                    }
+                  }
+                });
               }
 
               for (let i = 0; i < count; i++) {
@@ -1695,92 +1708,92 @@ export default function ProjectProgress() {
   // 3D Tower Scanning Logic
   const scanTowerPoints = async () => {
     try {
-        console.log("Iniciando scan da torre:", TOWER_MODEL_URL);
-        const gltf = await load(TOWER_MODEL_URL, GLTFLoader);
-        
-        // Access raw nodes from the GLTF JSON structure
-        const nodes = gltf.json?.nodes || []; 
-        
-        if (!nodes || nodes.length === 0) {
-            throw new Error("Nenhum nó encontrado no modelo GLTF.");
+      console.log("Iniciando scan da torre:", TOWER_MODEL_URL);
+      const gltf = await load(TOWER_MODEL_URL, GLTFLoader);
+
+      // Access raw nodes from the GLTF JSON structure
+      const nodes = gltf.json?.nodes || [];
+
+      if (!nodes || nodes.length === 0) {
+        throw new Error("Nenhum nó encontrado no modelo GLTF.");
+      }
+
+      console.log("Nós encontrados:", nodes);
+
+      const candidates: { x: number; y: number; z: number }[] = [];
+
+      // Extract translation from nodes
+      nodes.forEach((node: any) => {
+        // Check for translation property [x, y, z]
+        if (node.translation && Array.isArray(node.translation) && node.translation.length >= 2) {
+          candidates.push({
+            x: node.translation[0],
+            y: node.translation[1], // GLTF standard is Y-UP usually
+            z: node.translation[2] || 0
+          });
         }
+      });
 
-        console.log("Nós encontrados:", nodes);
-
-        const candidates: { x: number; y: number; z: number }[] = [];
-
-        // Extract translation from nodes
-        nodes.forEach((node: any) => {
-             // Check for translation property [x, y, z]
-             if (node.translation && Array.isArray(node.translation) && node.translation.length >= 2) {
-                 candidates.push({
-                     x: node.translation[0],
-                     y: node.translation[1], // GLTF standard is Y-UP usually
-                     z: node.translation[2] || 0
-                 });
-             }
-        });
-
-        if (candidates.length === 0) {
-             showToast({ 
-                title: "Sem dados de posição", 
-                description: "Os nós do modelo não possuem propriedade 'translation'.", 
-                variant: "destructive" 
-             });
-             return;
-        }
-
-        // Sort by Height.
-        // We need to determine if UP is Y or Z.
-        // Usually GLTF is Y-up. Let's check max variance.
-        const yRange = Math.max(...candidates.map(c => c.y)) - Math.min(...candidates.map(c => c.y));
-        const zRange = Math.max(...candidates.map(c => c.z)) - Math.min(...candidates.map(c => c.z));
-        
-        const isZUp = zRange > yRange * 2; // Simple heuristic
-        
-        // Sort descending by height (Top to Bottom)
-        candidates.sort((a, b) => isZUp ? b.z - a.z : b.y - a.y);
-
-        console.log("Candidatos ordenados (Topo -> Base):", candidates);
-
-        // Update Phases
-        const newPhases = [...phases];
-
-        // Helper to apply offsets to a phase
-        const applyToPhase = (index: number, point: {x: number, y: number, z: number}) => {
-            if (newPhases[index]) {
-                const height = isZUp ? point.z : point.y;
-                const width = point.x;
-
-                newPhases[index].verticalOffset = height;
-                newPhases[index].horizontalOffset = Math.abs(width);
-            }
-        };
-
-        // Assign points to phases (A, B, C)
-        if (candidates.length > 0) applyToPhase(0, candidates[0]);
-        if (candidates.length > 2) applyToPhase(1, candidates[2]);
-        if (candidates.length > 4) applyToPhase(2, candidates[4]);
-
-        setPhases(newPhases);
-
-        // Update Scan Visualization Points (Red Dots)
-        setDebugPoints(candidates.map(c => ({ 
-            position: [c.x, c.y, c.z] 
-        })));
-        
+      if (candidates.length === 0) {
         showToast({
-            title: "Scan Concluído",
-            description: `${candidates.length} pontos detectados. Fases ajustadas automaticamente.`,
+          title: "Sem dados de posição",
+          description: "Os nós do modelo não possuem propriedade 'translation'.",
+          variant: "destructive"
         });
-        
+        return;
+      }
+
+      // Sort by Height.
+      // We need to determine if UP is Y or Z.
+      // Usually GLTF is Y-up. Let's check max variance.
+      const yRange = Math.max(...candidates.map(c => c.y)) - Math.min(...candidates.map(c => c.y));
+      const zRange = Math.max(...candidates.map(c => c.z)) - Math.min(...candidates.map(c => c.z));
+
+      const isZUp = zRange > yRange * 2; // Simple heuristic
+
+      // Sort descending by height (Top to Bottom)
+      candidates.sort((a, b) => isZUp ? b.z - a.z : b.y - a.y);
+
+      console.log("Candidatos ordenados (Topo -> Base):", candidates);
+
+      // Update Phases
+      const newPhases = [...phases];
+
+      // Helper to apply offsets to a phase
+      const applyToPhase = (index: number, point: { x: number, y: number, z: number }) => {
+        if (newPhases[index]) {
+          const height = isZUp ? point.z : point.y;
+          const width = point.x;
+
+          newPhases[index].verticalOffset = height;
+          newPhases[index].horizontalOffset = Math.abs(width);
+        }
+      };
+
+      // Assign points to phases (A, B, C)
+      if (candidates.length > 0) applyToPhase(0, candidates[0]);
+      if (candidates.length > 2) applyToPhase(1, candidates[2]);
+      if (candidates.length > 4) applyToPhase(2, candidates[4]);
+
+      setPhases(newPhases);
+
+      // Update Scan Visualization Points (Red Dots)
+      setDebugPoints(candidates.map(c => ({
+        position: [c.x, c.y, c.z]
+      })));
+
+      showToast({
+        title: "Scan Concluído",
+        description: `${candidates.length} pontos detectados. Fases ajustadas automaticamente.`,
+      });
+
     } catch (error) {
-        console.error("Erro ao escanear torre:", error);
-        showToast({
-            title: "Erro no Scan",
-            description: "Não foi possível ler a geometria da torre.",
-            variant: "destructive"
-        });
+      console.error("Erro ao escanear torre:", error);
+      showToast({
+        title: "Erro no Scan",
+        description: "Não foi possível ler a geometria da torre.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -1997,7 +2010,7 @@ export default function ProjectProgress() {
       new ScatterplotLayer({
         id: "debug-points-layer",
         data: debugPoints || [],
-        getPosition: (d: { position: [number, number, number] }) => (Array.isArray(d?.position) && d.position.length >= 3) ? d.position : [0,0,0],
+        getPosition: (d: { position: [number, number, number] }) => (Array.isArray(d?.position) && d.position.length >= 3) ? d.position : [0, 0, 0],
         getFillColor: [255, 59, 48, 255], // More vibrant red
         getLineColor: [255, 255, 255, 120], // Brighter outline
         getRadius: 1.8,
@@ -2024,10 +2037,10 @@ export default function ProjectProgress() {
           coordinates: { lng: number; lat: number };
           name: string;
         }) => [
-          d.coordinates.lng,
-          d.coordinates.lat,
-          individualAltitudes[d.name] || 0,
-        ],
+            d.coordinates.lng,
+            d.coordinates.lat,
+            individualAltitudes[d.name] || 0,
+          ],
         getFillColor: [255, 255, 255, 40], // Faint white
         getLineColor: [255, 255, 255, 120], // Better visibility for the ring
         getRadius: 16,
@@ -2046,10 +2059,10 @@ export default function ProjectProgress() {
           coordinates: { lng: number; lat: number };
           name: string;
         }) => [
-          d.coordinates.lng,
-          d.coordinates.lat,
-          individualAltitudes[d.name] || 0,
-        ],
+            d.coordinates.lng,
+            d.coordinates.lat,
+            individualAltitudes[d.name] || 0,
+          ],
         getFillColor: (_d: { name: string }) =>
           towerElevation < -0.1 ? [255, 69, 58, 160] : [52, 199, 89, 160], // Apple Design Colors (System Red/Green)
         getLineColor: (_d: { name: string }) =>
@@ -2089,14 +2102,14 @@ export default function ProjectProgress() {
           coordinates: { lng: number; lat: number; altitude: number };
           name: string;
         }) => [
-          d.coordinates.lng,
-          d.coordinates.lat,
-          (individualAltitudes[d.name] !== undefined
-            ? individualAltitudes[d.name]
-            : d.coordinates.altitude || 0) +
+            d.coordinates.lng,
+            d.coordinates.lat,
+            (individualAltitudes[d.name] !== undefined
+              ? individualAltitudes[d.name]
+              : d.coordinates.altitude || 0) +
             towerElevation +
             2,
-        ],
+          ],
         getText: (d: { name: string }) => d.name,
         getSize: 16,
         getAngle: 0,
@@ -2137,15 +2150,15 @@ export default function ProjectProgress() {
           coordinates: { lng: number; lat: number; altitude: number };
           name: string;
         }) => [
-          d.coordinates.lng,
-          d.coordinates.lat,
-          (individualAltitudes[d.name] !== undefined
-            ? individualAltitudes[d.name]
-            : d.coordinates.altitude || 0) +
+            d.coordinates.lng,
+            d.coordinates.lat,
+            (individualAltitudes[d.name] !== undefined
+              ? individualAltitudes[d.name]
+              : d.coordinates.altitude || 0) +
             towerElevation -
             48 * (scale / 50) +
             0.1,
-        ],
+          ],
         getText: (d: { name: string }) => d.name,
         getSize: 10,
         getAngle: 0,
@@ -2189,7 +2202,7 @@ export default function ProjectProgress() {
         pickable: true,
         material: {
           ambient: 0.6, // Increased for visibility
-          diffuse: 0.4, 
+          diffuse: 0.4,
           shininess: 64,
           specularColor: [255, 255, 255]
         },
@@ -2225,7 +2238,7 @@ export default function ProjectProgress() {
       new ScatterplotLayer({
         id: "debug-points-glow",
         data: debugPoints || [],
-        getPosition: (d: { position: [number, number, number] }) => (Array.isArray(d?.position) && d.position.length >= 3) ? d.position : [0,0,0],
+        getPosition: (d: { position: [number, number, number] }) => (Array.isArray(d?.position) && d.position.length >= 3) ? d.position : [0, 0, 0],
         getFillColor: [255, 50, 50, 60],
         getRadius: 2.5, // Larger for glow effect
         radiusUnits: "meters",
@@ -2383,8 +2396,8 @@ export default function ProjectProgress() {
                     ? "bg-white/10 border-white/10 shadow-inner"
                     : "text-neutral-500 hover:bg-white/5 hover:border-white/5",
                   "disabled" in tool &&
-                    tool.disabled &&
-                    "opacity-20 cursor-not-allowed grayscale",
+                  tool.disabled &&
+                  "opacity-20 cursor-not-allowed grayscale",
                 )}
                 onClick={tool.onClick}
               >

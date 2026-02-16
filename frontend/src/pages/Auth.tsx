@@ -182,7 +182,7 @@ export default function Auth() {
         <div className="text-center mb-0 flex flex-col items-center">
           <img
             src="/logo-orion.png"
-            alt="Orion Logo"
+            alt="GESTÃO VIRTUAL Logo"
             className="w-[450px] md:w-[500px] h-auto drop-shadow-[0_0_25px_rgba(255,255,255,0.2)] animate-in fade-in zoom-in duration-1000"
           />
         </div>

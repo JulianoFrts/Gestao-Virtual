@@ -1,12 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { ApiResponse, withErrorHandler } from "@/lib/utils/api/response";
+import { requireAuth } from "@/lib/auth/session";
 import fs from "fs/promises";
 import path from "path";
+import { CONSTANTS } from "@/lib/constants";
 
 const STORAGE_PATH = path.join(process.cwd(), "storage");
 
-export const POST = async (request: Request) => {
+export const POST = async (request: NextRequest) => {
   return withErrorHandler(async () => {
+    await requireAuth();
     const formData = await request.formData();
     const file = formData.get("file") as File;
 
@@ -24,18 +27,23 @@ export const POST = async (request: Request) => {
 
     return ApiResponse.created({
       path: relativePath,
-      url: `/api/v1/storage/photos?path=${relativePath}`,
+      url: `${CONSTANTS.API.PREFIX}/storage/photos?path=${relativePath}`,
     });
   });
 };
 
-export const GET = async (request: Request) => {
+export const GET = async (request: NextRequest) => {
   return withErrorHandler(async () => {
+    await requireAuth();
     const { searchParams } = new URL(request.url);
     const filePath = searchParams.get("path");
 
     if (!filePath) {
       return ApiResponse.badRequest("Caminho não fornecido");
+    }
+
+    if (filePath.includes("..")) {
+      return ApiResponse.badRequest("Caminho inválido");
     }
 
     const absolutePath = path.join(STORAGE_PATH, filePath);
@@ -54,7 +62,7 @@ export const GET = async (request: Request) => {
       return new NextResponse(fileBuffer, {
         headers: {
           "Content-Type": contentType,
-          "Cache-Control": "public, max-age=31536000, immutable",
+          "Cache-Control": `public, max-age=${CONSTANTS.API.CACHE.TTL_EXTREME}, immutable`,
         },
       });
     } catch {

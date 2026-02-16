@@ -109,8 +109,8 @@ export function MapboxMap({
     };
 
     // Vite picks from .env.local first (if exists), then .env
-    // Use a single variable name: VITE_MAPEBOX_API_KEY in both files
-    const mapboxToken = import.meta.env.VITE_MAPEBOX_API_KEY;
+    // Use a single variable name: VITE_MAPBOX_API_KEY in both files
+    const mapboxToken = import.meta.env.VITE_MAPBOX_API_KEY;
 
     const defaultConfig: MapConfig = {
         center: { lat: -23.5505, lng: -46.6333 }, // São Paulo

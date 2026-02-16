@@ -5,7 +5,7 @@ import {
 } from "../domain/map-element.repository";
 
 export class MapElementService {
-  constructor(private readonly repository: MapElementRepository) {}
+  constructor(private readonly repository: MapElementRepository) { }
 
   async getElements(
     projectId: string,
@@ -48,13 +48,11 @@ export class MapElementService {
 
     // 2. Fetch companyId from project if missing
     if (!element.companyId && element.projectId) {
-      const { prisma } = await import("@/lib/prisma/client");
-      const project = await prisma.project.findUnique({
-        where: { id: element.projectId },
-        select: { companyId: true },
-      });
-      if (project?.companyId) {
-        element.companyId = project.companyId;
+      const companyId = await this.repository.getProjectCompanyId(
+        element.projectId,
+      );
+      if (companyId) {
+        element.companyId = companyId;
       }
     }
 

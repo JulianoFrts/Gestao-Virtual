@@ -1,5 +1,5 @@
 /**
- * Configuração NextAuth v5 - Orion System Backend
+ * Configuração NextAuth v5 - GESTÃO VIRTUAL
  * Sistema de Autenticação Multi-Modal (Email, Login, MFA)
  */
 
@@ -15,12 +15,12 @@ import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user
 const userRepo = new PrismaUserRepository();
 const permissionService = new UserPermissionService(userRepo as any);
 
-import { SESSION_MAX_AGE, MFA_TIME_STEP, MFA_WINDOW } from "@/lib/constants";
+import { CONSTANTS } from "@/lib/constants";
 
 export const authConfig: NextAuthConfig = {
   session: {
     strategy: "jwt",
-    maxAge: SESSION_MAX_AGE,
+    maxAge: CONSTANTS.AUTH.SESSION.MAX_AGE,
   },
   pages: {
     signIn: "/auth/login",
@@ -177,10 +177,10 @@ async function findAuthCredential(identifier: string) {
 function verifyMfaCode(secret: string | null, code: string): boolean {
   if (!secret || !code) return false;
   try {
-    const time = Math.floor(Date.now() / 1000 / MFA_TIME_STEP);
+    const time = Math.floor(Date.now() / 1000 / CONSTANTS.AUTH.MFA.TIME_STEP);
     const secretBuffer = base32Decode(secret);
 
-    for (let i = -MFA_WINDOW; i <= MFA_WINDOW; i++) {
+    for (let i = -CONSTANTS.AUTH.MFA.WINDOW; i <= CONSTANTS.AUTH.MFA.WINDOW; i++) {
       const counter = time + i;
       const buffer = Buffer.alloc(8);
       buffer.writeBigInt64BE(BigInt(counter));
@@ -193,9 +193,9 @@ function verifyMfaCode(secret: string | null, code: string): boolean {
       const otp = (((hash[offset] & 0x7f) << 24) |
         ((hash[offset + 1] & 0xff) << 16) |
         ((hash[offset + 2] & 0xff) << 8) |
-        (hash[offset + 3] & 0xff)) % 1000000;
+        (hash[offset + 3] & 0xff)) % 1_000_000;
 
-      if (otp.toString().padStart(6, "0") === code) return true;
+      if (otp.toString().padStart(CONSTANTS.AUTH.TOKENS.SHORT_LENGTH, "0") === code) return true;
     }
     return false;
   } catch (error) {

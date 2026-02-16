@@ -6,6 +6,7 @@ import { ProductionProgress } from "../domain/production-progress.entity";
 import { ProductionProgressService } from "./production-progress.service";
 import { ProductionScheduleService } from "./production-schedule.service";
 import { DailyProductionService } from "./daily-production.service";
+import { RecordDailyProductionDTO } from "./dtos/record-daily-production.dto";
 
 export class ProductionService {
   private readonly progressService: ProductionProgressService;
@@ -86,21 +87,9 @@ export class ProductionService {
   // ==========================================
 
   async recordDailyProduction(
-    elementId: string,
-    activityId: string,
-    projectId: string,
-    date: string,
-    data: any,
-    userId: string,
+    dto: RecordDailyProductionDTO,
   ): Promise<ProductionProgress> {
-    return this.dailyService.recordDailyProduction(
-      elementId,
-      activityId,
-      projectId,
-      date,
-      data,
-      userId,
-    );
+    return this.dailyService.recordDailyProduction(dto);
   }
 
   async listDailyProduction(

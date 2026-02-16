@@ -1352,12 +1352,12 @@ export default function Users() {
                                               setEditUserForm((prev) => {
                                                 const newPerms = checked
                                                   ? [
-                                                      ...prev.permissions,
-                                                      perm.code,
-                                                    ]
+                                                    ...prev.permissions,
+                                                    perm.code,
+                                                  ]
                                                   : prev.permissions.filter(
-                                                      (p) => p !== perm.code,
-                                                    );
+                                                    (p) => p !== perm.code,
+                                                  );
                                                 return {
                                                   ...prev,
                                                   permissions: newPerms,
@@ -1892,7 +1892,7 @@ export default function Users() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent
-                className="w-[var(--radix-popover-trigger-width)] p-0 border-white/10 bg-black/95 backdrop-blur-2xl"
+                className="w-[calc(var(--radix-popover-trigger-width) + 2rem)] p-0 border-white/10 bg-black/95 backdrop-blur-2xl"
                 align="start"
               >
                 <Command shouldFilter={false}>
@@ -1907,7 +1907,7 @@ export default function Users() {
                       {usersLoading ? (
                         <div className="flex items-center justify-center p-4 text-muted-foreground">
                           <Loader2 className="w-5 h-5 animate-spin mr-3" />
-                          Buscando na Base Orion...
+                          Buscando na Base GESTÃO VIRTUAL...
                         </div>
                       ) : (
                         "Nenhum usuário encontrado."
@@ -1964,12 +1964,12 @@ export default function Users() {
             className={cn(
               "h-12 px-6 border-white/10 bg-black/40 hover:bg-white/5 transition-all",
               selectedIds.size > 0 &&
-                "border-primary/50 text-primary bg-primary/5",
+              "border-primary/50 text-primary bg-primary/5",
             )}
             onClick={toggleSelectAll}
           >
             {selectedIds.size === sortedUsers.length &&
-            sortedUsers.length > 0 ? (
+              sortedUsers.length > 0 ? (
               <XCircle className="w-5 h-5 mr-2" />
             ) : (
               <CheckSquare className="w-5 h-5 mr-2" />
@@ -2093,7 +2093,7 @@ export default function Users() {
               className={cn(
                 "glass-card hover-lift transition-all duration-500 group overflow-hidden border-white/5 relative bg-white/2 backdrop-blur-xl",
                 user.isBlocked &&
-                  "opacity-60 grayscale-[0.3] border-destructive/10",
+                "opacity-60 grayscale-[0.3] border-destructive/10",
               )}
             >
               <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -mr-32 -mt-32 blur-[80px] group-hover:bg-primary/10 transition-colors duration-700 pointer-events-none" />
@@ -2145,16 +2145,16 @@ export default function Users() {
                           className={cn(
                             "truncate transition-all duration-500",
                             isSuperAdminGod(user as UserScope) &&
-                              "text-[#ea580c] font-black drop-shadow-[0_0_12px_rgba(234,88,12,0.5)] scale-[1.02] origin-left",
+                            "text-[#ea580c] font-black drop-shadow-[0_0_12px_rgba(234,88,12,0.5)] scale-[1.02] origin-left",
                             isGestaoGlobal(user as UserScope) &&
-                              !isSuperAdminGod(user as UserScope) &&
-                              "text-yellow-500 font-extrabold drop-shadow-[0_0_8px_rgba(234,179,8,0.3)]",
+                            !isSuperAdminGod(user as UserScope) &&
+                            "text-yellow-500 font-extrabold drop-shadow-[0_0_8px_rgba(234,179,8,0.3)]",
                             (user.role === "TI_SOFTWARE" ||
                               user.role === "TISOFTWARE") &&
-                              "text-purple-500 font-bold font-mono",
+                            "text-purple-500 font-bold font-mono",
                             isProtectedUser(user as UserScope) &&
-                              !isSuperAdminGod(user as UserScope) &&
-                              "text-orange-400 font-extrabold",
+                            !isSuperAdminGod(user as UserScope) &&
+                            "text-orange-400 font-extrabold",
                           )}
                         >
                           {user.fullName}
@@ -2378,80 +2378,80 @@ export default function Users() {
               userToEditAffiliation?.role,
               userToEditAffiliation as UserScope,
             ) && (
-              <>
-                <div className="space-y-2 animate-in slide-in-from-top-2">
-                  <Label>Obra Vinculada</Label>
-                  <Select
-                    value={editAffiliationForm.projectId}
-                    onValueChange={(val) =>
-                      setEditAffiliationForm({
-                        ...editAffiliationForm,
-                        projectId: val,
-                        siteId: "",
-                      })
-                    }
-                  >
-                    <SelectTrigger className="bg-white/5 border-white/10">
-                      <SelectValue placeholder="Selecione a obra..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Nenhuma Obra</SelectItem>
-                      {projects
-                        .filter(
-                          (p) =>
-                            !editAffiliationForm.companyId ||
-                            editAffiliationForm.companyId === "none" ||
-                            p.companyId === editAffiliationForm.companyId,
-                        )
-                        .map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            {p.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2 animate-in slide-in-from-top-2">
-                  <Label>Canteiro Vinculado</Label>
-                  <Select
-                    value={editAffiliationForm.siteId}
-                    onValueChange={(val) =>
-                      setEditAffiliationForm({
-                        ...editAffiliationForm,
-                        siteId: val,
-                      })
-                    }
-                  >
-                    <SelectTrigger className="bg-white/5 border-white/10">
-                      <SelectValue placeholder="Selecione o canteiro..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Nenhum Canteiro</SelectItem>
-                      {sites
-                        .filter((s) => {
-                          if (
-                            !editAffiliationForm.companyId ||
-                            editAffiliationForm.companyId === "none"
-                          )
-                            return true;
-                          const project = projects.find(
-                            (p) => p.id === s.projectId,
-                          );
-                          return (
-                            project?.companyId === editAffiliationForm.companyId
-                          );
+                <>
+                  <div className="space-y-2 animate-in slide-in-from-top-2">
+                    <Label>Obra Vinculada</Label>
+                    <Select
+                      value={editAffiliationForm.projectId}
+                      onValueChange={(val) =>
+                        setEditAffiliationForm({
+                          ...editAffiliationForm,
+                          projectId: val,
+                          siteId: "",
                         })
-                        .map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name} ({getProjectName(s.projectId, projects)})
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            )}
+                      }
+                    >
+                      <SelectTrigger className="bg-white/5 border-white/10">
+                        <SelectValue placeholder="Selecione a obra..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Nenhuma Obra</SelectItem>
+                        {projects
+                          .filter(
+                            (p) =>
+                              !editAffiliationForm.companyId ||
+                              editAffiliationForm.companyId === "none" ||
+                              p.companyId === editAffiliationForm.companyId,
+                          )
+                          .map((p) => (
+                            <SelectItem key={p.id} value={p.id}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2 animate-in slide-in-from-top-2">
+                    <Label>Canteiro Vinculado</Label>
+                    <Select
+                      value={editAffiliationForm.siteId}
+                      onValueChange={(val) =>
+                        setEditAffiliationForm({
+                          ...editAffiliationForm,
+                          siteId: val,
+                        })
+                      }
+                    >
+                      <SelectTrigger className="bg-white/5 border-white/10">
+                        <SelectValue placeholder="Selecione o canteiro..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Nenhum Canteiro</SelectItem>
+                        {sites
+                          .filter((s) => {
+                            if (
+                              !editAffiliationForm.companyId ||
+                              editAffiliationForm.companyId === "none"
+                            )
+                              return true;
+                            const project = projects.find(
+                              (p) => p.id === s.projectId,
+                            );
+                            return (
+                              project?.companyId === editAffiliationForm.companyId
+                            );
+                          })
+                          .map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name} ({getProjectName(s.projectId, projects)})
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
 
             <div className="flex justify-end gap-3 pt-4 border-t border-white/10 mt-4">
               <Button

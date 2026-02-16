@@ -1,5 +1,5 @@
-import { NextResponse, NextRequest } from "next/server";
-import { handleApiError } from "@/lib/utils/api/response";
+import { NextRequest } from "next/server";
+import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { AnchorService } from "@/modules/map-elements/application/anchor.service";
 import { PrismaAnchorRepository } from "@/modules/map-elements/infrastructure/prisma-anchor.repository";
 
@@ -21,25 +21,25 @@ export async function GET(request: NextRequest) {
       modelUrl,
     });
 
-    return NextResponse.json(result);
+    return ApiResponse.json(result);
   } catch (error) {
     return handleApiError(error, "src/app/api/v1/anchors/route.ts#GET");
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
     const result = await anchorService.saveAnchors(body);
 
-    return NextResponse.json(result);
+    return ApiResponse.json(result);
   } catch (error) {
     return handleApiError(error, "src/app/api/v1/anchors/route.ts#POST");
   }
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
   const companyId = searchParams.get("companyId");
@@ -54,7 +54,7 @@ export async function DELETE(request: Request) {
       towerId,
     });
 
-    return NextResponse.json({ success: true });
+    return ApiResponse.json({ success: true });
   } catch (error) {
     return handleApiError(error, "src/app/api/v1/anchors/route.ts#DELETE");
   }

@@ -17,6 +17,7 @@ import { paginationQuerySchema } from "@/core/common/domain/common.schema";
 import { emptyToUndefined } from "@/lib/utils/validators/schemas";
 import { CompanyService } from "@/modules/companies/application/company.service";
 import { PrismaCompanyRepository } from "@/modules/companies/infrastructure/prisma-company.repository";
+import { VALIDATION, API } from "@/lib/constants";
 
 // Injeção de Dependência (Manual devido ao Next.js Route handlers)
 const companyRepository = new PrismaCompanyRepository();
@@ -27,7 +28,7 @@ const companyService = new CompanyService(companyRepository);
 // =============================================
 
 const createCompanySchema = z.object({
-  name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres").max(255),
+  name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres").max(VALIDATION.STRING.MAX_NAME),
   taxId: z.string().optional(),
   address: z.string().optional(),
   phone: z.string().optional(),
@@ -56,7 +57,7 @@ export async function GET(request: NextRequest) {
     );
     if (!validation.success) return validation.response;
 
-    const { page = 1, limit = 10, search, isActive } = validation.data as any;
+    const { page = API.PAGINATION.DEFAULT_PAGE, limit = API.PAGINATION.DEFAULT_LIMIT, search, isActive } = validation.data as any;
 
     const result = await companyService.listCompanies({
       page,
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
     return ApiResponse.json(result);
   } catch (error) {
     logger.error("Erro ao listar empresas", { error });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/companies/route.ts#GET");
   }
 }
 
@@ -94,6 +95,6 @@ export async function POST(request: NextRequest) {
       return ApiResponse.conflict(error.message);
     }
     logger.error("Erro ao criar empresa", { error });
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/companies/route.ts#POST");
   }
 }

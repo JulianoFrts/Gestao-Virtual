@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, BarChart, Bar, Cell } from 'recharts';
@@ -8,6 +8,8 @@ import { ptBR } from 'date-fns/locale';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { CalendarDays } from 'lucide-react';
+import { orionApi } from '@/integrations/orion/client';
+import { cn } from '@/lib/utils';
 
 interface ProductionCostDashboardProps {
     projectId: string;
@@ -18,17 +20,19 @@ interface ProductionCostDashboardProps {
 
 type GranularityType = 'weekly' | 'monthly' | 'quarterly' | 'annual' | 'total';
 
-export default function ProductionCostDashboard({ towers, categories, unitCosts }: ProductionCostDashboardProps) {
+export default function ProductionCostDashboard({ projectId, towers, categories, unitCosts }: ProductionCostDashboardProps) {
     const [granularity, setGranularity] = useState<GranularityType>('monthly');
     const [startDate, setStartDate] = useState<string>('');
     const [endDate, setEndDate] = useState<string>('');
 
-    const getCost = (activityId: string) => {
-        const cost = unitCosts?.find(c => c.activityId === activityId);
-        return cost ? Number(cost.unitPrice) : 0;
-    };
+    const [loading, setLoading] = useState(false);
+    const [data, setData] = useState<{
+        curve: any[];
+        stats: { budget: number; earned: number };
+        pareto: any[];
+    }>({ curve: [], stats: { budget: 0, earned: 0 }, pareto: [] });
 
-    // Auto-detect project dates
+    // Auto-detect project dates for defaults
     const detectedDates = useMemo(() => {
         if (!towers) return { start: '', end: '' };
         const dates: Date[] = [];
@@ -45,142 +49,36 @@ export default function ProductionCostDashboard({ towers, categories, unitCosts 
         };
     }, [towers]);
 
-    const financialData = useMemo(() => {
-        if (!towers || !unitCosts || !categories) return { curve: [], stats: { budget: 0, earned: 0 }, pareto: [] };
-
-        let totalBudget = 0;
-        let totalEarned = 0;
-
-        const items: {
-            name: string;
-            plannedEnd: Date;
-            actualEnd?: Date;
-            cost: number;
-            isFinished: boolean;
-        }[] = [];
-
-        towers.forEach(t => {
-            categories.forEach(cat => {
-                cat.activities.forEach(act => {
-                    const price = getCost(act.id);
-                    if (price <= 0) return;
-
-                    const schedule = t.activitySchedules?.find(s => s.activityId === act.id);
-                    const status = t.activityStatuses?.find(s => s.activityId === act.id);
-
-                    if (schedule && schedule.plannedEnd) {
-                        const qty = schedule.plannedQuantity ? Number(schedule.plannedQuantity) : 1;
-                        const itemValue = qty * price;
-
-                        // totalBudget += itemValue; // REMOVIDO: Agora calculado dinamicamente com base no filtro
-                        // if (status?.status === 'FINISHED') {
-                        //     totalEarned += itemValue; // REMOVIDO
-                        // }
-
-                        items.push({
-                            name: act.name,
-                            plannedEnd: startOfDay(new Date(schedule.plannedEnd)),
-                            actualEnd: status?.endDate ? startOfDay(new Date(status.endDate)) : undefined,
-                            cost: itemValue,
-                            isFinished: status?.status === 'FINISHED'
-                        });
-                    }
-                });
-            });
-        });
-
-        if (items.length === 0) return { curve: [], stats: { budget: 0, earned: 0 }, pareto: [] };
-
-        const allDates = items.flatMap(i => [i.plannedEnd, i.actualEnd].filter(Boolean) as Date[]);
-        const minDetected = allDates.length > 0 ? min(allDates) : new Date();
-        const maxDetected = allDates.length > 0 ? max(allDates) : new Date();
-
-        const filterStart = startDate ? startOfDay(new Date(startDate)) : startOfMonth(minDetected);
-        const filterEnd = endDate ? endOfDay(new Date(endDate)) : endOfMonth(maxDetected);
-
-        const periodActivityCosts: Record<string, number> = {};
-
-        // Reset stats for the filtered period
-        totalBudget = 0;
-        totalEarned = 0;
-
-        items.forEach(item => {
-            // Stats: Filter by period
-            const budgetDate = item.plannedEnd;
-            if (isWithinInterval(budgetDate, { start: filterStart, end: filterEnd })) {
-                totalBudget += item.cost;
-            }
-
-            if (item.isFinished && item.actualEnd) {
-                if (isWithinInterval(item.actualEnd, { start: filterStart, end: filterEnd })) {
-                    totalEarned += item.cost;
-                }
-            }
-
-            // Pareto: Filter by relevant date (Actual for realized, Planned for future/budget?)
-            // Usually Pareto of Costs implies "Where money is going".
-            // Let's stick to the previous key date logic or align with Budget?
-            // The Original code used `refDate = actualEnd || plannedEnd` for Pareto.
-            // Let's keep consistency for Pareto.
-            const refDate = item.actualEnd || item.plannedEnd;
-            if (isWithinInterval(refDate, { start: filterStart, end: filterEnd })) {
-                periodActivityCosts[item.name] = (periodActivityCosts[item.name] || 0) + item.cost;
-            }
-        });
-
-        let timeline: Date[];
-        if (granularity === 'weekly') {
-            timeline = eachWeekOfInterval({ start: filterStart, end: addWeeks(filterEnd, 1) }, { weekStartsOn: 1 });
-        } else if (granularity === 'monthly') {
-            timeline = eachMonthOfInterval({ start: filterStart, end: addMonths(filterEnd, 1) });
-        } else if (granularity === 'quarterly') {
-            timeline = eachQuarterOfInterval({ start: filterStart, end: filterEnd });
-        } else if (granularity === 'annual') {
-            timeline = eachYearOfInterval({ start: filterStart, end: filterEnd });
-        } else {
-            timeline = [filterStart];
-        }
-
-        const curve = timeline.map((period) => {
-            let periodEnd: Date;
-            if (granularity === 'weekly') periodEnd = endOfWeek(period, { weekStartsOn: 1 });
-            else if (granularity === 'monthly') periodEnd = endOfMonth(period);
-            else if (granularity === 'quarterly') periodEnd = endOfQuarter(period);
-            else if (granularity === 'annual') periodEnd = endOfYear(period);
-            else periodEnd = filterEnd;
-
-            const plannedAcc = items
-                .filter(i => isBefore(i.plannedEnd, periodEnd))
-                .reduce((acc, curr) => acc + curr.cost, 0);
-
-            const actualAcc = items
-                .filter(i => i.actualEnd && isBefore(i.actualEnd, periodEnd))
-                .reduce((acc, curr) => acc + curr.cost, 0);
-
-            let label: string;
-            if (granularity === 'weekly') label = `S${format(period, 'ww')} - ${format(period, 'dd/MM')}`;
-            else if (granularity === 'monthly') label = format(period, 'MMM/yy', { locale: ptBR });
-            else if (granularity === 'quarterly') label = `${Math.floor(period.getMonth() / 3) + 1}º Trim/${format(period, 'yy')}`;
-            else if (granularity === 'annual') label = format(period, 'yyyy');
-            else label = 'GERAL';
-
-            return {
-                period: label,
-                planned: plannedAcc,
-                actual: actualAcc
+    const fetchFinancialData = useCallback(async () => {
+        if (!projectId) return;
+        setLoading(true);
+        try {
+            const params: any = {
+                projectId,
+                granularity,
             };
-        });
+            if (startDate) params.startDate = startDate;
+            else if (detectedDates.start) params.startDate = detectedDates.start;
 
-        const pareto = Object.entries(periodActivityCosts)
-            .map(([name, value]) => ({ name, value }))
-            .sort((a, b) => b.value - a.value)
-            .slice(0, 10);
+            if (endDate) params.endDate = endDate;
+            else if (detectedDates.end) params.endDate = detectedDates.end;
 
-        return { curve, stats: { budget: totalBudget, earned: totalEarned }, pareto };
+            const response = await orionApi.get('/analytics/production/financial', params);
+            if (response.data) {
+                setData(response.data as any);
+            }
+        } catch (error) {
+            console.error('[ProductionCostDashboard] Error fetching financial data:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, [projectId, granularity, startDate, endDate, detectedDates]);
 
-    }, [towers, unitCosts, categories, granularity, startDate, endDate]);
+    React.useEffect(() => {
+        fetchFinancialData();
+    }, [fetchFinancialData]);
 
-    const { curve, stats, pareto } = financialData;
+    const { curve, stats, pareto } = data;
 
     const formatCurrency = (val: number) => {
         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -208,7 +106,14 @@ export default function ProductionCostDashboard({ towers, categories, unitCosts 
     };
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
+        <div className={cn("space-y-6 animate-in fade-in slide-in-from-top-4 duration-500", loading && "opacity-50 pointer-events-none")}>
+            {loading && (
+                <div className="absolute inset-0 flex items-center justify-center z-50">
+                    <div className="bg-amber-500/10 backdrop-blur-md p-4 rounded-full border border-amber-500/20 animate-pulse">
+                        <div className="w-8 h-8 border-4 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
+                    </div>
+                </div>
+            )}
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="bg-slate-950/50 border-amber-900/20 backdrop-blur-sm">

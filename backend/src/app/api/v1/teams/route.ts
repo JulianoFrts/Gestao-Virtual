@@ -12,6 +12,7 @@ import { Validator } from "@/lib/utils/api/validator";
 import { paginationQuerySchema } from "@/core/common/domain/common.schema";
 import { PrismaTeamRepository } from "@/modules/teams/infrastructure/prisma-team.repository";
 import { TeamService } from "@/modules/teams/application/team.service";
+import { VALIDATION, API } from "@/lib/constants";
 
 // Inicialização do Service (Dependency Injection)
 const repository = new PrismaTeamRepository();
@@ -23,7 +24,7 @@ const createTeamSchema = z.object({
     .uuid("ID da empresa deve ser um UUID válido")
     .optional(),
   siteId: z.string().uuid("ID do canteiro deve ser um UUID válido").optional(),
-  name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres").max(255),
+  name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres").max(VALIDATION.STRING.MAX_NAME),
   supervisorId: z.string().optional(),
   displayOrder: z.number().default(0),
   laborType: z.enum(["MOD", "MOI"]).default("MOD"),
@@ -62,8 +63,8 @@ export async function GET(request: NextRequest) {
     if (!validation.success) return validation.response;
 
     const {
-      page = 1,
-      limit = 1000,
+      page = API.PAGINATION.DEFAULT_PAGE,
+      limit = API.PAGINATION.DEFAULT_LIMIT,
       companyId,
       siteId,
       isActive,

@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
 
     return ApiResponse.json(roles);
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/user_roles/route.ts#GET");
   }
 }
 
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
 
     return ApiResponse.created(newRole, "Role assigned successfully");
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/user_roles/route.ts#POST");
   }
 }
 
@@ -50,6 +50,6 @@ export async function PUT(request: NextRequest) {
 
     return ApiResponse.json(updatedRole, "Role updated successfully");
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, "src/app/api/v1/user_roles/route.ts#PUT");
   }
 }

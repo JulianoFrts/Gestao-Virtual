@@ -1,32 +1,25 @@
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib";
-import { getCurrentSession } from "@/lib/auth/session";
+import { NextRequest } from "next/server";
+import { requireAuth } from "@/lib/auth/session";
+import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
+import { PrismaWorkStageRepository } from "@/modules/work-stages/domain/work-stage.repository";
+
+const repository = new PrismaWorkStageRepository();
 
 // DELETE: Delete all stages for a site
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await getCurrentSession();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    await requireAuth();
     const { searchParams } = new URL(req.url);
     const siteId = searchParams.get("siteId");
 
     if (!siteId) {
-      return NextResponse.json({ error: "Site ID required" }, { status: 400 });
+      return ApiResponse.badRequest("ID do Canteiro (siteId) é obrigatório");
     }
 
-    await (prisma as any).workStage.deleteMany({
-      where: { siteId },
-    });
+    await repository.deleteBySite(siteId);
 
-    return NextResponse.json({ success: true });
+    return ApiResponse.json({ success: true }, "Todas as etapas do canteiro foram removidas");
   } catch (error) {
-    console.error("Error deleting all work stages:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 },
-    );
+    return handleApiError(error, "src/app/api/v1/work_stages/bulk/route.ts#DELETE");
   }
 }
