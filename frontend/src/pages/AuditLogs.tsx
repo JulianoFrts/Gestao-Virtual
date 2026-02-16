@@ -130,7 +130,7 @@ export default function AuditLogs() {
   } | null>(null);
 
   // Novos estados para visualização modernizada
-  const [streamViewMode, setStreamViewMode] = useState<"terminal" | "table">("terminal");
+  const [streamViewMode, setStreamViewMode] = useState<"terminal" | "table">("table");
 
   const handleSortAudit = (key: string) => {
     let direction: "asc" | "desc" = "asc";
@@ -173,6 +173,19 @@ export default function AuditLogs() {
       md += `| ${v.data.index} | ${v.data.severity} | ${v.data.file} | ${v.data.violation} | ${v.data.suggestion || '-'} |\n`;
     });
     return md;
+  };
+
+  const generateCSVReport = (data: any[]) => {
+    if (data.length === 0) return "";
+    const headers = ["N", "Severidade", "Arquivo", "Violacao", "Sugestao"];
+    const rows = data.map((v, i) => [
+      i + 1,
+      v.severity || v.data?.severity,
+      v.file || v.data?.file,
+      v.violation || v.data?.violation,
+      v.suggestion || v.data?.suggestion || ""
+    ]);
+    return [headers, ...rows].map(row => row.join("\t")).join("\n");
   };
 
   const SortIcon = ({
@@ -1343,7 +1356,7 @@ export default function AuditLogs() {
                       <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/30">
                         <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                         <span className="text-[10px] font-black uppercase tracking-widest text-green-500">
-                          STREAMING AO VIVO
+                          SCAN EM CURSO...
                         </span>
                       </div>
                     ) : (
@@ -1400,30 +1413,43 @@ export default function AuditLogs() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className={cn("px-3 py-1 h-7 rounded-none text-[10px] uppercase font-black", streamViewMode === 'terminal' ? 'bg-amber-500 text-black hover:bg-amber-600' : 'hover:bg-white/5')}
-                              onClick={() => setStreamViewMode('terminal')}
+                              className={cn("px-4 py-1 h-8 rounded-none text-[10px] uppercase font-black transition-all", streamViewMode === 'table' ? 'bg-amber-500 text-black hover:bg-amber-600' : 'hover:bg-white/5')}
+                              onClick={() => setStreamViewMode('table')}
                             >
-                              Terminal
+                              <Activity className="w-3 h-3 mr-2" />
+                              Visualização em Tabela (Colunas)
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
-                              className={cn("px-3 py-1 h-7 rounded-none text-[10px] uppercase font-black", streamViewMode === 'table' ? 'bg-amber-500 text-black hover:bg-amber-600' : 'hover:bg-white/5')}
-                              onClick={() => setStreamViewMode('table')}
+                              className={cn("px-4 py-1 h-8 rounded-none text-[10px] uppercase font-black transition-all", streamViewMode === 'terminal' ? 'bg-amber-500 text-black hover:bg-amber-600' : 'hover:bg-white/5')}
+                              onClick={() => setStreamViewMode('terminal')}
                             >
-                              Tabela
+                              <Play className="w-3 h-3 mr-2" />
+                              Terminal
                             </Button>
                           </div>
 
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 gap-2 border-amber-500/20 bg-amber-500/5 text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/20"
-                            onClick={() => copyToClipboard(generateMarkdownReport())}
-                          >
-                            <Copy className="w-3 h-3" />
-                            Copiar Relatório
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 gap-2 border-green-500/20 bg-green-500/5 text-[10px] font-black uppercase tracking-widest hover:bg-green-500/20 text-green-400"
+                              onClick={() => copyToClipboard(generateCSVReport(streamLogs.filter(l => l.type === 'violation').map(l => l.data)))}
+                            >
+                              <Copy className="w-3 h-3" />
+                              Copiar para Excel/CSV
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 gap-2 border-amber-500/20 bg-amber-500/5 text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/20"
+                              onClick={() => copyToClipboard(generateMarkdownReport())}
+                            >
+                              <Info className="w-3 h-3" />
+                              Relatório Completo
+                            </Button>
+                          </div>
                         </div>
                       );
                     })()}
@@ -1548,7 +1574,7 @@ export default function AuditLogs() {
                             <TableHead className="text-[9px] font-black uppercase text-amber-500/50 w-[20%]">O que foi testado (Arquivo)</TableHead>
                             <TableHead className="text-[9px] font-black uppercase text-amber-500/50 w-[25%]">Violação Detectada</TableHead>
                             <TableHead className="text-[9px] font-black uppercase text-amber-500/50">Sugestão de Melhoria</TableHead>
-                            <TableHead className="text-[9px] font-black uppercase text-amber-500/50 pr-6 text-right w-16">Ação</TableHead>
+                            <TableHead className="text-[9px] font-black uppercase text-amber-500/50 pr-6 text-right w-24">Ações</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1593,13 +1619,22 @@ export default function AuditLogs() {
                                   {log.data.suggestion || '--'}
                                 </TableCell>
                                 <TableCell className="pr-6 text-right">
-                                  <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0 hover:bg-amber-500/20 text-blue-400 rounded-lg"
+                                      onClick={() => copyToClipboard(log.data.file)}
+                                      title="Copiar apenas o caminho do arquivo"
+                                    >
+                                      <Link className="w-4 h-4" />
+                                    </Button>
                                     <Button
                                       variant="ghost"
                                       size="sm"
                                       className="h-8 w-8 p-0 hover:bg-amber-500/20 text-amber-500 rounded-lg"
                                       onClick={() => copyToClipboard(`Arquivo: ${log.data.file}\nViolação: ${log.data.violation}\nSugestão: ${log.data.suggestion}`)}
-                                      title="Copiar dados da violação"
+                                      title="Copiar dados formatados"
                                     >
                                       <Copy className="w-4 h-4" />
                                     </Button>
@@ -1779,6 +1814,20 @@ export default function AuditLogs() {
                               </p>
                             </div>
                           </TableCell>
+                          <TableCell className="pr-6 text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 hover:bg-amber-500/20 text-amber-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                copyToClipboard(`Arquivo: ${res.file}\nViolação: ${res.violation}\nSugestão: ${res.suggestion}`);
+                              }}
+                              title="Copiar detalhes"
+                            >
+                              <Copy className="w-4 h-4" />
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))
                     )}
@@ -1941,7 +1990,7 @@ export default function AuditLogs() {
               )}
             </DialogContent>
           </Dialog>
-        </TabsContent>
+        </TabsContent >
 
         <TabsContent value="checklist" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -2069,11 +2118,12 @@ export default function AuditLogs() {
             </div>
           </div>
         </TabsContent>
-      </Tabs>
+      </Tabs >
 
       {/* DIALOG DE DETALHES DO LOG */}
-      <Dialog
-        open={!!selectedLog}
+      < Dialog
+        open={!!selectedLog
+        }
         onOpenChange={(open) => !open && setSelectedLog(null)}
       >
         <DialogContent className="max-w-3xl glass-card border-primary/20 bg-background/95 backdrop-blur-xl">
@@ -2198,7 +2248,7 @@ export default function AuditLogs() {
             </div>
           )}
         </DialogContent>
-      </Dialog>
-    </div>
+      </Dialog >
+    </div >
   );
 }
