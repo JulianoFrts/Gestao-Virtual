@@ -9,8 +9,9 @@
         "./backend/src/*"
       ]
     },
-    "skipLibCheck": true,
+    "module": "ESNext",
     "moduleResolution": "bundler",
+    "skipLibCheck": true,
     "types": [
       "node",
       "d3-scale",

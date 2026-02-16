@@ -17,8 +17,11 @@
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "allowJs": true,
-    "noEmit": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "composite": true,
     "incremental": true,
+    "outDir": "dist",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
@@ -41,18 +44,15 @@
     }
   },
   "include": [
-    "src/**/*.js",
-    "src/**/*.ts",
-    // ".next/types/**/*.ts",
-    // ".next/dev/types/**/*.ts",
-    "next-env.d.ts",
-    "prisma/**/*.ts",
-    "src/**/*.mts",
     "src/**/*.ts",
     "src/**/*.tsx",
+    "src/**/*.mts",
+    "src/**/*.js",
+    "prisma/**/*.ts",
+    "scripts/**/*.ts",
+    "next-env.d.ts",
     ".next/types/**/*.ts",
-    "jest.config.mjs",
-    "next.config.mjs"
+    "worker.ts"
   ],
   "exclude": [
     "node_modules",
