@@ -556,7 +556,7 @@ export default function DailyReport() {
               </div>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-8">
+              <form onSubmit={handleSubmit} className="space-y-8 border-4 border-red-600 p-4">
                 <div className="space-y-8">
                   <div className="space-y-3">
                     <Label className="text-primary/80 font-bold uppercase text-[10px] tracking-widest pl-1">
@@ -657,7 +657,7 @@ export default function DailyReport() {
                   {/* QUICK ACTIVITY ADD BAR (YELLOW/RED) - IMPROVED VISIBILITY */}
                   <div className="w-full bg-amber-500/10 border-2 border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4 relative shadow-lg shadow-amber-500/5 my-4">
                     <div className="absolute -top-3 left-6 px-3 bg-amber-500 text-[10px] font-black text-black uppercase tracking-widest rounded-full shadow-md">
-                      Adicionar Atividade Rápida
+                      DEBUG: BARRA DE ATIVIDADES PRESENTE
                     </div>
 
                     <div className="flex-1 w-full flex items-center gap-2">
