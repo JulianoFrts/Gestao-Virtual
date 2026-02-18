@@ -114,8 +114,7 @@ export const GlobalInitializer = () => {
                     await fetchEmployees(true);
                     hasEmployeesFetchedSignal.value = true;
                 },
-                priority: 80,
-                dependencies: ['users']
+                priority: 80
             });
 
             loader.add({
@@ -159,8 +158,7 @@ export const GlobalInitializer = () => {
                 id: 'timeRecords',
                 label: 'Ponto Eletrônico',
                 action: async () => { await fetchTimeRecords(true); },
-                priority: 50,
-                dependencies: ['employees']
+                priority: 50
             });
 
             loader.add({
@@ -183,8 +181,7 @@ export const GlobalInitializer = () => {
                     await fetchAuditLogs(); // Inicia stream em background
                     hasAuditFetchedSignal.value = true;
                 },
-                priority: 30
-                // Removido dependências desnecessárias para carregar em paralelo
+                priority: 100
             });
 
 
@@ -194,8 +191,7 @@ export const GlobalInitializer = () => {
                 action: async () => {
                     has3dFetchedSignal.value = true;
                 },
-                priority: 20,
-                dependencies: ['projects']
+                priority: 95
             });
 
 

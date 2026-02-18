@@ -1,17 +1,39 @@
 import { signal, effect } from "@preact/signals-react";
 import { storageService } from "@/services/storageService";
 
-export interface DailyReportDraft {
-    employeeId: string;
-    subPointType: string;
+export interface DailyReportPhoto {
+    url: string; // base64
+    comment?: string;
+}
+
+export interface DailyReportSubPointDetail {
+    id: string; // Identificação (ex: Nome da Torre ou ID do Vão)
+    status: 'IN_PROGRESS' | 'FINISHED' | 'BLOCKED';
+    progress: number; // Porcentagem de 0 a 100
+    comment?: string; // Comentário individual opcional
+    startTime?: string; // Horário inicial (HH:mm)
+    endTime?: string; // Horário final (HH:mm)
+    photos?: DailyReportPhoto[];
+}
+
+export interface DailyReportActivity {
+    id: string; // Local ID for UI management
+    stageId: string;
+    stageName?: string;
+    subPointType: 'GERAL' | 'TORRE' | 'VAO' | 'TRECHO' | 'ESTRUTURA';
     subPoint: string;
     subPointEnd?: string;
     isMultiSelection: boolean;
-    teamIds: string[];
-    selectedSpanIds: string[];
-    selectedActivities: Array<{ stageId: string; status: 'IN_PROGRESS' | 'FINISHED' }>;
-    activities: string;
     observations: string;
+    status: 'IN_PROGRESS' | 'FINISHED';
+    details: DailyReportSubPointDetail[];
+    photos?: DailyReportPhoto[];
+}
+
+export interface DailyReportDraft {
+    employeeId: string;
+    teamIds: string[];
+    selectedActivities: DailyReportActivity[];
     siteId?: string;
     step: number;
     updatedAt: number;
@@ -19,15 +41,8 @@ export interface DailyReportDraft {
 
 const DEFAULT_DRAFT: DailyReportDraft = {
     employeeId: '',
-    subPointType: 'GERAL',
-    subPoint: '',
-    subPointEnd: '',
-    isMultiSelection: false,
     teamIds: [],
-    selectedSpanIds: [],
     selectedActivities: [],
-    activities: '',
-    observations: '',
     siteId: '',
     step: 1,
     updatedAt: Date.now()

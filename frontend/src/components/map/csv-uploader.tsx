@@ -414,9 +414,9 @@ export function CSVUploader({ projectId: externalProjectId, onUploadSuccess }: C
 
             // Upsert to handle duplicates
             const { error, data } = await db
-                .from('tower_technical_data' as any)
-                .upsert(dataToInsert, {
-                    onConflict: 'project_id,object_id',
+                .from('map_elements' as any)
+                .upsert(dataToInsert.map(d => ({ ...d, type: 'TOWER' })), {
+                    onConflict: 'projectId,objectId',
                     ignoreDuplicates: false
                 })
                 .select()

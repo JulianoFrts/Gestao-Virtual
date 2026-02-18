@@ -183,7 +183,7 @@ function isPublicRoute(pathname: string): boolean {
     "/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/health", "/api/v1/docs",
     "/api/v1/rpc/resolve_login_identifier", "/api/v1/rpc/login_funcionario",
     "/api/v1/audit/scan-stream", "/api/v1/debug/db-reset", "/api/v1/audit_logs",
-    "/api/v1/audit/architectural"
+    "/api/v1/audit/architectural", "/api/v1/debug/scan-files"
   ];
   return publicRoutes.some(route => pathname.startsWith(route));
 }

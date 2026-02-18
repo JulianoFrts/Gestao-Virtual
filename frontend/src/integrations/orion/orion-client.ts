@@ -1,10 +1,17 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
 
+const getBaseUrl = () => {
+  const url = (typeof process !== 'undefined' && process.env?.VITE_API_URL) ||
+    (globalThis as any).importMetaEnv?.VITE_API_URL ||
+    "";
+  
+  // Strip /api/v1 suffix if present to avoid duplication with generated code
+  return url.replace(/\/api\/v1\/?$/, '');
+};
+
 // Instância base do Axios para o Orion
 export const AXIOS_INSTANCE = axios.create({
-  baseURL: (typeof process !== 'undefined' && process.env?.VITE_API_URL) ||
-    (globalThis as any).importMetaEnv?.VITE_API_URL ||
-    "https://api.gestaovirtual.com/api/v1",
+  baseURL: getBaseUrl(),
 });
 
 // Interceptador para adicionar token de autenticação

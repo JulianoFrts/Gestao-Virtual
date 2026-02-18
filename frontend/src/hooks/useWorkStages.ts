@@ -7,8 +7,10 @@ import {
   isWorkStagesLoadingSignal,
   fetchWorkStages,
   hasWorkStagesFetchedSignal,
-  type WorkStage
 } from "@/signals/workStageSignals";
+import type { WorkStage } from "@/signals/workStageSignals";
+
+export type { WorkStage };
 
 export interface CreateStageData {
   name: string;
@@ -18,12 +20,14 @@ export interface CreateStageData {
   displayOrder?: number;
   productionActivityId?: string | null;
   metadata?: any;
+  children?: CreateStageData[]; // Para suporte a bulk hierárquico
 }
 
 export function useWorkStages(
   siteId?: string,
   projectId?: string,
   linkedOnly?: boolean,
+  companyId?: string,
 ) {
   const stages = workStagesSignal.value;
   const isLoading = isWorkStagesLoadingSignal.value;
@@ -31,13 +35,13 @@ export function useWorkStages(
   const { profile } = useAuth();
 
   const loadStages = useCallback(async () => {
-    await fetchWorkStages(true, siteId, projectId);
-  }, [siteId, projectId]);
+    await fetchWorkStages(true, siteId, projectId, companyId);
+  }, [siteId, projectId, companyId]);
 
   // Se as props mudarem, recarregamos
   // Mas evitamos loop infinito se já estiver carregando
-  if ((siteId || projectId) && !isLoading && !hasWorkStagesFetchedSignal.value) {
-    fetchWorkStages(false, siteId, projectId).catch(console.error);
+  if ((siteId || projectId || companyId) && !isLoading && !hasWorkStagesFetchedSignal.value) {
+    fetchWorkStages(false, siteId, projectId, companyId).catch(console.error);
   }
 
   const createStage = async (data: CreateStageData, silent = false) => {
@@ -89,17 +93,37 @@ export function useWorkStages(
    * para evitar erro 429 Too Many Requests.
    */
   const bulkCreateStages = async (items: CreateStageData[], silent = true) => {
-    const results = [];
-    for (let i = 0; i < items.length; i++) {
-      const result = await createStage(items[i], silent);
-      results.push(result);
-      // Intervalo de 200ms entre requisições para blindagem contra 429
-      if (i < items.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 200));
+    try {
+      const response = await orionApi.post("/work_stages/bulk", {
+        siteId,
+        projectId,
+        data: items,
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || "Erro ao criar etapas em lote");
       }
+
+      if (!silent) {
+        toast({
+          title: "Importação concluída",
+          description: "As etapas foram importadas com sucesso.",
+        });
+      }
+      
+      await loadStages();
+      return { success: true, data: response.data };
+    } catch (error: any) {
+      console.error("[bulkCreateStages] Error:", error);
+      if (!silent) {
+        toast({
+          title: "Erro na importação",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+      return { success: false, error: error.message };
     }
-    await loadStages();
-    return results;
   };
 
   const updateStage = async (

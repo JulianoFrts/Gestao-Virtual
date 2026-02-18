@@ -173,8 +173,11 @@ export function Header({ onMenuClick, title: propTitle }: HeaderProps) {
             </DialogContent>
           </Dialog>
 
-          {/* Sync Status */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary/50">
+          {/* Sync Status - Tooltip added for clarity */}
+          <div 
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-secondary/50 cursor-help transition-colors hover:bg-secondary/70"
+            title={isSyncing ? "Sincronizando dados com o servidor..." : isOnline ? "Sistema Online e Sincronizado" : "Sistema Offline"}
+          >
             {isOnline ? (
               <Wifi className="h-4 w-4 text-success" />
             ) : (

@@ -344,9 +344,10 @@ export function Mapbox3DLayer({
         setIsAutoConnecting(true);
         try {
             const { data: towers, error } = await orionApi
-                .from('tower_technical_data')
+                .from('map_elements')
                 .select('*')
-                .eq('project_id', projectId)
+                .eq('projectId', projectId)
+                .eq('type', 'TOWER')
                 .order('object_seq', { ascending: true });
 
             if (error) throw error;

@@ -8,6 +8,7 @@ import {
   validate,
 } from "@/lib/utils/validators/schemas";
 import * as authSession from "@/lib/auth/session";
+import { invalidateSessionCache } from "@/lib/auth/session";
 import { publicUserSelect, buildUserWhereClause } from "@/types/database";
 import { logger } from "@/lib/utils/logger";
 import { CONSTANTS } from "@/lib/constants";
@@ -243,6 +244,8 @@ export async function PUT(request: NextRequest) {
       publicUserSelect,
       currentUser.id,
     );
+    // Invalidar cache de sessão para forçar recarga dos dados atualizados
+    await invalidateSessionCache(targetUserId);
     return ApiResponse.json(updatedUser, CONSTANTS.HTTP.MESSAGES.SUCCESS.UPDATED);
   } catch (error) {
     return handleApiError(error, "src/app/api/v1/users/route.ts#PUT");

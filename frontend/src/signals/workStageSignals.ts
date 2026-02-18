@@ -23,7 +23,7 @@ export const workStagesSignal = signal<WorkStage[]>([]);
 export const isWorkStagesLoadingSignal = signal<boolean>(false);
 export const hasWorkStagesFetchedSignal = signal<boolean>(false);
 
-export const fetchWorkStages = async (force = false, siteId?: string, projectId?: string) => {
+export const fetchWorkStages = async (force = false, siteId?: string, projectId?: string, companyId?: string) => {
     // Se não for forçado e já tivermos carregado universalmente ou para o contexto atual, podemos pular? 
     // Por simplicidade na inicialização, focamos no carregamento global se siteId/projectId omitidos
     if (!force && hasWorkStagesFetchedSignal.value && workStagesSignal.value.length > 0) return;
@@ -33,6 +33,7 @@ export const fetchWorkStages = async (force = false, siteId?: string, projectId?
         const params: Record<string, string> = {};
         if (siteId && siteId !== "all") params.siteId = siteId;
         if (projectId && projectId !== "all") params.projectId = projectId;
+        if (companyId) params.companyId = companyId;
 
         const response = await orionApi.get<WorkStage[]>("/work_stages", params);
 

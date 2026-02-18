@@ -14,13 +14,26 @@ import { UserService } from "@/modules/users/application/user.service";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
 import { CONSTANTS } from "@/lib/constants";
 import { isGodRole, isSystemOwner, SECURITY_RANKS } from "@/lib/constants/security";
+import { cacheService } from "@/services/cacheService";
 
 const userService = new UserService(new PrismaUserRepository());
 
+/** TTL do cache de sessão em segundos (60s = 1 minuto) */
+const SESSION_CACHE_TTL = 60;
+
 /**
- * Helper para buscar usuário fresco e mapear dados de sessão
+ * Helper para buscar usuário fresco e mapear dados de sessão.
+ * Usa cache in-memory com TTL de 60s para evitar queries repetidas ao banco.
  */
 async function fetchUserSessionData(userId: string) {
+  const cacheKey = `session:${userId}`;
+
+  // Verificar cache primeiro
+  const cached = await cacheService.get<any>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   const freshUser = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -40,7 +53,7 @@ async function fetchUserSessionData(userId: string) {
   const permissions = await userService.getPermissionsMap(userRole, freshUser.id, projectId || undefined);
   const uiFlags = await (userService as any).getUIFlagsMap(userRole, freshUser.hierarchyLevel);
 
-  return {
+  const result = {
     ...freshUser,
     role: userRole,
     status: userStatus,
@@ -49,6 +62,19 @@ async function fetchUserSessionData(userId: string) {
     permissions,
     ui: uiFlags
   };
+
+  // Salvar no cache por SESSION_CACHE_TTL segundos
+  await cacheService.set(cacheKey, result, SESSION_CACHE_TTL);
+
+  return result;
+}
+
+/**
+ * Invalida o cache de sessão de um usuário específico.
+ * Deve ser chamado após atualização de perfil, role ou permissões.
+ */
+export async function invalidateSessionCache(userId: string): Promise<void> {
+  await cacheService.del(`session:${userId}`);
 }
 
 /**
@@ -83,15 +109,18 @@ export async function validateToken(token: string): Promise<Session | null> {
     let payload: any = null;
 
     // 1. Tentar decodificar como NextAuth JWE (padrão v5)
-    try {
-      payload = await decode({ 
-        token, 
-        secret: jwtSecret,
-        salt: process.env.NEXTAUTH_SALT || "authjs.session-token"
-      });
-      if (payload) console.debug("[AUTH] Token decodificado via JWE");
-    } catch (e: any) {
-      console.debug("[AUTH] Falha ao decodificar JWE:", e.message);
+    // CHECK: Só tentar decodificar se parecer um JWE (5 partes) para evitar logs de erro em tokens JWS
+    if (token.split('.').length === 5) {
+      try {
+        payload = await decode({ 
+          token, 
+          secret: jwtSecret,
+          salt: process.env.NEXTAUTH_SALT || "authjs.session-token"
+        });
+        if (payload) console.debug("[AUTH] Token decodificado via JWE");
+      } catch (e: any) {
+        console.debug("[AUTH] Falha ao decodificar JWE:", e.message);
+      }
     }
 
     // 2. Se falhar ou retornar null, tentar como JWS (HS256) - usado pelo login legado

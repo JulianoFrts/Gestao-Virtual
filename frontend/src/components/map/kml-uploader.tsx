@@ -372,10 +372,15 @@ export function KMLUploader({
       );
 
       for (let i = 0; i < towerDataToInsert.length; i += BATCH_SIZE) {
-        const batch = towerDataToInsert.slice(i, i + BATCH_SIZE);
+        const batch = towerDataToInsert.slice(i, i + BATCH_SIZE).map(t => ({
+          ...t,
+          projectId: targetProjectId,
+          companyId: profile?.companyId,
+          type: 'TOWER'
+        }));
         const { error: tErr } = await db
-          .from("tower_technical_data" as any)
-          .upsert(batch, { onConflict: "project_id,object_id" });
+          .from("map_elements" as any)
+          .upsert(batch, { onConflict: "projectId,objectId" });
 
         if (tErr) {
           console.error("❌ Erro no lote de torres:", tErr);
@@ -448,11 +453,16 @@ export function KMLUploader({
         `📦 Sincronizando ${processedSpans.length} vãos únicos em lotes...`,
       );
       for (let i = 0; i < processedSpans.length; i += BATCH_SIZE) {
-        const batch = processedSpans.slice(i, i + BATCH_SIZE);
+        const batch = processedSpans.slice(i, i + BATCH_SIZE).map(s => ({
+          ...s,
+          projectId: targetProjectId,
+          companyId: profile?.companyId,
+          type: 'SPAN'
+        }));
         const { error: sErr } = await db
-          .from("span_technical_data" as any)
+          .from("map_elements" as any)
           .upsert(batch, {
-            onConflict: "project_id,tower_start_id,tower_end_id",
+            onConflict: "projectId,towerStartId,towerEndId",
           });
 
         if (sErr) {

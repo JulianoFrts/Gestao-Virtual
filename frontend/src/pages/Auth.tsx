@@ -12,6 +12,8 @@ import { verify } from 'otplib';
 import { PasswordResetRequestForm } from '@/components/auth/PasswordResetRequestForm';
 import { PasswordRecovery2FAForm } from '@/components/auth/PasswordRecovery2FAForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Logo } from '@/components/common/Logo';
+import { logoUrlSignal } from "@/signals/settingsSignals";
 import {
   Dialog,
   DialogContent,
@@ -177,47 +179,59 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen dark theme-industrial gradient-hero flex items-center justify-center p-4">
-      <div className="w-full max-w-lg animate-fade-in flex flex-col items-center">
-        <div className="text-center mb-0 flex flex-col items-center">
-          <img
-            src="/gestao_virtual_premium_logo.png"
-            alt="GESTÃO VIRTUAL Logo"
-            className="w-[450px] md:w-[500px] h-auto drop-shadow-[0_0_25px_rgba(0,212,255,0.3)] animate-in fade-in zoom-in duration-1000"
-          />
-        </div>
+    <div className="min-h-screen bg-white flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background Decor */}
+      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_120%,rgba(120,119,198,0.1),rgba(255,255,255,0))]" />
+      
+      <div className="w-full max-w-lg animate-fade-in flex flex-col items-center relative z-10">
 
-        <Card className="glass-card border-foreground/10 relative overflow-hidden w-full max-w-md -mt-6">
+
+        <Card className="w-full max-w-md bg-slate-950 border-slate-800 shadow-[0_8px_30px_rgb(0,0,0,0.2)] ring-1 ring-white/10 rounded-3xl overflow-hidden shine-effect">
+          <div className="absolute inset-0 bg-linear-to-tr from-white/5 to-transparent pointer-events-none" />
+          
           {mode === 'qr' && (
             <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary/20 rounded-full blur-3xl animate-pulse" />
           )}
 
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold flex items-center justify-center gap-2 text-foreground">
-              {showMfaChallenge ? 'Verificação MFA' : mode === 'login' ? 'Gestão Virtual' : 'Acesso Rápido'}
+          <CardHeader className="text-center pb-2 relative z-10">
+            <div className="flex flex-col items-center justify-center mb-6">
+                {logoUrlSignal.value ? (
+                    <img
+                        src={logoUrlSignal.value}
+                        alt="Logo"
+                        className="max-h-20 object-contain drop-shadow-xl"
+                    />
+                ) : (
+                    <div className="scale-125 mb-2">
+                        <Logo className="text-white" />
+                    </div>
+                )}
+            </div>
+            <CardTitle className="text-2xl font-bold flex items-center justify-center gap-2 text-white">
+              {showMfaChallenge ? 'Verificação MFA' : mode === 'login' ? 'Bem-vindo' : 'Acesso Rápido'}
 
               {(mode === 'qr' || showMfaChallenge) && (
                 showMfaChallenge ? <ShieldCheck className="w-6 h-6 text-primary" /> : <QrCode className="w-6 h-6 text-primary" />
               )}
             </CardTitle>
-            <CardDescription className="text-foreground/70">
+            <CardDescription className="text-slate-400">
               {showMfaChallenge
                 ? 'Insira o código de 6 dígitos do Microsoft Authenticator'
-                : mode === 'login' ? 'Entre com suas credenciais' : 'Use seu celular para entrar'}
+                : mode === 'login' ? 'Acesse sua conta para continuar' : 'Use seu celular para entrar'}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="relative z-10">
             {showMfaChallenge ? (
               <form onSubmit={handleVerifyMfa} className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="mfa-code" className="text-foreground/80 font-semibold uppercase text-[10px] tracking-wider text-center block">Código de Segurança</Label>
+                  <Label htmlFor="mfa-code" className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider text-center block">Código de Segurança</Label>
                   <Input
                     id="mfa-code"
                     type="text"
                     placeholder="000 000"
                     value={mfaCode}
                     onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    className="text-center text-3xl tracking-[0.5em] font-bold h-16 dark:industrial-input-dark"
+                    className="text-center text-3xl tracking-[0.5em] font-bold h-16 bg-slate-900 border-slate-800 text-white focus-visible:ring-primary/40"
                     required
                     autoFocus
                   />
@@ -225,7 +239,7 @@ export default function Auth() {
 
                 <Button
                   type="submit"
-                  className="w-full h-11 gradient-primary text-primary-foreground font-bold shadow-glow"
+                  className="w-full h-11 gradient-primary text-primary-foreground font-bold shadow-lg shadow-primary/25"
                   disabled={isLoading || mfaCode.length !== 6}
                 >
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : 'Verificar e Entrar'}
@@ -234,7 +248,7 @@ export default function Auth() {
                 <Button
                   type="button"
                   variant="ghost"
-                  className="w-full text-xs text-muted-foreground"
+                  className="w-full text-xs text-slate-400 hover:text-white"
                   onClick={() => {
                     setShowMfaChallenge(false);
                     setMfaCode('');
@@ -247,18 +261,18 @@ export default function Auth() {
               <>
                 {/* Offline Login Banner */}
                 {isOffline && offlineAccount && (
-                  <div className="mb-4 p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                  <div className="mb-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
                     <div className="flex items-center gap-2 text-amber-500 mb-2">
                       <WifiOff className="w-4 h-4" />
                       <span className="font-semibold text-sm">Modo Offline</span>
                     </div>
-                    <p className="text-xs text-foreground/70 mb-3">
+                    <p className="text-xs text-slate-400 mb-3">
                       Sem conexão com a internet. Você pode continuar como:
                     </p>
                     <Button
                       onClick={handleOfflineLogin}
                       disabled={isLoading}
-                      className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+                      className="w-full bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-900/20"
                     >
                       {isLoading ? (
                         <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -267,7 +281,7 @@ export default function Auth() {
                       )}
                       Entrar como {offlineAccount.fullName}
                     </Button>
-                    <p className="text-[10px] text-foreground/50 mt-2 text-center">
+                    <p className="text-[10px] text-slate-500 mt-2 text-center">
                       ({offlineAccount.identifier})
                     </p>
                   </div>
@@ -275,12 +289,12 @@ export default function Auth() {
 
                 {/* Offline indicator without cached account */}
                 {isOffline && !offlineAccount && (
-                  <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
-                    <div className="flex items-center gap-2 text-destructive">
+                  <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                    <div className="flex items-center gap-2 text-red-500">
                       <WifiOff className="w-4 h-4" />
                       <span className="font-semibold text-sm">Sem Conexão</span>
                     </div>
-                    <p className="text-xs text-foreground/70 mt-1">
+                    <p className="text-xs text-slate-400 mt-1">
                       É necessário estar online para o primeiro login.
                     </p>
                   </div>
@@ -288,32 +302,32 @@ export default function Auth() {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email" className="text-foreground/80 font-semibold uppercase text-[10px] tracking-wider">Usuário ou E-mail</Label>
+                    <Label htmlFor="email" className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Usuário ou E-mail</Label>
                     <div className="relative group">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-foreground/40 group-focus-within:text-primary transition-colors" />
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-primary transition-colors" />
                       <Input
                         id="email"
                         type="text"
                         placeholder="E-mail ou Matrícula (#12345678)"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="pl-10 dark:industrial-input-dark"
+                        className="pl-10 h-11 bg-slate-900 border-slate-800 text-white focus-visible:ring-primary/40 transition-all font-medium placeholder:text-slate-600"
                         required
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="password" title="password label" className="text-foreground/80 font-semibold uppercase text-[10px] tracking-wider">Senha de Acesso</Label>
+                    <Label htmlFor="password" title="password label" className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Senha de Acesso</Label>
                     <div className="relative group">
-                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-foreground/40 group-focus-within:text-primary transition-colors" />
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-primary transition-colors" />
                       <Input
                         id="password"
                         type="password"
                         placeholder="••••••••"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="pl-10  dark:industrial-input-dark"
+                        className="pl-10 h-11 bg-slate-900 border-slate-800 text-white focus-visible:ring-primary/40 transition-all font-medium placeholder:text-slate-600"
                         required
                         minLength={6}
                         autoComplete="current-password"
@@ -323,19 +337,19 @@ export default function Auth() {
 
                   <Button
                     type="submit"
-                    className="w-full h-11 gradient-primary text-primary-foreground font-bold shadow-glow hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+                    className="w-full h-12 mt-2 gradient-primary text-primary-foreground font-bold shadow-lg shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all duration-300 rounded-xl"
                     disabled={isLoading}
                   >
                     {isLoading ? (
                       <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    ) : 'Entrar no Sistema'}
+                    ) : 'ENTRAR NO SISTEMA'}
                   </Button>
 
 
                   <div className="text-center mt-2">
                     <Dialog>
                       <DialogTrigger asChild>
-                        <Button variant="link" className="text-xs text-muted-foreground hover:text-primary">
+                        <Button variant="link" className="text-xs text-slate-500 hover:text-primary">
                           Esqueceu sua senha? Solicitar redefinição
                         </Button>
                       </DialogTrigger>
@@ -375,7 +389,7 @@ export default function Auth() {
               </>
             ) : (
               <div className="flex flex-col items-center justify-center py-4 space-y-6 animate-scale-in">
-                <div className="p-4 bg-white rounded-3xl shadow-glow overflow-hidden">
+                <div className="p-6 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100">
                   <QRCodeSVG
                     value={qrToken}
                     size={220}
@@ -389,23 +403,23 @@ export default function Auth() {
                     <Smartphone className="w-5 h-5" />
                     <span>Sincronizar Dispositivo</span>
                   </div>
-                  <p className="text-sm text-foreground/60 leading-relaxed font-medium">
+                  <p className="text-sm text-slate-400 leading-relaxed font-medium">
                     Escaneie para vincular seu telefone e habilitar o login biométrico e geolocalização.
                   </p>
                 </div>
 
                 <Button
                   variant="ghost"
-                  className="text-foreground/60 hover:text-foreground hover:bg-foreground/5 font-semibold"
+                  className="text-slate-400 hover:text-white hover:bg-slate-800 font-semibold"
                   onClick={() => setMode('login')}
-                >
+                  >
                   <ArrowLeft className="w-4 h-4 mr-2" />
                   Voltar ao login comum
                 </Button>
               </div>
             )}
 
-            <div className="mt-8 border-t border-foreground/5 pt-6 text-center">
+            <div className="mt-8 border-t border-slate-100 pt-6 text-center">
               {mode === 'login' && !showMfaChallenge && (
                 <button
                   type="button"
@@ -419,6 +433,13 @@ export default function Auth() {
             </div>
           </CardContent>
         </Card>
+        
+        {/* Footer info */}
+        <div className="mt-8 text-center space-y-2">
+            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">
+                Gestão Virtual &copy; 2024
+            </p>
+        </div>
       </div>
     </div >
   );

@@ -109,7 +109,7 @@ const TowerFormModal = ({
                 }
             };
 
-            const response = await orionApi.post("/tower_technical_data", [payload]);
+            const response = await orionApi.post("/map_elements", [{ ...payload, type: 'TOWER' }]);
             return response.data;
         },
         onSuccess: () => {

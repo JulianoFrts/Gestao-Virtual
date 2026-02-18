@@ -47,7 +47,7 @@ export function useSpanTechnicalData(projectId?: string, companyId?: string) {
                 .order('created_at', { ascending: false });
 
             if (projectId && projectId !== 'all') {
-                segmentQuery = segmentQuery.eq('project_id', projectId);
+                segmentQuery = segmentQuery.eq('projectId', projectId);
             }
 
             const { data: segments, error: segError } = await segmentQuery;
@@ -88,12 +88,12 @@ export function useSpanTechnicalData(projectId?: string, companyId?: string) {
                 combinedResult = [...mappedFromSegments];
             }
 
-            // 2. Fallback/Add: Buscar da tabela antiga SPAN_TECHNICAL_DATA
-            let query = orionApi.from('span_technical_data').select('*');
+            // 2. Fallback/Add: Buscar da tabela unificada MAP_ELEMENTS como SPAN
+            let query = orionApi.from('map_elements').select('*').eq('type', 'SPAN');
             if (projectId && projectId !== 'all') {
-                query = query.eq('project_id', projectId);
+                query = query.eq('projectId', projectId);
             } else if (companyId) {
-                query = query.eq('company_id', companyId);
+                query = query.eq('companyId', companyId);
             }
 
             const { data, error: apiError } = await query;
@@ -133,12 +133,13 @@ export function useSpanTechnicalData(projectId?: string, companyId?: string) {
             }
 
             // 3. Synthesis: Always attempt to synthesize if we have towers, to fill gaps.
-            let towerQuery = orionApi.from('tower_technical_data')
+            let towerQuery = orionApi.from('map_elements')
                 .select('*')
+                .eq('type', 'TOWER')
                 .order('object_seq', { ascending: true });
 
             if (projectId && projectId !== 'all') {
-                towerQuery = towerQuery.eq('project_id', projectId);
+                towerQuery = towerQuery.eq('projectId', projectId);
             }
 
             const { data: towers, error: towerError } = await towerQuery;

@@ -23,12 +23,22 @@ export class AuditStreamService {
                     }
                 };
 
-                sendEvent("connected", { message: "Iniciando verificação de auditoria..." });
+                sendEvent("connected", { message: "Iniciando auditoria... (Aguarde)" });
 
                 try {
                     let count = 0;
                     
+                    // 1. Notify file scanning start
+                    sendEvent("status", { message: "Mapeando estrutura de arquivos...", state: "scanning_files" });
+                    
                     const { results, summary } = await auditor.runFullAudit(userId, false, (result) => {
+                         if (isStreamClosed) return;
+                         
+                         count++;
+                         // First violation detected means scanning is done and processing started
+                         if (count === 1) {
+                             sendEvent("status", { message: "Analisando código...", state: "analyzing" });
+                         }
                          if (isStreamClosed) return;
                          
                          count++;

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { updateProfileSchema, validate } from "@/lib/utils/validators/schemas";
-import { requireAuth, requireActiveAccount } from "@/lib/auth/session";
+import { requireAuth, requireActiveAccount, invalidateSessionCache } from "@/lib/auth/session";
 import { publicUserSelect } from "@/types/database";
 import { MESSAGES } from "@/lib/constants";
 import { UserService } from "@/modules/users/application/user.service";
@@ -81,6 +81,9 @@ export async function PUT(request: NextRequest) {
       publicUserSelect,
       sessionUser.id,
     );
+
+    // Invalidar cache de sessão após atualização de perfil
+    await invalidateSessionCache(sessionUser.id);
 
     return ApiResponse.json(updatedUser, MESSAGES.SUCCESS.UPDATED);
   } catch (error: any) {

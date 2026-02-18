@@ -119,7 +119,7 @@ export const GeoViewerPage = () => {
                             metadata: t.properties || {},
                         }));
 
-                        const { error } = await orionApi.from("tower_technical_data").insert(towersToUpdate);
+                        const { error } = await orionApi.from("map_elements").insert(towersToUpdate.map(t => ({ ...t, type: 'TOWER' })));
                         if (error) throw error;
 
                         toast.success("Projeto Importado com Sucesso");

@@ -205,12 +205,7 @@ const menuGroups: SidebarGroup[] = [
         label: "3D Anchor Lab",
         path: "/viewer-3d",
       },
-      {
-        id: "audit_logs.view",
-        icon: Zap,
-        label: "Auditoria Master",
-        path: "/audit-logs?tab=standards",
-      },
+
 
       {
         id: "audit_logs.view",
@@ -284,7 +279,7 @@ function SidebarGroupItem({
   const hasActiveChild = visibleItems.some(
     (item) => location.pathname === item.path,
   );
-  const [isExpanded, setIsExpanded] = React.useState(true); 
+  const [isExpanded, setIsExpanded] = React.useState(false); 
 
   if (visibleItems.length === 0) return null;
 

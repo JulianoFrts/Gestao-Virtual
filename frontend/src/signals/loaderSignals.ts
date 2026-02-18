@@ -5,7 +5,16 @@ import { signal } from "@preact/signals-react";
  * Define o limite de tarefas simultâneas no ParallelLoader.
  * Pode ser ajustado dinamicamente via preferência do usuário ou UI.
  */
-export const loaderConcurrencySignal = signal<number>(8);
+import { effect } from "@preact/signals-react";
+
+const storedConcurrency = localStorage.getItem('loader_concurrency_v2');
+const initialConcurrency = storedConcurrency ? parseInt(storedConcurrency, 10) : 0; // 0 = Infinite
+
+export const loaderConcurrencySignal = signal<number>(initialConcurrency);
+
+effect(() => {
+    localStorage.setItem('loader_concurrency_v2', loaderConcurrencySignal.value.toString());
+});
 
 /**
  * activeTaskIdsSignal

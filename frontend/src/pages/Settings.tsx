@@ -45,6 +45,7 @@ import {
     saveSettings, 
     isLoadingSettingsSignal 
 } from "@/signals/settingsSignals";
+import { loaderConcurrencySignal } from "@/signals/loaderSignals";
 import { getRoleStyle, getRoleLabel } from "@/utils/roleUtils";
 import { cn } from "@/lib/utils";
 import { MfaSetup } from "@/components/auth/MfaSetup";
@@ -71,6 +72,8 @@ export default function Settings() {
   const { isOnline, pendingChanges, syncNow } = useSync();
   const { updateUser } = useUsers();
   const { toast } = useToast();
+  const [localConcurrency, setLocalConcurrency] = React.useState(loaderConcurrencySignal.value);
+  const [localLogoWidth, setLocalLogoWidth] = React.useState(logoWidthSignal.value);
   const { sendMessage, checkPasswordPermission, consumePasswordPermission } =
     useMessages();
 
@@ -342,7 +345,6 @@ export default function Settings() {
         description: "Sua senha foi alterada com sucesso.",
       });
       setNewPassword("");
-      setIsChangingPassword(false);
     } else {
       toast({
         title: "Erro ao alterar senha",
@@ -421,7 +423,6 @@ export default function Settings() {
     });
   };
 
-  return (
   const GeneralSettingsContent = (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <Card className="glass-card">
@@ -707,15 +708,16 @@ export default function Settings() {
                             <div className="flex items-center justify-between">
                                 <Label className="flex items-center gap-2">
                                     <LayoutTemplate className="w-4 h-4" />
-                                    Tamanho da Logo ({logoWidthSignal.value}px)
+                                    Tamanho da Logo ({localLogoWidth}px)
                                 </Label>
                             </div>
                             <Slider 
-                                value={[logoWidthSignal.value]} 
+                                value={[localLogoWidth]} 
                                 min={100} 
                                 max={260} 
                                 step={5}
                                 onValueChange={(val) => {
+                                    setLocalLogoWidth(val[0]);
                                     logoWidthSignal.value = val[0]; // Realtime preview
                                 }}
                                 onValueCommit={async (val) => {
@@ -727,6 +729,43 @@ export default function Settings() {
                                 className="w-full"
                             />
                         </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+
+            {/* LOADER CONCURRENCY SETTINGS */}
+            <Card className="glass-card border-purple-500/20 bg-purple-500/5">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-purple-400">
+                        <Loader2 className="w-5 h-5" />
+                        Performance do Carregamento
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="space-y-4">
+                         <div className="flex items-center justify-between">
+                            <Label className="flex items-center gap-2">
+                                <LayoutTemplate className="w-4 h-4" />
+                                {localConcurrency === 0 ? "Ilimitado (Máxima Performance)" : `Workers Simultâneos (${localConcurrency})`}
+                            </Label>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            <strong>0 = Ilimitado:</strong> Inicia todos os módulos possíveis simultaneamente.
+                            <br/>
+                            <strong>1-16:</strong> Limita o número de downloads paralelos (bom para internet lenta).
+                        </p>
+                        <Slider 
+                            value={[localConcurrency]} 
+                            min={0} 
+                            max={16} 
+                            step={1}
+                            onValueChange={(val) => {
+                                setLocalConcurrency(val[0]);
+                                loaderConcurrencySignal.value = val[0];
+                            }}
+                            className="w-full"
+                        />
                     </div>
                 </CardContent>
             </Card>
@@ -1315,3 +1354,5 @@ export default function Settings() {
     </div>
   );
 }
+
+

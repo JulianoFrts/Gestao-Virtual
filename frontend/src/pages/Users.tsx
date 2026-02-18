@@ -119,6 +119,7 @@ import {
 import { useSignals } from "@preact/signals-react/runtime";
 import { Project } from "@/signals/globalDataSignals";
 import { PERMISSION_CATEGORIES } from "@/utils/permissionCategories";
+import { AvatarSelection } from "@/components/users/AvatarSelection";
 
 export default function Users() {
   useSignals();
@@ -1141,6 +1142,13 @@ export default function Users() {
                             <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-tighter">
                               Clique para Foto
                             </span>
+                          </div>
+                          
+                          <div className="w-full flex justify-center pb-2">
+                             <AvatarSelection 
+                                onSelect={(base64) => setCreateForm(prev => ({ ...prev, image: base64 }))} 
+                                currentImage={createForm.image} 
+                             />
                           </div>
 
                           <div className="space-y-4">
@@ -2582,6 +2590,13 @@ export default function Users() {
                     <span className="text-[9px] text-muted-foreground uppercase font-bold tracking-tighter">
                       Clique para Foto
                     </span>
+                  </div>
+
+                  <div className="w-full flex justify-center pb-2">
+                     <AvatarSelection 
+                        onSelect={(base64) => setEditUserForm(prev => ({ ...prev, image: base64 }))} 
+                        currentImage={editUserForm.image} 
+                     />
                   </div>
 
                   <div className="space-y-4">

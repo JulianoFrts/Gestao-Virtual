@@ -48,9 +48,10 @@ export function useTowerTechnicalData(selectedProjectId: string) {
 
         try {
             const { error } = await orionApi
-                .from('tower_technical_data')
+                .from('map_elements')
                 .delete()
-                .eq('projectId', selectedProjectId);
+                .eq('projectId', selectedProjectId)
+                .eq('type', 'TOWER'); // No frontend o parâmetro é 'type', no backend vira 'elementType' via filtros no builder ou direto na rota
 
             if (error) throw error;
 

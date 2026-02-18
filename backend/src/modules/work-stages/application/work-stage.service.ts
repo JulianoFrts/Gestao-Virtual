@@ -2,6 +2,7 @@ import {
   WorkStageRepository,
   WorkStage,
   CreateWorkStageDTO,
+  CreateWorkStageBulkItem,
   WorkStageProgress,
 } from "../domain/work-stage.repository";
 import { logger } from "@/lib/utils/logger";
@@ -82,6 +83,20 @@ export class WorkStageService {
       projectId: effectiveProjectId,
       productionActivityId
     });
+  }
+
+  async createBulk(
+    projectId: string,
+    siteId: string | undefined,
+    data: CreateWorkStageBulkItem[],
+  ): Promise<WorkStage[]> {
+    const effectiveSiteId = (!siteId || siteId === 'all' || siteId === 'none') ? undefined : siteId;
+    
+    if (!projectId || projectId === 'all') {
+      throw new Error("Project ID is required for bulk creation");
+    }
+
+    return await this.repository.createBulk(projectId, effectiveSiteId, data);
   }
 
   async update(id: string, data: Partial<CreateWorkStageDTO>): Promise<WorkStage> {

@@ -79,8 +79,8 @@ const ExcelImportModal = ({
                 console.log(`[Import] Enviando lote ${Math.floor(i/CHUNK_SIZE) + 1} (${chunk.length} torres)...`);
                 
                 const { data: result, error } = await orionApi
-                    .from('tower_technical_data' as any)
-                    .insert(chunk as any);
+                    .from('map_elements' as any)
+                    .insert(chunk.map(c => ({ ...c, type: 'TOWER' })) as any);
 
                 if (error) throw error;
                 results.push(result);

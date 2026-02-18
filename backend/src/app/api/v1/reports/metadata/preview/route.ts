@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
         }
 
         const data = await metadataService.previewInterval(validation.data);
-        return ApiResponse.success(data);
+        return ApiResponse.json(data);
     } catch (error: any) {
         return handleApiError(error, "src/app/api/v1/reports/metadata/preview/route.ts#POST");
     }

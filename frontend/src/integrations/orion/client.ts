@@ -7,7 +7,7 @@
 
 import { signal, effect } from "@preact/signals-react";
 
-const API_URL = import.meta.env.VITE_API_URL || "https://api.gestaovirtual.com/api/v1";
+const API_URL = import.meta.env.VITE_API_URL || "/api/v1";
 const DB_MODE = import.meta.env.VITE_DB_MODE || 'orion_db';
 
 console.log('[ORION CLIENT] Initialized with:', { API_URL, DB_MODE });
@@ -173,11 +173,15 @@ export class OrionApiClient {
         });
       }
 
-      const headers: Record<string, string> = {
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        Pragma: "no-cache",
-        Expires: "0",
-      };
+      const headers: Record<string, string> = {};
+
+      // Cache-busting apenas para mutações (POST, PUT, PATCH, DELETE)
+      // GETs podem ser cacheados pelo browser para melhor performance
+      if (method !== "GET") {
+        headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+        headers["Pragma"] = "no-cache";
+        headers["Expires"] = "0";
+      }
 
       if (!(body instanceof FormData)) {
         headers["Content-Type"] = "application/json";

@@ -20,8 +20,9 @@ interface StageFormModalProps {
     stage?: WorkStage | null;
     onSave: (data: CreateStageData, silent?: boolean) => Promise<{ success: boolean; stageId?: string }>;
     onDelete?: (stageId: string) => Promise<{ success: boolean }>;
-    onSync?: () => Promise<{ success: boolean }>; // New prop
+    onSync?: () => Promise<{ success: boolean }>;
     onRefresh?: () => void;
+    bulkCreateStages?: (items: CreateStageData[], silent?: boolean) => Promise<any>;
 }
 
 interface ProductionCategory {
@@ -79,7 +80,7 @@ const DEFAULT_PRODUCTION_CATEGORIES: ProductionCategory[] = [
     }
 ];
 
-export default function StageFormModal({ isOpen, onClose, stage, onSave, onDelete, onSync, onRefresh }: StageFormModalProps) {
+export default function StageFormModal({ isOpen, onClose, stage, onSave, onDelete, onSync, onRefresh, bulkCreateStages }: StageFormModalProps) {
     const [activeTab, setActiveTab] = useState<'manual' | 'import'>('manual');
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
@@ -179,53 +180,50 @@ export default function StageFormModal({ isOpen, onClose, stage, onSave, onDelet
         setError('');
 
         try {
+            const bulkData: any[] = [];
+
             for (const cat of categories || []) {
                 const catActivities = cat.activities.filter(a => selectedActivities.has(a.id));
                 const isParentRequested = selectedCategoriesOnly.has(cat.id) || catActivities.length > 0;
 
                 if (!isParentRequested) continue;
 
-                console.log(`[Import] Criando Meta Mãe: ${cat.name} (Ordem: ${cat.order})`);
-                // Create Parent Meta (Meta Mãe)
-                const parentResult = await onSave({
+                bulkData.push({
                     name: cat.name,
                     description: catActivities.length > 0
                         ? `Etapa principal com ${catActivities.length} sub-metas`
                         : `Meta principal`,
                     weight: 1.0,
-                    displayOrder: cat.order
-                }, true);
-
-                const parentId = parentResult.stageId;
-                console.log(`[Import] Meta Mãe criada. ID: ${parentId}`, parentResult);
-
-                if (!parentId) {
-                    console.warn(`[Import] Alerta: Meta Mãe "${cat.name}" criada mas ID não retornado. Sub-metas ficarão órfãs.`);
-                }
-
-                // Pequeno delay após criar a Meta Mãe
-                await new Promise(resolve => setTimeout(resolve, 200));
-
-                // Create Children (Sub Metas)
-                for (const act of catActivities) {
-                    console.log(`[Import] Criando Sub-meta: ${act.name} (Parent: ${parentId}, Ordem: ${act.order})`);
-                    await onSave({
+                    displayOrder: cat.order,
+                    children: catActivities.map(act => ({
                         name: act.name,
                         description: `Sub-meta de ${cat.name}`,
                         weight: Number(act.weight) || 1.0,
-                        parentId: parentId,
                         displayOrder: act.order,
                         productionActivityId: act.id
-                    }, true);
-                    
-                    // Delay de 300ms entre sub-metas (aumentado para evitar 429)
-                    await new Promise(resolve => setTimeout(resolve, 300));
+                    }))
+                });
+            }
+
+            console.log(`[Import] Enviando ${bulkData.length} categorias para importação em lote...`);
+            
+            if (bulkCreateStages) {
+                await bulkCreateStages(bulkData, true);
+            } else {
+                console.warn('[Import] hook bulkCreateStages não fornecido');
+                // Fallback (não recomendado mas para segurança)
+                for (const item of bulkData) {
+                    const res = await onSave(item, true);
+                    if (item.children) {
+                        for (const child of item.children) {
+                            await onSave({ ...child, parentId: res.stageId }, true);
+                        }
+                    }
                 }
             }
 
             console.log('[Import] Processo concluído com sucesso.');
             if (onSync) {
-                console.log('[Importação] Iniciando sincronização de dados...');
                 await onSync();
             } else {
                 onRefresh?.();

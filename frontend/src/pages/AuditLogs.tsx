@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, ReactNode } from "react";
 import { useAuditLogs, AuditLog } from "@/hooks/useAuditLogs";
 import {
   Card,
@@ -298,6 +298,38 @@ export default function AuditLogs() {
     key: string;
     direction: "asc" | "desc";
   } | null>(null);
+
+
+  // Estados para Relatório de Segurança (Real-Time)
+  const [securityReport, setSecurityReport] = useState<{
+      summary: {
+          protectedRoutes: ReactNode;
+          totalRoutes: number;
+          score: number;
+          vulnerabilities: number;
+          checks: {
+              https: boolean;
+              strongSecret: boolean;
+              mode: string;
+          }
+      }
+  } | null>(null);
+
+  useEffect(() => {
+    const fetchSecurityReport = async () => {
+        try {
+            const { data } = await orionApi.post<any>("/audit/security-scan");
+            if (data) {
+                setSecurityReport(data.data || data); // Ajuste conforme resposta da API
+            }
+        } catch (error) {
+            console.error("Erro ao carregar relatório de segurança:", error);
+        }
+    };
+    if (defaultTab === 'checklist') {
+        fetchSecurityReport();
+    }
+  }, [defaultTab]);
 
   // Novos estados para visualização modernizada
   const [streamViewMode, setStreamViewMode] = useState<"terminal" | "table">("table");
@@ -2224,7 +2256,7 @@ export default function AuditLogs() {
 
                       <div className="flex justify-end pt-2">
                         <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-30">
-                          ORION ARCHITECTURAL AUDITOR V2.4 //{" "}
+                          GESTÃO VIRTUAL ARCHITECTURAL AUDITOR V2.4 //{" "}
                           {format(new Date(), "yyyy")}
                         </p>
                       </div>
@@ -2266,41 +2298,87 @@ export default function AuditLogs() {
                     </CardHeader>
                     <CardContent className="p-0">
                       <div className="divide-y divide-white/5">
-                        {[
-                          { id: 1, title: "Autenticação e Sessões", severity: "CRÍTICO", details: ["Tokens expostos em tela/logs", "Sessões sem expiração renovável"], suggestion: "Implementar httpOnly cookies e expiração curta via middleware." },
-                          { id: 2, title: "Controle de Acesso (RBAC)", severity: "CRÍTICO", details: ["Perfis com privilégios excessivos visíveis", "Falta de MFA para cargos diretivos"], suggestion: "Implementar matriz RBAC estrita e 2FA para perfis 'GOD'." },
-                          { id: 3, title: "Exposição de Dados (LGPD)", severity: "ALTO", details: ["Nomes completos em dashboards públicos", "Dados sensíveis sem anonimização"], suggestion: "Utilizar helper formatNameForLGPD() e aplicar máscaras em campos sensíveis." },
-                          { id: 4, title: "Validação de Dados", severity: "MÉDIO", details: ["Campos com 'Invalid Date' (RangeError)", "Falta de sanitização em inputs de texto"], suggestion: "Corrigir funções de manipulação de datas e integrar Zod no backend." },
-                          { id: 5, title: "Dashboard e Métricas", severity: "BAIXO", details: ["Relatórios acessíveis sem filtro de perfil"], suggestion: "Implementar filtros de acesso por ID de Empresa/Canteiro no signal." }
-                        ].map((item) => (
-                          <div key={item.id} className="p-6 space-y-4 hover:bg-white/2 transition-all group">
-                            <div className="flex items-start justify-between">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-black text-xs">0{item.id}</div>
-                                <h3 className="font-bold text-lg tracking-tight group-hover:text-primary transition-colors">{item.title}</h3>
-                              </div>
-                              <Badge className={`${item.severity === 'CRÍTICO' ? 'bg-red-500/20 text-red-400 border-red-500/30' :
-                                item.severity === 'ALTO' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30' :
-                                  'bg-blue-500/20 text-blue-400 border-blue-500/30'} font-black text-[10px] tracking-widest`}>
-                                {item.severity}
-                              </Badge>
-                            </div>
-                            <div className="pl-11 space-y-3">
-                              <div className="space-y-1.5">
-                                {item.details.map((detail, idx) => (
-                                  <div key={idx} className="flex items-center gap-2 text-sm text-muted-foreground">
-                                    <XCircle className="w-3.5 h-3.5 text-red-500/50" />
-                                    {detail}
-                                  </div>
-                                ))}
-                              </div>
-                              <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 text-primary-foreground text-xs font-bold flex items-start gap-3">
-                                <Zap className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                                <p className="leading-relaxed"><span className="text-primary mr-2 uppercase tracking-widest text-[9px]">Correção sugerida:</span> {item.suggestion}</p>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                        {securityReport ? (
+                            <>
+                                {/* ITEM 1: HTTPS & ENV */}
+                                <div className="p-6 space-y-4 hover:bg-white/2 transition-all group">
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-black text-xs">01</div>
+                                            <h3 className="font-bold text-lg tracking-tight group-hover:text-primary transition-colors">Ambiente & Criptografia</h3>
+                                        </div>
+                                        <Badge className={`font-black text-[10px] tracking-widest ${securityReport.summary.checks.https ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}>
+                                            {securityReport.summary.checks.https ? 'SEGURO' : 'CRÍTICO'}
+                                        </Badge>
+                                    </div>
+                                    <div className="pl-11 space-y-3">
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                {securityReport.summary.checks.https ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" /> : <XCircle className="w-3.5 h-3.5 text-red-500" />}
+                                                HTTPS Ativo: {securityReport.summary.checks.https ? "Sim" : "Não"}
+                                            </div>
+                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                <Info className="w-3.5 h-3.5 text-blue-500" />
+                                                Modo de Execução: {securityReport.summary.checks.mode}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* ITEM 2: JWT SECRET */}
+                                <div className="p-6 space-y-4 hover:bg-white/2 transition-all group">
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-black text-xs">02</div>
+                                            <h3 className="font-bold text-lg tracking-tight group-hover:text-primary transition-colors">Segurança de Tokens (JWT)</h3>
+                                        </div>
+                                        <Badge className={`font-black text-[10px] tracking-widest ${securityReport.summary.checks.strongSecret ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-orange-500/20 text-orange-400 border-orange-500/30'}`}>
+                                            {securityReport.summary.checks.strongSecret ? 'FORTE' : 'MÉDIO'}
+                                        </Badge>
+                                    </div>
+                                    <div className="pl-11 space-y-3">
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                {securityReport.summary.checks.strongSecret ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" /> : <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />}
+                                                Segredo JWT Forte ({">"} 32 chars)
+                                            </div>
+                                        </div>
+                                        {!securityReport.summary.checks.strongSecret && (
+                                            <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 text-primary-foreground text-xs font-bold flex items-start gap-3">
+                                                <Zap className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                                                <p className="leading-relaxed"><span className="text-primary mr-2 uppercase tracking-widest text-[9px]">Correção sugerida:</span> Aumente a complexidade do JWT_SECRET no .env.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* ITEM 3: EXPOSIÇÃO DE ROTAS */}
+                                <div className="p-6 space-y-4 hover:bg-white/2 transition-all group">
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-black text-xs">03</div>
+                                            <h3 className="font-bold text-lg tracking-tight group-hover:text-primary transition-colors">Exposição de Rotas</h3>
+                                        </div>
+                                        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 font-black text-[10px] tracking-widest">
+                                            INFO
+                                        </Badge>
+                                    </div>
+                                    <div className="pl-11 space-y-3">
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                <ShieldCheck className="w-3.5 h-3.5 text-green-500" />
+                                                Rotas Protegidas: {securityReport.summary.protectedRoutes} / {securityReport.summary.totalRoutes}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                             <div className="p-10 text-center space-y-3">
+                                <RefreshCw className="w-8 h-8 text-primary mx-auto animate-spin" />
+                                <p className="text-sm text-muted-foreground animate-pulse">Carregando análise de segurança em tempo real...</p>
+                             </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -2317,40 +2395,54 @@ export default function AuditLogs() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-8">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="p-6 rounded-[24px] bg-black/40 border border-white/5 group hover:border-primary/30 transition-all">
-                            <span className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em]">Score de Segurança</span>
-                            <p className="text-4xl font-black mt-2 text-primary tracking-tighter">84<span className="text-sm opacity-50 ml-1">/100</span></p>
-                          </div>
-                          <div className="p-6 rounded-[24px] bg-black/40 border border-white/5 group hover:border-amber-500/30 transition-all">
-                            <span className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em]">Status Geral</span>
-                            <p className="text-2xl font-black mt-2 text-amber-500 uppercase italic">EM ALERTA</p>
-                          </div>
-                        </div>
+                        {securityReport ? (
+                            <>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="p-6 rounded-[24px] bg-black/40 border border-white/5 group hover:border-primary/30 transition-all">
+                                    <span className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em]">Score de Segurança</span>
+                                    <p className="text-4xl font-black mt-2 text-primary tracking-tighter">
+                                        {securityReport.summary.score}
+                                        <span className="text-sm opacity-50 ml-1">/100</span>
+                                    </p>
+                                  </div>
+                                  <div className="p-6 rounded-[24px] bg-black/40 border border-white/5 group hover:border-amber-500/30 transition-all">
+                                    <span className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em]">Status Geral</span>
+                                    <p className={`text-2xl font-black mt-2 uppercase italic ${securityReport.summary.score > 80 ? 'text-green-500' : 'text-amber-500'}`}>
+                                        {securityReport.summary.score > 80 ? 'SEGURO' : 'EM ALERTA'}
+                                    </p>
+                                  </div>
+                                </div>
 
-                        <div className="space-y-5 pt-4 border-t border-white/5">
-                          <div className="flex items-center justify-between">
-                            <div className="flex flex-col">
-                              <span className="text-sm font-bold">Criptografia em Repouso</span>
-                              <span className="text-[10px] text-muted-foreground uppercase">AES-256 GCM</span>
+                                <div className="space-y-5 pt-4 border-t border-white/5">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                      <span className="text-sm font-bold">Criptografia em Repouso</span>
+                                      <span className="text-[10px] text-muted-foreground uppercase">AES-256 GCM</span>
+                                    </div>
+                                    <Badge className="bg-green-500/20 text-green-400 border-green-500/30">ATIVO</Badge>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                      <span className="text-sm font-bold">Monitoramento de Invasão</span>
+                                      <span className="text-[10px] text-muted-foreground uppercase">SSE Master Runner</span>
+                                    </div>
+                                    <Badge className="bg-green-500/20 text-green-400 border-green-500/30">ESTÁVEL</Badge>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                      <span className="text-sm font-bold">MFA Administrativo</span>
+                                      <span className="text-[10px] text-muted-foreground uppercase">TOTP / SMS</span>
+                                    </div>
+                                    <Badge variant="outline" className="border-white/10 text-muted-foreground">DESATIVADO</Badge>
+                                  </div>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="py-10 flex flex-col items-center justify-center gap-4 text-muted-foreground">
+                                <RefreshCw className="w-8 h-8 animate-spin text-primary" />
+                                <span className="text-xs uppercase font-bold tracking-widest">Calculando Score...</span>
                             </div>
-                            <Badge className="bg-green-500/20 text-green-400 border-green-500/30">ATIVO</Badge>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div className="flex flex-col">
-                              <span className="text-sm font-bold">Monitoramento de Invasão</span>
-                              <span className="text-[10px] text-muted-foreground uppercase">SSE Master Runner</span>
-                            </div>
-                            <Badge className="bg-green-500/20 text-green-400 border-green-500/30">ESTÁVEL</Badge>
-                          </div>
-                          <div className="flex items-center justify-between opacity-50">
-                            <div className="flex flex-col">
-                              <span className="text-sm font-bold">MFA Administrativo</span>
-                              <span className="text-[10px] text-muted-foreground uppercase">TOTP / SMS</span>
-                            </div>
-                            <Badge variant="outline" className="border-white/10 text-muted-foreground">DESATIVADO</Badge>
-                          </div>
-                        </div>
+                        )}
 
                         <Button className="w-full py-6 rounded-2xl bg-primary hover:bg-primary/90 text-white font-black uppercase tracking-widest shadow-xl shadow-primary/20 transition-all">
                           GERAR RELATÓRIO PDF

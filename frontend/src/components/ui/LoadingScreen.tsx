@@ -68,7 +68,7 @@ export const LoadingScreen = ({
                             strokeDasharray="276.46"
                             strokeDashoffset={totalItems > 0 ? (276.46 - (276.46 * progress) / 100) : 70}
                             strokeLinecap="round"
-                            className={cn("transition-all duration-700 ease-out text-primary", totalItems === 0 && "animate-spin-slow")}
+                            className={cn("transition-all duration-300 ease-out text-primary", totalItems === 0 && "animate-spin-slow")}
                             style={{ strokeDashoffset: totalItems > 0 ? undefined : 200 }}
                         />
                     </svg>
@@ -109,20 +109,15 @@ export const LoadingScreen = ({
                                 </span>
                             </div>
 
-                            <div className="flex items-center gap-3 bg-white/5 px-3 py-1.5 rounded-xl border border-white/10 shadow-inner">
-                                <Switch 
-                                    id="sync-expand" 
-                                    checked={isExpanded}
-                                    onCheckedChange={(checked) => setIsExpanded(checked)}
-                                    className="data-[state=checked]:bg-primary"
-                                />
-                                <Label 
-                                    htmlFor="sync-expand" 
-                                    className="text-[9px] font-black uppercase tracking-widest cursor-pointer select-none text-white/70 hover:text-white transition-colors"
-                                >
-                                    {isExpanded ? 'DETALHES: ON' : 'DETALHES: OFF'}
-                                </Label>
-                            </div>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setIsExpanded(!isExpanded)}
+                                className="h-6 text-[9px] font-black uppercase tracking-widest text-white/70 hover:text-white hover:bg-white/10 gap-2 px-2"
+                            >
+                                {isExpanded ? 'OCULTAR DETALHES' : 'EXIBIR DETALHES'}
+                                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                            </Button>
                         </div>
 
                         <div className={cn(

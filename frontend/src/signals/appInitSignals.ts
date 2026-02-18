@@ -108,9 +108,8 @@ export const isAppReadySignal = computed(() => {
     const auditReady = hasAuditFetchedSignal.value;
     const costsReady = hasCostsFetchedSignal.value;
 
-    const ready = authReady && usersReady && teamsReady && globalReady &&
-        dim3Ready && reportsReady && messagesReady && timeReady &&
-        stagesReady && auditReady && costsReady;
+    // Critérios mínimos para entrada (Otimista)
+    const ready = authReady && usersReady && teamsReady && globalReady && stagesReady;
 
     if (ready && !minDelayElapsedSignal.value) {
         minDelayElapsedSignal.value = true;

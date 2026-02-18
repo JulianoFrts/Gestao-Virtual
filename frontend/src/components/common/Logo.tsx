@@ -8,7 +8,7 @@ interface LogoProps {
 
 export function Logo({ className, variant = 'full', size = 'md' }: LogoProps) {
   // Option 2 Refined: Construction & Energy Theme
-  // Icon: Stylized Transmission Tower (Linha de Transmissão)
+  // Icon: Stylized Transmis  sion Tower (Linha de Transmissão)
   // Colors: Cyan (Tech) + Amber/Orange (Energy/Construction)
 
   return (
@@ -16,7 +16,7 @@ export function Logo({ className, variant = 'full', size = 'md' }: LogoProps) {
       <div className={cn(
         "relative flex items-center justify-center font-bold text-foreground shrink-0",
         variant === 'icon' 
-          ? "w-10 h-10 bg-gradient-to-br from-slate-900 to-slate-800 rounded-lg shadow-lg border border-amber-500/30" 
+          ? "w-10 h-10 bg-linear-to-br from-slate-900 to-slate-800 rounded-lg shadow-lg border border-amber-500/30" 
           : ""
       )}>
         {/* Custom SVG Icon: Transmission Tower */}

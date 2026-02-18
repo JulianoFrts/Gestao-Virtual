@@ -33,12 +33,17 @@ const querySchema = paginationQuerySchema.extend({
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth();
-    const validation = Validator.validateQuery(
+    const params = Object.fromEntries(request.nextUrl.searchParams.entries());
+
+    // Alias project_id -> projectId e company_id -> companyId para compatibilidade
+    if (params.project_id && !params.projectId) params.projectId = params.project_id;
+    if (params.company_id && !params.companyId) params.companyId = params.company_id;
+
+    const validation = Validator.validate(
       querySchema,
-      request.nextUrl.searchParams,
+      params,
     );
     if (!validation.success) {
-      const params = Object.fromEntries(request.nextUrl.searchParams.entries());
       logger.warn("Falha na validação de map_elements", { params });
       return validation.response;
     }

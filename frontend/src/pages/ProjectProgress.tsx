@@ -806,7 +806,7 @@ export default function ProjectProgress() {
         if (towersToUpdate.length > 0) {
           console.log(`[ProjectProgress] Sending batch update for ${towersToUpdate.length} towers/elements...`);
           const { error: towerError } = await orionApi
-            .from("tower_technical_data")
+            .from("map_elements")
             .insert(towersToUpdate);
           if (towerError) {
             console.error("[ProjectProgress] Tower save error details:", towerError);

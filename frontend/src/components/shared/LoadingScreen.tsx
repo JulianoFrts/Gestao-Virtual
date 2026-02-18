@@ -1,14 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Loader2, CheckCircle2, CircleCheck, FileText, Clock } from 'lucide-react';
+import { Loader2, CheckCircle2, CircleCheck, FileText, Clock, ChevronUp, ChevronDown } from 'lucide-react';
 import { useSignals } from "@preact/signals-react/runtime";
 import { appProgressSignal, loadingModulesSignal } from '@/signals/appInitSignals';
+import { logoUrlSignal } from '@/signals/settingsSignals';
+import { Button } from "@/components/ui/button";
 
 export function LoadingScreen() {
   useSignals();
 
   const progress = appProgressSignal.value;
   const modules = loadingModulesSignal.value;
+  const [isExpanded, setIsExpanded] = useState(false);
 
   return (
     <div className="fixed inset-0 z-9999 flex items-center justify-center bg-[#030712] overflow-hidden select-none">
@@ -35,7 +38,7 @@ export function LoadingScreen() {
               <div className="absolute inset-0 rounded-full bg-primary/5 blur-xl animate-pulse" />
 
               {/* Unified Rotating Container for Perfect Sync */}
-              <div className="absolute inset-0 animate-[spin_3s_linear_infinite]">
+              <div className="absolute inset-0 animate-[spin_1.5s_linear_infinite]">
 
                 {/* 1. Module Status Indicators (The Ring of Dots) */}
                 {modules.map((m, i) => {
@@ -87,19 +90,33 @@ export function LoadingScreen() {
 
           {/* Brand Identity - Responsive text sizes */}
           <div className="text-center space-y-1 pointer-events-none select-none">
-            <div className="space-y-0">
-              <h1
-                className="font-black tracking-[0.2em] text-white italic drop-shadow-glow flex items-center justify-center gap-1"
-                style={{ fontSize: 'clamp(1.5rem, 4vh, 3.5rem)' }}
-              >
-                {['G', 'E', 'S', 'T', 'Ã', 'O'].map((char, i) => (
-                  <span key={i} className="animate-in slide-in-from-bottom-2 fade-in duration-500" style={{ animationDelay: `${i * 40}ms` }}>{char}</span>
-                ))}
-              </h1>
-              <h2
-                className="font-black tracking-[0.3em] text-white/5 italic -mt-1"
-                style={{ fontSize: 'clamp(1rem, 3vh, 2.5rem)' }}
-              >VIRTUAL</h2>
+            <div className="space-y-0 flex flex-col items-center">
+                {logoUrlSignal.value ? (
+                    <img 
+                        src={logoUrlSignal.value} 
+                        alt="Logo" 
+                        className="animate-in zoom-in-50 duration-700 drop-shadow-glow object-contain"
+                        style={{ 
+                            maxHeight: 'clamp(60px, 12vh, 100px)',
+                            maxWidth: '80%'
+                        }}
+                    />
+                ) : (
+                    <>
+                      <h1
+                        className="font-black tracking-[0.2em] text-white italic drop-shadow-glow flex items-center justify-center gap-1"
+                        style={{ fontSize: 'clamp(1.5rem, 4vh, 3.5rem)' }}
+                      >
+                        {['G', 'E', 'S', 'T', 'Ã', 'O'].map((char, i) => (
+                          <span key={i} className="animate-in slide-in-from-bottom-2 fade-in duration-500" style={{ animationDelay: `${i * 40}ms` }}>{char}</span>
+                        ))}
+                      </h1>
+                      <h2
+                        className="font-black tracking-[0.3em] text-white/5 italic -mt-1"
+                        style={{ fontSize: 'clamp(1rem, 3vh, 2.5rem)' }}
+                      >VIRTUAL</h2>
+                    </>
+                )}
             </div>
 
             <div className="flex items-center justify-center gap-3 py-1">
@@ -107,7 +124,7 @@ export function LoadingScreen() {
               <span
                 className="font-black tracking-[0.4em] text-primary/50 uppercase"
                 style={{ fontSize: 'clamp(0.5rem, 1vh, 0.75rem)' }}
-              >Protocolo Orion v3</span>
+              >Software Solutions</span>
               <div className="h-px w-8 bg-linear-to-l from-transparent via-primary/30 to-transparent" />
             </div>
           </div>
@@ -116,16 +133,16 @@ export function LoadingScreen() {
         {/* Sync Status Card - Responsive */}
         <div
           className="w-full glass-card bg-black/40 backdrop-blur-2xl border border-white/5 rounded-2xl shadow-xl relative overflow-hidden group"
-          style={{ padding: 'clamp(12px, 2vh, 24px)', maxWidth: 'clamp(280px, 40vw, 380px)' }}
+          style={{ padding: 'clamp(10px, 2vh, 20px)', maxWidth: 'clamp(160px, 40vw, 400px)' }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between mb-[1.5vh]">
-            <div className="space-y-0.5">
+          <div className="flex items-center justify-center mb-[1.5vh] relative min-h-[32px]">
+            <div className="space-y-0.5 text-center">
               <h3
                 className="font-black tracking-[0.2em] text-white/30 uppercase"
                 style={{ fontSize: 'clamp(0.5rem, 0.9vh, 0.625rem)' }}
               >Sincronização de Dados</h3>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center justify-center gap-1.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shadow-[0_0_6px_hsl(var(--primary))]" />
                 <span
                   className="font-bold text-primary tracking-wider uppercase"
@@ -135,10 +152,21 @@ export function LoadingScreen() {
                 </span>
               </div>
             </div>
-            <FileText className="w-4 h-4 text-white/10" />
+            
+            <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="h-6 w-6 text-white/30 hover:text-white hover:bg-white/10 absolute right-0 top-1/2 -translate-y-1/2"
+            >
+                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </Button>
           </div>
 
-          <div className="space-y-[0.8vh]">
+          <div className={cn(
+              "space-y-[0.8vh] transition-all duration-500 ease-in-out overflow-hidden",
+              isExpanded ? "max-h-[60vh] opacity-100" : "max-h-0 opacity-0"
+          )}>
             {modules.map((step, idx) => (
               <div
                 key={step.id}
@@ -148,7 +176,7 @@ export function LoadingScreen() {
                 )}
                 style={{
                   padding: 'clamp(6px, 1vh, 12px) clamp(10px, 1.5vh, 16px)',
-                  transitionDelay: `${idx * 60}ms`
+                  transitionDelay: `${idx * 30}ms`
                 }}
               >
                 <div className="flex items-center gap-2">
@@ -159,7 +187,7 @@ export function LoadingScreen() {
                   )} />
                   <span
                     className={cn(
-                      "font-bold uppercase tracking-[0.15em] transition-all duration-500",
+                      "font-bold uppercase tracking-[0.15em] transition-all duration-300",
                       step.status === 'completed' ? "text-white/60" :
                         step.status === 'loading' ? "text-primary brightness-110" : "text-white/10"
                     )}

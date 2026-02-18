@@ -1,4 +1,8 @@
 import { prisma } from "@/lib/prisma/client";
+import { cacheService } from "@/services/cacheService";
+
+const WORK_STAGES_CACHE_TTL = 300; // 5 minutos de cache para etapas (geralmente estáveis)
+const PROGRESS_CACHE_TTL = 60;    // 1 minuto para progresso em listagens gerais
 
 export interface WorkStageProgress {
   id: string;
@@ -38,6 +42,16 @@ export interface CreateWorkStageDTO {
   parentId?: string | null;
   productionActivityId?: string | null;
   metadata?: any;
+}
+
+export interface CreateWorkStageBulkItem {
+  name: string;
+  description?: string | null;
+  weight?: number;
+  displayOrder: number;
+  productionActivityId?: string | null;
+  metadata?: any;
+  children?: CreateWorkStageBulkItem[];
 }
 
 export interface WorkStageRepository {
@@ -81,6 +95,11 @@ export interface WorkStageRepository {
   delete(id: string): Promise<void>;
   reorder(updates: { id: string; displayOrder: number }[]): Promise<void>;
   deleteBySite(siteId: string): Promise<void>;
+  createBulk(
+    projectId: string,
+    siteId: string | undefined,
+    data: CreateWorkStageBulkItem[],
+  ): Promise<WorkStage[]>;
 }
 
 export class PrismaWorkStageRepository implements WorkStageRepository {
@@ -153,12 +172,17 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
           notes: progress.notes,
         },
       });
+
+      // Invalidar cache de listagem ao salvar progresso
+      await this.invalidateCache();
+      
       return {
         ...result,
         actualPercentage: Number(result.actualPercentage),
       } as WorkStageProgress;
     }
   }
+
 
   async findProgressByDate(
     stageId: string,
@@ -180,7 +204,14 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
     companyId?: string | null;
     linkedOnly?: boolean;
   }): Promise<WorkStage[]> {
-    const { siteId, projectId, linkedOnly } = params;
+    const { siteId, projectId, companyId, linkedOnly } = params;
+
+    // Tentar obter do cache primeiro
+    const cacheKey = `work_stages:list:${projectId || 'all'}:${siteId || 'all'}:${linkedOnly || 'false'}:${companyId || 'all'}`;
+    const cached = await cacheService.get<WorkStage[]>(cacheKey);
+    if (cached) {
+      return cached;
+    }
 
     const where: any = {};
 
@@ -188,13 +219,28 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
       where.productionActivityId = { not: null };
     }
 
-    if (siteId) {
+    if (siteId && projectId) {
+      // Atividades do canteiro OU atividades globais do projeto
+      where.OR = [
+        { siteId: siteId },
+        { 
+          AND: [
+            { projectId: projectId },
+            { siteId: null }
+          ]
+        }
+      ];
+    } else if (siteId) {
       where.siteId = siteId;
     } else if (projectId) {
       where.OR = [
         { projectId: projectId },
         { site: { projectId: projectId } }
       ];
+    }
+
+    if (companyId) {
+      where.project = { companyId: companyId };
     }
 
     const stages = await prisma.workStage.findMany({
@@ -213,7 +259,12 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
       orderBy: { displayOrder: "asc" },
     });
 
-    return stages.map(this.mapToWorkStage);
+    const result = stages.map(this.mapToWorkStage);
+    
+    // Salvar no cache (TTL curto se tiver progresso, longo se for apenas estrutura)
+    await cacheService.set(cacheKey, result, linkedOnly ? PROGRESS_CACHE_TTL : WORK_STAGES_CACHE_TTL);
+
+    return result;
   }
 
   async findAllBySiteId(siteId: string): Promise<WorkStage[]> {
@@ -251,19 +302,6 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
     return stages.map(this.mapToWorkStage);
   }
 
-  private mapToWorkStage(s: any): WorkStage {
-    return {
-      ...s,
-      weight: s.weight ? Number(s.weight) : 1.0,
-      progress: s.progress
-        ? s.progress.map((p: any) => ({
-          ...p,
-          actualPercentage: Number(p.actualPercentage),
-        }))
-        : [],
-    };
-  }
-
   async create(data: CreateWorkStageDTO): Promise<WorkStage> {
     const result = await prisma.workStage.create({
       data: {
@@ -278,6 +316,7 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
         metadata: (data.metadata || {}) as any,
       },
     });
+    await this.invalidateCache();
     return this.mapToWorkStage(result);
   }
 
@@ -286,6 +325,7 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
       where: { id },
       data,
     });
+    await this.invalidateCache();
     return this.mapToWorkStage(result);
   }
 
@@ -313,18 +353,18 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
 
     if (elements.length === 0) return [0, 0];
 
-    let targetElementIds = elements.map(e => e.id);
+    let targetElementIds = elements.map((e: any) => e.id);
 
     if (siteName) {
       const normalizedSite = siteName.trim().toLowerCase();
-      const filteredElements = elements.filter(e => {
+      const filteredElements = elements.filter((e: any) => {
         const meta = e.metadata as any;
         const trecho = meta?.trecho || meta?.Trecho || meta?.site || "";
         return String(trecho).trim().toLowerCase() === normalizedSite;
       });
 
       if (filteredElements.length > 0) {
-        targetElementIds = filteredElements.map(e => e.id);
+        targetElementIds = filteredElements.map((e: any) => e.id);
       } else {
         targetElementIds = [];
       }
@@ -359,7 +399,7 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
     let targetElements = elements;
     if (siteName) {
       const normalizedSite = siteName.trim().toLowerCase();
-      const filtered = elements.filter(e => {
+      const filtered = elements.filter((e: any) => {
         const meta = e.metadata as any;
         const trecho = meta?.trecho || meta?.Trecho || meta?.site || "";
         return String(trecho).trim().toLowerCase() === normalizedSite;
@@ -373,7 +413,7 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
 
     if (targetElements.length === 0) return { totalWeight: 0, weightedProgress: 0 };
 
-    const targetElementIds = targetElements.map(e => e.id);
+    const targetElementIds = targetElements.map((e: any) => e.id);
     const progressRecords = await prisma.mapElementProductionProgress.findMany({
       where: {
         activityId,
@@ -414,6 +454,7 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
     await prisma.workStage.delete({
       where: { id }
     });
+    await this.invalidateCache();
   }
 
   async reorder(updates: { id: string; displayOrder: number }[]): Promise<void> {
@@ -426,11 +467,86 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
         }),
       ),
     );
+    await this.invalidateCache();
   }
 
   async deleteBySite(siteId: string): Promise<void> {
     await prisma.workStage.deleteMany({
-      where: { siteId }
+      where: { siteId },
     });
+    await this.invalidateCache();
+  }
+
+  async createBulk(
+    projectId: string,
+    siteId: string | undefined,
+    data: CreateWorkStageBulkItem[],
+  ): Promise<WorkStage[]> {
+    const results: WorkStage[] = [];
+
+    // Usamos transação para garantir atomicidade e performance
+    await prisma.$transaction(async (tx) => {
+      for (const item of data) {
+        // Criar o pai (Meta Mãe)
+        const parent = await tx.workStage.create({
+          data: {
+            name: item.name,
+            description: item.description,
+            weight: item.weight ?? 1.0,
+            displayOrder: item.displayOrder,
+            productionActivityId: item.productionActivityId || null,
+            siteId: siteId || null,
+            projectId: projectId,
+            metadata: item.metadata || {},
+          },
+        });
+
+        results.push(this.mapToWorkStage(parent));
+
+        // Se tiver filhos, criar cada um vinculado ao pai
+        if (item.children && item.children.length > 0) {
+          for (const child of item.children) {
+            const createdChild = await tx.workStage.create({
+              data: {
+                name: child.name,
+                description: child.description,
+                weight: child.weight ?? 1.0,
+                displayOrder: child.displayOrder,
+                productionActivityId: child.productionActivityId || null,
+                siteId: siteId || null,
+                projectId: projectId,
+                parentId: parent.id,
+                metadata: child.metadata || {},
+              },
+            });
+            results.push(this.mapToWorkStage(createdChild));
+          }
+        }
+      }
+    });
+
+    // Invalida o cache apenas UMA vez ao final de TODAS as inserções
+    await this.invalidateCache();
+
+    return results;
+  }
+
+  private async invalidateCache(): Promise<void> {
+    await cacheService.delByPattern("work_stages:list:*");
+  }
+
+  private mapToWorkStage(data: any): WorkStage {
+    return {
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      weight: data.weight,
+      siteId: data.siteId,
+      projectId: data.projectId,
+      productionActivityId: data.productionActivityId,
+      metadata: data.metadata,
+      site: data.site,
+      progress: data.progress,
+    };
   }
 }

@@ -22,14 +22,17 @@ export class ParallelLoader {
 
     private maxConcurrency: number | { value: number };
 
-    constructor(concurrency: number | { value: number } = 4) {
+    constructor(concurrency: number | { value: number } = 100) {
         this.maxConcurrency = concurrency;
     }
 
     private get currentLimit(): number {
-        return typeof this.maxConcurrency === 'number'
+        const val = typeof this.maxConcurrency === 'number'
             ? this.maxConcurrency
             : this.maxConcurrency.value;
+        
+        // If value is 0 or less, treat as unlimited (max integer)
+        return val <= 0 ? Number.MAX_SAFE_INTEGER : val;
     }
 
     /**
