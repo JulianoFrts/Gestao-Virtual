@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma/client";
 import {
   ProductionRepository,
@@ -81,10 +82,11 @@ export class PrismaProductionRepository
   async findByElement(elementId: string): Promise<ProductionProgress[]> {
     const results = await prisma.mapElementProductionProgress.findMany({
       where: { elementId },
-      include: { activity: true }
+      include: { productionActivity: true }
     });
     return results.map((res: any) => new ProductionProgress({
       ...res,
+      activity: res.productionActivity, // Mantém compatibilidade com a entidade se necessário
       projectId: (res as any).projectId,
       currentStatus: res.currentStatus as ActivityStatus,
       progressPercent: Number(res.progressPercent),
@@ -121,22 +123,30 @@ export class PrismaProductionRepository
       } else {
         // Filtering through the document relation is safer as towers are imported via KMZ (Document)
         // which is linked to a Site.
-        where.document = { siteId };
+        where.constructionDocument = { siteId };
       }
     }
 
-    return await prisma.mapElementTechnicalData.findMany({
+    const results = await prisma.mapElementTechnicalData.findMany({
       where,
       orderBy: { sequence: "asc" },
       include: {
-        productionProgress: {
+        mapElementProductionProgress: {
           include: {
-            activity: true,
+            productionActivity: true,
           },
         },
         activitySchedules: true,
       },
     });
+
+    return results.map((el: any) => ({
+      ...el,
+      productionProgress: (el.mapElementProductionProgress || []).map((p: any) => ({
+        ...p,
+        activity: p.productionActivity
+      }))
+    }));
   }
   async findLinkedActivityIds(projectId: string, siteId?: string): Promise<string[]> {
     const where: any = {
@@ -210,16 +220,18 @@ export class PrismaProductionRepository
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const id = `auto_${stage.id}_${today.getTime()}`;
 
     await prisma.stageProgress.upsert({
-      where: { id: `auto_${stage.id}_${today.getTime()}` },
-      update: { actualPercentage: avgProgress, updatedById: updatedBy },
+      where: { id },
+      update: { actualPercentage: avgProgress, updatedBy: updatedBy },
       create: {
+        id,
         stageId: stage.id,
         actualPercentage: avgProgress,
         plannedPercentage: 0,
         recordedDate: today,
-        updatedById: updatedBy,
+        updatedBy: updatedBy,
         notes: "Sincronização Automática (Modelo DDD)",
       },
     });
@@ -234,7 +246,7 @@ export class PrismaProductionRepository
     const results = await prisma.mapElementProductionProgress.findMany({
       where,
       include: {
-        activity: true,
+        productionActivity: true,
         element: {
           select: { name: true, externalId: true, elementType: true },
         },
@@ -295,8 +307,8 @@ export class PrismaProductionRepository
     const where: any = {};
 
     if (params.projectId && params.projectId !== "all") {
-      // Precisamos navegar via element relation
-      where.element = { projectId: params.projectId };
+      // Navigate via mapElementTechnicalData relation (correct Prisma name)
+      where.mapElementTechnicalData = { projectId: params.projectId };
     }
 
     if (params.elementId) {
@@ -304,8 +316,8 @@ export class PrismaProductionRepository
     }
 
     if (params.companyId) {
-      where.element = {
-        ...where.element,
+      where.mapElementTechnicalData = {
+        ...where.mapElementTechnicalData,
         companyId: params.companyId,
       };
     }
@@ -324,8 +336,8 @@ export class PrismaProductionRepository
     return await prisma.activitySchedule.findMany({
       where,
       include: {
-        element: { select: { id: true, externalId: true, name: true } },
-        activity: { select: { name: true } },
+        mapElementTechnicalData: { select: { id: true, externalId: true, name: true } },
+        productionActivity: { select: { name: true } },
       },
       orderBy: { plannedStart: "asc" },
     });
@@ -387,15 +399,16 @@ export class PrismaProductionRepository
         dailyCost: data.dailyCost,
         currency: data.currency,
         description: data.description,
-        updatedById: data.updatedById,
+        updatedBy: data.updatedById,
       },
       create: {
+        id: crypto.randomUUID(),
         companyId: data.companyId,
         projectId: data.projectId,
         dailyCost: data.dailyCost,
         currency: data.currency,
         description: data.description,
-        updatedById: data.updatedById,
+        updatedBy: data.updatedById,
       },
     })) as unknown as DelayCostConfig;
   }
@@ -410,12 +423,13 @@ export class PrismaProductionRepository
   async createDelayReason(data: any): Promise<any> {
     return await prisma.projectDelayReason.create({
       data: {
+        id: crypto.randomUUID(),
         projectId: data.projectId,
         code: data.code,
         description: data.description,
         dailyCost: data.dailyCost,
         category: data.category,
-        updatedById: data.updatedById,
+        updatedBy: data.updatedById,
       },
     });
   }
@@ -427,14 +441,20 @@ export class PrismaProductionRepository
   // Categories (ProductionCategory)
   // Schema: ProductionCategory has name, description, order. No projectId.
   async listCategories(): Promise<any[]> {
-    return await prisma.productionCategory.findMany({
+    const results = await prisma.productionCategory.findMany({
       orderBy: { order: "asc" },
       include: {
-        activities: {
+        productionActivities: {
           orderBy: { order: "asc" },
         },
       },
     });
+
+    // Mapeia para o formato esperado pelo frontend (activities)
+    return results.map(cat => ({
+      ...cat,
+      activities: cat.productionActivities
+    }));
   }
 
   async createCategory(data: any): Promise<any> {
@@ -448,7 +468,7 @@ export class PrismaProductionRepository
     return await prisma.productionActivity.findMany({
       where,
       orderBy: { order: "asc" },
-      include: { category: true },
+      include: { productionCategory: true },
     });
   }
 
@@ -466,7 +486,7 @@ export class PrismaProductionRepository
     const res = await prisma.mapElementProductionProgress.findFirst({
       where,
       include: {
-        activity: true,
+        productionActivity: true,
         element: { select: { projectId: true } },
       },
     });
@@ -484,16 +504,21 @@ export class PrismaProductionRepository
   }
 
   async findAllIAPs(): Promise<any[]> {
-    return prisma.listIAP.findMany({
+    return prisma.listIap.findMany({
       orderBy: { iap: "asc" },
     });
   }
 
   async listUnitCosts(projectId: string): Promise<any[]> {
-    return await prisma.activityUnitCost.findMany({
+    const results = await prisma.activityUnitCost.findMany({
       where: { projectId },
-      include: { activity: true },
+      include: { productionActivity: true },
     });
+
+    return results.map(cost => ({
+      ...cost,
+      activity: cost.productionActivity
+    }));
   }
 
   async upsertUnitCosts(projectId: string, costs: any[]): Promise<any> {
@@ -511,6 +536,7 @@ export class PrismaProductionRepository
           measureUnit: cost.measureUnit,
         },
         create: {
+          id: crypto.randomUUID(),
           projectId,
           activityId: cost.activityId,
           unitPrice: cost.unitPrice,

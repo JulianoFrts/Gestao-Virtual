@@ -32,25 +32,44 @@ export class PrismaAuthCredentialRepository implements IAuthCredentialRepository
 
     async findByIdentifier(identifier: string) {
         const normalizedIdentifier = identifier.toLowerCase().trim();
+        if (!normalizedIdentifier) return null;
 
-        let credential = await this.findByEmail(normalizedIdentifier);
-        if (credential) return credential;
+        try {
+            // 1. Busca por email
+            const byEmail = await this.findByEmail(normalizedIdentifier);
+            if (byEmail) return byEmail;
+        } catch (err) {
+            console.error("[AuthRepo] Erro ao buscar por email:", (err as any)?.code, (err as any)?.message);
+            throw err;
+        }
 
-        credential = await this.findByLogin(normalizedIdentifier);
-        if (credential) return credential;
+        try {
+            // 2. Busca por login
+            const byLogin = await this.findByLogin(normalizedIdentifier);
+            if (byLogin) return byLogin;
+        } catch (err) {
+            console.error("[AuthRepo] Erro ao buscar por login:", (err as any)?.code, (err as any)?.message);
+            throw err;
+        }
 
+        // 3. Busca por CPF (somente se parecer CPF válido)
         const cpfClean = normalizedIdentifier.replace(/\D/g, "");
-        if (cpfClean.length === 11) {
-            const user = await this.prisma.user.findUnique({
-                where: { cpf: cpfClean },
-                select: { id: true },
-            });
-            if (user) {
-                credential = await this.findByUserId(user.id);
+        if (cpfClean.length === 11 && !/^0+$/.test(cpfClean)) {
+            try {
+                const user = await this.prisma.user.findUnique({
+                    where: { cpf: cpfClean },
+                    select: { id: true },
+                });
+                if (user) {
+                    return await this.findByUserId(user.id);
+                }
+            } catch (err) {
+                console.error("[AuthRepo] Erro ao buscar por CPF:", (err as any)?.code, (err as any)?.message);
+                throw err;
             }
         }
 
-        return credential;
+        return null;
     }
 
     async create(data: Prisma.AuthCredentialCreateInput) {

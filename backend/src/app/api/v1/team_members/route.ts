@@ -21,7 +21,7 @@ const querySchema = z.object({
   ),
   teamId: z.preprocess(
     (val) => (val === "undefined" || !val ? undefined : val),
-    z.string().uuid().optional(),
+    z.string().optional(),
   ),
   userId: z.preprocess(
     (val) => (val === "undefined" || !val ? undefined : val),

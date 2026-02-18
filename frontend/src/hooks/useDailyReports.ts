@@ -20,6 +20,7 @@ export interface DailyReport {
   subPoint?: string | null;
   subPointType?: "TORRE" | "VAO" | "TRECHO" | "GERAL" | null;
   metadata?: any;
+  selectedActivities?: any[];
   createdAt: Date;
 }
 
@@ -69,6 +70,7 @@ export function useDailyReports() {
               subPoint: r.sub_point,
               subPointType: r.sub_point_type,
               metadata: r.metadata,
+              selectedActivities: (r.metadata as any)?.selectedActivities || [],
               employeeId: r.user_id, // Mapeado corretamente para user_id
               companyId: (r as any).company_id,
               createdBy: r.created_by,
@@ -160,6 +162,8 @@ export function useDailyReports() {
 
     const today = new Date();
 
+    const reportMetadata = { ...(data.metadata || {}), teamIds: data.teamIds || [], selectedActivities: data.selectedActivities || data.metadata?.selectedActivities || [] };
+
     const newReport: DailyReport = {
       id: localId,
       teamId: data.teamId || null,
@@ -171,7 +175,8 @@ export function useDailyReports() {
       createdBy: effectiveUserId,
       subPoint: data.subPoint || null,
       subPointType: (data.subPointType as any) || null,
-      metadata: { ...(data.metadata || {}), teamIds: data.teamIds || [] },
+      metadata: reportMetadata,
+      selectedActivities: reportMetadata.selectedActivities,
       syncedAt: null,
       localId,
       createdAt: today,
@@ -199,7 +204,7 @@ export function useDailyReports() {
             created_by: effectiveUserId,
             sub_point: data.subPoint || null,
             sub_point_type: data.subPointType || null,
-            metadata: { ...(data.metadata || {}), teamIds: data.teamIds || [] },
+            metadata: reportMetadata,
             synced_at: new Date().toISOString(),
             local_id: localId,
           } as any)

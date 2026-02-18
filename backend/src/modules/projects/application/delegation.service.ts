@@ -9,7 +9,7 @@ export class DelegationService {
       where: { projectId },
       include: {
         jobFunction: { select: { name: true } },
-        module: { select: { code: true, name: true } },
+        permissionModule: { select: { code: true, name: true } },
       },
     });
   }

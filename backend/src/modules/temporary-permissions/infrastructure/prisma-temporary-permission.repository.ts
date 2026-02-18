@@ -13,7 +13,7 @@ export class PrismaTemporaryPermissionRepository implements TemporaryPermissionR
     return prisma.temporaryPermission.create({
       data,
       include: {
-        ticket: { select: { id: true, subject: true } },
+        systemMessage: { select: { id: true, subject: true } },
       },
     });
   }
@@ -68,7 +68,7 @@ export class PrismaTemporaryPermissionRepository implements TemporaryPermissionR
         take: limit,
         orderBy: { createdAt: "desc" },
         include: {
-          ticket: { select: { id: true, subject: true, status: true } },
+          systemMessage: { select: { id: true, subject: true, status: true } },
         },
       }),
       prisma.temporaryPermission.count({ where }),

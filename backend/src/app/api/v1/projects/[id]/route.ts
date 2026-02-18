@@ -8,7 +8,7 @@ import { PrismaProjectRepository } from "@/modules/projects/infrastructure/prism
 import { VALIDATION } from "@/lib/constants";
 
 const updateProjectSchema = z.object({
-  companyId: z.string().uuid().optional(),
+  companyId: z.string().optional(),
   name: z.string().min(2).max(VALIDATION.STRING.MAX_NAME).optional(),
   code: z
     .string()

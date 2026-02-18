@@ -15,7 +15,7 @@ export class PrismaPermissionRepository implements PermissionRepository {
         return prisma.permissionMatrix.findMany({
             where: { levelId },
             include: {
-                module: {
+                permissionModule: {
                     select: { code: true },
                 },
             },
@@ -39,7 +39,7 @@ export class PrismaPermissionRepository implements PermissionRepository {
                 jobFunctionId,
             },
             include: {
-                module: { select: { code: true } },
+                permissionModule: { select: { code: true } },
             },
         });
     }

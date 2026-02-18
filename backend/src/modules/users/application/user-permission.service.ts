@@ -39,7 +39,7 @@ export class UserPermissionService {
         // 3. Montar o mapa de permissões
         if (matrixData) {
           matrixData.forEach((item: any) => {
-            const moduleCode = item.module?.code;
+            const moduleCode = item.permissionModule?.code;
             if (moduleCode) {
               permissionsMap[moduleCode] = item.isGranted;
               if (moduleCode.includes(".")) {
@@ -86,7 +86,7 @@ export class UserPermissionService {
           await this.repository.findProjectDelegations(projectId, user.functionId);
 
         delegatedPerms.forEach((item: any) => {
-          const moduleCode = item.module?.code;
+          const moduleCode = item.permissionModule?.code;
           if (moduleCode) {
             if (item.isGranted) {
               permissionsMap[moduleCode] = true;

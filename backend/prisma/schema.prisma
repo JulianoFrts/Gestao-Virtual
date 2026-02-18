@@ -11,13 +11,13 @@ datasource db {
 }
 
 model Model3DAnchor {
-  id        String   @id
+  id        String   @id @default(cuid())
   companyId String   @map("company_id")
   projectId String   @map("project_id")
   towerId   String?  @map("tower_id")
   anchors   Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -45,14 +45,14 @@ model Account {
 }
 
 model ActivitySchedule {
-  id                      String                  @id
+  id                      String                  @id @default(cuid())
   activityId              String                  @map("activity_id")
   plannedStart            DateTime                @map("planned_start") @db.Date
   plannedEnd              DateTime                @map("planned_end") @db.Date
   plannedQuantity         Decimal?                @map("planned_quantity") @db.Decimal(10, 2)
   plannedHhh              Decimal?                @map("planned_hhh") @db.Decimal(10, 2)
   createdBy               String?                 @map("created_by")
-  createdAt               DateTime                @default(now())
+  createdAt               DateTime                @default(now()) @map("created_at")
   elementId               String                  @map("element_id")
   productionActivity      ProductionActivity      @relation(fields: [activityId], references: [id], onDelete: Cascade)
   user                    User?                   @relation("activity_schedule", fields: [createdBy], references: [id])
@@ -62,13 +62,13 @@ model ActivitySchedule {
 }
 
 model ActivityUnitCost {
-  id                 String             @id
+  id                 String             @id @default(cuid())
   projectId          String             @map("project_id")
   activityId         String             @map("activity_id")
   unitPrice          Decimal            @default(0) @map("unit_price") @db.Decimal(10, 2)
   measureUnit        String             @default("un") @map("measure_unit")
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
   productionActivity ProductionActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
   project            Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -77,7 +77,7 @@ model ActivityUnitCost {
 }
 
 model AuditLog {
-  id        String   @id
+  id        String   @id @default(cuid())
   userId    String
   action    String
   entity    String
@@ -85,9 +85,9 @@ model AuditLog {
   oldValues Json?
   newValues Json?
   createdAt DateTime @default(now())
-  ipAddress String?
+  ipAddress String?  @map("ip_address")
   route     String?
-  userAgent String?
+  userAgent String?  @map("user_agent")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([entity, entityId])
@@ -96,7 +96,7 @@ model AuditLog {
 }
 
 model AuthCredential {
-  id            String        @id
+  id            String        @id @default(cuid())
   userId        String        @unique @map("user_id")
   email         String        @unique
   login         String?       @unique
@@ -108,8 +108,8 @@ model AuthCredential {
   mfaEnabled    Boolean       @default(false) @map("mfa_enabled")
   mfaSecret     String?       @map("mfa_secret")
   systemUse     Boolean       @default(true) @map("system_use")
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([email])
@@ -118,13 +118,37 @@ model AuthCredential {
   @@map("auth_credentials")
 }
 
+model UserAddress {
+  id          String   @id @default(cuid())
+  userId      String   @unique @map("user_id")
+  cep         String
+  logradouro  String
+  complemento String?
+  unidade     String?
+  bairro      String
+  localidade  String
+  uf          String   @db.VarChar(2)
+  estado      String
+  regiao      String?
+  ibge        String?
+  gia         String?
+  ddd         String?
+  siafi       String?
+  number      String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_addresses")
+}
+
 model Circuit {
-  id              String           @id
+  id              String           @id @default(cuid())
   projectId       String           @map("project_id")
   name            String
   type            String           @default("SINGLE")
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
   color           String?
   isActive        Boolean          @default(true) @map("is_active")
   voltageKv       Decimal?         @map("voltage_kv") @db.Decimal(10, 2)
@@ -137,15 +161,15 @@ model Circuit {
 }
 
 model Company {
-  id                      String                    @id
+  id                      String                    @id @default(cuid())
   name                    String
   taxId                   String?                   @unique @map("tax_id")
   address                 String?
   phone                   String?
   logoUrl                 String?                   @map("logo_url")
   isActive                Boolean                   @default(true) @map("is_active")
-  createdAt               DateTime                  @default(now())
-  updatedAt               DateTime                  @updatedAt
+  createdAt               DateTime                  @default(now()) @map("created_at")
+  updatedAt               DateTime                  @updatedAt @map("updated_at")
   model3DAnchors          Model3DAnchor[]
   constructionDocuments   ConstructionDocument[]
   dailyReports            DailyReport[]
@@ -170,14 +194,14 @@ model Conductor {
   id        String   @id
   segmentId String   @map("segment_id")
   phase     String
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
   cableType String?  @map("cable_type")
   circuitId String?  @map("circuit_id")
   color     String?
   length    Decimal? @db.Decimal(10, 2)
   sag       Decimal? @db.Decimal(10, 2)
   tension   Decimal? @db.Decimal(10, 2)
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @updatedAt @map("updated_at")
   voltageKv Decimal? @map("voltage_kv") @db.Decimal(10, 2)
   circuit   Circuit? @relation(fields: [circuitId], references: [id])
   segment   Segment  @relation(fields: [segmentId], references: [id], onDelete: Cascade)
@@ -186,7 +210,7 @@ model Conductor {
 }
 
 model ConstructionDocument {
-  id                      String                    @id
+  id                      String                    @id @default(cuid())
   companyId               String?                   @map("company_id")
   projectId               String?                   @map("project_id")
   siteId                  String?                   @map("site_id")
@@ -199,8 +223,8 @@ model ConstructionDocument {
   status                  String                    @default("valid")
   createdById             String?                   @map("created_by")
   metadata                Json                      @default("{}")
-  createdAt               DateTime                  @default(now())
-  updatedAt               DateTime                  @updatedAt
+  createdAt               DateTime                  @default(now()) @map("created_at")
+  updatedAt               DateTime                  @updatedAt @map("updated_at")
   company                 Company?                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   project                 Project?                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   site                    Site?                     @relation(fields: [siteId], references: [id], onDelete: Cascade)
@@ -223,8 +247,8 @@ model ControlIap {
   listIapId String   @map("list_iap_id")
   setor     String
   iap       Decimal  @db.Decimal(10, 4)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
   listIap   ListIap  @relation(fields: [listIapId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
@@ -234,7 +258,7 @@ model ControlIap {
 }
 
 model DailyReport {
-  id           String    @id
+  id           String    @id @default(cuid())
   teamId       String?   @map("team_id")
   userId       String?   @map("user_id")
   companyId    String?   @map("company_id")
@@ -247,8 +271,8 @@ model DailyReport {
   subPoint     String?   @map("sub_point")
   subPointType String?   @map("sub_point_type")
   metadata     Json?     @default("{}")
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
   company      Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   team         Team?     @relation(fields: [teamId], references: [id], onDelete: Cascade)
   user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -266,8 +290,8 @@ model DataIngestion {
   recordsProcessed Int      @default(0) @map("records_processed")
   errorMessage     String?  @map("error_message")
   metadata         Json?    @default("{}")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("data_ingestions")
 }
@@ -277,22 +301,22 @@ model DatabaseDiagram {
   name        String
   description String?
   data        Json
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("database_diagrams")
 }
 
 model DelayCostConfig {
-  id          String   @id
+  id          String   @id @default(cuid())
   companyId   String   @map("company_id")
   projectId   String   @unique @map("project_id")
   dailyCost   Decimal  @default(0) @map("daily_cost") @db.Decimal(15, 2)
   currency    String   @default("BRL")
   description String?
   updatedBy   String?  @map("updated_by")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user        User?    @relation(fields: [updatedBy], references: [id])
@@ -302,7 +326,7 @@ model DelayCostConfig {
 }
 
 model GovernanceAuditHistory {
-  id              String    @id
+  id              String    @id @default(cuid())
   companyId       String?   @map("company_id")
   performerId     String?   @map("performer_id")
   file            String
@@ -329,8 +353,8 @@ model JobFunction {
   description                  String?
   canLeadTeam                  Boolean                       @default(false) @map("can_lead_team")
   hierarchyLevel               Int                           @default(0) @map("hierarchy_level")
-  createdAt                    DateTime                      @default(now())
-  updatedAt                    DateTime                      @updatedAt
+  createdAt                    DateTime                      @default(now()) @map("created_at")
+  updatedAt                    DateTime                      @updatedAt @map("updated_at")
   company                      Company?                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   projectPermissionDelegations ProjectPermissionDelegation[]
   users                        User[]
@@ -346,8 +370,8 @@ model ListIap {
   iap         Decimal      @db.Decimal(10, 4)
   cost        Decimal      @db.Decimal(15, 2)
   description String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
   controlIaps ControlIap[]
 
   @@index([setor])
@@ -355,7 +379,7 @@ model ListIap {
 }
 
 model MapElementProductionProgress {
-  id                      String                  @id
+  id                      String                  @id @default(cuid())
   projectId               String                  @map("project_id")
   elementId               String                  @map("element_id")
   activityId              String                  @map("activity_id")
@@ -367,8 +391,8 @@ model MapElementProductionProgress {
   dailyProduction         Json                    @default("{}")
   requiresApproval        Boolean?                @default(false) @map("requires_approval")
   approvalReason          String?                 @map("approval_reason")
-  updatedAt               DateTime                @updatedAt
-  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt @map("updated_at")
+  createdAt               DateTime                @default(now()) @map("created_at")
   productionActivity      ProductionActivity      @relation(fields: [activityId], references: [id], onDelete: Cascade)
   mapElementTechnicalData MapElementTechnicalData @relation(fields: [elementId], references: [id], onDelete: Cascade)
   project                 Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -378,7 +402,7 @@ model MapElementProductionProgress {
 }
 
 model MapElementTechnicalData {
-  id                           String                         @id
+  id                           String                         @id @default(cuid())
   companyId                    String                         @map("company_id")
   projectId                    String                         @map("project_id")
   elementType                  String                         @map("element_type")
@@ -388,8 +412,8 @@ model MapElementTechnicalData {
   longitude                    Decimal?                       @db.Decimal(30, 10)
   elevation                    Decimal?                       @db.Decimal(10, 2)
   metadata                     Json                           @default("{}")
-  createdAt                    DateTime                       @default(now())
-  updatedAt                    DateTime                       @updatedAt
+  createdAt                    DateTime                       @default(now()) @map("created_at")
+  updatedAt                    DateTime                       @updatedAt @map("updated_at")
   description                  String?
   displaySettings              Json                           @default("{}") @map("display_settings")
   documentId                   String?                        @map("document_id")
@@ -411,7 +435,7 @@ model MapElementTechnicalData {
 }
 
 model MapElementVisibility {
-  id                      String                  @id
+  id                      String                  @id @default(cuid())
   userId                  String                  @map("user_id")
   projectId               String?                 @map("project_id")
   documentId              String?                 @map("document_id")
@@ -424,8 +448,8 @@ model MapElementVisibility {
   elementAngle            Decimal?                @map("element_angle") @db.Decimal(5, 2)
   customModelUrl          String?                 @map("custom_model_url")
   customModelTransform    Json?                   @map("custom_model_transform")
-  createdAt               DateTime                @default(now())
-  updatedAt               DateTime                @updatedAt
+  createdAt               DateTime                @default(now()) @map("created_at")
+  updatedAt               DateTime                @updatedAt @map("updated_at")
   constructionDocument    ConstructionDocument?   @relation(fields: [documentId], references: [id], onDelete: Cascade)
   project                 Project?                @relation(fields: [projectId], references: [id], onDelete: Cascade)
   mapElementTechnicalData MapElementTechnicalData @relation(fields: [elementId], references: [id], onDelete: Cascade)
@@ -435,28 +459,28 @@ model MapElementVisibility {
 }
 
 model ModelAnchors {
-  id        String   @id
+  id        String   @id @default(cuid())
   modelUrl  String   @map("model_url")
   meshName  String?  @map("mesh_name")
   position  Json
   normal    Json?
   faceIndex Int?     @map("face_index")
   metadata  Json     @default("{}")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([modelUrl])
   @@map("model_anchors")
 }
 
 model PermissionAuditLog {
-  id        String   @id
+  id        String   @id @default(cuid())
   adminId   String   @map("admin_id")
   action    String
   targetId  String?  @map("target_id")
   oldValue  Json?    @map("old_value")
   newValue  Json?    @map("new_value")
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@map("permission_audit_logs")
 }
@@ -467,7 +491,7 @@ model PermissionLevel {
   rank               Int
   description        String?
   isSystem           Boolean            @default(false) @map("is_system")
-  createdAt          DateTime           @default(now())
+  createdAt          DateTime           @default(now()) @map("created_at")
   permissionMatrices PermissionMatrix[]
 
   @@map("permission_levels")
@@ -477,7 +501,7 @@ model PermissionMatrix {
   levelId          String           @map("level_id")
   moduleId         String           @map("module_id")
   isGranted        Boolean          @default(false) @map("is_granted")
-  createdAt        DateTime         @default(now())
+  createdAt        DateTime         @default(now()) @map("created_at")
   permissionLevel  PermissionLevel  @relation(fields: [levelId], references: [id], onDelete: Cascade)
   permissionModule PermissionModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
 
@@ -486,12 +510,12 @@ model PermissionMatrix {
 }
 
 model PermissionModule {
-  id                           String                        @id
+  id                           String                        @id @default(cuid())
   code                         String                        @unique
   name                         String
   category                     String
   description                  String?
-  createdAt                    DateTime                      @default(now())
+  createdAt                    DateTime                      @default(now()) @map("created_at")
   permissionMatrices           PermissionMatrix[]
   projectPermissionDelegations ProjectPermissionDelegation[]
 
@@ -499,14 +523,14 @@ model PermissionModule {
 }
 
 model ProductionActivity {
-  id                           String                         @id
+  id                           String                         @id @default(cuid())
   categoryId                   String                         @map("category_id")
   name                         String
   description                  String?
   weight                       Decimal                        @default(1.0) @db.Decimal(5, 2)
   order                        Int                            @default(0)
-  createdAt                    DateTime                       @default(now())
-  updatedAt                    DateTime                       @updatedAt
+  createdAt                    DateTime                       @default(now()) @map("created_at")
+  updatedAt                    DateTime                       @updatedAt @map("updated_at")
   activitySchedules            ActivitySchedule[]
   activityUnitCosts            ActivityUnitCost[]
   mapElementProductionProgress MapElementProductionProgress[]
@@ -517,12 +541,12 @@ model ProductionActivity {
 }
 
 model ProductionCategory {
-  id                   String               @id
+  id                   String               @id @default(cuid())
   name                 String
   description          String?
   order                Int                  @default(0)
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
   productionActivities ProductionActivity[]
 
   @@map("production_categories")
@@ -532,23 +556,23 @@ model Project3dCableSettings {
   id        String   @id
   projectId String   @unique @map("project_id")
   settings  Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("project_3d_cable_settings")
 }
 
 model ProjectDelayReason {
-  id          String         @id
+  id          String         @id @default(cuid())
   projectId   String         @map("project_id")
   code        String
   description String
   dailyCost   Decimal        @map("daily_cost") @db.Decimal(10, 2)
   category    ImpedimentType
   updatedBy   String?        @map("updated_by")
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
   project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user        User?          @relation(fields: [updatedBy], references: [id])
 
@@ -556,15 +580,15 @@ model ProjectDelayReason {
 }
 
 model ProjectMonthlyTarget {
-  id                        String   @id
+  id                        String   @id @default(cuid())
   projectId                 String?  @map("project_id")
   siteId                    String?  @map("site_id")
   companyId                 String?  @map("company_id")
   targetMonth               DateTime @map("target_month") @db.Date
   plannedHours              Decimal  @default(0) @map("planned_hours") @db.Decimal(10, 2)
   plannedProgressPercentage Decimal  @default(0) @map("planned_progress_percentage") @db.Decimal(5, 2)
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
   company                   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
   project                   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   site                      Site?    @relation(fields: [siteId], references: [id], onDelete: Cascade)
@@ -580,8 +604,8 @@ model ProjectPermissionDelegation {
   moduleId         String           @map("module_id")
   isGranted        Boolean          @default(false) @map("is_granted")
   grantedById      String?          @map("granted_by_id")
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
   jobFunction      JobFunction      @relation(fields: [jobFunctionId], references: [id], onDelete: Cascade)
   permissionModule PermissionModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   project          Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -591,7 +615,7 @@ model ProjectPermissionDelegation {
 }
 
 model Project {
-  id                           String                         @id
+  id                           String                         @id @default(cuid())
   companyId                    String                         @map("company_id")
   name                         String
   code                         String?
@@ -602,8 +626,8 @@ model Project {
   endDate                      DateTime?                      @map("end_date")
   plannedHours                 Decimal                        @default(0) @map("planned_hours") @db.Decimal(10, 2)
   estimatedCost                Decimal                        @default(0) @map("estimated_cost") @db.Decimal(15, 2)
-  createdAt                    DateTime                       @default(now())
-  updatedAt                    DateTime                       @updatedAt
+  createdAt                    DateTime                       @default(now()) @map("created_at")
+  updatedAt                    DateTime                       @updatedAt @map("updated_at")
   model3DAnchors               Model3DAnchor[]
   activityUnitCosts            ActivityUnitCost[]
   circuits                     Circuit[]
@@ -631,18 +655,18 @@ model Project {
 }
 
 model QrSession {
-  id           String          @id
+  id           String          @id @default(cuid())
   sessionToken String          @unique @map("session_token")
   status       QrSessionStatus @default(pending)
   authPayload  Json?           @map("auth_payload")
   expiresAt    DateTime        @default(dbgenerated("(now() + '00:02:00'::interval)")) @map("expires_at")
-  createdAt    DateTime        @default(now())
+  createdAt    DateTime        @default(now()) @map("created_at")
 
   @@map("qr_sessions")
 }
 
 model RouteHealthHistory {
-  id          String   @id
+  id          String   @id @default(cuid())
   companyId   String?  @map("company_id")
   performerId String?  @map("performer_id")
   route       String
@@ -670,12 +694,12 @@ model SegmentCircuit {
 }
 
 model Segment {
-  id              String           @id
+  id              String           @id @default(cuid())
   projectId       String           @map("project_id")
   fromTowerId     String           @map("from_tower_id")
   toTowerId       String           @map("to_tower_id")
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
   groundLevel     Decimal?         @map("ground_level") @db.Decimal(10, 2)
   length          Decimal?         @db.Decimal(10, 2)
   conductors      Conductor[]
@@ -710,14 +734,14 @@ model SiteResponsible {
 }
 
 model Site {
-  id                    String                 @id
+  id                    String                 @id @default(cuid())
   projectId             String                 @map("project_id")
   name                  String
   code                  String?
   locationDetails       String?                @map("location_details")
   plannedHours          Decimal                @default(0) @map("planned_hours") @db.Decimal(10, 2)
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
   xLat                  Decimal?               @map("x_lat") @db.Decimal(30, 20)
   yLa                   Decimal?               @map("y_la") @db.Decimal(30, 20)
   constructionDocuments ConstructionDocument[]
@@ -735,14 +759,14 @@ model Site {
 }
 
 model StageProgress {
-  id                String    @id
+  id                String    @id @default(cuid())
   stageId           String    @map("stage_id")
   plannedPercentage Decimal   @default(0.0) @map("planned_percentage") @db.Decimal(5, 2)
   actualPercentage  Decimal   @default(0.0) @map("actual_percentage") @db.Decimal(5, 2)
   recordedDate      DateTime  @default(now()) @map("recorded_date") @db.Date
   updatedBy         String?   @map("updated_by")
   notes             String?
-  createdAt         DateTime  @default(now())
+  createdAt         DateTime  @default(now()) @map("created_at")
   workStage         WorkStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
   user              User?     @relation(fields: [updatedBy], references: [id])
 
@@ -750,20 +774,20 @@ model StageProgress {
 }
 
 model SyncQueue {
-  id        String        @id
+  id        String        @id @default(cuid())
   userId    String        @map("user_id")
   operation SyncOperation
   tableName String        @map("table_name")
   recordId  String        @map("record_id")
   data      Json
-  createdAt DateTime      @default(now())
+  createdAt DateTime      @default(now()) @map("created_at")
   syncedAt  DateTime?     @map("synced_at")
 
   @@map("sync_queue")
 }
 
 model SystemMessage {
-  id                   String                @id
+  id                   String                @id @default(cuid())
   senderId             String?               @map("sender_id")
   senderEmail          String?               @map("sender_email")
   recipientId          String?               @map("recipient_id")
@@ -780,11 +804,11 @@ model SystemMessage {
   metadata             Json                  @default("{}")
   resolvedBy           String?               @map("resolved_by")
   resolvedAt           DateTime?             @map("resolved_at")
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
   company              Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   project              Project?              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user                 User?                 @relation(fields: [recipientUserId], references: [id])
+  recipientUser        User?                 @relation(fields: [recipientUserId], references: [id])
   site                 Site?                 @relation(fields: [siteId], references: [id], onDelete: Cascade)
   temporaryPermissions TemporaryPermission[]
   ticketHistory        TicketHistory[]
@@ -796,20 +820,20 @@ model SystemMessage {
 }
 
 model TaskQueue {
-  id        String     @id
+  id        String     @id @default(cuid())
   type      String
   payload   Json
   status    TaskStatus @default(pending)
   error     String?
   attempts  Int        @default(0)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
 
   @@map("task_queue")
 }
 
 model TeamMember {
-  id       String   @id
+  id       String   @id @default(cuid())
   teamId   String   @map("team_id")
   userId   String   @unique @map("user_id")
   joinedAt DateTime @default(now()) @map("joined_at")
@@ -820,15 +844,15 @@ model TeamMember {
 }
 
 model Team {
-  id           String        @id
+  id           String        @id @default(cuid())
   companyId    String?       @map("company_id")
   siteId       String?       @map("site_id")
   name         String
   supervisorId String?       @map("supervisor_id")
   isActive     Boolean       @default(true) @map("is_active")
   displayOrder Int           @default(0) @map("display_order")
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
   laborType    String?       @default("MOD") @map("labor_type")
   dailyReports DailyReport[]
   teamMembers  TeamMember[]
@@ -851,7 +875,7 @@ model TemporaryPermission {
   ticketId       String?        @map("ticket_id")
   expiresAt      DateTime       @map("expires_at")
   usedAt         DateTime?      @map("used_at")
-  createdAt      DateTime       @default(now())
+  createdAt      DateTime       @default(now()) @map("created_at")
   systemMessage  SystemMessage? @relation(fields: [ticketId], references: [id])
 
   @@map("temporary_permissions")
@@ -865,7 +889,7 @@ model TicketHistory {
   newStatus     String?       @map("new_status")
   performedBy   String?       @map("performed_by")
   comment       String?
-  createdAt     DateTime      @default(now())
+  createdAt     DateTime      @default(now()) @map("created_at")
   systemMessage SystemMessage @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@map("ticket_history")
@@ -884,7 +908,7 @@ model TimeRecord {
   createdBy  String?    @map("created_by")
   localId    String?    @map("local_id")
   syncedAt   DateTime?  @map("synced_at")
-  createdAt  DateTime   @default(now())
+  createdAt  DateTime   @default(now()) @map("created_at")
   company    Company?   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   creator    User?      @relation("time_records_created_byTousers", fields: [createdBy], references: [id])
   team       Team?      @relation(fields: [teamId], references: [id])
@@ -896,38 +920,14 @@ model TimeRecord {
   @@map("time_records")
 }
 
-model UserAddress {
-  id          String   @id
-  userId      String   @unique @map("user_id")
-  cep         String
-  logradouro  String
-  complemento String?
-  unidade     String?
-  bairro      String
-  localidade  String
-  uf          String   @db.VarChar(2)
-  estado      String
-  regiao      String?
-  ibge        String?
-  gia         String?
-  ddd         String?
-  siafi       String?
-  number      String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("user_addresses")
-}
-
 model UserAffiliation {
-  id        String   @id
+  id        String   @id @default(cuid())
   userId    String   @unique @map("user_id")
   companyId String?  @map("company_id")
   projectId String?  @map("project_id")
   siteId    String?  @map("site_id")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
   company   Company? @relation(fields: [companyId], references: [id])
   project   Project? @relation(fields: [projectId], references: [id])
   site      Site?    @relation(fields: [siteId], references: [id])
@@ -940,7 +940,7 @@ model UserAffiliation {
 }
 
 model User {
-  id                     String                   @id
+  id                     String                   @id @default(cuid())
   name                   String?
   image                  String?
   cpf                    String?                  @unique
@@ -950,8 +950,8 @@ model User {
   faceDescriptor         Json?                    @map("face_descriptor")
   hierarchyLevel         Int                      @default(0) @map("hierarchy_level")
   laborType              String?                  @default("MOD") @map("labor_type")
-  createdAt              DateTime                 @default(now())
-  updatedAt              DateTime                 @updatedAt
+  createdAt              DateTime                 @default(now()) @map("created_at")
+  updatedAt              DateTime                 @updatedAt @map("updated_at")
   iapName                String?                  @map("iap_name")
   birthDate              String?                  @map("birth_date")
   gender                 String?
@@ -993,7 +993,7 @@ model VerificationToken {
 }
 
 model WorkStage {
-  id                   String              @id
+  id                   String              @id @default(cuid())
   siteId               String?             @map("site_id")
   parentId             String?             @map("parent_id")
   name                 String
@@ -1002,7 +1002,7 @@ model WorkStage {
   metadata             Json?               @default("{}")
   displayOrder         Int                 @default(0) @map("display_order")
   createdAt            DateTime            @default(now()) @map("created_at")
-  updatedAt            DateTime            @map("updated_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
   productionActivityId String?             @map("production_activity_id")
   projectId            String?             @map("project_id")
   stageProgress        StageProgress[]

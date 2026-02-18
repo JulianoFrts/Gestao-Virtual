@@ -25,9 +25,10 @@ function log(message, color = colors.reset) {
   console.log(`${color}${message}${colors.reset}`);
 }
 
-function startProcess(command, args, label, color, cwd = rootDir) {
+function startProcess(command, args, label, color, cwd = rootDir, extraEnv = {}) {
   const env = {
     ...process.env,
+    ...extraEnv,
     NODE_OPTIONS: "--max-old-space-size=4096", // Aumentar limite de memória para evitar travamentos
     FORCE_COLOR: "1", // Garantir cores no terminal
   };
@@ -145,11 +146,11 @@ async function start() {
     log("\n⚡ Passo 2: Iniciando serviços (Modo Robusto)...", colors.yellow);
 
     const backend = startProcess(
-      "node",
-      [`"${nextBin}"`, "dev", "-p", "3000"],
+      "npm",
+      ["run", "dev", "-w", "backend"],
       "BACKEND",
       colors.blue,
-      backendDir
+      rootDir
     );
 
     const frontend = startProcess(

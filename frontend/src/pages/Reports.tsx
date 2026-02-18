@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { FileText, Filter, Search, Eye, Calendar, User, Users as UsersIcon } from 'lucide-react';
+import { FileText, Filter, Search, Eye, Calendar, User, Users as UsersIcon, Clock, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -233,9 +233,25 @@ export default function Reports() {
                         </div>
                       </TableCell>
                       <TableCell className="max-w-[300px]">
-                        <p className="truncate text-sm text-muted-foreground">
-                          {report.activities}
-                        </p>
+                        {report.selectedActivities && report.selectedActivities.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {report.selectedActivities.slice(0, 3).map((act: any, i: number) => (
+                              <Badge key={i} variant="outline" className="text-[10px] font-bold border-primary/20 text-primary/80">
+                                {act.stageName || 'Atividade'}
+                                {act.subPoint && <span className="text-muted-foreground ml-1">({act.subPoint})</span>}
+                              </Badge>
+                            ))}
+                            {report.selectedActivities.length > 3 && (
+                              <Badge variant="outline" className="text-[10px] font-bold border-muted-foreground/20">
+                                +{report.selectedActivities.length - 3}
+                              </Badge>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="truncate text-sm text-muted-foreground">
+                            {report.activities}
+                          </p>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Button
@@ -330,9 +346,91 @@ export default function Reports() {
                   <FileText className="w-4 h-4 text-primary" /> Atividades
                   Realizadas
                 </label>
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {selectedReport.activities}
-                </p>
+
+                {selectedReport.selectedActivities && selectedReport.selectedActivities.length > 0 ? (
+                  <div className="space-y-4">
+                    {selectedReport.selectedActivities.map((act: any, actIdx: number) => (
+                      <div key={actIdx} className="p-3 bg-background/50 rounded-lg border border-primary/10">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge className="bg-primary/10 text-primary border-primary/20 font-bold text-xs">
+                            {act.stageName || 'Atividade'}
+                          </Badge>
+                          {act.subPoint && (
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />
+                              {act.subPointType}: {act.subPoint}
+                              {act.isMultiSelection && act.subPointEnd && ` → ${act.subPointEnd}`}
+                            </span>
+                          )}
+                          <Badge variant="outline" className={`text-[10px] font-bold ml-auto ${
+                            act.status === 'FINISHED' 
+                              ? 'border-green-500/30 text-green-500' 
+                              : 'border-amber-500/30 text-amber-500'
+                          }`}>
+                            {act.status === 'FINISHED' ? 'CONCLUÍDO' : 'ANDAMENTO'}
+                          </Badge>
+                        </div>
+
+                        {act.observations && (
+                          <p className="text-xs text-muted-foreground italic mb-2 pl-2 border-l-2 border-primary/20">
+                            "{act.observations}"
+                          </p>
+                        )}
+
+                        {act.details && act.details.length > 0 && (
+                          <div className="rounded-md border text-xs">
+                            <table className="w-full">
+                              <thead>
+                                <tr className="border-b bg-muted/30">
+                                  <th className="p-2 text-left font-bold text-muted-foreground">Item</th>
+                                  <th className="p-2 text-center font-bold text-muted-foreground">Início</th>
+                                  <th className="p-2 text-center font-bold text-muted-foreground">Fim</th>
+                                  <th className="p-2 text-center font-bold text-muted-foreground">Status</th>
+                                  <th className="p-2 text-left font-bold text-muted-foreground">Obs</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {act.details.map((d: any, dIdx: number) => (
+                                  <tr key={dIdx} className="border-b last:border-0">
+                                    <td className="p-2 font-bold">{d.id}</td>
+                                    <td className="p-2 text-center">
+                                      <span className="inline-flex items-center gap-1">
+                                        <Clock className="w-3 h-3 text-amber-500" />
+                                        {d.startTime || '--:--'}
+                                      </span>
+                                    </td>
+                                    <td className="p-2 text-center">
+                                      <span className="inline-flex items-center gap-1">
+                                        <Clock className="w-3 h-3 text-primary" />
+                                        {d.endTime || '--:--'}
+                                      </span>
+                                    </td>
+                                    <td className="p-2 text-center">
+                                      <Badge variant="outline" className={`text-[9px] font-bold ${
+                                        d.status === 'FINISHED' ? 'border-green-500/30 text-green-500' :
+                                        d.status === 'BLOCKED' ? 'border-red-500/30 text-red-500' :
+                                        'border-amber-500/30 text-amber-500'
+                                      }`}>
+                                        {d.status === 'FINISHED' ? 'CONCLUÍDO' :
+                                         d.status === 'BLOCKED' ? 'PARADO' :
+                                         `AND. ${d.progress || 0}%`}
+                                      </Badge>
+                                    </td>
+                                    <td className="p-2 text-muted-foreground italic">{d.comment || '-'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                    {selectedReport.activities}
+                  </p>
+                )}
               </div>
 
               {selectedReport.observations && (

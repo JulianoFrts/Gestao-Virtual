@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
 import { ProductionCategory } from '@/modules/production/types';
 import { Button } from '@/components/ui/button';
-import { Check, Info, Loader2, X } from 'lucide-react';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Check, Info, Loader2, X, PenLine, Trash2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { orionApi } from '@/integrations/orion/client';
 import { cn } from '@/lib/utils';
@@ -21,9 +29,11 @@ import { toast } from 'sonner';
 interface StageHeaderSelectorProps {
     stage: WorkStage;
     onUpdate: (stageId: string, payload: Partial<CreateStageData>) => Promise<void>;
+    onEdit?: () => void;
+    onDelete?: () => Promise<void>;
 }
 
-export const StageHeaderSelector: React.FC<StageHeaderSelectorProps> = ({ stage, onUpdate }) => {
+export const StageHeaderSelector: React.FC<StageHeaderSelectorProps> = ({ stage, onUpdate, onEdit, onDelete }) => {
     const [isAlertOpen, setIsAlertOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
@@ -115,9 +125,23 @@ export const StageHeaderSelector: React.FC<StageHeaderSelectorProps> = ({ stage,
     return (
         <>
             <div className="w-full flex items-center justify-between gap-2 px-1">
-                <span className="truncate max-w-[90px] text-[10px] font-medium" title={stage.name}>
-                    {stage.name}
-                </span>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <span className="truncate max-w-[90px] text-[10px] font-medium cursor-pointer hover:text-primary transition-colors hover:underline decoration-dashed underline-offset-2" title={stage.name}>
+                            {stage.name}
+                        </span>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-48 bg-slate-950 border-slate-800">
+                        <DropdownMenuLabel className="text-[10px] uppercase text-muted-foreground">Gerenciar Etapa</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={onEdit} className="cursor-pointer gap-2 text-xs">
+                            <PenLine className="h-3.5 w-3.5" /> Editar Etapa
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="bg-slate-800" />
+                        <DropdownMenuItem onClick={() => onDelete?.()} className="cursor-pointer gap-2 text-xs text-red-500 focus:text-red-500 focus:bg-red-500/10">
+                            <Trash2 className="h-3.5 w-3.5" /> Excluir Etapa
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
                 
                 <Button
                     variant="ghost"

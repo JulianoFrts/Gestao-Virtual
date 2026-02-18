@@ -165,25 +165,50 @@ function handleZodError(error: ZodError): NextResponse {
 
 type PrismaKnownError = {
   code: string;
-  meta?: { target?: string[] };
+  meta?: { target?: string[]; [key: string]: any };
+  message?: string;
+  clientVersion?: string;
 };
 
 function isPrismaError(error: unknown): error is PrismaKnownError {
-  return typeof error === "object" && error !== null && "code" in error;
+  if (typeof error !== "object" || error === null || !("code" in error)) return false;
+  const code = (error as any).code;
+  // Prisma error codes always start with "P" followed by digits
+  return typeof code === "string" && /^P\d{4}$/.test(code);
 }
 
 function handlePrismaError(error: PrismaKnownError): NextResponse {
+  const logContext = { code: error.code, meta: error.meta, message: error.message };
+
   switch (error.code) {
+    // Unique constraint violation
     case "P2002": {
       const field = error.meta?.target?.[0] ?? "campo";
       return ApiResponse.conflict(`${field} já está em uso`);
     }
+    // Record not found
     case "P2025":
       return ApiResponse.notFound("Registro não encontrado");
+    // Foreign key constraint failed
     case "P2003":
       return ApiResponse.badRequest("Referência inválida");
+    // Connection errors
+    case "P1001":
+    case "P1002":
+    case "P1008":
+    case "P1017":
+      logger.error("Prisma connection error", logContext);
+      return ApiResponse.errorJson(
+        "Serviço temporariamente indisponível. Tente novamente.",
+        503, undefined, "SERVICE_UNAVAILABLE"
+      );
+    // Schema errors (table/column not found)
+    case "P2021":
+    case "P2022":
+      logger.error("Prisma schema mismatch error", logContext);
+      return ApiResponse.internalError("Erro de configuração do banco de dados");
     default:
-      logger.error("Unhandled Prisma error", error);
+      logger.error("Unhandled Prisma error", logContext);
       return ApiResponse.internalError();
   }
 }

@@ -15,9 +15,9 @@ const systemMessageService = new SystemMessageService(
 const createMessageSchema = z.object({
   recipientUserId: z.string().optional(),
   recipientRole: z.string().optional(),
-  companyId: z.string().uuid().optional(),
-  projectId: z.string().uuid().optional(),
-  siteId: z.string().uuid().optional(),
+  companyId: z.string().optional(),
+  projectId: z.string().optional(),
+  siteId: z.string().optional(),
   messageType: z.enum([
     "PASSWORD_RESET",
     "ADMINISTRATIVE",

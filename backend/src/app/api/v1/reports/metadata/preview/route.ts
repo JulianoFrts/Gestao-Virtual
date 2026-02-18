@@ -6,7 +6,7 @@ import { z } from "zod";
 const metadataService = new ReportMetadataService();
 
 const previewSchema = z.object({
-    projectId: z.string().uuid(),
+    projectId: z.string().min(1),
     subPointType: z.enum(['TORRE', 'VAO', 'TRECHO', 'GERAL']),
     subPoint: z.string(),
     subPointEnd: z.string().optional(),

@@ -40,12 +40,12 @@ export const publicUserSelect = {
   address: {
     select: {
       cep: true,
-      street: true,
+      logradouro: true,
       number: true,
-      neighborhood: true,
-      city: true,
-      stateCode: true,
-      stateName: true,
+      bairro: true,
+      localidade: true,
+      uf: true,
+      estado: true,
     }
   },
   createdAt: true,

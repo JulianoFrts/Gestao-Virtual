@@ -47,7 +47,17 @@ export class AuthService {
    * Autentica usuário por qualquer identificador
    */
   async authenticate(identifier: string, password: string, mfaCode?: string) {
-    const credential = await this.authRepo.findByIdentifier(identifier);
+    let credential;
+
+    try {
+      credential = await this.authRepo.findByIdentifier(identifier);
+    } catch (dbError: any) {
+      console.error("[AuthService] Erro Prisma ao buscar credencial:", {
+        code: dbError?.code,
+        message: dbError?.message,
+      });
+      return { success: false, error: "DATABASE_ERROR" };
+    }
 
     if (!credential) {
       return { success: false, error: "INVALID_CREDENTIALS" };
@@ -76,7 +86,15 @@ export class AuthService {
       }
     }
 
-    await this.authRepo.updateLastLogin(credential.userId);
+    try {
+      await this.authRepo.updateLastLogin(credential.userId);
+    } catch (dbError: any) {
+      // Não bloquear login por falha ao atualizar lastLogin
+      console.error("[AuthService] Erro ao atualizar lastLogin (não-bloqueante):", {
+        code: dbError?.code,
+        userId: credential.userId,
+      });
+    }
 
     return {
       success: true,

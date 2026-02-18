@@ -19,7 +19,7 @@ const repository = new PrismaSiteRepository();
 const service = new SiteService(repository);
 
 const createSiteSchema = z.object({
-  projectId: z.string().uuid("ID do projeto deve ser um UUID válido"),
+  projectId: z.string().min(1, "ID do projeto é obrigatório"),
   name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres").max(VALIDATION.STRING.MAX_NAME),
   code: z
     .string()
@@ -45,7 +45,7 @@ const createSiteSchema = z.object({
     (val) => (val === "" || val === null ? undefined : val),
     z.coerce.number().optional(),
   ),
-  responsibleIds: z.array(z.string().uuid()).optional().default([]),
+  responsibleIds: z.array(z.string().min(1)).optional().default([]),
 });
 
 

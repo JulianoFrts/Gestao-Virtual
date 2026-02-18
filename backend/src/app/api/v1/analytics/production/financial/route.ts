@@ -6,7 +6,7 @@ import { z } from "zod";
 const analyticsService = new FinancialAnalyticsService();
 
 const querySchema = z.object({
-    projectId: z.string().uuid(),
+    projectId: z.string().min(1),
     granularity: z.enum(['weekly', 'monthly', 'quarterly', 'annual', 'total']).default('monthly'),
     startDate: z.string().optional(),
     endDate: z.string().optional(),

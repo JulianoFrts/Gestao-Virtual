@@ -21,9 +21,8 @@ const service = new TeamService(repository);
 const createTeamSchema = z.object({
   companyId: z
     .string()
-    .uuid("ID da empresa deve ser um UUID válido")
     .optional(),
-  siteId: z.string().uuid("ID do canteiro deve ser um UUID válido").optional(),
+  siteId: z.string().optional(),
   name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres").max(VALIDATION.STRING.MAX_NAME),
   supervisorId: z.string().optional(),
   displayOrder: z.number().default(0),
@@ -35,11 +34,11 @@ import { emptyToUndefined } from "@/lib/utils/validators/schemas";
 const querySchema = paginationQuerySchema.extend({
   companyId: z.preprocess(
     emptyToUndefined,
-    z.string().uuid().optional().nullable(),
+    z.string().optional().nullable(),
   ),
   siteId: z.preprocess(
     emptyToUndefined,
-    z.string().uuid().optional().nullable(),
+    z.string().optional().nullable(),
   ),
   isActive: z.preprocess(
     emptyToUndefined,

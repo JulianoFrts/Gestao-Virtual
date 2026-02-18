@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { orionApi } from "@/integrations/orion/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -38,11 +38,23 @@ export function useWorkStages(
     await fetchWorkStages(true, siteId, projectId, companyId);
   }, [siteId, projectId, companyId]);
 
-  // Se as props mudarem, recarregamos
-  // Mas evitamos loop infinito se já estiver carregando
-  if ((siteId || projectId || companyId) && !isLoading && !hasWorkStagesFetchedSignal.value) {
-    fetchWorkStages(false, siteId, projectId, companyId).catch(console.error);
-  }
+  // Recarregar quando parâmetros mudam
+  const lastParamsRef = useRef<string>("");
+
+  useEffect(() => {
+    const paramsKey = `${siteId}-${projectId}-${companyId}`;
+    if (paramsKey === lastParamsRef.current) return;
+    
+    // Se temos parâmetros válidos, forçamos o carregamento para garantir dados atualizados
+    // especialmente se mudamos de contexto (ex: 'all' -> 'project-id')
+    if (siteId || projectId || companyId) {
+        lastParamsRef.current = paramsKey;
+        // Force fetch if we are switching contexts
+        fetchWorkStages(true, siteId, projectId, companyId).catch(console.error);
+    }
+  }, [siteId, projectId, companyId]);
+
+  // Fallback inicial (similar ao anterior mas dentro do effect agora)
 
   const createStage = async (data: CreateStageData, silent = false) => {
     try {

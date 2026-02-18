@@ -97,12 +97,11 @@ export class PrismaUserRepository implements UserRepository {
       createData.address = {
         create: {
           cep: zipCode || "",
-          street: street || "",
-          number: number || "",
-          neighborhood: neighborhood || "",
-          city: city || "",
-          stateCode: state || "null",
-          stateName: "",
+          logradouro: street || "",
+          bairro: neighborhood || "",
+          localidade: city || "",
+          uf: state || "",
+          estado: "",
         },
       };
     }
@@ -194,20 +193,18 @@ export class PrismaUserRepository implements UserRepository {
         upsert: {
           create: {
             cep: zipCode || "",
-            street: street || "",
-            number: number || "",
-            neighborhood: neighborhood || "",
-            city: city || "",
-            stateCode: state || "",
-            stateName: "",
+            logradouro: street || "",
+            bairro: neighborhood || "",
+            localidade: city || "",
+            uf: state || "",
+            estado: "",
           },
           update: {
             ...(zipCode !== null && { cep: zipCode }),
-            ...(street !== null && { street }),
-            ...(number !== null && { number }),
-            ...(neighborhood !== null && { neighborhood }),
-            ...(city !== null && { city }),
-            ...(state !== null && { stateCode: state }),
+            ...(street !== null && { logradouro: street }),
+            ...(neighborhood !== null && { bairro: neighborhood }),
+            ...(city !== null && { localidade: city }),
+            ...(state !== null && { uf: state }),
           },
         },
       };

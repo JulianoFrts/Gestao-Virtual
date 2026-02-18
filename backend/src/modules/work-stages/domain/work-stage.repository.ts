@@ -246,7 +246,7 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
     const stages = await prisma.workStage.findMany({
       where,
       include: {
-        progress: {
+        stageProgress: {
           orderBy: { recordedDate: "desc" },
           take: 1,
         },
@@ -271,7 +271,7 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
     const stages = await prisma.workStage.findMany({
       where: { siteId },
       include: {
-        progress: {
+        stageProgress: {
           orderBy: { recordedDate: "desc" },
           take: 1,
         },
@@ -290,7 +290,7 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
         },
       },
       include: {
-        progress: {
+        stageProgress: {
           orderBy: { recordedDate: "desc" },
           take: 1,
         },
@@ -546,7 +546,7 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
       productionActivityId: data.productionActivityId,
       metadata: data.metadata,
       site: data.site,
-      progress: data.progress,
+      progress: data.stageProgress || data.progress || [],
     };
   }
 }

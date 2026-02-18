@@ -16,8 +16,8 @@ const timeRecordService = new TimeRecordService(
 
 const createTimeRecordSchema = z.object({
   userId: z.string(),
-  teamId: z.string().uuid().optional(),
-  companyId: z.string().uuid().optional(),
+  teamId: z.string().min(1).optional(),
+  companyId: z.string().min(1).optional(),
   recordType: z.enum(["entry", "exit"]),
   recordedAt: z.string().datetime(),
   photoUrl: z.string().url().optional(),

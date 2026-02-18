@@ -19,14 +19,13 @@ const nextConfig = {
   // 1. Ignora verificação de tipos e lint (já configurado).
   // 2. Desabilita geração estática paralela e source maps.
   typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
+
   productionBrowserSourceMaps: false,
+
+
 
   // Limita uso de CPU/Memória na geração estática (APENAS PROD)
   experimental: {
-    // Em dev, queremos usar workers para velocidade
-    workerThreads: process.env.NODE_ENV === 'production' ? false : true,
-    cpus: process.env.NODE_ENV === 'production' ? 1 : undefined,
     optimizePackageImports: ["lucide-react", "date-fns"], // Tree shaking
   },
 

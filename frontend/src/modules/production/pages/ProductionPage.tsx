@@ -45,7 +45,7 @@ import { useCompanies } from "@/hooks/useCompanies";
 import { Building2 } from "lucide-react";
 import { useProjects } from "@/hooks/useProjects"; // Necessary for auto-selection logic
 import { useSites } from "@/hooks/useSites";
-import { useWorkStages } from "@/hooks/useWorkStages";
+import { useWorkStages, WorkStage } from "@/hooks/useWorkStages";
 import { useTimeRecords } from "@/hooks/useTimeRecords";
 import { useUsers } from "@/hooks/useUsers";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -295,6 +295,7 @@ const ProductionPage = () => {
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [isStageModalOpen, setIsStageModalOpen] = useState(false);
     const [editingTower, setEditingTower] = useState<TowerProductionData | null>(null);
+    const [editingStage, setEditingStage] = useState<WorkStage | null>(null);
     const [isExecutionModalOpen, setIsExecutionModalOpen] = useState(false);
     const [executionModalData, setExecutionModalData] = useState<{
         towerId: string;
@@ -408,7 +409,7 @@ const ProductionPage = () => {
         }
     });
 
-    const { stages, createStage, updateStage, isLoading: isLoadingStages } = useWorkStages(selectedSiteId || 'all', selectedProjectId);
+    const { stages, createStage, updateStage, deleteStage, isLoading: isLoadingStages } = useWorkStages(selectedSiteId === 'all' ? undefined : selectedSiteId, selectedProjectId);
     const { records, isLoading: isLoadingRecords } = useTimeRecords();
     const { users, isLoading: isLoadingUsers } = useUsers();
 
@@ -557,7 +558,7 @@ const ProductionPage = () => {
 
         // 2. Map to grid structure
         return parents.map((p, idx) => {
-            const catActivities = children
+            let catActivities = children
                 .filter(c => c.parentId === p.id)
                 .sort((a, b) => (Number(a.displayOrder) || 0) - (Number(b.displayOrder) || 0))
                 .map((c, actIdx) => ({
@@ -571,6 +572,21 @@ const ProductionPage = () => {
                     productionActivityId: c.productionActivityId,
                     metadata: c.metadata
                 }));
+
+            // FIX: Se não houver filhos, tratamos a própria etapa pai como uma coluna (Etapa Plana)
+            if (catActivities.length === 0) {
+                catActivities = [{
+                    id: p.productionActivityId || 'custom-' + p.id,
+                    categoryId: p.id,
+                    name: p.name,
+                    description: p.description,
+                    weight: p.weight,
+                    order: 0,
+                    stageId: p.id,
+                    productionActivityId: p.productionActivityId,
+                    metadata: p.metadata
+                }];
+            }
 
             return {
                 id: p.id,
@@ -874,7 +890,7 @@ const ProductionPage = () => {
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end" className="w-56 bg-slate-950 border-slate-800">
                                                 <DropdownMenuLabel>Gestão de Etapas</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={() => setIsStageModalOpen(true)} className="cursor-pointer">
+                                                <DropdownMenuItem onClick={() => { setEditingStage(null); setIsStageModalOpen(true); }} className="cursor-pointer">
                                                     <Plus className="mr-2 h-4 w-4" /> Criar/Editar Etapas
                                                 </DropdownMenuItem>
                                                 <DropdownMenuSeparator className="bg-slate-800" />
@@ -1203,7 +1219,7 @@ const ProductionPage = () => {
                                                                             description: null,
                                                                             weight: act.weight,
                                                                             displayOrder: 0,
-                                                                            createdAt: new Date(),
+                                                                            createdAt: new Date().toISOString() as any, // Cast to any or string to avoid type conflict if strict
                                                                             // This is the CRITICAL part: we need to pass the productionActivityId if it exists
                                                                             productionActivityId: act.productionActivityId, // Assuming logic below adds this
                                                                             metadata: act.metadata
@@ -1212,6 +1228,21 @@ const ProductionPage = () => {
                                                                             // Payload can be { productionActivityId } or { metadata } or both
                                                                             await updateStage(stageId, payload);
                                                                             // Invalidate queries to refresh columns
+                                                                        }}
+                                                                        onEdit={() => {
+                                                                            // We need to construct a full WorkStage object or at least enough for specific edit
+                                                                            // Ideally we find the real object from "stages" array using ID
+                                                                            const realStage = stages?.find(s => s.id === (act.stageId || act.id));
+                                                                            if (realStage) {
+                                                                                setEditingStage(realStage);
+                                                                                setIsStageModalOpen(true);
+                                                                            }
+                                                                        }}
+                                                                        onDelete={async () => {
+                                                                            const idToDelete = act.stageId || act.id;
+                                                                            if (window.confirm(`Tem certeza que deseja excluir a etapa "${act.name}"?`)) {
+                                                                                 await deleteStage(idToDelete);
+                                                                            }
                                                                         }}
                                                                     />
                                                                 </div>
@@ -1352,8 +1383,15 @@ const ProductionPage = () => {
 
             <StageFormModal
                 isOpen={isStageModalOpen}
-                onClose={() => setIsStageModalOpen(false)}
-                onSave={createStage}
+                onClose={() => { setIsStageModalOpen(false); setEditingStage(null); }}
+                stage={editingStage}
+                onSave={async (data) => {
+                    if (editingStage) {
+                        await updateStage(editingStage.id, data);
+                    } else {
+                        await createStage(data);
+                    }
+                }}
                 onRefresh={() => queryClient.invalidateQueries({ queryKey: ['work-stages'] })}
             />
 

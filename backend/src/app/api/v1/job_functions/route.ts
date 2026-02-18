@@ -13,7 +13,7 @@ const jobFunctionService = new JobFunctionService(
 );
 
 const createJobFunctionSchema = z.object({
-  companyId: z.string().uuid().optional().nullable(),
+  companyId: z.string().optional().nullable(),
   name: z.string().min(2).max(VALIDATION.STRING.MAX_NAME),
   description: z.string().optional(),
   canLeadTeam: z.boolean().default(false),
@@ -31,7 +31,6 @@ const querySchema = z.object({
   ),
   companyId: z
     .string()
-    .uuid()
     .optional()
     .nullable()
     .or(z.literal(""))

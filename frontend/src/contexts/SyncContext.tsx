@@ -345,6 +345,9 @@ function mapToDbColumns(
       localId: "local_id",
       createdBy: "created_by",
       companyId: "company_id",
+      subPoint: "sub_point",
+      subPointType: "sub_point_type",
+      metadata: "metadata",
     },
   };
 

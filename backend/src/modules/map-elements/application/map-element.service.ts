@@ -38,8 +38,13 @@ export class MapElementService {
   async saveBatch(
     elements: MapElementTechnicalData[],
   ): Promise<MapElementTechnicalData[]> {
-    await Promise.all(elements.map((e) => this.enrichElement(e)));
-    return this.repository.saveMany(elements);
+    try {
+      await Promise.all(elements.map((e) => this.enrichElement(e)));
+      return await this.repository.saveMany(elements);
+    } catch (error: any) {
+      console.error("[MapElementService] Error saving batch:", error);
+      throw error;
+    }
   }
 
   private async enrichElement(element: any) {
@@ -70,8 +75,10 @@ export class MapElementService {
             : "TOWER";
     }
 
-    if (!element.externalId && element.object_id) {
-      element.externalId = String(element.object_id);
+    if (!element.externalId) {
+      if (element.object_id) element.externalId = String(element.object_id);
+      else if (element.NumeroTorre) element.externalId = String(element.NumeroTorre);
+      else if (element.numero_torre) element.externalId = String(element.numero_torre);
     }
 
     if (!element.projectId && element.project_id)
@@ -79,9 +86,14 @@ export class MapElementService {
     if (!element.companyId && element.company_id)
       element.companyId = element.company_id;
 
+    // Se ainda não tem projectId e companyId, tenta pegar do metadata se houver logic de importação
+    if (!element.projectId && element.metadata?.projectId) element.projectId = element.metadata.projectId;
+
     if (element.sequence === undefined || element.sequence === 0) {
       if (element.object_seq !== undefined)
         element.sequence = Number(element.object_seq);
+      else if (element.Sequencia)
+        element.sequence = Number(element.Sequencia);
     }
 
     if (element.latitude === undefined || element.latitude === null) {
@@ -177,6 +189,10 @@ export class MapElementService {
 
   async deleteElement(id: string): Promise<boolean> {
     return this.repository.delete(id);
+  }
+
+  async deleteElements(ids: string[]): Promise<number> {
+    return this.repository.deleteMany(ids);
   }
 
   async clearProject(projectId: string): Promise<number> {

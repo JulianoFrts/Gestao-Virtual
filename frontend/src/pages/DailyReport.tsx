@@ -813,10 +813,25 @@ export default function DailyReport() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!employeeId || selectedActivities.length === 0) {
+
+    // Fallback: se o employeeId não foi explicitamente selecionado, usar do perfil
+    const effectiveEmployeeId = employeeId || profile?.employeeId || (profile as any)?.id || '';
+
+    console.debug('[RDO Submit] employeeId:', employeeId, 'effectiveEmployeeId:', effectiveEmployeeId, 'selectedActivities:', selectedActivities.length);
+
+    if (!effectiveEmployeeId) {
       toast({
         title: "Erro",
-        description: "Selecione o funcionário e adicione pelo menos uma atividade ao relatório.",
+        description: "Selecione o funcionário responsável pelo relatório.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (selectedActivities.length === 0) {
+      toast({
+        title: "Erro",
+        description: "Adicione pelo menos uma atividade ao relatório.",
         variant: "destructive",
       });
       return;
@@ -828,7 +843,7 @@ export default function DailyReport() {
       // O payload agora é puramente baseado em selectedActivities
       const result = await createReport({
         teamIds: teamIds,
-        employeeId: employeeId,
+        employeeId: effectiveEmployeeId,
         companyId: selectedCompanyId, 
         activities: selectedActivities.map(a => `${a.stageName} (${a.subPoint})`).join(", "),
         selectedActivities: selectedActivities,

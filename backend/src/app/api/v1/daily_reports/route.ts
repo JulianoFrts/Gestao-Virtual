@@ -13,19 +13,27 @@ const dailyReportService = new DailyReportService(
 );
 
 const createDailyReportSchema = z.object({
-  teamId: z.string().uuid().optional().or(z.string().nullable()),
-  team_id: z.string().uuid().optional(),
+  teamId: z.string().optional().or(z.string().nullable()),
+  team_id: z.string().optional().nullable(),
   userId: z.string().optional(),
-  user_id: z.string().optional(),
-  companyId: z.string().uuid().optional(),
-  company_id: z.string().uuid().optional(),
+  user_id: z.string().optional().nullable(),
+  companyId: z.string().optional(),
+  company_id: z.string().optional().nullable(),
   reportDate: z.string().optional(),
   report_date: z.string().optional(),
-  activities: z.string().min(1).default("Atividade sem descrição"),
+  activities: z.string().default("Atividade sem descrição"),
   observations: z.string().optional().nullable(),
   localId: z.string().optional(),
-  local_id: z.string().optional(),
-});
+  local_id: z.string().optional().nullable(),
+  subPoint: z.string().optional().nullable(),
+  sub_point: z.string().optional().nullable(),
+  subPointType: z.string().optional().nullable(),
+  sub_point_type: z.string().optional().nullable(),
+  metadata: z.any().optional(),
+  created_by: z.string().optional().nullable(),
+  createdBy: z.string().optional().nullable(),
+  synced_at: z.string().optional().nullable(),
+}).passthrough();
 
 const querySchema = z.object({
   page: z.preprocess(
@@ -38,7 +46,6 @@ const querySchema = z.object({
   ),
   teamId: z
     .string()
-    .uuid()
     .optional()
     .nullable()
     .or(z.literal(""))
@@ -98,7 +105,15 @@ export async function POST(request: NextRequest) {
     const user = await requireAuth();
 
     const body = await request.json();
-    const rawData = createDailyReportSchema.parse(body);
+    logger.info("[daily_reports POST] Body received", { bodyKeys: Object.keys(body), activities: typeof body.activities, activitiesLen: body.activities?.length });
+
+    let rawData;
+    try {
+      rawData = createDailyReportSchema.parse(body);
+    } catch (zodErr: any) {
+      logger.error("[daily_reports POST] Zod validation failed", { issues: zodErr.issues, bodySnapshot: JSON.stringify(body).slice(0, 500) });
+      throw zodErr;
+    }
 
     // Mapeamento de campos garantindo segurança (Herança de companyId do usuário)
     const data = {
@@ -106,10 +121,13 @@ export async function POST(request: NextRequest) {
       userId: rawData.userId || rawData.user_id || (user as any).id,
       companyId: (user as any).companyId || rawData.companyId || rawData.company_id || null,
       reportDate: rawData.reportDate || rawData.report_date,
-      activities: rawData.activities,
+      activities: rawData.activities || "Atividade sem descrição",
       observations: rawData.observations || null,
       localId: rawData.localId || rawData.local_id || null,
-      metadata: (body as any).metadata || {},
+      subPoint: rawData.subPoint || rawData.sub_point || null,
+      subPointType: rawData.subPointType || rawData.sub_point_type || null,
+      metadata: rawData.metadata || (body as any).metadata || {},
+      createdBy: rawData.createdBy || rawData.created_by || (user as any).id,
     };
 
     const report = await dailyReportService.createReport(data);

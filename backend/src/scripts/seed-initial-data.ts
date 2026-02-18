@@ -121,11 +121,11 @@ async function seedMockWorkers(count: number, hashedPassword: string) {
           address: {
             create: {
               cep: "12345-678",
-              street: faker.location.streetAddress(),
-              neighborhood: "Centro",
-              city: faker.location.city(),
-              stateCode: "SP",
-              stateName: "São Paulo"
+              logradouro: faker.location.streetAddress(),
+              bairro: "Centro",
+              localidade: faker.location.city(),
+              uf: "SP",
+              estado: "São Paulo"
             }
           }
         },
@@ -211,13 +211,13 @@ async function seedTeams(companyId: string, projectId: string, workers: any[]) {
         siteId: site.id,
         isActive: true,
         laborType: teamData.laborType,
-        members: {
+        teamMembers: {
           create: teamWorkers.map(w => ({
             userId: w.id
           }))
         }
       },
-      include: { members: true }
+      include: { teamMembers: true }
     });
     createdTeams.push(team);
     console.log(`✅ Equipe criada: ${team.name} com ${teamWorkers.length} membros`);
@@ -272,7 +272,7 @@ async function seedTimeRecords(workers: any[], companyId: string) {
             recordedAt: exitDate,
             latitude: -23.550520,
             longitude: -46.633308,
-            createdById: worker.id
+            createdBy: worker.id
           }
         });
         totalRecords += 2;
@@ -322,7 +322,7 @@ async function seed() {
   const defaultPassword = "orion123";
   const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
-  await cleanDatabase();
+  // await cleanDatabase();
   const { companyId, projectId } = await seedProjectInfrastructure();
   await seedAdminUsers(hashedPassword);
   

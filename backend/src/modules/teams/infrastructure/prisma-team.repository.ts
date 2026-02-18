@@ -34,7 +34,7 @@ export class PrismaTeamRepository implements TeamRepository {
           company: { select: { id: true, name: true } },
           site: { select: { id: true, name: true } },
           supervisor: { select: { id: true, name: true } },
-          _count: { select: { members: true } },
+          _count: { select: { teamMembers: true } },
         },
       }),
       prisma.team.count({ where }),
@@ -52,7 +52,7 @@ export class PrismaTeamRepository implements TeamRepository {
         company: { select: { id: true, name: true } },
         site: { select: { id: true, name: true } },
         supervisor: { select: { id: true, name: true } },
-        members: {
+        teamMembers: {
           include: {
             user: {
               select: {

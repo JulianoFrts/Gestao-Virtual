@@ -18,14 +18,14 @@ const querySchema = paginationQuerySchema.extend({
       val === "undefined" || val === "" || val === "null" || !val
         ? undefined
         : val,
-    z.string().uuid("ID do projeto inválido").optional(),
+    z.string().min(1, "ID do projeto inválido").optional(),
   ),
   companyId: z.preprocess(
     (val) =>
       val === "undefined" || val === "" || val === "null" || !val
         ? undefined
         : val,
-    z.string().uuid("ID da empresa inválido").optional(),
+    z.string().min(1, "ID da empresa inválido").optional(),
   ),
   type: z.enum(["TOWER", "SPAN", "CABLE", "EQUIPMENT", "STATION"]).optional(),
 });
@@ -100,9 +100,29 @@ export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth();
     const body = await request.json();
+    const params = Object.fromEntries(request.nextUrl.searchParams.entries());
+    const urlProjectId = params.projectId || params.project_id;
+    const urlCompanyId = params.companyId || params.company_id;
 
-    if (Array.isArray(body)) {
-      const results = await service.saveBatch(body);
+    // Injetar IDs da URL no body se estiverem faltando
+    const processItem = (item: any) => {
+      if (!item.projectId && urlProjectId) item.projectId = urlProjectId;
+      if (!item.companyId && urlCompanyId) item.companyId = urlCompanyId;
+      if (!item.companyId && user.companyId) item.companyId = user.companyId;
+      return item;
+    };
+
+    const finalBody = Array.isArray(body) ? body.map(processItem) : processItem(body);
+
+    logger.info("POST /api/v1/map_elements: Received body", { 
+      isArray: Array.isArray(body), 
+      count: Array.isArray(body) ? body.length : 1,
+      projectId: urlProjectId,
+      companyId: urlCompanyId
+    });
+
+    if (Array.isArray(finalBody)) {
+      const results = await service.saveBatch(finalBody);
       return ApiResponse.json(
         results,
         `${results.length} elementos processados.`,
@@ -111,8 +131,12 @@ export async function POST(request: NextRequest) {
 
     const result = await service.saveElement(body);
     return ApiResponse.json(result, "Elemento processado com sucesso.");
-  } catch (error) {
-    logger.error("Erro ao salvar elemento(s) do mapa", { error });
+  } catch (error: any) {
+    logger.error("Erro ao salvar elemento(s) do mapa", { 
+      message: error.message,
+      stack: error.stack,
+      error 
+    });
     return handleApiError(error, "src/app/api/v1/map_elements/route.ts#POST");
   }
 }
@@ -132,6 +156,16 @@ export async function DELETE(request: NextRequest) {
     if (id) {
       await service.deleteElement(id);
       return ApiResponse.json({ success: true }, "Elemento removido.");
+    }
+
+    const ids = request.nextUrl.searchParams.get("ids");
+    if (ids) {
+      const idList = ids.split(",").filter(Boolean);
+      const count = await service.deleteElements(idList);
+      return ApiResponse.json(
+        { success: true, count },
+        `${count} elementos removidos.`,
+      );
     }
 
     if (projectId) {

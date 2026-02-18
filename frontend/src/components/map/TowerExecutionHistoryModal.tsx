@@ -94,7 +94,7 @@ export function TowerExecutionHistoryModal({ isOpen, onClose, tower, projectId }
             <DialogContent className="max-w-4xl h-[80vh] bg-neutral-950 border-white/10 p-0 flex flex-col overflow-hidden">
                 {/* Header */}
                 <div className="h-24 bg-linear-to-r from-neutral-900 to-neutral-950 border-b border-white/5 p-6 flex items-center justify-between relative overflow-hidden">
-                    <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20" />
+                    <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")" }} />
                     <div className="relative z-10 flex items-center gap-4">
                         <div className="w-12 h-12 bg-indigo-500/10 border border-indigo-500/20 rounded-xl flex items-center justify-center">
                             <FileText className="w-6 h-6 text-indigo-400" />

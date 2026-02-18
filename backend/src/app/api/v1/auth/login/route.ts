@@ -72,11 +72,19 @@ async function executeLogin(email: string, password: string) {
       projectId: undefined,
     });
 
-    const permissions = await userService.getPermissionsMap(
-      user.role!,
-      user.id,
-      undefined
-    );
+    let permissions = {};
+    try {
+      permissions = await userService.getPermissionsMap(
+        user.role!,
+        user.id,
+        undefined
+      );
+    } catch (permError: any) {
+      logger.warn("Falha ao carregar permissões (não-bloqueante)", {
+        code: permError?.code,
+        message: permError?.message,
+      });
+    }
 
     return {
       data: {
@@ -98,8 +106,9 @@ async function executeLogin(email: string, password: string) {
   } catch (dbError: any) {
     logger.error("ERRO CRÍTICO NO BANCO/TOKEN DURANTE LOGIN", {
       message: dbError.message,
-      stack: dbError.stack,
-      code: dbError.code
+      code: dbError.code,
+      meta: dbError.meta,
+      stack: dbError.stack?.split("\n").slice(0, 5).join("\n"),
     });
     throw dbError;
   }

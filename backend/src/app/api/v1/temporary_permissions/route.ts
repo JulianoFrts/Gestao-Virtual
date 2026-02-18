@@ -21,7 +21,7 @@ const createTemporaryPermissionSchema = z.object({
   userId: z.string(),
   permissionType: z.string().min(1),
   grantedBy: z.string().optional(),
-  ticketId: z.string().uuid().optional(),
+  ticketId: z.string().optional(),
   expiresAt: z.string().datetime(),
 });
 

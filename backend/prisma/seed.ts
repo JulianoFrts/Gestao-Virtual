@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import { seedAdmin } from "./seed-admin";
 import { seedProduction } from "./seed-production";
 import { seedPersonnel } from "./master-seed-personnel";
+import { seedGlobalUsers } from "./seed-global";
 import { fileURLToPath } from "url";
 
 dotenv.config();
@@ -23,6 +24,9 @@ async function main() {
     console.log("===============================");
 
     try {
+        // 0. Global Master Users (Juliano, Socio, etc)
+        await seedGlobalUsers(prisma);
+
         // 1. Admin & Basic Users
         await seedAdmin(prisma);
 
