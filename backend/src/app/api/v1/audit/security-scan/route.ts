@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { SecurityAuditService } from "@/modules/audit/application/security-audit.service";
 import { GovernanceService } from "@/modules/audit/application/governance.service";
 import { PrismaGovernanceRepository } from "@/modules/audit/infrastructure/prisma-governance.repository";
+import { HTTP_STATUS } from "@/lib/constants";
 
 export async function POST() {
     try {
@@ -16,6 +17,6 @@ export async function POST() {
             data: report
         });
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: error.message }, { status: HTTP_STATUS.INTERNAL_ERROR });
     }
 }

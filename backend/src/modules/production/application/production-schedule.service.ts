@@ -1,13 +1,17 @@
 import { ProductionRepository } from "../domain/production.repository";
+import { ProductionScheduleRepository } from "../domain/production-schedule.repository";
 
 export class ProductionScheduleService {
-  constructor(private readonly repository: ProductionRepository) {}
+  constructor(
+    private readonly scheduleRepository: ProductionScheduleRepository,
+    private readonly progressRepository: ProductionRepository
+  ) {}
 
   async saveSchedule(
     data: any,
     user: { id: string; role: string; companyId?: string | null },
   ) {
-    const existing = await this.repository.findScheduleByElement(
+    const existing = await this.scheduleRepository.findScheduleByElement(
       data.towerId,
       data.activityId,
     );
@@ -23,7 +27,7 @@ export class ProductionScheduleService {
       createdById: existing ? undefined : user.id,
     };
 
-    return this.repository.saveSchedule(payload);
+    return this.scheduleRepository.saveSchedule(payload);
   }
 
   async listSchedules(
@@ -33,7 +37,7 @@ export class ProductionScheduleService {
     const { isUserAdmin } = await import("@/lib/auth/session");
     const isAdmin = isUserAdmin(user.role);
 
-    return this.repository.findSchedulesByScope({
+    return this.scheduleRepository.findSchedulesByScope({
       elementId: params.elementId ?? undefined,
       projectId: params.projectId,
       companyId: isAdmin ? undefined : user.companyId || undefined,
@@ -45,7 +49,7 @@ export class ProductionScheduleService {
     user: { id: string; role: string; companyId?: string | null },
     options?: { targetDate?: string },
   ) {
-    const existing = await this.repository.findScheduleById(scheduleId);
+    const existing = await this.scheduleRepository.findScheduleById(scheduleId);
     if (!existing) throw new Error("Agendamento não encontrado");
 
     if (options?.targetDate) {
@@ -56,12 +60,12 @@ export class ProductionScheduleService {
         existing.plannedStart.toISOString().split("T")[0] ===
         existing.plannedEnd.toISOString().split("T")[0]
       ) {
-        return this.repository.deleteSchedule(scheduleId);
+        return this.scheduleRepository.deleteSchedule(scheduleId);
       }
 
       await this.performScheduleSplit(scheduleId, existing, targetDate);
     } else {
-      return this.repository.deleteSchedule(scheduleId);
+      return this.scheduleRepository.deleteSchedule(scheduleId);
     }
   }
 
@@ -83,7 +87,7 @@ export class ProductionScheduleService {
     const validIds = await this.filterNonExecutedSchedules(candidates);
     if (validIds.length === 0) return { count: 0, skipped: candidates.length };
 
-    const count = await this.repository.deleteSchedulesBatch(validIds);
+    const count = await this.scheduleRepository.deleteSchedulesBatch(validIds);
     return { count, skipped: candidates.length - count };
   }
 
@@ -108,7 +112,7 @@ export class ProductionScheduleService {
       };
     }
 
-    return this.repository.findSchedulesByScope(queryParams);
+    return this.scheduleRepository.findSchedulesByScope(queryParams);
   }
 
   private async filterNonExecutedSchedules(candidates: any[]): Promise<string[]> {
@@ -123,7 +127,7 @@ export class ProductionScheduleService {
   }
 
   async hasExecution(elementId: string, activityId: string): Promise<boolean> {
-    const progress = await this.repository.findByElement(elementId);
+    const progress = await this.progressRepository.findByElement(elementId);
     const specific = progress.find((p) => p.activityId === activityId);
     return !!(
       specific &&
@@ -142,7 +146,7 @@ export class ProductionScheduleService {
     const part2Start = new Date(targetDate);
     part2Start.setDate(part2Start.getDate() + 1);
 
-    await this.repository.splitSchedule(
+    await this.scheduleRepository.splitSchedule(
       scheduleId,
       { plannedEnd: part1End },
       {

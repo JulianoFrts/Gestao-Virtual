@@ -1,7 +1,8 @@
 import bcrypt from "bcryptjs";
 import { CONSTANTS } from "@/lib/constants";
-import { UserRepository } from "../domain/user.repository";
+import { UserRepository, UserWithRelations } from "../domain/user.repository";
 import { SystemAuditRepository } from "../../audit/domain/system-audit.repository";
+import { isGodRole, isSystemOwner, SECURITY_RANKS } from "@/lib/constants/security";
 
 export class UserSecurityService {
   constructor(
@@ -18,10 +19,10 @@ export class UserSecurityService {
     data: { currentPassword?: string; newPassword?: string; password?: string },
     performerId?: string,
   ) {
-    const user = await this.repository.findById(userId, {
+    const user = (await this.repository.findById(userId, {
       id: true,
       authCredential: { select: { password: true } },
-    } as any);
+    })) as UserWithRelations | null;
     if (!user) throw new Error("User not found");
 
     let newPasswordToHash: string;
@@ -29,10 +30,10 @@ export class UserSecurityService {
     if (data.password && !data.currentPassword) {
       newPasswordToHash = data.password;
     } else if (data.currentPassword && data.newPassword) {
-      if (!(user as any).authCredential?.password) throw new Error("User has no password set");
+      if (!user.authCredential?.password) throw new Error("User has no password set");
       const isValidPassword = await bcrypt.compare(
         data.currentPassword,
-        (user as any).authCredential.password as string,
+        user.authCredential.password,
       );
       if (!isValidPassword) throw new Error("Invalid current password");
       newPasswordToHash = data.newPassword;
@@ -41,6 +42,7 @@ export class UserSecurityService {
     }
 
     const hashedPassword = await this.hashPassword(newPasswordToHash);
+    // Nota: O método repository.update pode precisar de adequação para aceitar password diretamente se não estiver no modelo base
     await this.repository.update(userId, { password: hashedPassword } as any);
 
     if (this.auditRepository) {
@@ -51,6 +53,57 @@ export class UserSecurityService {
         entityId: userId,
         newValues: { password: "[CHANGED]" },
       });
+    }
+  }
+
+  async validateHierarchySovereignty(performerId: string, targetId: string, targetLevel: number) {
+    if (performerId === targetId) return;
+
+    const performer = (await this.repository.findById(performerId, {
+      hierarchyLevel: true,
+      authCredential: { select: { role: true } },
+    })) as UserWithRelations | null;
+
+    if (!performer) return;
+
+    const performerRole = performer.authCredential?.role || "";
+    const performerLevel = performer.hierarchyLevel || 0;
+    const isGod = isGodRole(performerRole) || performerLevel >= SECURITY_RANKS.MASTER;
+
+    if (!isGod && performerLevel <= targetLevel) {
+      throw new Error("Soberania de Hierarquia: Você não pode modificar um usuário de nível igual ou superior ao seu.");
+    }
+  }
+
+  async validatePromotionPermission(performerId: string, newRole: string, newLevel: number) {
+    const performer = (await this.repository.findById(performerId, {
+      hierarchyLevel: true,
+      authCredential: { select: { role: true } },
+    })) as UserWithRelations | null;
+
+    if (!performer) return;
+
+    const performerRole = performer.authCredential?.role || "";
+    const performerLevel = performer.hierarchyLevel || 0;
+    const isGod = isGodRole(performerRole) || performerLevel >= SECURITY_RANKS.MASTER;
+
+    if (!isGod && newLevel > performerLevel) {
+      throw new Error(`Segurança: Você (Nível ${performerLevel}) não tem permissão para promover um usuário ao cargo de ${newRole} (Nível ${newLevel}).`);
+    }
+  }
+
+  async validateSystemAdminFlag(performerId: string, isSystemAdmin: boolean, currentIsSystemAdmin: boolean) {
+    if (isSystemAdmin === currentIsSystemAdmin) return;
+
+    const performer = (await this.repository.findById(performerId, {
+      authCredential: { select: { role: true } },
+    })) as UserWithRelations | null;
+
+    if (!performer) return;
+
+    const performerRole = performer.authCredential?.role || "";
+    if (!isSystemOwner(performerRole)) {
+      throw new Error("Segurança Crítica: Apenas Super Administradores podem conceder ou revogar status de System Admin.");
     }
   }
 }

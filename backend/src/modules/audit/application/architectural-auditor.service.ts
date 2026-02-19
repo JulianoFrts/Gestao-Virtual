@@ -14,6 +14,13 @@ import { AuditScanner } from "./audit-scanner";
 import { AuditReportService, AuditSummary } from "./audit-report.service";
 import { CONSTANTS } from "@/lib/constants";
 
+// Novas Regras (Refatoração SRP)
+import { TooManyParametersRule } from "../domain/rules/too-many-params.rule";
+import { DDDViolationRule } from "../domain/rules/ddd-violation.rule";
+import { HardcodedEnvironmentRule } from "../domain/rules/hardcoded-env.rule";
+import { PrimitiveObsessionRule } from "../domain/rules/primitive-obsession.rule";
+import { VisualConsistencyRule } from "../domain/rules/visual-consistency.rule";
+
 /**
  * ArchitecturalAuditor - Realiza auditoria estática do código
  * v3.1: SRP Refactoring & Constant Cleanup
@@ -48,7 +55,12 @@ export class ArchitecturalAuditor {
     const availableRules = [
       new SingleResponsibilityRule(),
       new LongMethodRule(),
-      new MagicNumbersRule()
+      new MagicNumbersRule(),
+      new TooManyParametersRule(),
+      new DDDViolationRule(),
+      new HardcodedEnvironmentRule(),
+      new PrimitiveObsessionRule(),
+      new VisualConsistencyRule()
     ];
 
     this.rules = availableRules;
@@ -233,9 +245,6 @@ export class ArchitecturalAuditor {
     const results: AuditResult[] = [];
 
     this.analyzeWithAST(relativePath, content, results);
-    this.auditHardcodedStrings(relativePath, content, results);
-    this.auditPrimitiveObsession(relativePath, content, results);
-    this.auditVisualConsistency(relativePath, content, results);
 
     this.cacheService.updateCache(file, content, results.length);
 
@@ -259,147 +268,11 @@ export class ArchitecturalAuditor {
         const ruleResults = rule.execute(file, sourceFile, content);
         results.push(...ruleResults);
       }
-
-      const visit = (node: ts.Node) => {
-        if (
-          ts.isFunctionDeclaration(node) ||
-          ts.isMethodDeclaration(node) ||
-          ts.isArrowFunction(node) ||
-          ts.isFunctionExpression(node)
-        ) {
-          this.checkTooManyParameters(file, node, results);
-        }
-
-        if (
-          ts.isCallExpression(node) &&
-          ts.isPropertyAccessExpression(node.expression)
-        ) {
-          this.checkDDDViolations(file, node, results);
-        }
-
-        ts.forEachChild(node, visit);
-      };
-
-      visit(sourceFile);
     } catch (e) {
       logger.warn(`Erro na análise AST de ${file}`, { error: e });
     }
   }
 
-  private checkTooManyParameters(
-    file: string,
-    node: ts.FunctionLikeDeclaration,
-    results: AuditResult[]
-  ) {
-    const MAX_PARAMS = 5;
-    if (node.parameters.length > MAX_PARAMS) {
-      results.push({
-        file,
-        status: "WARN",
-        severity: "MEDIUM",
-        message: `Função com ${node.parameters.length} parâmetros.`,
-        violation: "Muitos Parâmetros",
-        suggestion: "Use um objeto de configuração (DTO/Interface).",
-      });
-    }
-  }
-
-  private checkDDDViolations(
-    file: string,
-    node: ts.CallExpression,
-    results: AuditResult[]
-  ) {
-    if (!file.includes("route.ts") && !file.includes("controller")) return;
-
-    const expression = node.expression as ts.PropertyAccessExpression;
-    const propName = expression.name.text;
-
-    if (
-      ["create", "update", "delete", "upsert"].includes(propName) &&
-      expression.expression.getText().includes("prisma")
-    ) {
-      results.push({
-        file,
-        status: "WARN",
-        severity: "MEDIUM",
-        message: "Persistência direta na camada de Rota/Controlador.",
-        violation: "Violação de Camada (DDD)",
-        suggestion: "Mova a persistência para um Serviço ou Repositório.",
-      });
-    }
-  }
-
-  private auditHardcodedStrings(
-    file: string,
-    content: string,
-    results: AuditResult[]
-  ) {
-    const APP_URL = process.env.APP_URL || "https://orion.gestaovirtual.com";
-
-    if (
-      content.includes("localhost:") &&
-      !file.includes("config") &&
-      !file.includes("client") &&
-      !file.includes("AuditScanner") // Scanner and Auditor are exceptions while refactoring
-    ) {
-      results.push({
-        file,
-        status: "WARN",
-        severity: "MEDIUM",
-        message: "URL localhost hardcoded.",
-        violation: "Ambiente Hardcoded",
-        suggestion: `Use variáveis de ambiente (APP_URL=${APP_URL}).`,
-      });
-    }
-  }
-
-  private auditPrimitiveObsession(
-    file: string,
-    content: string,
-    results: AuditResult[]
-  ) {
-    const MAX_PRIMITIVE_STATES = 5;
-    const statePattern =
-      /(?:status|type|state|mode)\s*(?:===?|!==?)\s*['"]\w+['"]/gi;
-    const matches = content.match(statePattern) || [];
-
-    if (matches.length > MAX_PRIMITIVE_STATES) {
-      results.push({
-        file,
-        status: "WARN",
-        severity: "LOW",
-        message: `Uso excessivo de estados string (${matches.length}x).`,
-        violation: "Obsessão por Primitivos",
-        suggestion: "Use Enums ou Tipos.",
-      });
-    }
-  }
-
-  private auditVisualConsistency(
-    file: string,
-    content: string,
-    results: AuditResult[]
-  ) {
-    if (!file.endsWith(".tsx")) return;
-    if (file.includes("index.css") || file.includes("tailwind.config")) return;
-
-    const MAX_COLOR_VIOLATIONS = 5;
-    const problematicColorsPattern =
-      /(?:text|bg|border|ring|shadow)-(?:orange|amber)-(?:400|500|600|700)/g;
-    const matches = content.match(problematicColorsPattern) || [];
-    const uniqueColors = [...new Set(matches)];
-
-    if (uniqueColors.length > 0 && matches.length > MAX_COLOR_VIOLATIONS) {
-      results.push({
-        file,
-        status: "WARN",
-        severity: "LOW",
-        message: `Cores fora do padrão: ${uniqueColors.join(", ")}.`,
-        violation: "Inconsistência Visual",
-        suggestion: "Use variáveis de tema (primary/secondary).",
-      });
-    }
-  }
 
   private reportResults(results: AuditResult[]) {
     const fails = results.filter((r) => r.status === "FAIL").length;

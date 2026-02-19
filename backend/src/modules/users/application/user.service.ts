@@ -1,6 +1,6 @@
-import { UserRepository } from "../domain/user.repository";
+import { UserRepository, UserWithRelations } from "../domain/user.repository";
 import { SystemAuditRepository } from "../../audit/domain/system-audit.repository";
-import { type Prisma } from "@prisma/client";
+import { type Prisma, type User } from "@prisma/client";
 import { isGodRole, isSystemOwner, SECURITY_RANKS } from "@/lib/constants/security";
 import { ROLE_LEVELS, DEFAULT_PAGE } from "@/lib/constants";
 import { prisma } from "@/lib/prisma/client";
@@ -60,7 +60,7 @@ export class UserService {
   }
 
   private paginateResults(
-    items: any[],
+    items: UserWithRelations[],
     total: number,
     page: number,
     limit: number,
@@ -82,17 +82,17 @@ export class UserService {
   /**
    * Achata a estrutura aninhada do Prisma para o formato plano esperado pelo frontend
    */
-  public flattenUser(user: any) {
+  public flattenUser(user: UserWithRelations | null): any {
     if (!user) return null;
     return {
       ...user,
-      email: user.authCredential?.email || user.email,
-      role: user.authCredential?.role || user.role,
-      status: user.authCredential?.status || user.status,
+      email: user.authCredential?.email,
+      role: user.authCredential?.role,
+      status: user.authCredential?.status,
       mfaEnabled: !!user.authCredential?.mfaEnabled,
-      companyId: user.affiliation?.companyId || user.companyId,
-      projectId: user.affiliation?.projectId || user.projectId,
-      siteId: user.affiliation?.siteId || user.siteId,
+      companyId: user.affiliation?.companyId,
+      projectId: user.affiliation?.projectId,
+      siteId: user.affiliation?.siteId,
       // Mantém os objetos originais caso algo precise especificamente deles
     };
   }
@@ -160,73 +160,51 @@ export class UserService {
     });
     if (!existing) throw new Error("User not found");
 
-    // 2. Segurança de Hierarquia
-    if (performerId && performerId !== id) {
-      const performer = await this.repository.findById(performerId, {
-        id: true,
-        hierarchyLevel: true,
-        authCredential: { select: { role: true } },
-      });
-      if (performer) {
-        const performerRole = (performer as any).authCredential?.role || "";
-        const isGod = isGodRole(performerRole) || (performer as any).hierarchyLevel >= SECURITY_RANKS.MASTER;
+    const updateData = { ...data };
 
-        const targetLevel = (existing as any).hierarchyLevel || 0;
-        const performerLevel = (performer as any).hierarchyLevel || 0;
+    // 2. Segurança de Hierarquia e Regras Críticas
+    if (performerId) {
+      await this.securityService.validateHierarchySovereignty(
+        performerId,
+        id,
+        existing.hierarchyLevel || 0
+      );
 
-        if (!isGod && performerLevel <= targetLevel) {
-          throw new Error("Soberania de Hierarquia: Você não pode modificar um usuário de nível igual ou superior ao seu.");
-        }
+      if (updateData.role && updateData.role !== (existing as any).authCredential?.role) {
+        const newLevel = await this.permissionService.getRankByRole(updateData.role);
+        await this.securityService.validatePromotionPermission(performerId, updateData.role, newLevel);
+        updateData.hierarchyLevel = newLevel;
+      }
+
+      if (updateData.isSystemAdmin !== undefined) {
+        await this.securityService.validateSystemAdminFlag(
+          performerId,
+          updateData.isSystemAdmin,
+          (existing as any).isSystemAdmin || false
+        );
       }
     }
 
-    // 3. Preparação e Normalização
-    const updateData = { ...data };
-
-    // Tratamento de senha
+    // 3. Preparação e Senha
     if (updateData.password) {
       updateData.password = await this.securityService.hashPassword(updateData.password);
     }
 
-    // Tratamento de cargo e nível hierárquico
-    if (updateData.role && updateData.role !== (existing as any).authCredential?.role) {
-      const newLevel = await this.permissionService.getRankByRole(updateData.role);
-      if (performerId) {
-        const performer = await this.repository.findById(performerId, {
-          id: true,
-          hierarchyLevel: true,
-          authCredential: { select: { role: true } },
-        });
-        const performerLevel = (performer as any).hierarchyLevel || 0;
-        const performerRole = (performer as any).authCredential?.role || "";
-        const isGod = isGodRole(performerRole) || (performer as any).hierarchyLevel >= SECURITY_RANKS.MASTER;
+    // 4. Persistência Granular
+    const report = await this.processGranularUpdates(id, existing, updateData);
 
-        if (!isGod && newLevel > performerLevel) {
-          throw new Error(`Segurança: Você (Nível ${performerLevel}) não tem permissão para promover um usuário ao cargo de ${updateData.role} (Nível ${newLevel}).`);
-        }
-      }
-      updateData.hierarchyLevel = newLevel;
-    }
+    // 5. AuditLog e Retorno
+    const finalUser = await this.repository.findById(id, select);
+    await this.logAudit("UPDATE", "User", id, data, existing, performerId);
 
-    // [SECURITY] Tratamento de Flag isSystemAdmin
-    // Somente God Roles podem alterar essa flag crítica
-    if (updateData.isSystemAdmin !== undefined && updateData.isSystemAdmin !== (existing as any).isSystemAdmin) {
-      if (performerId) {
-        const performer = await this.repository.findById(performerId, {
-          id: true,
-          hierarchyLevel: true,
-          authCredential: { select: { role: true } },
-        });
-        const performerRole = (performer as any).authCredential?.role || "";
-        const isOwner = isSystemOwner(performerRole);
+    return {
+      ...(this.flattenUser(finalUser) as any),
+      _report: report,
+      _partial: report.failed.length > 0
+    };
+  }
 
-        if (!isOwner) {
-          throw new Error("Segurança Crítica: Apenas Super Administradores podem conceder ou revogar status de System Admin.");
-        }
-      }
-    }
-
-    // 4. Persistência Granular (Campo a Campo)
+  private async processGranularUpdates(id: string, existing: any, updateData: any) {
     const report: { success: string[], failed: { field: string, error: string }[] } = {
       success: [],
       failed: []
@@ -238,46 +216,31 @@ export class UserService {
       try {
         let value = updateData[field];
 
-        // 4.1 Limpeza específica de CPF e Telefone (Redundância de Segurança)
+        // Limpeza de CPF e Telefone
         if ((field === 'cpf' || field === 'phone') && typeof value === 'string') {
           value = value.replace(/\D/g, '');
         }
 
-        const singleFieldUpdate = { [field]: value };
-
-        // Validação específica de email (Unicidade)
+        // Validação de email único
         if (field === 'email' && value !== (existing as any).authCredential?.email) {
           const emailExists = await this.repository.findByEmail(value);
           if (emailExists) throw new Error("Email já está sendo usado por outro usuário.");
         }
 
-        // Tenta atualizar este campo específico
-        await this.repository.update(id, singleFieldUpdate);
+        await this.repository.update(id, { [field]: value });
         report.success.push(field);
       } catch (error: any) {
         const errorMsg = error.message || "Erro desconhecido";
         console.error(`[GranularUpdate] Falha no campo ${field}:`, errorMsg);
         report.failed.push({ field, error: errorMsg });
 
-        // SE for erro de constraint única (Prisma P2002 ou mensagem similar), 
-        // interrompemos o loop pois é um erro crítico de negócio
         if (errorMsg.includes('Unique constraint') || errorMsg.includes('P2002') || errorMsg.includes('já está sendo usado')) {
-          console.warn('[GranularUpdate] Abortando atualização devido a erro de duplicidade crítica.');
-          throw error; // Repropaga para o controlador tratar como 409 Conflict ou 400 Bad Request
+          throw error;
         }
       }
     }
 
-    // 5. AuditLog e Retorno
-    const finalUser = await this.repository.findById(id, select);
-    await this.logAudit("UPDATE", "User", id, data, existing, performerId);
-
-    // Retorna o usuário achatado com o report de persistência
-    return {
-      ...(this.flattenUser(finalUser) as any),
-      _report: report,
-      _partial: report.failed.length > 0
-    };
+    return report;
   }
 
   /**
@@ -319,22 +282,11 @@ export class UserService {
     }
 
     if (performerId) {
-      const performer = await this.repository.findById(performerId, {
-        id: true,
-        hierarchyLevel: true,
-        authCredential: { select: { role: true } },
-      });
-      if (performer) {
-        const performerRole = (performer as any).authCredential?.role || "";
-        const isGod = isGodRole(performerRole) || (performer as any).hierarchyLevel >= SECURITY_RANKS.MASTER;
-        const targetLevel = (existing as any).hierarchyLevel || 0;
-        const performerLevel = (performer as any).hierarchyLevel || 0;
-        if (!isGod && performerLevel <= targetLevel) {
-          throw new Error(
-            "Soberania de Hierarquia: Você não tem permissão para excluir usuários de nível igual ou superior ao seu.",
-          );
-        }
-      }
+      await this.securityService.validateHierarchySovereignty(
+        performerId,
+        id,
+        (existing as any).hierarchyLevel || 0
+      );
     }
 
     await prisma.$transaction([

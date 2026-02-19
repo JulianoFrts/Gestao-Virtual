@@ -11,7 +11,7 @@ import {
 } from "../domain/production-config.repository";
 
 export class PrismaProductionRepository
-  implements ProductionRepository, ProductionConfigRepository {
+  implements ProductionRepository {
   async save(progress: ProductionProgress): Promise<ProductionProgress> {
     const dataToSave: any = {
       currentStatus: progress.currentStatus,
@@ -169,10 +169,27 @@ export class PrismaProductionRepository
       .filter((id: any): id is string => !!id);
   }
 
-  async findSchedule(elementId: string, activityId: string): Promise<any> {
-    return await prisma.activitySchedule.findFirst({
-      where: { elementId, activityId },
+  async findPendingLogs(
+    companyId?: string | null,
+  ): Promise<ProductionProgress[]> {
+    const where: any = { currentStatus: 'PENDING' };
+    if (companyId) where.project = { companyId };
+
+    const results = await prisma.mapElementProductionProgress.findMany({
+      where,
+      include: {
+        productionActivity: true,
+        element: {
+          select: { name: true, externalId: true, elementType: true },
+        },
+        project: {
+          select: { name: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
     });
+
+    return results.map((res: any) => new ProductionProgress(res as any));
   }
 
   async syncWorkStages(
@@ -237,128 +254,6 @@ export class PrismaProductionRepository
     });
   }
 
-  async findPendingLogs(
-    companyId?: string | null,
-  ): Promise<ProductionProgress[]> {
-    const where: any = { currentStatus: 'PENDING' };
-    if (companyId) where.project = { companyId };
-
-    const results = await prisma.mapElementProductionProgress.findMany({
-      where,
-      include: {
-        productionActivity: true,
-        element: {
-          select: { name: true, externalId: true, elementType: true },
-        },
-        project: {
-          select: { name: true },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    return results.map((res: any) => new ProductionProgress(res as any));
-  }
-
-  // Schedule Implementation
-  async findScheduleByElement(
-    elementId: string,
-    activityId: string,
-  ): Promise<any | null> {
-    return await prisma.activitySchedule.findFirst({
-      where: { elementId, activityId },
-    });
-  }
-
-  async findScheduleById(id: string): Promise<any | null> {
-    return await prisma.activitySchedule.findUnique({
-      where: { id },
-    });
-  }
-
-  async saveSchedule(data: any): Promise<any> {
-    if (data.id) {
-      return await prisma.activitySchedule.update({
-        where: { id: data.id },
-        data,
-      });
-    }
-    return await prisma.activitySchedule.create({ data });
-  }
-
-  async deleteSchedule(id: string): Promise<void> {
-    await prisma.activitySchedule.delete({ where: { id } });
-  }
-
-  async deleteSchedulesBatch(ids: string[]): Promise<number> {
-    const result = await prisma.activitySchedule.deleteMany({
-      where: { id: { in: ids } },
-    });
-    return result.count;
-  }
-
-  async findSchedulesByScope(params: {
-    projectId?: string;
-    companyId?: string;
-    elementId?: string;
-    activityId?: string;
-    dateRange?: { start: Date; end: Date };
-  }): Promise<any[]> {
-    const where: any = {};
-
-    if (params.projectId && params.projectId !== "all") {
-      // Navigate via mapElementTechnicalData relation (correct Prisma name)
-      where.mapElementTechnicalData = { projectId: params.projectId };
-    }
-
-    if (params.elementId) {
-      where.elementId = params.elementId;
-    }
-
-    if (params.companyId) {
-      where.mapElementTechnicalData = {
-        ...where.mapElementTechnicalData,
-        companyId: params.companyId,
-      };
-    }
-
-    if (params.activityId) {
-      where.activityId = params.activityId;
-    }
-
-    if (params.dateRange) {
-      where.AND = [
-        { plannedStart: { lte: params.dateRange.end } },
-        { plannedEnd: { gte: params.dateRange.start } },
-      ];
-    }
-
-    return await prisma.activitySchedule.findMany({
-      where,
-      include: {
-        mapElementTechnicalData: { select: { id: true, externalId: true, name: true } },
-        productionActivity: { select: { name: true } },
-      },
-      orderBy: { plannedStart: "asc" },
-    });
-  }
-
-  async splitSchedule(
-    id: string,
-    updateData: any,
-    createData: any,
-  ): Promise<void> {
-    await prisma.$transaction([
-      prisma.activitySchedule.update({
-        where: { id },
-        data: updateData,
-      }),
-      prisma.activitySchedule.create({
-        data: createData,
-      }),
-    ]);
-  }
-
   async findElementProjectId(elementId: string): Promise<string | null> {
     const element = await prisma.mapElementTechnicalData.findUnique({
       where: { id: elementId },
@@ -373,107 +268,6 @@ export class PrismaProductionRepository
       select: { companyId: true },
     });
     return element?.companyId || null;
-  }
-
-  // Production Config Repository Methods
-  async getDelayCostConfig(
-    companyId: string,
-    projectId: string,
-  ): Promise<DelayCostConfig | null> {
-    const config = await prisma.delayCostConfig.findUnique({
-      where: { companyId_projectId: { companyId, projectId } },
-    });
-    if (!config) return null;
-    return config as unknown as DelayCostConfig;
-  }
-
-  async upsertDelayCostConfig(data: DelayCostConfig): Promise<DelayCostConfig> {
-    return (await prisma.delayCostConfig.upsert({
-      where: {
-        companyId_projectId: {
-          companyId: data.companyId,
-          projectId: data.projectId,
-        },
-      },
-      update: {
-        dailyCost: data.dailyCost,
-        currency: data.currency,
-        description: data.description,
-        updatedBy: data.updatedById,
-      },
-      create: {
-        id: crypto.randomUUID(),
-        companyId: data.companyId,
-        projectId: data.projectId,
-        dailyCost: data.dailyCost,
-        currency: data.currency,
-        description: data.description,
-        updatedBy: data.updatedById,
-      },
-    })) as unknown as DelayCostConfig;
-  }
-
-  async listDelayReasons(projectId: string): Promise<any[]> {
-    return await prisma.projectDelayReason.findMany({
-      where: projectId === "all" ? {} : { projectId },
-      orderBy: { createdAt: "desc" },
-    });
-  }
-
-  async createDelayReason(data: any): Promise<any> {
-    return await prisma.projectDelayReason.create({
-      data: {
-        id: crypto.randomUUID(),
-        projectId: data.projectId,
-        code: data.code,
-        description: data.description,
-        dailyCost: data.dailyCost,
-        category: data.category,
-        updatedBy: data.updatedById,
-      },
-    });
-  }
-
-  async deleteDelayReason(id: string): Promise<void> {
-    await prisma.projectDelayReason.delete({ where: { id } });
-  }
-
-  // Categories (ProductionCategory)
-  // Schema: ProductionCategory has name, description, order. No projectId.
-  async listCategories(): Promise<any[]> {
-    const results = await prisma.productionCategory.findMany({
-      orderBy: { order: "asc" },
-      include: {
-        productionActivities: {
-          orderBy: { order: "asc" },
-        },
-      },
-    });
-
-    // Mapeia para o formato esperado pelo frontend (activities)
-    return results.map(cat => ({
-      ...cat,
-      activities: cat.productionActivities
-    }));
-  }
-
-  async createCategory(data: any): Promise<any> {
-    return await prisma.productionCategory.create({ data });
-  }
-
-  // Activities (ProductionActivity)
-  async listActivities(categoryId?: string): Promise<any[]> {
-    const where: any = {};
-    if (categoryId) where.categoryId = categoryId;
-    return await prisma.productionActivity.findMany({
-      where,
-      orderBy: { order: "asc" },
-      include: { productionCategory: true },
-    });
-  }
-
-  async createActivity(data: any): Promise<any> {
-    return await prisma.productionActivity.create({ data });
   }
 
   async findProgress(
@@ -501,50 +295,5 @@ export class PrismaProductionRepository
       history: res.history as any[],
       dailyProduction: res.dailyProduction as any,
     } as any);
-  }
-
-  async findAllIAPs(): Promise<any[]> {
-    return prisma.listIap.findMany({
-      orderBy: { iap: "asc" },
-    });
-  }
-
-  async listUnitCosts(projectId: string): Promise<any[]> {
-    const results = await prisma.activityUnitCost.findMany({
-      where: { projectId },
-      include: { productionActivity: true },
-    });
-
-    return results.map(cost => ({
-      ...cost,
-      activity: cost.productionActivity
-    }));
-  }
-
-  async upsertUnitCosts(projectId: string, costs: any[]): Promise<any> {
-    const results = [];
-    for (const cost of costs) {
-      const result = await prisma.activityUnitCost.upsert({
-        where: {
-          projectId_activityId: {
-            projectId,
-            activityId: cost.activityId,
-          },
-        },
-        update: {
-          unitPrice: cost.unitPrice,
-          measureUnit: cost.measureUnit,
-        },
-        create: {
-          id: crypto.randomUUID(),
-          projectId,
-          activityId: cost.activityId,
-          unitPrice: cost.unitPrice,
-          measureUnit: cost.measureUnit || "UN",
-        },
-      });
-      results.push(result);
-    }
-    return { success: true, count: results.length };
   }
 }

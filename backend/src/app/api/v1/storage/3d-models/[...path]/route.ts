@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { HTTP_STATUS, API } from "@/lib/constants";
 
 const STORAGE_ROOT = path.join(process.cwd(), "storage", "3d-models");
 
@@ -13,14 +14,14 @@ export async function GET(
 
   // Proteção contra caminhos maliciosos
   if (filePath.includes("..")) {
-    return new NextResponse("Caminho inválido", { status: 400 });
+    return new NextResponse("Caminho inválido", { status: HTTP_STATUS.BAD_REQUEST });
   }
 
   const fullPath = path.join(STORAGE_ROOT, filePath);
 
   try {
     if (!fs.existsSync(fullPath) || fs.statSync(fullPath).isDirectory()) {
-      return new NextResponse("Arquivo não encontrado", { status: 404 });
+      return new NextResponse("Arquivo não encontrado", { status: HTTP_STATUS.NOT_FOUND });
     }
 
     const fileBuffer = fs.readFileSync(fullPath);
@@ -38,10 +39,10 @@ export async function GET(
     return new NextResponse(fileBuffer, {
       headers: {
         "Content-Type": contentTypes[ext] || "application/octet-stream",
-        "Cache-Control": "public, max-age=31536000, immutable",
+        "Cache-Control": `public, max-age=${API.CACHE.TTL_EXTREME}, immutable`,
       },
     });
   } catch (err: any) {
-    return new NextResponse(err.message, { status: 500 });
+    return new NextResponse(err.message, { status: HTTP_STATUS.INTERNAL_ERROR });
   }
 }

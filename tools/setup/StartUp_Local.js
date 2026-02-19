@@ -204,9 +204,9 @@ async function start() {
       log("Pressione Ctrl+C para encerrar todos os serviços.\n", colors.yellow);
       process.on("SIGINT", () => {
         log("\n🛑 Encerrando serviços...", colors.red);
-        backend.kill();
-        frontend.kill();
-        worker.kill();
+        if (backend) backend.kill();
+        if (frontend) frontend.kill();
+        if (worker) worker.kill();
         process.exit();
       });
     }

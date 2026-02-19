@@ -5,7 +5,7 @@ import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { SystemMessageService } from "@/modules/common/application/system-message.service";
 import { PrismaSystemMessageRepository } from "@/modules/common/infrastructure/prisma-system-message.repository";
-import { API } from "@/lib/constants";
+import { API, CONSTANTS } from "@/lib/constants";
 
 // DI
 const systemMessageService = new SystemMessageService(
@@ -26,7 +26,7 @@ const createMessageSchema = z.object({
     "DIRECT",
     "OTHER",
   ]),
-  subject: z.string().min(1).max(255),
+  subject: z.string().min(1).max(CONSTANTS.VALIDATION.STRING.MAX_SHORT_TEXT),
   content: z.string().min(1),
   attachmentUrl: z.string().url().optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),

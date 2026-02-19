@@ -5,12 +5,13 @@ import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { TeamService } from "@/modules/teams/application/team.service";
 import { PrismaTeamRepository } from "@/modules/teams/infrastructure/prisma-team.repository";
+import { CONSTANTS } from "@/lib/constants";
 
 // DI
 const teamService = new TeamService(new PrismaTeamRepository());
 
 const updateTeamSchema = z.object({
-  name: z.string().min(2).max(255).optional(),
+  name: z.string().min(2).max(CONSTANTS.VALIDATION.STRING.MAX_SHORT_TEXT).optional(),
   supervisorId: z.string().optional().nullable(),
   isActive: z.boolean().optional(),
   displayOrder: z.number().optional(),

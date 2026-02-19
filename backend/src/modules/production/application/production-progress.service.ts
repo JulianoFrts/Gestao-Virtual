@@ -5,6 +5,17 @@ import {
 import { ProductionProgress } from "../domain/production-progress.entity";
 import { logger } from "@/lib/utils/logger";
 
+export interface UpdateProductionProgressDTO {
+  elementId: string;
+  activityId: string;
+  projectId?: string | null;
+  status: ActivityStatus;
+  progress: number;
+  metadata?: any;
+  userId: string;
+  dates?: { start?: string | null; end?: string | null };
+}
+
 export class ProductionProgressService {
   private readonly logContext = {
     source: "src/modules/production/application/production-progress.service",
@@ -181,16 +192,8 @@ export class ProductionProgressService {
     });
   }
 
-  async updateProgress(
-    elementId: string,
-    activityId: string,
-    projectId: string | null | undefined,
-    status: ActivityStatus,
-    progress: number,
-    metadata: any,
-    userId: string,
-    dates?: { start?: string | null; end?: string | null },
-  ): Promise<ProductionProgress> {
+  async updateProgress(dto: UpdateProductionProgressDTO): Promise<ProductionProgress> {
+    const { elementId, activityId, projectId, status, progress, metadata, userId, dates } = dto;
     logger.info(
       `Atualizando progresso: Elemento ${elementId}, Atividade ${activityId}`,
       { ...this.logContext, userId },

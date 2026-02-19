@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { DataIngestionService } from '@/modules/data-ingestion/services/DataIngestionService';
 import { Readable } from 'stream';
+import { HTTP_STATUS } from '@/lib/constants';
 
 // Helper to convert Web Stream to Node Buffer
 async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
     const file = formData.get('file') as File;
 
     if (!file) {
-      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+      return NextResponse.json({ error: 'No file uploaded' }, { status: HTTP_STATUS.BAD_REQUEST });
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
     console.error('Ingestion error:', error);
     return NextResponse.json(
       { error: error.message || 'Internal Server Error' },
-      { status: 500 }
+      { status: HTTP_STATUS.INTERNAL_ERROR }
     );
   }
 }

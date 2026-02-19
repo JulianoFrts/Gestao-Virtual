@@ -101,9 +101,16 @@ export class PrismaTowerRepository implements TowerRepository {
 
   async saveMany(towers: Tower[]): Promise<Tower[]> {
     const results: Tower[] = [];
-    for (const tower of towers) {
-      results.push(await this.save(tower));
+    const BATCH_SIZE = 10;
+
+    for (let i = 0; i < towers.length; i += BATCH_SIZE) {
+      const batch = towers.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.all(
+        batch.map(tower => this.save(tower))
+      );
+      results.push(...batchResults);
     }
+
     return results;
   }
 

@@ -108,7 +108,7 @@ async function executeLogin(email: string, password: string) {
       message: dbError.message,
       code: dbError.code,
       meta: dbError.meta,
-      stack: dbError.stack?.split("\n").slice(0, 5).join("\n"),
+      stack: dbError.stack?.split("\n").slice(0, CONSTANTS.API.LOGGING.STACK_TRACE_LIMIT).join("\n"),
     });
     throw dbError;
   }

@@ -41,131 +41,71 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
 
-    // Validação de paginação
-    const paginationResult = validate(paginationSchema, {
-      page: searchParams.get("page"),
-      limit: searchParams.get("limit"),
-      sortBy: searchParams.get("sortBy"),
-      sortOrder: searchParams.get("sortOrder"),
-    });
+    // 1. Validação de Parâmetros
+    const pagination = parsePagination(searchParams);
+    if ('errors' in pagination) return ApiResponse.validationError(pagination.errors);
 
-    if (!paginationResult.success) {
-      return ApiResponse.validationError(paginationResult.errors);
-    }
+    const filters = parseFilters(searchParams);
+    if ('errors' in filters) return ApiResponse.validationError(filters.errors);
 
-    const {
-      page = CONSTANTS.API.PAGINATION.DEFAULT_PAGE,
-      limit = CONSTANTS.API.PAGINATION.DEFAULT_LIMIT,
-      sortBy,
-      sortOrder,
-    } = paginationResult.data as {
-      page: number;
-      limit: number;
-      sortBy?: string;
-      sortOrder?: string;
-    };
-
-    // Validação de filtros
-    const filtersResult = validate(userFiltersSchema, {
-      id: searchParams.get("id"),
-      search: searchParams.get("search"),
-      role: searchParams.get("role"),
-      status: searchParams.get("status"),
-      emailVerified: searchParams.get("emailVerified"),
-      createdAfter: searchParams.get("createdAfter"),
-      createdBefore: searchParams.get("createdBefore"),
-      projectId:
-        searchParams.get("projectId") || searchParams.get("project_id"),
-      siteId: searchParams.get("siteId") || searchParams.get("site_id"),
-      companyId:
-        searchParams.get("companyId") || searchParams.get("company_id"),
-      onlyCorporate: searchParams.get("onlyCorporate"),
-      excludeCorporate: searchParams.get("excludeCorporate"),
-    });
-
-    if (!filtersResult.success) {
-      return ApiResponse.validationError(filtersResult.errors);
-    }
-
-    const filters = filtersResult.data as any;
-
-    // Lógica Especial: Se estiver filtrando por um ID único, retornar o perfil completo (com permissões)
+    // 2. Lógica de Perfil Único (Short-circuit)
     if (filters.id && !filters.search) {
-      // Segurança: Apenas admins podem ver perfil de outros, ou o próprio usuário pode ver o seu
-      if (isAdmin || filters.id === currentUser.id) {
-        try {
-          const profile = await userService.getProfile(filters.id);
-          return ApiResponse.json({
-            items: [profile],
-            pagination: {
-              page: CONSTANTS.API.PAGINATION.DEFAULT_PAGE,
-              limit: 1,
-              total: 1,
-              pages: 1,
-              hasNext: false,
-              hasPrev: false,
-            },
-          });
-        } catch (err: any) {
-          if (err.message === "User not found") {
-            return ApiResponse.json({ items: [], pagination: { total: 0, limit: 1, page: CONSTANTS.API.PAGINATION.DEFAULT_PAGE, pages: 0 } });
-          }
-          throw err;
-        }
-      }
+      const singleUserResponse = await handleSingleUserFetch(filters.id, currentUser, isAdmin);
+      if (singleUserResponse) return singleUserResponse;
     }
 
+    // 3. Construção do Where e Segurança
     const where = buildUserWhereClause(filters);
+    applyHierarchySecurity(where, currentUser, isAdmin);
 
-    // Segurança: Filtro por Hierarquia e Escopo
-    if (!isAdmin) {
-      if (currentUser.companyId) {
-        where.affiliation = { companyId: currentUser.companyId };
-      } else if (currentUser.projectId) {
-        where.affiliation = { projectId: currentUser.projectId };
-      } else {
-        where.id = currentUser.id;
-      }
-    } else {
-      // Desenvolvedores ou Admins Reais filtram por hierarquia
-      const isGod =
-        isGodRole(currentUser.role || "") ||
-        (currentUser as any).hierarchyLevel >= SECURITY_RANKS.MASTER;
+    const { page, limit, sortBy, sortOrder } = pagination as { page: number; limit: number; sortBy?: string; sortOrder?: string };
 
-      if (!isGod) {
-        const myLevel = (currentUser as any).hierarchyLevel || SECURITY_RANKS.ADMIN;
-        where.hierarchyLevel = { lte: myLevel };
-      }
-    }
-
-    const total = await userRepository.count(where);
-    const pages = Math.ceil(total / limit);
-
-    // Streaming para limites altos
-    if (limit > CONSTANTS.API.STREAM.THRESHOLD) {
-      const stream = generateUsersStream(where, page, limit, total, sortBy, sortOrder, CONSTANTS);
-      return new Response(stream, {
-        headers: {
-          "Content-Type": "application/json",
-          "Transfer-Encoding": "chunked",
-        },
-      });
-    }
-
-    // Caso normal
-    const result = await userService.listUsers({
-      where,
-      page,
-      limit,
-      sortBy,
-      sortOrder,
-      select: publicUserSelect,
-    });
-
-    return ApiResponse.json(result);
+    // 4. Resposta (Streaming ou Normal)
+    return handleUsersResponse(where, pagination, CONSTANTS);
   } catch (error) {
     return handleApiError(error, "src/app/api/v1/users/route.ts#GET");
   }
+}
+
+interface UserStreamParams {
+  where: any;
+  page: number;
+  limit: number;
+  total: number;
+  sortBy?: string;
+  sortOrder?: string;
+  CONSTANTS: any;
+}
+
+async function handleUsersResponse(where: any, pagination: any, CONSTANTS: any) {
+  const { page, limit, sortBy, sortOrder } = pagination;
+
+  if (limit > CONSTANTS.API.STREAM.THRESHOLD) {
+    const total = await userRepository.count(where);
+    const stream = generateUsersStream({
+      where,
+      page,
+      limit,
+      total,
+      sortBy,
+      sortOrder,
+      CONSTANTS
+    });
+    return new Response(stream, {
+      headers: { "Content-Type": "application/json", "Transfer-Encoding": "chunked" },
+    });
+  }
+
+  const result = await userService.listUsers({
+    where,
+    page,
+    limit,
+    sortBy,
+    sortOrder,
+    select: publicUserSelect,
+  });
+
+  return ApiResponse.json(result);
 }
 
 // ===== CREATE USER =====
@@ -201,38 +141,21 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
     const currentUser = await authSession.requireAuth();
-    const targetUserId = body.id ?? currentUser.id;
 
-    const isAdmin = authSession.isUserAdmin(
-      currentUser.role,
-      (currentUser as any).hierarchyLevel,
-    );
+    const isAdmin = authSession.isUserAdmin(currentUser.role, (currentUser as any).hierarchyLevel);
     const canManage = await authSession.can("users.manage");
     const hasFullAccess = await authSession.can("system.full_access");
+
+    const targetUserId = body.id ?? currentUser.id;
 
     if (!canManage && targetUserId !== currentUser.id) {
       return ApiResponse.forbidden("Você não pode atualizar outros usuários");
     }
 
-    // Só bloqueia campos se o usuário **não tem full access e não é admin/god**
+    // Validação e Normalização
+    const payload = prepareUpdatePayload(body, { isAdmin, canManage, hasFullAccess });
+    const validation = validate(updateUserSchema, payload);
 
-    if (!hasFullAccess && !isAdmin && !canManage) {
-      delete body.role;
-      delete body.companyId;
-      delete body.projectId;
-      delete body.status;
-    }
-
-    // Validação e Normalização dos dados (CPF, email, etc.)
-    const updatePayload = { ...body };
-    delete (updatePayload as any).id;
-
-    // Normalização de Nome (Frontend Gestão Virtual usa fullName)
-    if (updatePayload.fullName !== undefined && updatePayload.name === undefined) {
-      updatePayload.name = updatePayload.fullName;
-    }
-
-    const validation = validate(updateUserSchema, updatePayload);
     if (!validation.success) {
       console.warn(`[UserUpdate] Validation failed for user ${targetUserId}:`, validation.errors);
       return ApiResponse.badRequest("Erro de validação", validation.errors);
@@ -240,11 +163,11 @@ export async function PUT(request: NextRequest) {
 
     const updatedUser = await userService.updateUser(
       targetUserId,
-      validation.data, // Dados validados e normalizados
+      validation.data,
       publicUserSelect,
-      currentUser.id,
+      currentUser.id
     );
-    // Invalidar cache de sessão para forçar recarga dos dados atualizados
+
     await invalidateSessionCache(targetUserId);
     return ApiResponse.json(updatedUser, CONSTANTS.HTTP.MESSAGES.SUCCESS.UPDATED);
   } catch (error) {
@@ -305,15 +228,8 @@ export async function DELETE(request: NextRequest) {
 /**
  * Função Auxiliar para Streaming de Usuários (SRP)
  */
-function generateUsersStream(
-  where: any,
-  page: number,
-  limit: number,
-  total: number,
-  sortBy: string | undefined,
-  sortOrder: string | undefined,
-  CONSTANTS: any
-): ReadableStream {
+function generateUsersStream(params: UserStreamParams): ReadableStream {
+  const { where, page, limit, total, sortBy, sortOrder, CONSTANTS } = params;
   const encoder = new TextEncoder();
   const pages = Math.ceil(total / limit);
 
@@ -377,4 +293,121 @@ function generateUsersStream(
       }
     },
   });
+}
+
+// ==========================================
+// HELPERS DE REFATORAÇÃO (Fase 2)
+// ==========================================
+
+function parsePagination(searchParams: URLSearchParams): { page: number; limit: number; sortBy?: string; sortOrder?: string } | { errors: string[] } {
+  const result = validate(paginationSchema, {
+    page: searchParams.get("page"),
+    limit: searchParams.get("limit"),
+    sortBy: searchParams.get("sortBy"),
+    sortOrder: searchParams.get("sortOrder"),
+  });
+
+  if (!result.success) return { errors: result.errors };
+
+  const data = result.data as any;
+  return {
+    page: data.page || CONSTANTS.API.PAGINATION.DEFAULT_PAGE,
+    limit: data.limit || CONSTANTS.API.PAGINATION.DEFAULT_LIMIT,
+    sortBy: data.sortBy,
+    sortOrder: data.sortOrder,
+  };
+}
+
+function parseFilters(searchParams: URLSearchParams): any | { errors: string[] } {
+  const result = validate(userFiltersSchema, {
+    id: searchParams.get("id"),
+    search: searchParams.get("search"),
+    role: searchParams.get("role"),
+    status: searchParams.get("status"),
+    emailVerified: searchParams.get("emailVerified"),
+    createdAfter: searchParams.get("createdAfter"),
+    createdBefore: searchParams.get("createdBefore"),
+    projectId: searchParams.get("projectId") || searchParams.get("project_id"),
+    siteId: searchParams.get("siteId") || searchParams.get("site_id"),
+    companyId: searchParams.get("companyId") || searchParams.get("company_id"),
+    onlyCorporate: searchParams.get("onlyCorporate"),
+    excludeCorporate: searchParams.get("excludeCorporate"),
+  });
+
+  if (!result.success) return { errors: result.errors };
+  return result.data;
+}
+
+async function handleSingleUserFetch(id: string, currentUser: any, isAdmin: boolean) {
+  if (isAdmin || id === currentUser.id) {
+    try {
+      const profile = await userService.getProfile(id);
+      return ApiResponse.json({
+        items: [profile],
+        pagination: {
+          page: CONSTANTS.API.PAGINATION.DEFAULT_PAGE,
+          limit: 1,
+          total: 1,
+          pages: 1,
+          hasNext: false,
+          hasPrev: false,
+        },
+      });
+    } catch (err: any) {
+      if (err.message === "User not found") {
+        return ApiResponse.json({
+          items: [],
+          pagination: {
+            total: 0,
+            limit: 1,
+            page: CONSTANTS.API.PAGINATION.DEFAULT_PAGE,
+            pages: 0,
+          },
+        });
+      }
+      throw err;
+    }
+  }
+  return null;
+}
+
+function applyHierarchySecurity(where: any, currentUser: any, isAdmin: boolean) {
+  if (!isAdmin) {
+    if (currentUser.companyId) {
+      where.affiliation = { companyId: currentUser.companyId };
+    } else if (currentUser.projectId) {
+      where.affiliation = { projectId: currentUser.projectId };
+    } else {
+      where.id = currentUser.id;
+    }
+  } else {
+    const isGod =
+      isGodRole(currentUser.role || "") ||
+      (currentUser as any).hierarchyLevel >= SECURITY_RANKS.MASTER;
+
+    if (!isGod) {
+      const myLevel = (currentUser as any).hierarchyLevel || SECURITY_RANKS.ADMIN;
+      where.hierarchyLevel = { lte: myLevel };
+    }
+  }
+}
+
+function prepareUpdatePayload(body: any, permissions: { isAdmin: boolean; canManage: boolean; hasFullAccess: boolean }) {
+  const payload = { ...body };
+  delete payload.id;
+
+  // Segurança de Campos
+  if (!permissions.hasFullAccess && !permissions.isAdmin && !permissions.canManage) {
+    delete payload.role;
+    delete payload.companyId;
+    delete payload.projectId;
+    delete payload.status;
+  }
+
+  // Normalização de Nome
+  if (payload.fullName !== undefined && payload.name === undefined) {
+    payload.name = payload.fullName;
+  }
+
+  return payload;
 }

@@ -705,7 +705,7 @@ export default function ProjectProgress() {
 
         // 2. Load Global Settings
         const { data: settingsData } = await orionApi
-          .from("Project3dCableSettings")
+          .from("project_3d_cable_settings")
           .select("settings")
           .eq("projectId", projectId)
           .maybeSingle();
@@ -755,7 +755,7 @@ export default function ProjectProgress() {
       setIsSaving(true);
       try {
         // 1. Save Global Settings & Connections
-        await orionApi.from("Project3dCableSettings").upsert({
+        await orionApi.from("project_3d_cable_settings").upsert({
           projectId: selectedProjectId,
           settings: {
             scale,

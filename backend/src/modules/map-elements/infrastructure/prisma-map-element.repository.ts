@@ -97,17 +97,22 @@ export class PrismaMapElementRepository implements MapElementRepository {
       });
     }
 
-    // 3. Perform Updates (Parallel)
-    // Prisma doesn't support bulk update with different data, so we parallelize
+    // 3. Perform Updates (Batched Parallel)
+    // Prisma doesn't support bulk update with different data, so we batch them
+    // to avoid saturating the connection pool.
     if (toUpdate.length > 0) {
-      await Promise.all(
-        toUpdate.map((el) =>
-          prisma.mapElementTechnicalData.update({
-            where: { id: el.id },
-            data: { ...el, id: undefined } as any,
-          })
-        )
-      );
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < toUpdate.length; i += BATCH_SIZE) {
+        const batch = toUpdate.slice(i, i + BATCH_SIZE);
+        await Promise.all(
+          batch.map((el) =>
+            prisma.mapElementTechnicalData.update({
+              where: { id: el.id },
+              data: { ...el, id: undefined } as any,
+            })
+          )
+        );
+      }
     }
 
     // 4. Return correct data (fetch again or construct)

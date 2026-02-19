@@ -1,5 +1,22 @@
 import { User, Prisma } from "@prisma/client";
 
+export interface UserWithRelations extends Partial<User> {
+  authCredential?: {
+    email?: string;
+    role?: string;
+    status?: string;
+    mfaEnabled?: boolean;
+    password?: string;
+  };
+  affiliation?: {
+    companyId?: string | null;
+    projectId?: string | null;
+    siteId?: string | null;
+  };
+  hierarchyLevel?: number;
+  isSystemAdmin?: boolean;
+}
+
 export interface UserListResult {
   items: Partial<User>[];
   pagination: {

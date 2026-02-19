@@ -3,19 +3,28 @@ import {
   ActivityStatus,
 } from "../domain/production.repository";
 import { ProductionProgress } from "../domain/production-progress.entity";
-import { ProductionProgressService } from "./production-progress.service";
+import { ProductionProgressService, UpdateProductionProgressDTO } from "./production-progress.service";
 import { ProductionScheduleService } from "./production-schedule.service";
 import { DailyProductionService } from "./daily-production.service";
 import { RecordDailyProductionDTO } from "./dtos/record-daily-production.dto";
+
+// Novos Repositórios (Divisão SRP)
+import { PrismaProductionScheduleRepository } from "../infrastructure/prisma-production-schedule.repository";
+import { PrismaProductionCatalogueRepository } from "../infrastructure/prisma-production-catalogue.repository";
 
 export class ProductionService {
   private readonly progressService: ProductionProgressService;
   private readonly scheduleService: ProductionScheduleService;
   private readonly dailyService: DailyProductionService;
+  private readonly scheduleRepository: PrismaProductionScheduleRepository;
+  private readonly catalogueRepository: PrismaProductionCatalogueRepository;
 
   constructor(private readonly repository: ProductionRepository) {
+    this.scheduleRepository = new PrismaProductionScheduleRepository();
+    this.catalogueRepository = new PrismaProductionCatalogueRepository();
+
     this.progressService = new ProductionProgressService(repository);
-    this.scheduleService = new ProductionScheduleService(repository);
+    this.scheduleService = new ProductionScheduleService(this.scheduleRepository, repository);
     this.dailyService = new DailyProductionService(repository);
   }
 
@@ -46,26 +55,8 @@ export class ProductionService {
     return this.progressService.getPendingLogs(companyId);
   }
 
-  async updateProgress(
-    elementId: string,
-    activityId: string,
-    projectId: string | null | undefined,
-    status: ActivityStatus,
-    progress: number,
-    metadata: any,
-    userId: string,
-    dates?: { start?: string | null; end?: string | null },
-  ): Promise<ProductionProgress> {
-    return this.progressService.updateProgress(
-      elementId,
-      activityId,
-      projectId,
-      status,
-      progress,
-      metadata,
-      userId,
-      dates,
-    );
+  async updateProgress(dto: UpdateProductionProgressDTO): Promise<ProductionProgress> {
+    return this.progressService.updateProgress(dto);
   }
 
   async approveLog(
@@ -140,6 +131,6 @@ export class ProductionService {
   }
 
   async listIAPs() {
-    return this.repository.findAllIAPs();
+    return this.catalogueRepository.findAllIAPs();
   }
 }

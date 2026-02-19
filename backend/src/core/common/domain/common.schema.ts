@@ -6,7 +6,7 @@ import { CONSTANTS } from "@/lib/constants";
  * Common validation rules shared across the system
  */
 
-export const idSchema = z.string().uuid("ID deve ser um UUID válido");
+export const idSchema = z.string().min(3, "ID deve ter pelo menos 3 caracteres");
 export const optionalIdSchema = z.preprocess(
   emptyToUndefined,
   idSchema.optional().nullable(),

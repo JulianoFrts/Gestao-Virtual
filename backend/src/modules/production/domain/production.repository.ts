@@ -46,23 +46,4 @@ export interface ProductionRepository {
     elementId: string,
     activityId?: string,
   ): Promise<ProductionProgress | null>;
-
-  // Schedule Support
-  findScheduleByElement(
-    elementId: string,
-    activityId: string,
-  ): Promise<any | null>;
-  findScheduleById(id: string): Promise<any | null>;
-  saveSchedule(data: any): Promise<any>;
-  deleteSchedule(id: string): Promise<void>;
-  deleteSchedulesBatch(ids: string[]): Promise<number>;
-  findSchedulesByScope(params: {
-    projectId?: string;
-    companyId?: string;
-    elementId?: string;
-    activityId?: string;
-    dateRange?: { start: Date; end: Date };
-  }): Promise<any[]>;
-  splitSchedule(id: string, updateData: any, createData: any): Promise<void>;
-  findAllIAPs(): Promise<any[]>;
 }

@@ -151,6 +151,7 @@ vi.mock('@/signals/dailyReportSignals', () => ({
             subPointEnd: '',
             isMultiSelection: false,
             teamIds: [],
+            selectedActivities: [],
             activities: '',
             observations: '',
             step: 1

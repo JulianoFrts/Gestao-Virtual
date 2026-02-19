@@ -127,16 +127,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const progress = await service.updateProgress(
-      finalElementId,
+    const progress = await service.updateProgress({
+      elementId: finalElementId,
       activityId,
-      bodyProjectId, // Pass if provided, service will look up if null
+      projectId: bodyProjectId, // Pass if provided, service will look up if null
       status,
-      progressPercent || 0,
-      { ...((metadata as any) || {}), foremanName, notes },
-      user.id,
-      { start: startDate, end: endDate },
-    );
+      progress: progressPercent || 0,
+      metadata: { ...((metadata as any) || {}), foremanName, notes },
+      userId: user.id,
+      dates: { start: startDate, end: endDate },
+    });
 
     return ApiResponse.json(progress, "Status atualizado com sucesso");
   } catch (error) {

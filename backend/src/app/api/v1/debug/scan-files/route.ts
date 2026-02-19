@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { AuditScanner } from "@/modules/audit/application/audit-scanner";
 import { AuditConfigService } from "@/modules/audit/infrastructure/config/audit-config.service";
 import { GitDiffService } from "@/modules/audit/infrastructure/git/git-diff.service";
+import { HTTP_STATUS } from "@/lib/constants";
 import * as path from "path";
 
 export async function GET() {
@@ -38,6 +39,6 @@ export async function GET() {
             files: files.slice(0, 100) // First 100 files for verification
         });
     } catch (error: any) {
-        return NextResponse.json({ error: error.message, stack: error.stack }, { status: 500 });
+        return NextResponse.json({ error: error.message, stack: error.stack }, { status: HTTP_STATUS.INTERNAL_ERROR });
     }
 }

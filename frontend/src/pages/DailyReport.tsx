@@ -436,28 +436,54 @@ export default function DailyReport() {
       }
     }
 
-    const newItem: DailyReportActivity = {
-      id: crypto.randomUUID(),
-      stageId: currentStageId,
-      stageName,
-      subPointType: currentSubPointType,
-      subPoint: currentSubPoint,
-      subPointEnd: currentSubPointEnd,
-      isMultiSelection: currentIsMultiSelection,
-      observations: currentObservations,
-      status: currentStatus,
-      details: currentDetails,
-      photos: currentPhotos
-    };
+    const existingActivityIndex = selectedActivities.findIndex(a => a.stageId === currentStageId);
 
-    updateReportDraft({
-      selectedActivities: [...selectedActivities, newItem]
-    });
+    if (existingActivityIndex !== -1) {
+      // Mesclar com atividade existente
+      const updatedActivities = [...selectedActivities];
+      const existing = updatedActivities[existingActivityIndex];
+      
+      updatedActivities[existingActivityIndex] = {
+        ...existing,
+        details: [...existing.details, ...currentDetails],
+        observations: existing.observations && currentObservations
+          ? `${existing.observations}\n${currentObservations}`
+          : (existing.observations || currentObservations),
+        photos: [...(existing.photos || []), ...currentPhotos],
+        // Atualiza subPoint para refletir múltiplos se for diferente
+        subPoint: existing.subPoint === currentSubPoint ? existing.subPoint : `${existing.subPoint}, ${currentSubPoint}`,
+        isMultiSelection: existing.isMultiSelection || currentIsMultiSelection || existing.details.length > 1
+      };
+
+      updateReportDraft({
+        selectedActivities: updatedActivities
+      });
+    } else {
+      const newItem: DailyReportActivity = {
+        id: crypto.randomUUID(),
+        stageId: currentStageId,
+        stageName,
+        subPointType: currentSubPointType,
+        subPoint: currentSubPoint,
+        subPointEnd: currentSubPointEnd,
+        isMultiSelection: currentIsMultiSelection,
+        observations: currentObservations,
+        status: currentStatus,
+        details: currentDetails,
+        photos: currentPhotos
+      };
+
+      updateReportDraft({
+        selectedActivities: [...selectedActivities, newItem]
+      });
+    }
+
 
     // Reset local form
     setCurrentStageId("");
     setCurrentObservations("");
     setCurrentDetails([]);
+    setLockedDetails([]);
     setCurrentPhotos([]);
     
     toast({
@@ -602,6 +628,7 @@ export default function DailyReport() {
   const [currentObservations, setCurrentObservations] = React.useState<string>("");
   const [currentStatus, setCurrentStatus] = React.useState<'IN_PROGRESS' | 'FINISHED'>('FINISHED');
   const [currentDetails, setCurrentDetails] = React.useState<DailyReportSubPointDetail[]>([]);
+  const [lockedDetails, setLockedDetails] = React.useState<DailyReportSubPointDetail[]>([]);
   const [currentPhotos, setCurrentPhotos] = React.useState<DailyReportPhoto[]>([]);
 
   // Memo para detecção de conflitos de horário em tempo real
@@ -651,35 +678,31 @@ export default function DailyReport() {
 
   // Sincronizar detalhes individuais quando a seleção mudar
   React.useEffect(() => {
+    let activeDetails: DailyReportSubPointDetail[] = [];
+
     // Se temos um preview com torres expandidas, usamos elas
     if (previewData.expandedTowers && previewData.expandedTowers.length > 0) {
       const currentStageProduction = towersByStage[currentStageId] || [];
       
-      // Manter o que já foi editado se possível (pelos IDs)
-      setCurrentDetails(prev => {
-        return previewData.expandedTowers.map((id, idx) => {
-          const existing = prev.find(p => p.id === id);
-          if (existing) return existing;
-          
-          // Buscar progresso atual na grelha de produção para esta torre
-          const prodInfo = currentStageProduction.find(t => t.objectId === id);
-          const currentProgress = prodInfo?.activityStatuses?.find(s => 
-            s.activityId === currentStageId || s.activity?.id === currentStageId
-          )?.progressPercent || 0;
+      activeDetails = previewData.expandedTowers.map((id, idx) => {
+        // Buscar progresso atual na grelha de produção para esta torre
+        const prodInfo = currentStageProduction.find(t => t.objectId === id);
+        const currentProgress = prodInfo?.activityStatuses?.find(s => 
+          s.activityId === currentStageId || s.activity?.id === currentStageId
+        )?.progressPercent || 0;
 
-          const lastAct = selectedActivities[selectedActivities.length - 1];
-          const lastItemInLastAct = lastAct?.details?.[lastAct.details.length - 1];
-          const lastReportEndTime = lastItemInLastAct?.endTime || "";
+        const lastAct = selectedActivities[selectedActivities.length - 1];
+        const lastItemInLastAct = lastAct?.details?.[lastAct.details.length - 1];
+        const lastReportEndTime = lastItemInLastAct?.endTime || "";
 
-          return {
-            id,
-            status: currentProgress >= 100 ? 'FINISHED' : (currentProgress > 0 ? 'IN_PROGRESS' : currentStatus),
-            progress: currentProgress,
-            comment: "",
-            startTime: idx === 0 ? lastReportEndTime : "" ,
-            endTime: ""
-          };
-        });
+        return {
+          id,
+          status: currentProgress >= 100 ? 'FINISHED' : (currentProgress > 0 ? 'IN_PROGRESS' : currentStatus),
+          progress: currentProgress,
+          comment: "",
+          startTime: idx === 0 ? lastReportEndTime : "" ,
+          endTime: ""
+        };
       });
     } else if (currentSubPoint && currentSubPointType !== 'GERAL') {
       // Ponto único
@@ -693,18 +716,21 @@ export default function DailyReport() {
       const lastItemInLastAct = lastAct?.details?.[lastAct.details.length - 1];
       const lastReportEndTime = lastItemInLastAct?.endTime || "";
 
-      setCurrentDetails([{
+      activeDetails = [{
         id: currentSubPoint,
         status: currentProgress >= 100 ? 'FINISHED' : (currentProgress > 0 ? 'IN_PROGRESS' : currentStatus),
         progress: currentProgress,
         comment: "",
         startTime: lastReportEndTime,
         endTime: ""
-      }]);
-    } else {
-      setCurrentDetails([]);
+      }];
     }
-  }, [previewData.expandedTowers, currentSubPoint, currentSubPointType, currentStatus, towersByStage, currentStageId, selectedActivities]);
+
+    // Remover duplicatas entre activeDetails e lockedDetails (priorizar locked)
+    const filteredActive = activeDetails.filter(ad => !lockedDetails.some(ld => ld.id === ad.id));
+    setCurrentDetails([...lockedDetails, ...filteredActive]);
+
+  }, [previewData.expandedTowers, currentSubPoint, currentSubPointType, currentStatus, towersByStage, currentStageId, selectedActivities, lockedDetails]);
 
   const spanTotals = previewData.metrics;
 
@@ -1120,7 +1146,10 @@ export default function DailyReport() {
 
                         <div className="space-y-4">
                           <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500/40">2. Onde? (Localização)</Label>
-                          <div className="grid grid-cols-2 gap-3">
+                          
+                          <div className="flex flex-col md:flex-row gap-6">
+                            {/* Coluna 1: Tipo e Opção Multi */}
+                            <div className="flex flex-col gap-3 min-w-[150px]">
                               <Select value={currentSubPointType} onValueChange={(val: any) => setCurrentSubPointType(val)}>
                                 <SelectTrigger className="bg-black/40 border-amber-500/20 rounded-2xl h-14 font-bold text-xs"><SelectValue /></SelectTrigger>
                                 <SelectContent className="glass-card">
@@ -1130,15 +1159,49 @@ export default function DailyReport() {
                                   <SelectItem value="TRECHO">Trecho</SelectItem>
                                 </SelectContent>
                               </Select>
-                              <LocationPicker value={currentSubPoint} onChange={setCurrentSubPoint} placeholder="..." />
-                          </div>
-                          
-                          <div className="flex items-center gap-4 justify-between pt-2">
-                             <label className="flex items-center gap-2 text-[10px] font-bold text-amber-500/60 cursor-pointer">
-                               <input type="checkbox" checked={currentIsMultiSelection} onChange={e => { setCurrentIsMultiSelection(e.target.checked); setCurrentSubPointEnd(""); }} className="rounded border-amber-500/30 bg-black/40 text-amber-500" />
-                               SELEÇÃO MÚLTIPLA
-                             </label>
-                             {currentIsMultiSelection && <div className="w-1/2 animate-in slide-in-from-right-4"><LocationPicker value={currentSubPointEnd} onChange={setCurrentSubPointEnd} placeholder="FIM..." /></div>}
+
+                              <label className="flex items-center gap-2 text-[10px] font-bold text-amber-500/60 cursor-pointer pt-1">
+                                <input 
+                                  type="checkbox" 
+                                  checked={currentIsMultiSelection} 
+                                  onChange={e => { setCurrentIsMultiSelection(e.target.checked); setCurrentSubPointEnd(""); }} 
+                                  className="rounded border-amber-500/30 bg-black/40 text-amber-500" 
+                                />
+                                SELEÇÃO MÚLTIPLA
+                              </label>
+                            </div>
+
+                            {/* Coluna 2: Seletores de Localização e Botão de Adicionar */}
+                            <div className="flex gap-3 items-center animate-in fade-in duration-500">
+                               <div className="flex flex-row gap-2">
+                                  <div className="w-[140px] relative">
+                                    <LocationPicker value={currentSubPoint} onChange={setCurrentSubPoint} placeholder={currentIsMultiSelection ? "INÍCIO..." : "TORRE..."} />
+                                  </div>
+                                  
+                                  {currentIsMultiSelection && (
+                                    <div className="w-[140px] animate-in slide-in-from-left-2 duration-300">
+                                      <LocationPicker value={currentSubPointEnd} onChange={setCurrentSubPointEnd} placeholder="FIM..." />
+                                    </div>
+                                  )}
+                               </div>
+
+                               {currentSubPoint && (
+                                 <Button 
+                                   type="button" 
+                                   variant="outline" 
+                                   size="icon" 
+                                   onClick={() => {
+                                     const activeSelection = currentDetails.filter(d => !lockedDetails.some(ld => ld.id === d.id));
+                                     setLockedDetails([...lockedDetails, ...activeSelection]);
+                                     setCurrentSubPoint("");
+                                     setCurrentSubPointEnd("");
+                                   }}
+                                   className="bg-amber-500/20 border-amber-500/40 text-amber-500 hover:bg-amber-500 hover:text-black h-14 w-14 rounded-2xl shrink-0 transition-all active:scale-90"
+                                 >
+                                   <Plus className="w-6 h-6" />
+                                 </Button>
+                               )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1161,7 +1224,7 @@ export default function DailyReport() {
                                     "flex flex-col md:flex-row items-center gap-4 bg-black/40 border p-4 rounded-3xl transition-all group/tower",
                                     hasAnyConflict ? "border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]" : "border-amber-500/10 hover:border-amber-500/30"
                                   )}>
-                                    <div className="flex items-center gap-3 min-w-[120px]">
+                                    <div className="flex items-center gap-3 min-w-[150px]">
                                        <div className={cn(
                                          "w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black transition-colors",
                                          hasAnyConflict ? "bg-red-500 text-white" : "bg-amber-500/10 text-amber-500 group-hover/tower:bg-amber-500 group-hover/tower:text-black"
@@ -1169,6 +1232,17 @@ export default function DailyReport() {
                                          {idx + 1}
                                        </div>
                                     <span className="font-black text-xs uppercase tracking-tight w-12">{detail.id}</span>
+                                    {lockedDetails.some(ld => ld.id === detail.id) && (
+                                      <Button 
+                                        type="button" 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        onClick={() => setLockedDetails(prev => prev.filter(ld => ld.id !== detail.id))}
+                                        className="h-8 w-8 text-red-500/20 hover:text-red-500 hover:bg-red-500/10 rounded-xl -ml-2"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </Button>
+                                    )}
                                     <div className="flex gap-2">
                                       <div className="flex flex-col gap-0.5">
                                         <label className="text-[7px] font-black text-white/30 uppercase pl-1">Início</label>

@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     try {
       rawData = createDailyReportSchema.parse(body);
     } catch (zodErr: any) {
-      logger.error("[daily_reports POST] Zod validation failed", { issues: zodErr.issues, bodySnapshot: JSON.stringify(body).slice(0, 500) });
+      logger.error("[daily_reports POST] Zod validation failed", { issues: zodErr.issues, bodySnapshot: JSON.stringify(body).slice(0, API.LOGGING.MAX_LOG_SNAPSHOT) });
       throw zodErr;
     }
 

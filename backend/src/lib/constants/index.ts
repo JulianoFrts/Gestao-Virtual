@@ -36,6 +36,10 @@ export const API = {
     TTL_SHORT: 60,
     TTL_LONG: 3600,
     TTL_EXTREME: 31536000, // 1 ano
+  },
+  LOGGING: {
+    STACK_TRACE_LIMIT: 5,
+    MAX_LOG_SNAPSHOT: 500,
   }
 } as const;
 
@@ -75,6 +79,7 @@ export const AUTH = {
 export const VALIDATION = {
   STRING: {
     MAX_NAME: 255,
+    MAX_SHORT_TEXT: 255,
     MAX_DESCRIPTION: 1000,
     MAX_PATH: 512,
     MAX_METADATA: 5000,
