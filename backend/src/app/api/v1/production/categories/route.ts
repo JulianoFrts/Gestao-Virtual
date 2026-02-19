@@ -2,13 +2,15 @@ import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth } from "@/lib/auth/session";
 import { ProductionConfigService } from "@/modules/production/application/production-config.service";
-import { PrismaProductionRepository } from "@/modules/production/infrastructure/prisma-production.repository";
+import { PrismaProductionConfigRepository } from "@/modules/production/infrastructure/prisma-production-config.repository";
+import { PrismaProductionCatalogueRepository } from "@/modules/production/infrastructure/prisma-production-catalogue.repository";
 import { z } from "zod";
 import { VALIDATION } from "@/lib/constants";
 
 // DI
-const productionRepository = new PrismaProductionRepository();
-const configService = new ProductionConfigService(productionRepository);
+const configRepo = new PrismaProductionConfigRepository();
+const catalogueRepo = new PrismaProductionCatalogueRepository();
+const configService = new ProductionConfigService(configRepo, catalogueRepo);
 
 const createCategorySchema = z.object({
   name: z.string().min(2).max(VALIDATION.STRING.MAX_NAME),

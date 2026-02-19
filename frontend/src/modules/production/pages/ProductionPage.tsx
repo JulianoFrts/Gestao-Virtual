@@ -36,7 +36,7 @@ import { toast } from "sonner";
 import { BarChart3, LayoutGrid } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProjectSelector } from "@/components/shared/ProjectSelector";
-import { ProjectEmptyState } from "@/components/shared/ProjectEmptyState";
+// import { ProjectEmptyState } from "@/components/shared/ProjectEmptyState";
 import GAPOAnalyticsPanel from "@/components/gapo/GAPOAnalyticsPanel";
 import StageFormModal from "@/components/gapo/StageFormModal";
 import { StageHeaderSelector } from "../components/StageHeaderSelector";
@@ -735,26 +735,8 @@ const ProductionPage = () => {
         queryClient.invalidateQueries({ queryKey: ["production-towers"] });
     };
 
-    const isAppLoading = 
-        loadingTowers || 
-        loadingCategories ||
-        isLoadingCompanies ||
-        isLoadingProjects ||
-        isLoadingSites ||
-        isLoadingStages ||
-        isLoadingRecords ||
-        isLoadingUsers;
-
-    if (isAppLoading) {
-        return (
-            <div className="flex h-screen items-center justify-center bg-background">
-                <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                    <p className="text-sm font-bold uppercase tracking-widest text-primary/60">Sincronizando Dados...</p>
-                </div>
-            </div>
-        );
-    }
+    // Removido o bloqueio global de isAppLoading para dar mais agilidade à UI
+    // O esqueleto da página (Header/Tabs) agora renderiza imediatamente.
 
     return (
         <div className="h-screen w-full bg-background flex flex-col overflow-hidden font-sans">
@@ -772,9 +754,17 @@ const ProductionPage = () => {
                     </Button>
                     
                     <div className="flex flex-col">
-                        <h1 className="text-2xl md:text-3xl font-black tracking-tighter bg-linear-to-r from-primary via-primary to-primary/40 bg-clip-text text-transparent uppercase italic drop-shadow-sm">
-                            GESTÃO DE PRODUÇÃO
-                        </h1>
+                        <div className="flex items-center gap-3">
+                            <h1 className="text-2xl md:text-3xl font-black tracking-tighter bg-linear-to-r from-primary via-primary to-primary/40 bg-clip-text text-transparent uppercase italic drop-shadow-sm">
+                                GESTÃO DE PRODUÇÃO
+                            </h1>
+                            {(loadingTowers || loadingCategories || isLoadingCompanies || isLoadingProjects) && (
+                                <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 border border-primary/20 rounded-full animate-pulse">
+                                    <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                                    <span className="text-[9px] font-black text-primary uppercase tracking-widest">Sincronizando</span>
+                                </div>
+                            )}
+                        </div>
                         <div className="flex items-center gap-2">
                             <div className="h-1 w-8 bg-primary rounded-full shadow-[0_0_10px_rgba(var(--primary),0.6)]" />
                             <p className="text-muted-foreground text-[10px] font-bold uppercase tracking-[0.3em]">Controle Técnico e Planejamento</p>
@@ -1007,15 +997,14 @@ const ProductionPage = () => {
                             </div>
                         ) : !towers || towers.length === 0 ? (
                             <div className="flex-1 flex items-center justify-center p-8 h-[60vh]">
-                                <ProjectEmptyState
-                                    type="towers"
-                                    title="Nenhuma Torre Cadastrada"
-                                    description="Esta obra ainda não possui torres ou atividades técnicas. Você pode importar uma planilha Excel ou cadastrar manualmente."
-                                    onAction={() => setIsTowerModalOpen(true)}
-                                    onSecondaryAction={() => setIsImportModalOpen(true)}
-                                    actionLabel="Nova Torre"
-                                    secondaryActionLabel="Importar Excel"
-                                />
+                            <div className="flex-1 flex flex-col items-center justify-center p-8 h-[60vh] text-center space-y-4">
+                                <div className="text-xl font-bold text-muted-foreground">Nenhuma Torre Cadastrada</div>
+                                <p className="text-sm text-muted-foreground/60 max-w-md">Esta obra ainda não possui torres ou atividades técnicas. Você pode importar uma planilha Excel ou cadastrar manualmente.</p>
+                                <div className="flex gap-4">
+                                    <Button onClick={() => setIsTowerModalOpen(true)}>Nova Torre</Button>
+                                    <Button variant="outline" onClick={() => setIsImportModalOpen(true)}>Importar Excel</Button>
+                                </div>
+                            </div>
                             </div>
                         ) : (
                             <>
@@ -1280,33 +1269,27 @@ const ProductionPage = () => {
                     <TabsContent value="progress" className="h-full overflow-auto p-6">
                         {(!towers || towers.length === 0) ? (
                             <div className="flex-1 flex items-center justify-center h-[60vh]">
-                                <ProjectEmptyState
-                                    type="towers"
-                                    title="Sem Torres para Acompanhar"
-                                    description="Para visualizar o progresso físico, é necessário primeiro cadastrar as torres da obra."
-                                    onAction={() => setIsTowerModalOpen(true)}
-                                    actionLabel="Nova Torre"
-                                />
+                            <div className="flex-1 flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+                                <div className="text-xl font-bold text-muted-foreground">Sem Torres para Acompanhar</div>
+                                <p className="text-sm text-muted-foreground/60 max-w-md">Para visualizar o progresso físico, é necessário primeiro cadastrar as torres da obra.</p>
+                                <Button onClick={() => setIsTowerModalOpen(true)}>Nova Torre</Button>
+                            </div>
                             </div>
                         ) : (!sites || sites.length === 0) ? (
                             <div className="flex-1 flex items-center justify-center h-[60vh]">
-                                <ProjectEmptyState
-                                    type="sites"
-                                    title="Nenhum Canteiro Encontrado"
-                                    description="Para acompanhar o avanço físico, você precisa primeiro cadastrar os canteiros e trechos desta obra."
-                                    onAction={() => navigate('/canteiros')}
-                                    actionLabel="Configurar Canteiros"
-                                />
+                            <div className="flex-1 flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+                                <div className="text-xl font-bold text-muted-foreground">Nenhum Canteiro Encontrado</div>
+                                <p className="text-sm text-muted-foreground/60 max-w-md">Para acompanhar o avanço físico, você precisa primeiro cadastrar os canteiros e trechos desta obra.</p>
+                                <Button onClick={() => navigate('/canteiros')}>Configurar Canteiros</Button>
+                            </div>
                             </div>
                         ) : (!stages || stages.length === 0) ? (
                             <div className="flex-1 flex items-center justify-center h-[60vh]">
-                                <ProjectEmptyState
-                                    type="generic"
-                                    title="Etapas Não Configuradas"
-                                    description="Não foram encontradas etapas de trabalho (Atividades) para este canteiro. Verifique as configurações de cronograma."
-                                    onAction={() => setIsStageModalOpen(true)}
-                                    actionLabel="Configurar Etapas"
-                                />
+                            <div className="flex-1 flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+                                <div className="text-xl font-bold text-muted-foreground">Etapas Não Configuradas</div>
+                                <p className="text-sm text-muted-foreground/60 max-w-md">Não foram encontradas etapas de trabalho (Atividades) para este canteiro. Verifique as configurações de cronograma.</p>
+                                <Button onClick={() => setIsStageModalOpen(true)}>Configurar Etapas</Button>
+                            </div>
                             </div>
                         ) : (
                             <GAPOProgressTracker siteId={selectedSiteId} projectId={selectedProjectId} />
@@ -1316,23 +1299,19 @@ const ProductionPage = () => {
                     <TabsContent value="performance" className="h-full overflow-auto p-6">
                         {(!towers || towers.length === 0) ? (
                             <div className="flex-1 flex items-center justify-center h-[60vh]">
-                                <ProjectEmptyState
-                                    type="towers"
-                                    title="Sem Dados de Performance"
-                                    description="A análise de performance requer que existam torres e atividades cadastradas na obra."
-                                    onAction={() => setIsTowerModalOpen(true)}
-                                    actionLabel="Nova Torre"
-                                />
+                            <div className="flex-1 flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+                                <div className="text-xl font-bold text-muted-foreground">Sem Dados de Performance</div>
+                                <p className="text-sm text-muted-foreground/60 max-w-md">A análise de performance requer que existam torres e atividades cadastradas na obra.</p>
+                                <Button onClick={() => setIsTowerModalOpen(true)}>Nova Torre</Button>
+                            </div>
                             </div>
                         ) : (!users || users.length === 0) ? (
                             <div className="flex-1 flex items-center justify-center h-[60vh]">
-                                <ProjectEmptyState
-                                    type="workers"
-                                    title="Nenhum Funcionário Alocado"
-                                    description="Não há dados de performance pois ainda não foram cadastrados funcionários ou equipes para esta obra."
-                                    onAction={() => navigate('/usuarios')}
-                                    actionLabel="Cadastrar Equipe"
-                                />
+                            <div className="flex-1 flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
+                                <div className="text-xl font-bold text-muted-foreground">Nenhum Funcionário Alocado</div>
+                                <p className="text-sm text-muted-foreground/60 max-w-md">Não há dados de performance pois ainda não foram cadastrados funcionários ou equipes para esta obra.</p>
+                                <Button onClick={() => navigate('/usuarios')}>Cadastrar Equipe</Button>
+                            </div>
                             </div>
                         ) : (
                             <GAPOAnalyticsPanel stages={stages} records={records} projectId={selectedProjectId !== 'all' ? selectedProjectId : undefined} />
@@ -1386,10 +1365,14 @@ const ProductionPage = () => {
                 onClose={() => { setIsStageModalOpen(false); setEditingStage(null); }}
                 stage={editingStage}
                 onSave={async (data) => {
-                    if (editingStage) {
-                        await updateStage(editingStage.id, data);
-                    } else {
-                        await createStage(data);
+                    try {
+                        if (editingStage) {
+                            return await updateStage(editingStage.id, data);
+                        } else {
+                            return await createStage(data);
+                        }
+                    } catch (error) {
+                        return { success: false };
                     }
                 }}
                 onRefresh={() => queryClient.invalidateQueries({ queryKey: ['work-stages'] })}

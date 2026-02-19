@@ -7,10 +7,11 @@ const metadataService = new ReportMetadataService();
 
 const previewSchema = z.object({
     projectId: z.string().min(1),
-    subPointType: z.enum(['TORRE', 'VAO', 'TRECHO', 'GERAL']),
+    subPointType: z.enum(['TORRE', 'VAO', 'TRECHO', 'GERAL', 'ESTRUTURA']),
     subPoint: z.string(),
     subPointEnd: z.string().optional(),
     isMultiSelection: z.boolean().default(false),
+    stageId: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {

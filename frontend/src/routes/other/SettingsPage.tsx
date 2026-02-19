@@ -16,13 +16,16 @@ import {
   CreditCard,
   ArrowLeft
 } from 'lucide-react';
-import { userSignal, themeSignal, densitySignal } from '../hooks/useSignals';
-import { showToast } from '../hooks/useSignals';
-import { updateMe, updateCompany } from '../services/auth';
+import { themeSignal, densitySignal } from '@/signals/uiSignals';
+import { orionApi } from '@/integrations/orion/client';
+import { useToast } from '@/hooks/use-toast';
+import { authService } from '@/services/api/auth/AuthService';
 
 type SectionId = 'profile' | 'company' | 'security' | 'notifications' | 'appearance' | 'billing';
 
 export function SettingsPage() {
+  const { toast } = useToast();
+  const userSignal = orionApi.userSignal;
   const user = userSignal.value;
   const userLevel = user?.level ?? 0;
   const [activeSection, setActiveSection] = useState<SectionId | null>(null);
@@ -71,24 +74,24 @@ export function SettingsPage() {
         };
         if (profileData.password) payload.password = profileData.password;
         
-        await updateMe(payload);
-        showToast('Perfil atualizado com sucesso', 'success');
+        await authService.updateMe(payload);
+        toast({ title: 'Perfil atualizado com sucesso', variant: 'default' });
         
         // Atualizar signal global com os novos dados
         if (userSignal.value) {
             userSignal.value = { ...userSignal.value, ...payload };
         }
       } else if (activeSection === 'company') {
-        await updateCompany(companyData);
-        showToast('Dados da empresa atualizados', 'success');
+        await authService.updateCompany(companyData);
+        toast({ title: 'Dados da empresa atualizados', variant: 'default' });
       } else {
         // Módulos ainda não implementados no backend usam delay simulado
         await new Promise(resolve => setTimeout(resolve, 800));
-        showToast('Preferências salvas localmente', 'success');
+        toast({ title: 'Preferências salvas localmente', variant: 'default' });
       }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Erro ao salvar alterações';
-      showToast(errorMessage, 'error');
+      toast({ title: errorMessage, variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }

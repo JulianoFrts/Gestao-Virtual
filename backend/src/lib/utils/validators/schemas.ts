@@ -97,7 +97,7 @@ function validateCPFDigits(cpf: string): boolean {
 export const cpfSchema = z
   .string()
   .transform((v) => v.replace(/\D/g, ""))
-  .refine((v) => v.length === 11, "CPF deve ter 11 dígitos")
+  .refine((v) => v.length === CONSTANTS.VALIDATION.DOCUMENTS.CPF_LENGTH, `CPF deve ter ${CONSTANTS.VALIDATION.DOCUMENTS.CPF_LENGTH} dígitos`)
   // Suavizado: Se falhar na validação de dígitos, permitimos se for ambiente de desenvolvimento ou se houver um padrão de teste comum
   // Para evitar travar o sistema com dados legados inválidos (ex: Alessandro Braga), vamos apenas validar se tem 11 dígitos.
   // Se quiser manter rigoroso, deve-se usar um schema diferente para criação e atualização.
@@ -132,7 +132,7 @@ function validateCNPJDigits(cnpj: string): boolean {
 export const cnpjSchema = z
   .string()
   .transform((v) => v.replace(/\D/g, ""))
-  .refine((v) => v.length === 14, "CNPJ deve ter 14 dígitos")
+  .refine((v) => v.length === CONSTANTS.VALIDATION.DOCUMENTS.CNPJ_LENGTH, `CNPJ deve ter ${CONSTANTS.VALIDATION.DOCUMENTS.CNPJ_LENGTH} dígitos`)
   .refine(validateCNPJDigits, "CNPJ inválido");
 
 /**

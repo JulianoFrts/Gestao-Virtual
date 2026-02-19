@@ -6,10 +6,12 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { show } from "@/signals/authSignals";
 
+import { HistoryLog } from "@/modules/production/types";
+
 interface HistoryTabProps {
     isLoadingHistory: boolean;
-    history: any[];
-    approveMutation: any;
+    history: HistoryLog[];
+    approveMutation: any; // Mantido any temporariamente até tipar o mutation
 }
 
 export const HistoryTab = ({ isLoadingHistory, history, approveMutation }: HistoryTabProps) => {

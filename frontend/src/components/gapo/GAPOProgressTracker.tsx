@@ -35,8 +35,8 @@ export default function GAPOProgressTracker({ siteId, projectId }: GAPOProgressT
 
         // First pass: create all nodes
         stages.forEach(stage => {
-            // Create a deep copy to avoid mutating the query cache, allowing us to update progress
-            stageMap.set(stage.id, { ...stage, children: [], progress: { ...stage.progress } } as StageWithChildren);
+            // Use progress directly from backend (already aggregated by WorkStageSyncService)
+            stageMap.set(stage.id, { ...stage, children: [] } as StageWithChildren);
         });
 
         // Second pass: build hierarchy
@@ -49,48 +49,13 @@ export default function GAPOProgressTracker({ siteId, projectId }: GAPOProgressT
             }
         });
 
-        // Helper to calculate progress recursively
-        const calculateProgress = (node: StageWithChildren): number => {
-            if (node.children.length === 0) {
-                return node.progress?.actualPercentage || 0;
-            }
-
-            let totalWeight = 0;
-            let totalWeightedProgress = 0;
-
-            node.children.forEach(child => {
-                const childProgress = calculateProgress(child);
-                const weight = Number(child.weight) || 0;
-
-                totalWeight += weight;
-                totalWeightedProgress += childProgress * weight;
-            });
-
-            const aggregatedProgress = totalWeight > 0 ? totalWeightedProgress / totalWeight : 0;
-
-            // Update parent progress visually
-            node.progress = {
-                ...(node.progress || {}),
-                actualPercentage: aggregatedProgress,
-                // Optional: mark as aggregate
-            } as any;
-
-            return aggregatedProgress;
+        // Helper to sort children by displayOrder
+        const sortNodes = (nodes: StageWithChildren[]) => {
+            nodes.sort((a, b) => (Number(a.displayOrder) || 0) - (Number(b.displayOrder) || 0));
+            nodes.forEach(n => sortNodes(n.children));
         };
 
-        // Sort children by displayOrder and calculate progress
-        const sortAndCalc = (nodes: StageWithChildren[]) => {
-            nodes.sort((a, b) => a.displayOrder - b.displayOrder);
-            nodes.forEach(n => {
-                sortAndCalc(n.children);
-                // Calculate starts from leaves up, but recursion is natively supported.
-                // Actually, calculateProgress calls calculateProgress(child), so we just need to call it on roots AFTER structure is built.
-            });
-        };
-
-        sortAndCalc(rootStages);
-        rootStages.forEach(root => calculateProgress(root));
-
+        sortNodes(rootStages);
         return rootStages;
     }, [stages]);
 
@@ -290,12 +255,12 @@ export default function GAPOProgressTracker({ siteId, projectId }: GAPOProgressT
                             <div className="w-32 space-y-1.5">
                                 <div className="flex justify-between text-xs font-bold">
                                     <span className="text-slate-500">Progresso</span>
-                                    <span className={getStatusColor(stage.progress?.actualPercentage || 0, stage.progress?.plannedPercentage || 0)}>
-                                        {Math.min(100, stage.progress?.actualPercentage || 0).toFixed(2)}%
+                                    <span className={getStatusColor(stage.progress?.[0]?.actualPercentage || 0, stage.progress?.[0]?.plannedPercentage || 0)}>
+                                        {Math.min(100, stage.progress?.[0]?.actualPercentage || 0).toFixed(2)}%
                                     </span>
                                 </div>
 
-                                <Progress value={Math.min(100, stage.progress?.actualPercentage || 0)} className="h-1.5 bg-white/5" />
+                                <Progress value={Math.min(100, stage.progress?.[0]?.actualPercentage || 0)} className="h-1.5 bg-white/5" />
                             </div>
 
                             {/* Actions */}

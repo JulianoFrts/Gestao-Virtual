@@ -3,12 +3,10 @@ import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
-import { PrismaProductionRepository } from "@/modules/production/infrastructure/prisma-production.repository";
-import { ProductionService } from "@/modules/production/application/production.service";
+import { ProductionFactory } from "@/modules/production/application/production.factory";
 import { HTTP_STATUS } from "@/lib/constants";
 
-const repository = new PrismaProductionRepository();
-const service = new ProductionService(repository);
+const service = ProductionFactory.create();
 
 const dailyProductionSchema = z.object({
   towerId: z.string(),
@@ -33,7 +31,7 @@ export async function POST(request: NextRequest) {
     // O multitenancy já é verificado dentro do service se passarmos o contexto,
     // ou podemos delegar a verificação de permissão.
     // Para manter compatibilidade com as regras atuais do controller:
-    const elementCompanyId = await repository.findElementCompanyId(
+    const elementCompanyId = await service.getElementCompanyId(
       data.towerId,
     );
     if (!elementCompanyId)
@@ -48,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     const elementProjectId =
       body.projectId ||
-      (await repository.findElementProjectId(data.towerId)) ||
+      (await service.getElementProjectId(data.towerId)) ||
       "";
 
     const updated = await service.recordDailyProduction({

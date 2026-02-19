@@ -1,20 +1,18 @@
 import type { ReactNode } from 'react';
-import { Dashboard } from '../views/dashboard/Dashboard';
-import { ObraListPage } from '../modules/obra/pages/ObraListPage'; 
-import { EmpresaListPage } from '../modules/empresa/pages/EmpresaListPage';
-import { CanteiroListPage } from '../modules/canteiro/pages/CanteiroListPage';
-import { FuncionarioListPage } from '../modules/funcionario/pages/FuncionarioListPage';
-import { ProductionListPage } from '../modules/production/pages/ProductionListPage';
-import { FinanceDashboard } from '../modules/finance/pages/FinanceDashboard';
-import { PlanningDashboard } from '../modules/planning/pages/PlanningDashboard';
-import AuditDashboard from '../modules/auditoria/pages/AuditDashboard';
-import RolesPage from '../modules/funcionario/pages/RolesPage';
-import { SettingsPage } from './SettingsPage'; 
-import { AdvancedUsersPage } from '../modules/admin/pages/AdvancedUsersPage';
-import { AppManagementPage } from '../modules/admin/pages/AppManagementPage';
-import { AdvancedAuditPage } from '../modules/auditoria/pages/AdvancedAuditPage';
-import { ProjectManagementPage } from '../modules/production/pages/ProjectManagementPage';
-import { BuilderView } from '../views/builder/BuilderView';
+import Dashboard from '@/pages/Dashboard';
+import Projects from '@/pages/Projects';
+import Companies from '@/pages/Companies';
+import Sites from '@/pages/Sites';
+import Employees from '@/pages/Employees';
+import AuditLogs from '@/pages/AuditLogs';
+import Functions from '@/pages/Functions';
+import Reports from '@/pages/Reports';
+import Users from '@/pages/Users';
+import CustomSU from '@/pages/CustomSU';
+import DatabaseHub from '@/pages/DatabaseHub';
+import ProductionPage from '@/modules/production/pages/ProductionPage';
+import ProductionAnalyticsPage from '@/modules/production/pages/ProductionAnalyticsPage';
+import { SettingsPage } from './SettingsPage';
 
 
 // Definição de Tipos de Rota
@@ -33,44 +31,47 @@ export const routes = {
     global: <div className="p-8 text-white">Módulo Global (Em breve)</div>,
     
     // Empresa Module
-    dashboard_empresa: <EmpresaListPage />,
-    empresa: <EmpresaListPage />,
+    dashboard_empresa: <Companies />,
+    empresa: <Companies />,
     
     // Obra Module
-    obras: <ObraListPage />, 
-    towers: <ProjectManagementPage />, 
+    obras: <Projects />, 
+    towers: <ProductionPage />, 
     
     // Canteiro Module
-    canteiros: <CanteiroListPage />,
+    canteiros: <Sites />,
 
     // Funcionarios Module
-    employees: <FuncionarioListPage />,
+    employees: <Employees />,
     
     // Finance Module
-    finance: <FinanceDashboard />,
+    finance: <div className="p-8 text-slate-400 font-bold italic">Financeiro em desenvolvimento...</div>,
 
     // Planning Module
-    planning: <PlanningDashboard />,
+    planning: <div className="p-8 text-slate-400 font-bold italic">Planejamento em desenvolvimento...</div>,
 
-    production: <ProductionListPage />,
+    production: <ProductionPage />,
+    production_analytics: <ProductionAnalyticsPage />,
 
     // Auditoria
-    auditoria: <AuditDashboard />,
+    auditoria: <AuditLogs />,
 
     // Configurações
-    roles: <RolesPage />,
+    roles: <Functions />,
     settings: <SettingsPage />,
 
     // Administrativo Avançado
-    advanced_users: <AdvancedUsersPage />,
-    app_management: <AppManagementPage />,
-    advanced_audit: <AdvancedAuditPage />,
-    project_management: <ProjectManagementPage />,
+    advanced_users: <Users />,
+    app_management: <CustomSU />,
+    advanced_audit: <AuditLogs />,
+    project_management: <ProductionPage />,
+    database_hub: <DatabaseHub />,
+    reports_standard: <Reports />,
     
     // Placeholders para Módulos Pendentes
     rdo: <div className="p-8 text-slate-400 font-bold italic">Diário de Obra (RDO) em desenvolvimento...</div>,
     reports_executive: <div className="p-8 text-slate-400 font-bold italic">Relatórios Executivos em desenvolvimento...</div>,
     contracts: <div className="p-8 text-slate-400 font-bold italic">Contratos & Clientes em desenvolvimento...</div>,
     inventory: <div className="p-8 text-slate-400 font-bold italic">Almoxarifado em desenvolvimento...</div>,
-    builder: <BuilderView />,
+    builder: <div className="p-8 text-slate-400 font-bold italic">Builder View em desenvolvimento...</div>,
 };

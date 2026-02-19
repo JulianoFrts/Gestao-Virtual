@@ -18,7 +18,7 @@ export interface ProductionProgress {
   createdAt?: Date;
 }
 
-export interface ProductionRepository {
+export interface ProductionProgressRepository {
   save(progress: ProductionProgress): Promise<ProductionProgress>;
   findById(id: string): Promise<ProductionProgress | null>;
   findByElement(elementId: string): Promise<ProductionProgress[]>;
@@ -26,22 +26,7 @@ export interface ProductionRepository {
     projectId: string,
     activityId: string,
   ): Promise<ProductionProgress[]>;
-  findElementsWithProgress(
-    projectId: string,
-    companyId?: string | null,
-    siteId?: string,
-  ): Promise<any[]>;
-  findLinkedActivityIds(projectId: string, siteId?: string): Promise<string[]>;
-  findSchedule?(elementId: string, activityId: string): Promise<any | null>;
-  syncWorkStages?(
-    elementId: string,
-    activityId: string,
-    projectId: string,
-    updatedBy: string,
-  ): Promise<void>;
   findPendingLogs(companyId?: string | null): Promise<ProductionProgress[]>;
-  findElementProjectId(elementId: string): Promise<string | null>;
-  findElementCompanyId(elementId: string): Promise<string | null>;
   findProgress(
     elementId: string,
     activityId?: string,

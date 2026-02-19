@@ -1,19 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useCompanies, Company } from '@/hooks/useCompanies';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Building2, Search, Loader2, MapPin, Phone, Pencil, Trash2, ShieldCheck, Mail } from 'lucide-react';
+import { Plus, Building2, Search, Loader2, MapPin, Phone, Pencil, Trash2, ShieldCheck, Mail, Lock } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { isProtectedSignal, can } from '@/signals/authSignals';
 import { useSignals } from "@preact/signals-react/runtime";
-import { LoadingScreen } from '@/components/ui/LoadingScreen';
-import { Lock } from 'lucide-react';
 
 export default function Companies() {
     useSignals();
@@ -43,6 +41,9 @@ export default function Companies() {
         variant: 'default'
     });
     const { toast } = useToast();
+
+    const isSA = profile?.role === 'SUPER_ADMIN';
+    const profileCompanyId = profile?.companyId;
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -83,7 +84,7 @@ export default function Companies() {
         setConfirmModal({
             open: true,
             title: 'Excluir Empresa',
-            description: `Deseja realmente excluir a empresa "${company.name}"? Esta ação não pode ser desfeita.`,
+            description: `Deseja realmente excluir a empresa "${company.name}"? Esta ação não pode ser desfeita e removerá todos os registros associados.`,
             variant: 'destructive',
             onConfirm: async () => {
                 const result = await deleteCompany(company.id);
@@ -100,215 +101,209 @@ export default function Companies() {
         setIsDialogOpen(false);
     };
 
-    const profileCompanyId = profile?.companyId;
-    const isSA = isProtectedSignal.value;
-
-    const filteredCompanies = React.useMemo(() => {
-        return companies.filter(c => {
-            const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesCompany = isSA || c.id === profileCompanyId;
+    const filteredCompanies = useMemo(() => {
+        return companies.filter(company => {
+            const matchesSearch = company.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (company.taxId && company.taxId.includes(searchTerm));
+            
+            const matchesCompany = isSA || company.id === profileCompanyId;
+            
             return matchesSearch && matchesCompany;
         });
     }, [companies, searchTerm, isSA, profileCompanyId]);
 
-    if (isLoading) {
-        return (
-            <LoadingScreen 
-                isLoading={true} 
-                title="GESTÃO DE EMPRESAS" 
-                message="SINCRONIZANDO DADOS"
-                details={[
-                    { label: "Empresas", isLoading: isLoading }
-                ]}
-            />
-        );
-    }
-
     return (
-        <div className="space-y-6 animate-fade-in">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="space-y-6 animate-fade-in h-full flex flex-col p-6 overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shrink-0">
                 <div>
-                    <h1 className="text-3xl font-display font-bold gradient-text">Gestão de Empresas</h1>
-                    <p className="text-muted-foreground">Cadastre e gerencie as empresas do grupo</p>
+                    <h1 className="text-3xl font-display font-bold gradient-text uppercase italic tracking-tighter">Gestão de Empresas</h1>
+                    <p className="text-muted-foreground mt-1 font-medium text-sm">Cadastre e gerencie as empresas do grupo e parceiros.</p>
                 </div>
-                <Dialog open={isDialogOpen} onOpenChange={(open) => {
-                    setIsDialogOpen(open);
-                    if (!open) resetForm();
-                }}>
-                    {(isProtectedSignal.value || can('system.is_corporate') || can('companies.create')) && (
-                        <Button
-                            className="gradient-primary text-white shadow-glow"
-                            onClick={() => {
-                                resetForm();
-                                setIsDialogOpen(true);
-                            }}
-                        >
-                            <Plus className="w-4 h-4 mr-2" />
-                            Nova Empresa
-                        </Button>
-                    )}
-                    <DialogContent className="max-w-md">
-                        <DialogHeader>
-                            <DialogTitle className="flex items-center gap-2 text-2xl font-bold">
-                                <div className="w-10 h-10 rounded-lg gradient-primary flex items-center justify-center shadow-glow">
-                                    <Building2 className="text-white w-6 h-6" />
-                                </div>
-                                {editingCompany ? 'Editar Empresa' : 'Nova Empresa'}
-                            </DialogTitle>
-                            <DialogDescription className="text-muted-foreground pt-1">
-                                Gerencie os dados cadastrais da empresa no grupo.
-                            </DialogDescription>
-                        </DialogHeader>
-
-                        <form onSubmit={handleSubmit} className="space-y-6 pt-4">
-                            {/* Seção: Dados Cadastrais */}
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-2 text-primary font-semibold text-sm uppercase tracking-wider">
-                                    <ShieldCheck className="w-4 h-4" />
-                                    Dados Cadastrais
-                                </div>
-                                <Separator className="bg-white/10" />
-
-                                <div className="space-y-2">
-                                    <Label className="text-xs uppercase text-muted-foreground font-bold">Nome da Empresa *</Label>
-                                    <Input
-                                        value={formData.name}
-                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                        className="industrial-input h-10"
-                                        placeholder="Ex: Nono Engenharia"
-                                        required
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-xs uppercase text-muted-foreground font-bold">CNPJ / Identificação</Label>
-                                    <Input
-                                        value={formData.taxId}
-                                        onChange={e => setFormData({ ...formData, taxId: e.target.value })}
-                                        className="industrial-input h-10"
-                                        placeholder="00.000.000/0000-00"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Seção: Contato */}
-                            <div className="space-y-4 pt-2">
-                                <div className="flex items-center gap-2 text-amber-500 font-semibold text-sm uppercase tracking-wider">
-                                    <MapPin className="w-4 h-4" />
-                                    Endereço e Contato
-                                </div>
-                                <Separator className="bg-white/10" />
-
-                                <div className="space-y-2">
-                                    <Label className="text-xs uppercase text-muted-foreground font-bold">Endereço</Label>
-                                    <div className="relative">
-                                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
-                                        <Input
-                                            value={formData.address}
-                                            onChange={e => setFormData({ ...formData, address: e.target.value })}
-                                            className="industrial-input pl-10 h-10"
-                                            placeholder="Logradouro, Bairro, Cidade - UF"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label className="text-xs uppercase text-muted-foreground font-bold">Telefone</Label>
-                                    <div className="relative">
-                                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
-                                        <Input
-                                            value={formData.phone}
-                                            onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                                            className="industrial-input pl-10 h-10"
-                                            placeholder="(00) 0000-0000"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="pt-4 flex gap-3">
-                                <Button type="button" variant="outline" onClick={resetForm} className="flex-1 h-11">
-                                    Cancelar
+                
+                <div className="flex items-center gap-4">
+                    <Dialog open={isDialogOpen} onOpenChange={(open) => {
+                        setIsDialogOpen(open);
+                        if (!open) resetForm();
+                    }}>
+                        {(isProtectedSignal.value || can('system.is_corporate') || can('companies.create')) && (
+                            <DialogTrigger asChild>
+                                <Button className="gradient-primary text-white shadow-glow px-6 font-bold uppercase tracking-widest text-[10px]">
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Nova Empresa
                                 </Button>
-                                <Button type="submit" className="flex-1 h-11 gradient-primary shadow-glow" disabled={isSaving}>
-                                    {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                                    {editingCompany ? 'Salvar Alterações' : 'Cadastrar Empresa'}
-                                </Button>
-                            </div>
-                        </form>
-                    </DialogContent>
-                </Dialog>
-            </div>
+                            </DialogTrigger>
+                        )}
+                        <DialogContent className="max-w-md glass-card border-white/10 shadow-2xl overflow-hidden p-0">
+                            <div className="absolute top-0 inset-x-0 h-1 gradient-primary shadow-[0_0_15px_rgba(var(--primary),0.5)]" />
+                            <DialogHeader className="p-6">
+                                <DialogTitle className="flex items-center gap-3 text-2xl font-black italic tracking-tighter uppercase italic">
+                                    <div className="w-12 h-12 rounded-2xl gradient-primary flex items-center justify-center shadow-glow">
+                                        <Building2 className="text-white w-7 h-7" />
+                                    </div>
+                                    {editingCompany ? 'Editar Empresa' : 'Nova Empresa'}
+                                </DialogTitle>
+                                <DialogDescription className="text-muted-foreground font-medium pl-15">
+                                    Preencha os dados cadastrais da empresa no sistema.
+                                </DialogDescription>
+                            </DialogHeader>
 
-            <div className="relative max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                    placeholder="Buscar empresas..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 industrial-input"
-                />
-            </div>
-
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredCompanies.map((company) => (
-                    <Card key={company.id} className="glass-card group hover:shadow-strong transition-all overflow-hidden border-l-4 border-l-primary relative">
-                        <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {(() => {
-                                const canEdit = isProtectedSignal.value || can('companies.update') || can('companies.edit_config');
-                                const canDelete = isProtectedSignal.value || can('companies.delete');
-
-                                if (!canEdit && !canDelete) {
-                                    return (
-                                        <div className="h-8 flex items-center px-2 bg-white/5 rounded text-muted-foreground/30" title="Sem permissão hierárquica">
-                                            <Lock className="w-3.5 h-3.5 mr-1" />
-                                            <span className="text-[10px] uppercase font-bold">Leitura</span>
+                            <form onSubmit={handleSubmit} className="p-6 pt-0 space-y-5">
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] uppercase font-black tracking-widest text-primary/70 pl-1">Nome da Empresa / Razão Social *</Label>
+                                        <div className="relative">
+                                            <Input
+                                                value={formData.name}
+                                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                                className="industrial-input h-11 bg-black/20 border-white/5 rounded-xl pr-10"
+                                                required
+                                                placeholder="Ex: Construtora Exemplo Ltda"
+                                                disabled={editingCompany && !(isProtectedSignal.value || can('companies.rename'))}
+                                            />
+                                            {editingCompany && !(isProtectedSignal.value || can('companies.rename')) && <Lock className="absolute right-3 top-3 w-5 h-5 text-orange-500/50" />}
                                         </div>
-                                    );
-                                }
+                                    </div>
 
-                                return (
-                                    <>
-                                        {canEdit && (
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => handleEdit(company)}>
-                                                <Pencil className="w-4 h-4" />
-                                            </Button>
-                                        )}
-                                        {canDelete && (
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(company)}>
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
-                                        )}
-                                    </>
-                                );
-                            })()}
-                        </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label className="text-[10px] uppercase font-black tracking-widest text-primary/70 pl-1">CNPJ / CPF</Label>
+                                            <Input
+                                                value={formData.taxId}
+                                                onChange={(e) => setFormData({ ...formData, taxId: e.target.value })}
+                                                className="industrial-input h-11 bg-black/20 border-white/5 rounded-xl"
+                                                placeholder="00.000.000/0001-00"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-[10px] uppercase font-black tracking-widest text-primary/70 pl-1">Telefone</Label>
+                                            <Input
+                                                value={formData.phone}
+                                                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                                className="industrial-input h-11 bg-black/20 border-white/5 rounded-xl"
+                                                placeholder="(00) 0000-0000"
+                                            />
+                                        </div>
+                                    </div>
 
-                        <CardHeader className="pb-3">
-                            <div className="flex items-center gap-3">
-                                <div className="p-3 rounded-2xl bg-primary/10 group-hover:bg-primary/20 transition-colors">
-                                    <Building2 className="w-6 h-6 text-primary" />
+                                    <div className="space-y-2">
+                                        <Label className="text-[10px] uppercase font-black tracking-widest text-primary/70 pl-1">Endereço Completo</Label>
+                                        <div className="relative">
+                                            <Input
+                                                value={formData.address}
+                                                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                                                className="industrial-input h-11 bg-black/20 border-white/5 rounded-xl pr-10"
+                                                placeholder="Rua, Número, Cidade - UF"
+                                            />
+                                            <MapPin className="absolute right-3.5 top-3.5 w-4 h-4 text-white/20" />
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <CardTitle className="text-lg">{company.name}</CardTitle>
-                                    <CardDescription>{company.taxId || 'CNPJ não informado'}</CardDescription>
+
+                                <div className="flex gap-4 pt-6 border-t border-white/5">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        onClick={resetForm}
+                                        className="flex-1 h-12 rounded-2xl hover:bg-white/5 text-muted-foreground font-bold"
+                                    >
+                                        Cancelar
+                                    </Button>
+                                    <Button
+                                        type="submit"
+                                        className="flex-1 h-12 rounded-2xl gradient-primary shadow-glow font-black uppercase tracking-widest text-xs"
+                                        disabled={isSaving}
+                                    >
+                                        {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : (editingCompany ? 'Salvar Alterações' : 'Cadastrar Empresa')}
+                                    </Button>
                                 </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-2 text-sm text-muted-foreground">
-                                <div className="flex items-center gap-2">
-                                    <MapPin className="w-4 h-4" />
-                                    <span className="truncate">{company.address || 'Endereço não cadastrado'}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Phone className="w-4 h-4" />
-                                    <span>{company.phone || 'Sem telefone'}</span>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                ))}
+                            </form>
+                        </DialogContent>
+                    </Dialog>
+                </div>
             </div>
-            {/* Confirmation Dialog */}
+
+            {isLoading ? (
+                <div className="flex-1 flex flex-col items-center justify-center space-y-4 min-h-[400px]">
+                    <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                    <p className="text-sm font-bold uppercase tracking-widest text-primary/60">Sincronizando Empresas...</p>
+                </div>
+            ) : (
+                <div className="flex-1 overflow-auto pb-10 scrollbar-thin scrollbar-thumb-primary/20">
+                    <div className="flex flex-wrap items-center gap-4 bg-white/5 p-4 rounded-2xl border border-white/5 mb-8">
+                        <div className="relative w-full max-w-md">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Buscar empresa por nome ou CNPJ..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="pl-10 industrial-input h-10"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {filteredCompanies.map((company) => (
+                            <Card key={company.id} className="glass-card group hover:shadow-strong transition-all overflow-hidden border-l-4 border-l-primary relative">
+                                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                                    {(() => {
+                                        const canEdit = isProtectedSignal.value || can('companies.update') || can('companies.edit_config');
+                                        const canDelete = isProtectedSignal.value || can('companies.delete');
+
+                                        if (!canEdit && !canDelete) {
+                                            return (
+                                                <div className="h-8 flex items-center px-2 bg-black/40 backdrop-blur-sm rounded text-white/30" title="Sem permissão hierárquica">
+                                                    <Lock className="w-3.5 h-3.5 mr-1" />
+                                                    <span className="text-[10px] uppercase font-bold">Leitura</span>
+                                                </div>
+                                            );
+                                        }
+
+                                        return (
+                                            <>
+                                                {canEdit && (
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary bg-black/20 backdrop-blur-sm" onClick={() => handleEdit(company)}>
+                                                        <Pencil className="w-4 h-4" />
+                                                    </Button>
+                                                )}
+                                                {canDelete && (
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive bg-black/20 backdrop-blur-sm" onClick={() => handleDelete(company)}>
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </Button>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+
+                                <CardHeader className="pb-3 pt-6 px-6">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-3 rounded-2xl bg-primary/10 group-hover:bg-primary/20 transition-colors">
+                                            <Building2 className="w-6 h-6 text-primary" />
+                                        </div>
+                                        <div>
+                                            <CardTitle className="text-lg font-bold tracking-tight">{company.name}</CardTitle>
+                                            <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50">{company.taxId || 'CNPJ não informado'}</CardDescription>
+                                        </div>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="space-y-4 px-6 pb-6">
+                                    <div className="space-y-2 text-sm text-muted-foreground font-medium">
+                                        <div className="flex items-center gap-3">
+                                            <MapPin className="w-4 h-4 text-primary/40" />
+                                            <span className="truncate italic">{company.address || 'Endereço não cadastrado'}</span>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <Phone className="w-4 h-4 text-primary/40" />
+                                            <span>{company.phone || 'Sem telefone'}</span>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                </div>
+            )}
+            
             <ConfirmationDialog
                 open={confirmModal.open}
                 onOpenChange={(open) => setConfirmModal(prev => ({ ...prev, open }))}

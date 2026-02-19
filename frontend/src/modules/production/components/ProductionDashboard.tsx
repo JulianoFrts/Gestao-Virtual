@@ -8,7 +8,9 @@ import { ptBR } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { CalendarDays, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Loader2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { orionApi } from '@/integrations/orion/client';
 
 interface ProductionDashboardProps {
     projectId: string;
@@ -24,109 +26,23 @@ const ProductionDashboard: React.FC<ProductionDashboardProps> = ({ projectId, to
     const [startDate, setStartDate] = useState<string>('');
     const [endDate, setEndDate] = useState<string>('');
 
-    // Calculate S-Curve Data based on Bottom-up data (Schedules vs Actuals)
-    const curveData = useMemo(() => {
-        if (!towers || towers.length === 0) return [];
-
-        // 1. Identify relevant items based on filter
-        const relevantActivities: {
-            plannedEnd?: Date;
-            history: { date: Date; percent: number }[];
-            weight: number;
-        }[] = [];
-
-        towers.forEach(t => {
-            const activitiesToProcess = selectedActivityId !== 'all'
-                ? [selectedActivityId]
-                : categories?.flatMap(c => c.activities.map(a => a.id)) || [];
-
-            activitiesToProcess.forEach(actId => {
-                const schedule = t.activitySchedules?.find(s => s.activityId === actId);
-                const status = t.activityStatuses?.find(s => s.activityId === actId);
-
-                if (schedule || status) {
-                    const activityHistory: { date: Date; percent: number }[] = [];
-
-                    if (status?.history && Array.isArray(status.history)) {
-                        status.history.forEach((h: any) => {
-                            if (h.changedAt || h.timestamp) {
-                                activityHistory.push({
-                                    date: new Date(h.changedAt || h.timestamp),
-                                    percent: h.progressPercent || h.progress || 0
-                                });
-                            }
-                        });
-                    } else if (status?.status === 'FINISHED' && status.endDate) {
-                        activityHistory.push({
-                            date: new Date(status.endDate),
-                            percent: 100
-                        });
-                    }
-
-                    relevantActivities.push({
-                        plannedEnd: schedule?.plannedEnd ? new Date(schedule.plannedEnd) : undefined,
-                        history: activityHistory,
-                        weight: 1 // For now weights are equal, but could be cat.weight
-                    });
-                }
+    // Fetch S-Curve Data from Backend
+    const { data: curveData = [], isLoading } = useQuery({
+        queryKey: ['production-s-curve', projectId, selectedActivityId, granularity, startDate, endDate],
+        queryFn: async () => {
+            const params = new URLSearchParams({
+                projectId,
+                granularity,
+                activityId: selectedActivityId
             });
-        });
+            if (startDate) params.append('startDate', startDate);
+            if (endDate) params.append('endDate', endDate);
 
-        if (relevantActivities.length === 0) return [];
-
-        // 2. Determine Time Range
-        const dates = [
-            ...relevantActivities.map(i => i.plannedEnd),
-            ...relevantActivities.flatMap(i => i.history.map(h => h.date))
-        ].filter(d => !!d) as Date[];
-
-        if (dates.length === 0) return [];
-
-        const minDate = startDate ? new Date(startDate) : startOfMonth(min(dates));
-        const maxDate = endDate ? new Date(endDate) : endOfMonth(max(dates));
-
-        // Build timeline
-        let timeline: Date[];
-        if (granularity === 'weekly') {
-            timeline = eachWeekOfInterval({ start: minDate, end: addWeeks(maxDate, 1) }, { weekStartsOn: 1 });
-        } else {
-            timeline = eachMonthOfInterval({ start: minDate, end: addMonths(maxDate, 1) });
-        }
-
-        // 3. Build Cumulative Data
-        const totalWeight = relevantActivities.length; // Cada atividade-torre conta como 1 "unidade"
-
-        return timeline.map(period => {
-            const periodEnd = granularity === 'weekly' ? endOfWeek(period, { weekStartsOn: 1 }) : endOfMonth(period);
-
-            // Planned: simple binary (100% if plannedEnd <= periodEnd)
-            const plannedSum = relevantActivities.reduce((acc, i) => {
-                return acc + (i.plannedEnd && isBefore(i.plannedEnd, periodEnd) ? 1 : 0);
-            }, 0);
-
-            // Actual: based on history points (find max progress before periodEnd)
-            const actualSum = relevantActivities.reduce((acc, i) => {
-                const historyBefore = i.history.filter(h => isBefore(h.date, periodEnd));
-                if (historyBefore.length === 0) return acc;
-                const maxProgress = Math.max(...historyBefore.map(h => h.percent));
-                return acc + (maxProgress / 100);
-            }, 0);
-
-            const label = granularity === 'weekly'
-                ? `S${format(period, 'ww', { locale: ptBR })} - ${format(period, 'dd/MM', { locale: ptBR })}`
-                : format(period, 'MMM/yy', { locale: ptBR });
-
-            return {
-                period: label,
-                date: period.toISOString(),
-                planned: (plannedSum / totalWeight) * 100,
-                actual: (actualSum / totalWeight) * 100,
-                qtyPlanned: Math.round(plannedSum),
-                qtyActual: Math.round(actualSum),
-                total: totalWeight
-            };
-        });
-    }, [towers, selectedActivityId, categories, granularity, startDate, endDate]);
+            const res = await orionApi.get(`/analytics/production/physical?${params.toString()}`);
+            return res.data as any[];
+        },
+        enabled: !!projectId
+    });
 
     // Calculate current metrics
     const currentMetric = useMemo(() => {

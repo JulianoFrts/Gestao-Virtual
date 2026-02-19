@@ -8,6 +8,7 @@ import { UserPermissionService } from "./user-permission.service";
 import { UserSecurityService } from "./user-security.service";
 import { UserLegacyService } from "./user-legacy.service";
 import { PrismaPermissionRepository } from "../infrastructure/prisma-permission.repository";
+import { UserMapper } from "./user.mapper";
 
 export class UserService {
   private readonly permissionService: UserPermissionService;
@@ -50,51 +51,7 @@ export class UserService {
       this.repository.count(params.where),
     ]);
 
-    const flattenedItems = items.map((u) => this.flattenUser(u));
-    return this.paginateResults(
-      flattenedItems,
-      total,
-      params.page,
-      params.limit,
-    );
-  }
-
-  private paginateResults(
-    items: UserWithRelations[],
-    total: number,
-    page: number,
-    limit: number,
-  ) {
-    const pages = Math.ceil(total / limit);
-    return {
-      items,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages,
-        hasNext: page < pages,
-        hasPrev: page > DEFAULT_PAGE,
-      },
-    };
-  }
-
-  /**
-   * Achata a estrutura aninhada do Prisma para o formato plano esperado pelo frontend
-   */
-  public flattenUser(user: UserWithRelations | null): any {
-    if (!user) return null;
-    return {
-      ...user,
-      email: user.authCredential?.email,
-      role: user.authCredential?.role,
-      status: user.authCredential?.status,
-      mfaEnabled: !!user.authCredential?.mfaEnabled,
-      companyId: user.affiliation?.companyId,
-      projectId: user.affiliation?.projectId,
-      siteId: user.affiliation?.siteId,
-      // Mantém os objetos originais caso algo precise especificamente deles
-    };
+    return UserMapper.toPaginatedDTO(items, total, params.page, params.limit);
   }
 
   async getUserById(id: string, select?: Prisma.UserSelect) {
@@ -198,7 +155,7 @@ export class UserService {
     await this.logAudit("UPDATE", "User", id, data, existing, performerId);
 
     return {
-      ...(this.flattenUser(finalUser) as any),
+      ...UserMapper.toDTO(finalUser),
       _report: report,
       _partial: report.failed.length > 0
     };
@@ -392,10 +349,8 @@ export class UserService {
     // Check both: Role-based (Centralized) OR Explicit Flag in DB
     const isSystemAdmin = isSystemOwner(userRole) || (user as any).isSystemAdmin === true;
 
-    const flattened = this.flattenUser(user);
-
     return {
-      ...flattened,
+      ...UserMapper.toDTO(user),
       permissions,
       ui,
       isSystemAdmin,

@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/command";
 import { CalendarIcon, Loader2, Check, ChevronsUpDown, User, X, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ActivityStatus, TowerActivityStatus, LandStatus, ImpedimentType, ActivitySchedule } from "../types";
+import { ActivityStatus, TowerActivityStatus, LandStatus, ImpedimentType, ActivitySchedule, DelayReason, HistoryLog } from "@/modules/production/types";
 import { orionApi } from "@/integrations/orion/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -43,9 +43,9 @@ import { show, isSystemAdminSignal } from "@/signals/authSignals";
 import { useAuth } from "@/contexts/AuthContext";
 
 // Sub-componentes Refatorados (SRP)
-import { StatusTab } from "./ActivityStatusModal/StatusTab";
-import { HistoryTab } from "./ActivityStatusModal/HistoryTab";
-import { ScheduleSection } from "./ActivityStatusModal/ScheduleSection";
+import { StatusTab } from "@/modules/production/components/ActivityStatusModal/StatusTab";
+import { HistoryTab } from "@/modules/production/components/ActivityStatusModal/HistoryTab";
+import { ScheduleSection } from "@/modules/production/components/ActivityStatusModal/ScheduleSection";
 
 interface ActivityStatusModalProps {
     isOpen: boolean;
@@ -59,25 +59,9 @@ interface ActivityStatusModalProps {
     projectId?: string;
 }
 
-interface HistoryLog {
-    id: string;
-    elementId: string;
-    activityId: string;
-    status: string;
-    progressPercent: number;
-    notes: string;
-    logTimestamp: string;
-    userName: string;
-    requiresApproval?: boolean;
-    isApproved?: boolean;
-    approvedAt?: string;
-}
 
-interface DelayReason {
-    id: string;
-    name: string;
-    category: string;
-}
+
+
 
 const ActivityStatusModal = React.memo(({
     isOpen,
@@ -188,7 +172,7 @@ const ActivityStatusModal = React.memo(({
             queryClient.invalidateQueries({ queryKey: ["production-logs", elementId, activityId] });
             toast.success("Log aprovado com sucesso");
         },
-        onError: (error: Error | any) => {
+        onError: (error: any) => {
             const message = error.response?.data?.message || error.message || "Erro desconhecido";
             toast.error("Erro ao aprovar log: " + message);
         }

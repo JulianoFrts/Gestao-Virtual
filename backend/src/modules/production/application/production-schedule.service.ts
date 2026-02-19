@@ -1,10 +1,10 @@
-import { ProductionRepository } from "../domain/production.repository";
+import { ProductionProgressRepository } from "../domain/production.repository";
 import { ProductionScheduleRepository } from "../domain/production-schedule.repository";
 
 export class ProductionScheduleService {
   constructor(
     private readonly scheduleRepository: ProductionScheduleRepository,
-    private readonly progressRepository: ProductionRepository
+    private readonly progressRepository: ProductionProgressRepository
   ) {}
 
   async saveSchedule(

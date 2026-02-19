@@ -109,7 +109,9 @@ export const isAppReadySignal = computed(() => {
     const costsReady = hasCostsFetchedSignal.value;
 
     // Critérios mínimos para entrada (Otimista)
-    const ready = authReady && usersReady && teamsReady && globalReady && stagesReady;
+    // Agora só bloqueamos se o usuário e dados básicos de acesso não estiverem prontos.
+    // Outros dados (equipes, etapas, etc.) carregam em background.
+    const ready = authReady && usersReady;
 
     if (ready && !minDelayElapsedSignal.value) {
         minDelayElapsedSignal.value = true;

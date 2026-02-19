@@ -1,7 +1,9 @@
 import {
-  ProductionRepository,
-  ActivityStatus,
+  ProductionProgressRepository,
 } from "../domain/production.repository";
+import { ProjectElementRepository } from "../domain/project-element.repository";
+import { ProductionSyncRepository } from "../domain/production-sync.repository";
+import { ProductionScheduleRepository } from "../domain/production-schedule.repository";
 import { ProductionProgress } from "../domain/production-progress.entity";
 import { ProductionProgressService, UpdateProductionProgressDTO } from "./production-progress.service";
 import { ProductionScheduleService } from "./production-schedule.service";
@@ -9,23 +11,34 @@ import { DailyProductionService } from "./daily-production.service";
 import { RecordDailyProductionDTO } from "./dtos/record-daily-production.dto";
 
 // Novos Repositórios (Divisão SRP)
-import { PrismaProductionScheduleRepository } from "../infrastructure/prisma-production-schedule.repository";
 import { PrismaProductionCatalogueRepository } from "../infrastructure/prisma-production-catalogue.repository";
 
 export class ProductionService {
   private readonly progressService: ProductionProgressService;
   private readonly scheduleService: ProductionScheduleService;
   private readonly dailyService: DailyProductionService;
-  private readonly scheduleRepository: PrismaProductionScheduleRepository;
-  private readonly catalogueRepository: PrismaProductionCatalogueRepository;
 
-  constructor(private readonly repository: ProductionRepository) {
-    this.scheduleRepository = new PrismaProductionScheduleRepository();
-    this.catalogueRepository = new PrismaProductionCatalogueRepository();
-
-    this.progressService = new ProductionProgressService(repository);
-    this.scheduleService = new ProductionScheduleService(this.scheduleRepository, repository);
-    this.dailyService = new DailyProductionService(repository);
+  constructor(
+    private readonly progressRepository: ProductionProgressRepository,
+    private readonly elementRepository: ProjectElementRepository,
+    private readonly syncRepository: ProductionSyncRepository,
+    private readonly scheduleRepository: ProductionScheduleRepository,
+    private readonly catalogueRepository: PrismaProductionCatalogueRepository,
+  ) {
+    this.progressService = new ProductionProgressService(
+      progressRepository,
+      elementRepository,
+      syncRepository,
+      scheduleRepository
+    );
+    this.scheduleService = new ProductionScheduleService(
+      scheduleRepository,
+      progressRepository
+    );
+    this.dailyService = new DailyProductionService(
+      progressRepository,
+      elementRepository
+    );
   }
 
   // ==========================================
@@ -132,5 +145,17 @@ export class ProductionService {
 
   async listIAPs() {
     return this.catalogueRepository.findAllIAPs();
+  }
+
+  // ==========================================
+  // ELEMENT METADATA HELPERS
+  // ==========================================
+
+  async getElementCompanyId(elementId: string): Promise<string | null> {
+    return this.elementRepository.findCompanyId(elementId);
+  }
+
+  async getElementProjectId(elementId: string): Promise<string | null> {
+    return this.elementRepository.findProjectId(elementId);
   }
 }

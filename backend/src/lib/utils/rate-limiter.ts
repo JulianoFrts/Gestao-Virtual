@@ -4,6 +4,8 @@
  * Implementação in-memory.
  * Redis removido para simplificação de infraestrutura.
  */
+ 
+import { CONSTANTS } from "@/lib/constants";
 
 // =============================================
 // TIPOS
@@ -44,7 +46,9 @@ const DEFAULT_CONFIG: RateLimitConfig = {
   maxRequests: parseInt(process.env.API_RATE_LIMIT || "100", 10),
   windowMs: parseInt(process.env.API_RATE_LIMIT_WINDOW_MS || "60000", 10),
   blockDurationMs:
-    process.env.NODE_ENV === "development" ? 10 * 1000 : 5 * 60 * 1000, // 10s em dev, 5min em prod
+    process.env.NODE_ENV === "development" 
+      ? 10 * CONSTANTS.TIME.MS_IN_SECOND 
+      : 5 * CONSTANTS.TIME.SECONDS_IN_MINUTE * CONSTANTS.TIME.MS_IN_SECOND, // 10s em dev, 5min em prod
 };
 
 // =============================================
@@ -70,7 +74,7 @@ if (process.env.NODE_ENV !== "test" && typeof setInterval !== "undefined") {
         }
       }
     },
-    5 * 60 * 1000,
+    5 * CONSTANTS.TIME.SECONDS_IN_MINUTE * CONSTANTS.TIME.MS_IN_SECOND,
   );
 }
 
@@ -148,7 +152,7 @@ function handleBlockedEntry(
   normalizedId: string,
 ): RateLimitResult | null {
   if (now < entry.blockedUntil!) {
-    const retryAfter = Math.ceil((entry.blockedUntil! - now) / 1000);
+    const retryAfter = Math.ceil((entry.blockedUntil! - now) / CONSTANTS.TIME.MS_IN_SECOND);
     return {
       blocked: true,
       remaining: 0,
@@ -200,7 +204,7 @@ function incrementEntry(params: IncrementParams): RateLimitResult {
     entry.blockedUntil = now + blockDurationMs;
     store.set(normalizedId, entry);
 
-    const retryAfter = Math.ceil(blockDurationMs / 1000);
+    const retryAfter = Math.ceil(blockDurationMs / CONSTANTS.TIME.MS_IN_SECOND);
     return {
       blocked: true,
       remaining: 0,

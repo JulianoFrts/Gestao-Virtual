@@ -6,9 +6,14 @@ import {
   WorkStageProgress,
 } from "../domain/work-stage.repository";
 import { logger } from "@/lib/utils/logger";
+import { WorkStageSyncService } from "@/modules/production/application/work-stage-sync.service";
 
 export class WorkStageService {
-  constructor(private readonly repository: WorkStageRepository) { }
+  private readonly syncService: WorkStageSyncService;
+
+  constructor(private readonly repository: WorkStageRepository) {
+    this.syncService = new WorkStageSyncService();
+  }
 
   async findAll(params: {
     siteId?: string | null;
@@ -162,6 +167,11 @@ export class WorkStageService {
           stageId: stage.id
         });
       }
+    }
+
+    // 3. Executar sincronização recursiva (Agregação Bottom-Up)
+    if (projectId) {
+      await this.syncService.syncAllStages(projectId, (siteId && siteId !== 'all') ? siteId : undefined);
     }
 
     return results;

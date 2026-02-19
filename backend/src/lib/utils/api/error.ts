@@ -41,6 +41,7 @@ export class AppError extends Error {
       RATE_LIMITED: HTTP_STATUS.TOO_MANY_REQUESTS,
       INTERNAL_ERROR: HTTP_STATUS.INTERNAL_ERROR,
       DATABASE_ERROR: HTTP_STATUS.INTERNAL_ERROR,
+      SERVICE_UNAVAILABLE: HTTP_STATUS.SERVICE_UNAVAILABLE,
       INVALID_CREDENTIALS: HTTP_STATUS.UNAUTHORIZED,
     };
     return statusMap[code] || HTTP_STATUS.INTERNAL_ERROR;
@@ -52,7 +53,7 @@ export class AppError extends Error {
  */
 export class ValidationError extends AppError {
   constructor(errors: string[]) {
-    super("Erro de validação", "VALIDATION_ERROR", 400, errors);
+    super("Erro de validação", "VALIDATION_ERROR", HTTP_STATUS.BAD_REQUEST, errors);
     this.name = "ValidationError";
   }
 }
@@ -62,7 +63,7 @@ export class ValidationError extends AppError {
  */
 export class AuthenticationError extends AppError {
   constructor(message = "Não autenticado") {
-    super(message, "UNAUTHORIZED", 401);
+    super(message, "UNAUTHORIZED", HTTP_STATUS.UNAUTHORIZED);
     this.name = "AuthenticationError";
   }
 }
@@ -72,7 +73,7 @@ export class AuthenticationError extends AppError {
  */
 export class AuthorizationError extends AppError {
   constructor(message = "Sem permissão para esta ação") {
-    super(message, "FORBIDDEN", 403);
+    super(message, "FORBIDDEN", HTTP_STATUS.FORBIDDEN);
     this.name = "AuthorizationError";
   }
 }
@@ -82,7 +83,7 @@ export class AuthorizationError extends AppError {
  */
 export class NotFoundError extends AppError {
   constructor(resource = "Recurso") {
-    super(`${resource} não encontrado`, "NOT_FOUND", 404);
+    super(`${resource} não encontrado`, "NOT_FOUND", HTTP_STATUS.NOT_FOUND);
     this.name = "NotFoundError";
   }
 }
@@ -92,7 +93,7 @@ export class NotFoundError extends AppError {
  */
 export class ConflictError extends AppError {
   constructor(message = "Conflito com recurso existente") {
-    super(message, "CONFLICT", 409);
+    super(message, "CONFLICT", HTTP_STATUS.CONFLICT);
     this.name = "ConflictError";
   }
 }
@@ -104,7 +105,7 @@ export class RateLimitError extends AppError {
   public readonly retryAfter?: number;
 
   constructor(message = "Muitas requisições", retryAfter?: number) {
-    super(message, "RATE_LIMITED", 429);
+    super(message, "RATE_LIMITED", HTTP_STATUS.TOO_MANY_REQUESTS);
     this.name = "RateLimitError";
     this.retryAfter = retryAfter;
   }
@@ -115,7 +116,7 @@ export class RateLimitError extends AppError {
  */
 export class DatabaseError extends AppError {
   constructor(message = "Erro no banco de dados") {
-    super(message, "DATABASE_ERROR", 500);
+    super(message, "DATABASE_ERROR", HTTP_STATUS.INTERNAL_ERROR);
     this.name = "DatabaseError";
   }
 }

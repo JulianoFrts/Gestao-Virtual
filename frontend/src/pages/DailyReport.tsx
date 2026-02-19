@@ -66,10 +66,17 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Check, ChevronsUpDown, Info, Search, Plus } from "lucide-react";
 import { useWorkStages } from "@/hooks/useWorkStages";
 import { fetchWorkStages, hasWorkStagesFetchedSignal } from "@/signals/workStageSignals";
-import { useTowerProduction } from "@/modules/production/hooks/useTowerProduction";
 import { Progress } from "@/components/ui/progress";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useProjects } from "@/hooks/useProjects";
@@ -389,12 +396,12 @@ export default function DailyReport() {
   const [quickActivityId, setQuickActivityId] = React.useState<string>("");
 
   const handleAddItem = () => {
-    if (!currentStageId) {
-      toast({ title: "Atividade não selecionada", description: "Escolha uma atividade na lista antes de adicionar.", variant: "destructive" });
+    if (currentStageIds.length === 0) {
+      toast({ title: "Atividade não selecionada", description: "Escolha pelo menos uma atividade na lista antes de adicionar.", variant: "destructive" });
       return;
     }
 
-    if (currentSubPointType !== 'GERAL' && !currentSubPoint) {
+    if (currentSubPointType !== 'GERAL' && !currentSubPoint && currentDetails.length === 0) {
       toast({ title: "Localização ausente", description: "Informe a torre ou vão da atividade.", variant: "destructive" });
       return;
     }
@@ -404,7 +411,10 @@ export default function DailyReport() {
       return;
     }
 
-    const stageName = fixBrokenEncoding(workStages.find(s => s.id === currentStageId)?.name || "Atividade");
+    const selectedStages = workStages.filter(s => currentStageIds.includes(s.id));
+    const stageNames = selectedStages.map(s => fixBrokenEncoding(s.name));
+    const stageName = stageNames.length > 1 ? `(${stageNames.join(" | ")})` : (stageNames[0] || "Atividade");
+    const primaryStageId = currentStageIds[0];
 
     // Validação de Horários (Intervalos)
     if (currentSubPointType !== 'GERAL') {
@@ -436,7 +446,11 @@ export default function DailyReport() {
       }
     }
 
-    const existingActivityIndex = selectedActivities.findIndex(a => a.stageId === currentStageId);
+    const effectiveSubPoint = currentSubPoint || (currentDetails.length > 0 ? currentDetails.map(d => d.id).join(", ") : "");
+    const effectiveSubPointEnd = currentSubPointEnd || "";
+    const effectiveIsMultiSelection = currentIsMultiSelection || currentDetails.length > 1;
+
+    const existingActivityIndex = selectedActivities.findIndex(a => a.stageName === stageName);
 
     if (existingActivityIndex !== -1) {
       // Mesclar com atividade existente
@@ -451,8 +465,8 @@ export default function DailyReport() {
           : (existing.observations || currentObservations),
         photos: [...(existing.photos || []), ...currentPhotos],
         // Atualiza subPoint para refletir múltiplos se for diferente
-        subPoint: existing.subPoint === currentSubPoint ? existing.subPoint : `${existing.subPoint}, ${currentSubPoint}`,
-        isMultiSelection: existing.isMultiSelection || currentIsMultiSelection || existing.details.length > 1
+        subPoint: (existing.subPoint === effectiveSubPoint || !effectiveSubPoint) ? existing.subPoint : `${existing.subPoint}, ${effectiveSubPoint}`,
+        isMultiSelection: existing.isMultiSelection || effectiveIsMultiSelection
       };
 
       updateReportDraft({
@@ -461,12 +475,12 @@ export default function DailyReport() {
     } else {
       const newItem: DailyReportActivity = {
         id: crypto.randomUUID(),
-        stageId: currentStageId,
+        stageId: primaryStageId,
         stageName,
         subPointType: currentSubPointType,
-        subPoint: currentSubPoint,
-        subPointEnd: currentSubPointEnd,
-        isMultiSelection: currentIsMultiSelection,
+        subPoint: effectiveSubPoint,
+        subPointEnd: effectiveSubPointEnd,
+        isMultiSelection: effectiveIsMultiSelection,
         observations: currentObservations,
         status: currentStatus,
         details: currentDetails,
@@ -480,12 +494,13 @@ export default function DailyReport() {
 
 
     // Reset local form
-    setCurrentStageId("");
+    setCurrentStageIds([]);
     setCurrentObservations("");
     setCurrentDetails([]);
     setLockedDetails([]);
     setCurrentPhotos([]);
-    
+    setCurrentSubPoint("");
+    setCurrentSubPointEnd("");
     toast({
       title: "Atividade Adicionada",
       description: `"${stageName}" incluída no relatório.`,
@@ -541,18 +556,6 @@ export default function DailyReport() {
     }
   }, [effectiveProjectId, effectiveSiteId, selectedCompanyId]);
 
-  // Carregar dados de execução real para sincronizar com a Grelha
-  const { towersByStage, loadProductionData } = useTowerProduction();
-
-  // Efeito para carregar dados de produção quando as etapas forem carregadas
-  React.useEffect(() => {
-    if (workStages.length > 0 && effectiveSiteId && selectedCompanyId) {
-      const projectId = sites.find(s => s.id === effectiveSiteId)?.projectId;
-      if (projectId) {
-        loadProductionData(workStages, projectId, effectiveSiteId, selectedCompanyId);
-      }
-    }
-  }, [workStages, effectiveSiteId, selectedCompanyId, loadProductionData, sites]);
   
   // Agrupar atividades por categoria para visualização organizada (similar à Grelha de Produção)
   const workStagesGrouped = React.useMemo(() => {
@@ -581,46 +584,103 @@ export default function DailyReport() {
     const parents = sortedStages.filter(s => !s.parentId);
     const children = sortedStages.filter(s => s.parentId);
     
-    const groups: { category: string; items: any[] }[] = [];
-    const standaloneItems: any[] = [];
+    const groupsMap = new Map<string, any[]>();
     
-    // Processar pais e seus filhos
-    parents.forEach(p => {
-      const pChildren = children.filter(c => c.parentId === p.id);
-      if (pChildren.length > 0) {
-        groups.push({ category: p.name, items: pChildren });
-      } else {
-        // Se é um item de topo sem filhos, é selecionável como standalone
-        standaloneItems.push(p);
-      }
-    });
-    
-    // Adicionar filhos "órfãos" (cujo pai não está na lista filtrada)
-    const orphanChildren = children.filter(c => !parents.some(p => p.id === c.parentId));
-    if (orphanChildren.length > 0) {
-      standaloneItems.push(...orphanChildren);
-    }
+    // Mapeamento explícito fornecido pelo usuário para garantir precisão
+    const activityToCategory: Record<string, string> = {
+      // SERVIÇOS PRELIMINARES
+      "CROQUI DE ACESSO": "SERVIÇOS PRELIMINARES",
+      "SONDAGEM": "SERVIÇOS PRELIMINARES",
+      "CONFERÊNCIA DE PERFIL": "SERVIÇOS PRELIMINARES",
+      "SUPRESSÃO VEGETAL (ÁREA)": "SERVIÇOS PRELIMINARES",
+      "ABERTURA DE ACESSOS": "SERVIÇOS PRELIMINARES",
+      // FUNDAÇÃO
+      "ESCAVAÇÃO": "FUNDAÇÃO",
+      "ARMAÇÃO": "FUNDAÇÃO",
+      "CONCRETAGEM": "FUNDAÇÃO",
+      "REATERRO": "FUNDAÇÃO",
+      // MONTAGEM
+      "PRÉ-MONTAGEM": "MONTAGEM",
+      "IÇAMENTO": "MONTAGEM",
+      "REVISÃO": "MONTAGEM",
+      "TORQUEAMENTO": "MONTAGEM",
+      // CABOS
+      "LANÇAMENTO CABO GUIA": "CABOS",
+      "LANÇAMENTO CONDUTOR": "CABOS",
+      "GRAMPEAÇÃO": "CABOS",
+      "REGULAÇÃO": "CABOS"
+    };
 
-    // Se houver itens standalone, agrupar sob uma categoria geral
-    if (standaloneItems.length > 0) {
-      groups.push({ 
-        category: "Atividades Disponíveis", 
-        items: standaloneItems.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0)) 
+    uniqueStages.forEach(s => {
+      let categoryName = "";
+      const nameUpper = s.name.toUpperCase().trim();
+      
+      // 1. Prioridade: Mapeamento Explícito
+      if (activityToCategory[nameUpper]) {
+        categoryName = activityToCategory[nameUpper];
+      }
+      
+      // 2. Tentar encontrar o nome do pai
+      if (!categoryName && s.parentId) {
+        const parent = workStages.find(p => p.id === s.parentId);
+        if (parent) {
+          categoryName = fixBrokenEncoding(parent.name).toUpperCase();
+        }
+      }
+      
+      // 3. Critérios de busca por palavras-chave
+      if (!categoryName) {
+        const descUpper = (s.description || "").toUpperCase();
+        const keywords = ["FUNDAÇÃO", "MONTAGEM", "CABOS", "PRELIMINARES", "ESTRUTURA"];
+        
+        const foundInDesc = keywords.find(k => descUpper.includes(k));
+        if (foundInDesc) {
+           categoryName = foundInDesc === "PRELIMINARES" ? "SERVIÇOS PRELIMINARES" : foundInDesc;
+        } else {
+           const foundInName = keywords.find(k => nameUpper.includes(k));
+           if (foundInName) categoryName = foundInName === "PRELIMINARES" ? "SERVIÇOS PRELIMINARES" : foundInName;
+        }
+      }
+
+      // 4. Fallback Final
+      if (!categoryName) {
+        const isParent = uniqueStages.some(child => child.parentId === s.id);
+        if (isParent) return;
+        categoryName = "GERAL";
+      }
+
+      const finalList = groupsMap.get(categoryName) || [];
+      finalList.push(s);
+      groupsMap.set(categoryName, finalList);
+    });
+
+    return Array.from(groupsMap.entries())
+      .map(([category, items]) => ({
+        category,
+        items: items.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+      }))
+      .sort((a, b) => {
+        const orderPriority: Record<string, number> = {
+          "SERVIÇOS PRELIMINARES": 1,
+          "FUNDAÇÃO": 2,
+          "MONTAGEM": 3,
+          "CABOS": 4,
+          "GERAL": 10
+        };
+        return (orderPriority[a.category] || 50) - (orderPriority[b.category] || 50);
       });
-    }
-    
-    return groups;
   }, [workStages]);
 
   const [previewData, setPreviewData] = React.useState<{
     expandedTowers: string[];
     finalLabel: string;
     metrics: { towers: number; km: string };
+    details?: Array<{ id: string; progress: number; status: 'IN_PROGRESS' | 'FINISHED' | 'BLOCKED' }>;
   }>({ expandedTowers: [], finalLabel: "", metrics: { towers: 0, km: "0.00" } });
   const [isPreviewing, setIsPreviewing] = React.useState(false);
 
   // Estados locais para o "Mini-Relatório" de adição de atividade (Movido para cá para evitar erro de referência com previewData)
-  const [currentStageId, setCurrentStageId] = React.useState<string>("");
+  const [currentStageIds, setCurrentStageIds] = React.useState<string[]>([]);
   const [currentSubPointType, setCurrentSubPointType] = React.useState<'GERAL' | 'TORRE' | 'VAO' | 'TRECHO' | 'ESTRUTURA'>('TORRE');
   const [currentSubPoint, setCurrentSubPoint] = React.useState<string>("");
   const [currentSubPointEnd, setCurrentSubPointEnd] = React.useState<string>("");
@@ -680,46 +740,46 @@ export default function DailyReport() {
   React.useEffect(() => {
     let activeDetails: DailyReportSubPointDetail[] = [];
 
-    // Se temos um preview com torres expandidas, usamos elas
-    if (previewData.expandedTowers && previewData.expandedTowers.length > 0) {
-      const currentStageProduction = towersByStage[currentStageId] || [];
-      
-      activeDetails = previewData.expandedTowers.map((id, idx) => {
-        // Buscar progresso atual na grelha de produção para esta torre
-        const prodInfo = currentStageProduction.find(t => t.objectId === id);
-        const currentProgress = prodInfo?.activityStatuses?.find(s => 
-          s.activityId === currentStageId || s.activity?.id === currentStageId
-        )?.progressPercent || 0;
+    // Se temos um preview com detalhes enriquecidos do backend
+    if (previewData.details && previewData.details.length > 0) {
+      const lastAct = selectedActivities[selectedActivities.length - 1];
+      const lastItemInLastAct = lastAct?.details?.[lastAct.details.length - 1];
+      const lastReportEndTime = lastItemInLastAct?.endTime || "";
 
-        const lastAct = selectedActivities[selectedActivities.length - 1];
-        const lastItemInLastAct = lastAct?.details?.[lastAct.details.length - 1];
-        const lastReportEndTime = lastItemInLastAct?.endTime || "";
+      activeDetails = previewData.details.map((d, idx) => ({
+        id: d.id,
+        status: d.status,
+        progress: d.progress,
+        comment: "",
+        startTime: idx === 0 ? lastReportEndTime : "" ,
+        endTime: ""
+      }));
+    } else if (previewData.expandedTowers && previewData.expandedTowers.length > 0) {
+        // Fallback básico caso o backend não retorne details mas retorne expandedTowers
+        activeDetails = previewData.expandedTowers.map((id, idx) => {
+          const lastAct = selectedActivities[selectedActivities.length - 1];
+          const lastItemInLastAct = lastAct?.details?.[lastAct.details.length - 1];
+          const lastReportEndTime = lastItemInLastAct?.endTime || "";
 
-        return {
-          id,
-          status: currentProgress >= 100 ? 'FINISHED' : (currentProgress > 0 ? 'IN_PROGRESS' : currentStatus),
-          progress: currentProgress,
-          comment: "",
-          startTime: idx === 0 ? lastReportEndTime : "" ,
-          endTime: ""
-        };
-      });
+          return {
+            id,
+            status: currentStatus,
+            progress: 0,
+            comment: "",
+            startTime: idx === 0 ? lastReportEndTime : "" ,
+            endTime: ""
+          };
+        });
     } else if (currentSubPoint && currentSubPointType !== 'GERAL') {
-      // Ponto único
-      const currentStageProduction = towersByStage[currentStageId] || [];
-      const prodInfo = currentStageProduction.find(t => t.objectId === currentSubPoint);
-      const currentProgress = prodInfo?.activityStatuses?.find(s => 
-        s.activityId === currentStageId || s.activity?.id === currentStageId
-      )?.progressPercent || 0;
-
+      // Ponto único (fallback se o preview ainda não carregou ou falhou)
       const lastAct = selectedActivities[selectedActivities.length - 1];
       const lastItemInLastAct = lastAct?.details?.[lastAct.details.length - 1];
       const lastReportEndTime = lastItemInLastAct?.endTime || "";
 
       activeDetails = [{
         id: currentSubPoint,
-        status: currentProgress >= 100 ? 'FINISHED' : (currentProgress > 0 ? 'IN_PROGRESS' : currentStatus),
-        progress: currentProgress,
+        status: currentStatus,
+        progress: 0,
         comment: "",
         startTime: lastReportEndTime,
         endTime: ""
@@ -730,7 +790,7 @@ export default function DailyReport() {
     const filteredActive = activeDetails.filter(ad => !lockedDetails.some(ld => ld.id === ad.id));
     setCurrentDetails([...lockedDetails, ...filteredActive]);
 
-  }, [previewData.expandedTowers, currentSubPoint, currentSubPointType, currentStatus, towersByStage, currentStageId, selectedActivities, lockedDetails]);
+  }, [previewData, currentSubPoint, currentSubPointType, currentStatus, selectedActivities, lockedDetails]);
 
   const spanTotals = previewData.metrics;
 
@@ -756,6 +816,7 @@ export default function DailyReport() {
         subPoint: currentSubPoint,
         subPointEnd: currentSubPointEnd,
         isMultiSelection: currentIsMultiSelection,
+        stageId: currentStageIds[0] // Passar o primeiro stageId para buscar progresso
       });
       if (response.data) {
         setPreviewData(response.data as any);
@@ -771,6 +832,7 @@ export default function DailyReport() {
     currentSubPoint,
     currentSubPointEnd,
     currentIsMultiSelection,
+    currentStageIds,
     sites,
   ]);
 
@@ -1110,7 +1172,11 @@ export default function DailyReport() {
                               <Button variant="outline" className="w-full justify-start h-14 bg-black/40 border-amber-500/20 rounded-2xl hover:bg-black/60 transition-all text-left px-6">
                                 <Search className="w-5 h-5 mr-3 text-amber-500/60" />
                                 <span className="font-bold truncate">
-                                  {currentStageId ? fixBrokenEncoding(workStages.find(s => s.id === currentStageId)?.name || "") : "Escolha a atividade..."}
+                                  {currentStageIds.length > 0 
+                                    ? (currentStageIds.length === 1 
+                                        ? fixBrokenEncoding(workStages.find(s => s.id === currentStageIds[0])?.name || "")
+                                        : `${currentStageIds.length} Atividades selecionadas`)
+                                    : "Escolha as atividades..."}
                                 </span>
                               </Button>
                             </PopoverTrigger>
@@ -1125,14 +1191,24 @@ export default function DailyReport() {
                                           key={stage.id} 
                                           value={stage.name} 
                                           onSelect={() => {
-                                            setCurrentStageId(stage.id);
-                                            setIsActivityPopoverOpen(false);
+                                            if (currentStageIds.includes(stage.id)) {
+                                              setCurrentStageIds(currentStageIds.filter(id => id !== stage.id));
+                                            } else {
+                                              setCurrentStageIds([...currentStageIds, stage.id]);
+                                            }
                                           }} 
                                           className="cursor-pointer aria-selected:bg-amber-500/20 rounded-xl m-1 px-4 py-3"
                                         >
-                                          <div className="flex flex-col">
-                                            <span className="font-bold text-sm">{stage.name}</span>
-                                            {stage.description && <span className="text-[10px] text-muted-foreground">{stage.description}</span>}
+                                          <div className="flex items-center justify-between w-full">
+                                            <div className="flex flex-col">
+                                              <span className="font-bold text-sm">{stage.name}</span>
+                                              {stage.description && <span className="text-[10px] text-muted-foreground">{stage.description}</span>}
+                                            </div>
+                                            {currentStageIds.includes(stage.id) && (
+                                              <div className="w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center">
+                                                <Check className="w-3 h-3 text-black" />
+                                              </div>
+                                            )}
                                           </div>
                                         </CommandItem>
                                       ))}
@@ -1147,9 +1223,9 @@ export default function DailyReport() {
                         <div className="space-y-4">
                           <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500/40">2. Onde? (Localização)</Label>
                           
-                          <div className="flex flex-col md:flex-row gap-6">
-                            {/* Coluna 1: Tipo e Opção Multi */}
-                            <div className="flex flex-col gap-3 min-w-[150px]">
+                          <div className="flex flex-wrap items-center gap-4 lg:gap-6 relative z-10">
+                            {/* Seletor de Tipo */}
+                            <div className="min-w-[140px]">
                               <Select value={currentSubPointType} onValueChange={(val: any) => setCurrentSubPointType(val)}>
                                 <SelectTrigger className="bg-black/40 border-amber-500/20 rounded-2xl h-14 font-bold text-xs"><SelectValue /></SelectTrigger>
                                 <SelectContent className="glass-card">
@@ -1159,27 +1235,28 @@ export default function DailyReport() {
                                   <SelectItem value="TRECHO">Trecho</SelectItem>
                                 </SelectContent>
                               </Select>
-
-                              <label className="flex items-center gap-2 text-[10px] font-bold text-amber-500/60 cursor-pointer pt-1">
-                                <input 
-                                  type="checkbox" 
-                                  checked={currentIsMultiSelection} 
-                                  onChange={e => { setCurrentIsMultiSelection(e.target.checked); setCurrentSubPointEnd(""); }} 
-                                  className="rounded border-amber-500/30 bg-black/40 text-amber-500" 
-                                />
-                                SELEÇÃO MÚLTIPLA
-                              </label>
                             </div>
 
-                            {/* Coluna 2: Seletores de Localização e Botão de Adicionar */}
-                            <div className="flex gap-3 items-center animate-in fade-in duration-500">
-                               <div className="flex flex-row gap-2">
-                                  <div className="w-[140px] relative">
+                            {/* Checkbox de Seleção Múltipla */}
+                            <label className="flex items-center gap-2 text-[10px] font-bold text-amber-500/60 cursor-pointer whitespace-nowrap px-2">
+                              <input 
+                                type="checkbox" 
+                                checked={currentIsMultiSelection} 
+                                onChange={e => { setCurrentIsMultiSelection(e.target.checked); setCurrentSubPointEnd(""); }} 
+                                className="rounded border-amber-500/30 bg-black/40 text-amber-500" 
+                              />
+                              SELEÇÃO MÚLTIPLA
+                            </label>
+
+                            {/* Seletores de Localização e Botão de Adicionar */}
+                            <div className="flex gap-3 items-center animate-in fade-in duration-500 flex-1 min-w-[300px]">
+                               <div className="flex flex-row gap-2 flex-1">
+                                  <div className="flex-1 relative">
                                     <LocationPicker value={currentSubPoint} onChange={setCurrentSubPoint} placeholder={currentIsMultiSelection ? "INÍCIO..." : "TORRE..."} />
                                   </div>
                                   
                                   {currentIsMultiSelection && (
-                                    <div className="w-[140px] animate-in slide-in-from-left-2 duration-300">
+                                    <div className="flex-1 animate-in slide-in-from-left-2 duration-300">
                                       <LocationPicker value={currentSubPointEnd} onChange={setCurrentSubPointEnd} placeholder="FIM..." />
                                     </div>
                                   )}
@@ -1219,7 +1296,7 @@ export default function DailyReport() {
                               const hasAnyConflict = isInvalid || isInternalOverlap || isExternalOverlap || isChronologyError;
 
                               return (
-                                <div key={detail.id} className="space-y-2">
+                                <div key={`${detail.id}-${idx}`} className="space-y-2">
                                   <div className={cn(
                                     "flex flex-col md:flex-row items-center gap-4 bg-black/40 border p-4 rounded-3xl transition-all group/tower",
                                     hasAnyConflict ? "border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]" : "border-amber-500/10 hover:border-amber-500/30"
@@ -1433,17 +1510,13 @@ export default function DailyReport() {
                       </div>
 
                       <div className="flex items-center justify-between gap-6 pt-4 relative z-10">
-                         <div className="flex gap-2">
-                            <Button type="button" onClick={() => setCurrentStatus('IN_PROGRESS')} variant="outline" className={cn("rounded-xl text-[10px] font-black uppercase border-amber-500/30 transition-all", currentStatus === 'IN_PROGRESS' ? 'bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-500/30 scale-105' : 'bg-black/20')}>ANDAMENTO</Button>
-                            <Button type="button" onClick={() => setCurrentStatus('FINISHED')} variant="outline" className={cn("rounded-xl text-[10px] font-black uppercase border-green-500/30 transition-all", currentStatus === 'FINISHED' ? 'bg-green-600 text-white border-green-500 shadow-lg shadow-green-500/30 scale-105' : 'bg-black/20')}>CONCLUÍDO</Button>
-                         </div>
 
                          <Button 
                           type="button" 
                           onClick={handleAddItem}
                            disabled={
-                             !currentStageId || 
-                             (currentSubPointType !== 'GERAL' && !currentSubPoint) || 
+                             currentStageIds.length === 0 || 
+                             (currentSubPointType !== 'GERAL' && currentDetails.length === 0) || 
                              currentDetails.some(d => d.status === 'BLOCKED' && !d.comment) ||
                              (currentSubPointType !== 'GERAL' && (
                                currentDetails.some(d => !d.startTime || !d.endTime) ||
@@ -1543,8 +1616,8 @@ export default function DailyReport() {
                                    <span className="w-10 text-[10px] font-black uppercase text-muted-foreground/60 tracking-wider text-right">#</span>
                                  </div>
                                  <div className="max-h-[300px] overflow-y-auto space-y-px rounded-b-xl border border-white/5 divide-y divide-white/5">
-                                   {act.details.map((d) => (
-                                     <div key={d.id} className="space-y-px">
+                                   {act.details.map((d, dIdx) => (
+                                     <div key={`${d.id}-${dIdx}`} className="space-y-px">
                                        <div className="group/row flex items-center px-4 py-2.5 bg-black/20 hover:bg-black/40 transition-colors">
                                          {/* Hora Início */}
                                          <div className="w-20">
@@ -1586,132 +1659,145 @@ export default function DailyReport() {
                                            </p>
                                          </div>
 
-                                         {/* Ação/FullView (Edição Ativada) */}
-                                         <div className="w-10 flex justify-end">
-                                             <Popover>
-                                               <PopoverTrigger asChild>
-                                                 <button className={cn(
-                                                   "p-1 hover:bg-primary/20 rounded-lg transition-colors",
-                                                   d.comment ? "text-amber-500" : "text-white/10 hover:text-white/40"
-                                                 )}>
-                                                   <Info className="w-3.5 h-3.5 shadow-sm" />
-                                                 </button>
-                                               </PopoverTrigger>
-                                               <PopoverContent className="w-72 p-4 glass-card border-white/10 shadow-2xl backdrop-blur-xl" side="left">
-                                                 <div className="space-y-3">
-                                                   <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                                                     <span className="text-[10px] font-black uppercase text-primary tracking-widest">{d.id}</span>
-                                                     <span className="text-[8px] font-black text-muted-foreground px-1.5 py-0.5 bg-white/5 rounded">EDITAR ITEM</span>
-                                                   </div>
-                                                   
-                                                   <div className="grid grid-cols-2 gap-3">
-                                                     <div className="space-y-1.5">
-                                                       <Label className="text-[8px] font-black uppercase text-white/30">H. Início</Label>
-                                                       <TimePicker24h 
-                                                         value={d.startTime || ""}
-                                                         className="text-amber-500"
-                                                         onChange={(val) => {
-                                                           const draft = dailyReportDraftSignal.value;
-                                                           const updatedActs = draft.selectedActivities.map(a => {
-                                                             if (a.id === act.id) {
-                                                               return {
-                                                                 ...a,
-                                                                 details: a.details?.map(item => {
-                                                                   if (item.id === d.id) {
-                                                                     const newItem = { ...item, startTime: val };
-                                                                     // Sempre preencher 1 minuto a mais para o fim ao preencher o início
-                                                                     if (!newItem.endTime || toMinutes(newItem.endTime) <= toMinutes(val)) {
-                                                                       newItem.endTime = addOneMinute(val);
-                                                                     }
-                                                                     return newItem;
-                                                                   }
-                                                                   return item;
-                                                                 })
-                                                               };
-                                                             }
-                                                             return a;
-                                                           });
-                                                           updateReportDraft({ selectedActivities: updatedActs });
-                                                         }}
-                                                       />
-                                                     </div>
-                                                     <div className="space-y-1.5">
-                                                       <Label className="text-[8px] font-black uppercase text-white/30">H. Fim</Label>
-                                                       <TimePicker24h 
-                                                         value={d.endTime || ""}
-                                                         onChange={(val) => {
-                                                           const draft = dailyReportDraftSignal.value;
-                                                           const updatedActs = draft.selectedActivities.map(a => {
-                                                             if (a.id === act.id) {
-                                                               return {
-                                                                 ...a,
-                                                                 details: a.details?.map(item => {
-                                                                   if (item.id === d.id) {
-                                                                     return { ...item, endTime: val };
-                                                                   }
-                                                                   return item;
-                                                                 })
-                                                               };
-                                                             }
-                                                             return a;
-                                                           });
-                                                           updateReportDraft({ selectedActivities: updatedActs });
-                                                         }}
-                                                       />
-                                                     </div>
-                                                   </div>
+                                          {/* Ação/FullView (Edição Ativada) */}
+                                          <div className="w-10 flex justify-end">
+                                              <Dialog>
+                                                <DialogTrigger asChild>
+                                                  <button className={cn(
+                                                    "p-1 hover:bg-primary/20 rounded-lg transition-colors",
+                                                    d.comment ? "text-amber-500" : "text-white/10 hover:text-white/40"
+                                                  )}>
+                                                    <Info className="w-3.5 h-3.5 shadow-sm" />
+                                                  </button>
+                                                </DialogTrigger>
+                                                <DialogContent className="sm:max-w-xl p-8 glass-card border-white/10 shadow-2xl backdrop-blur-xl">
+                                                  <DialogHeader className="pb-4 border-b border-white/5">
+                                                    <div className="flex items-center justify-between">
+                                                      <DialogTitle className="text-xl font-black uppercase text-primary tracking-widest">{d.id}</DialogTitle>
+                                                      <DialogDescription className="sr-only">
+                                                        Edite os detalhes da atividade para o item {d.id}
+                                                      </DialogDescription>
+                                                      <span className="text-xs font-black text-muted-foreground px-3 py-1 bg-white/5 rounded-full">EDITAR ITEM</span>
+                                                    </div>
+                                                  </DialogHeader>
+                                                  
+                                                  <div className="space-y-6 pt-6">
+                                                    <div className="grid grid-cols-2 gap-6">
+                                                      <div className="space-y-2.5">
+                                                        <Label className="text-[10px] font-black uppercase text-white/40 tracking-widest flex items-center gap-2">
+                                                          <Clock className="w-3 h-3 text-amber-500" />
+                                                          H. Início
+                                                        </Label>
+                                                        <TimePicker24h 
+                                                          value={d.startTime || ""}
+                                                          className="text-amber-500 scale-110 origin-left"
+                                                          onChange={(val) => {
+                                                            const draft = dailyReportDraftSignal.value;
+                                                            const updatedActs = draft.selectedActivities.map(a => {
+                                                              if (a.id === act.id) {
+                                                                return {
+                                                                  ...a,
+                                                                  details: a.details?.map((item, itemIdx) => {
+                                                                    if (itemIdx === dIdx) {
+                                                                      const newItem = { ...item, startTime: val };
+                                                                      // Sempre preencher 1 minuto a mais para o fim ao preencher o início
+                                                                      if (!newItem.endTime || toMinutes(newItem.endTime) <= toMinutes(val)) {
+                                                                        newItem.endTime = addOneMinute(val);
+                                                                      }
+                                                                      return newItem;
+                                                                    }
+                                                                    return item;
+                                                                  })
+                                                                };
+                                                              }
+                                                              return a;
+                                                            });
+                                                            updateReportDraft({ selectedActivities: updatedActs });
+                                                          }}
+                                                        />
+                                                      </div>
+                                                      <div className="space-y-2.5">
+                                                        <Label className="text-[10px] font-black uppercase text-white/40 tracking-widest flex items-center gap-2">
+                                                          <Clock className="w-3 h-3 text-primary" />
+                                                          H. Fim
+                                                        </Label>
+                                                        <TimePicker24h 
+                                                          value={d.endTime || ""}
+                                                          className="scale-110 origin-left"
+                                                          onChange={(val) => {
+                                                            const draft = dailyReportDraftSignal.value;
+                                                            const updatedActs = draft.selectedActivities.map(a => {
+                                                              if (a.id === act.id) {
+                                                                return {
+                                                                  ...a,
+                                                                  details: a.details?.map((item, itemIdx) => {
+                                                                    if (itemIdx === dIdx) {
+                                                                      return { ...item, endTime: val };
+                                                                    }
+                                                                    return item;
+                                                                  })
+                                                                };
+                                                              }
+                                                              return a;
+                                                            });
+                                                            updateReportDraft({ selectedActivities: updatedActs });
+                                                          }}
+                                                        />
+                                                      </div>
+                                                    </div>
+ 
+                                                    <div className="space-y-2.5">
+                                                      <Label className="text-[10px] font-black uppercase text-white/40 tracking-widest">Observação / Comentário</Label>
+                                                      <Textarea 
+                                                        placeholder="Adicionar observação para este item..."
+                                                        className="bg-black/40 border-white/5 rounded-2xl text-sm min-h-[120px] text-white/90 placeholder:text-white/20 italic p-4 focus:ring-primary/20"
+                                                        value={d.comment || ""}
+                                                        onChange={(e) => {
+                                                          const draft = dailyReportDraftSignal.value;
+                                                          const updatedActs = draft.selectedActivities.map(a => {
+                                                            if (a.id === act.id) {
+                                                              return {
+                                                                ...a,
+                                                                details: a.details?.map((item, itemIdx) => {
+                                                                  if (itemIdx === dIdx) return { ...item, comment: e.target.value };
+                                                                  return item;
+                                                                })
+                                                              };
+                                                            }
+                                                            return a;
+                                                          });
+                                                          updateReportDraft({ selectedActivities: updatedActs });
+                                                        }}
+                                                      />
+                                                    </div>
+ 
+                                                    <div className="pt-4 border-t border-white/5">
+                                                      <Label className="text-[10px] font-black uppercase text-white/40 tracking-widest block mb-4">Fotos do Item</Label>
+                                                      <PhotoUploadZone 
+                                                        photos={d.photos || []} 
+                                                        onChange={(photos) => {
+                                                          const draft = dailyReportDraftSignal.value;
+                                                          const updatedActs = draft.selectedActivities.map(a => {
+                                                            if (a.id === act.id) {
+                                                              return {
+                                                                ...a,
+                                                                details: a.details?.map((item, itemIdx) => {
+                                                                  if (itemIdx === dIdx) return { ...item, photos };
+                                                                  return item;
+                                                                  })
+                                                                };
+                                                              }
+                                                              return a;
+                                                            });
+                                                            updateReportDraft({ selectedActivities: updatedActs });
+                                                          }}
+                                                          compact={false}
+                                                        />
+                                                      </div>
+                                                    </div>
+                                                  </DialogContent>
+                                                </Dialog>
 
-                                                   <div className="space-y-1.5">
-                                                     <Label className="text-[8px] font-black uppercase text-white/30">Observação / Comentário</Label>
-                                                     <Textarea 
-                                                       placeholder="Adicionar observação para este item..."
-                                                       className="bg-black/40 border-white/5 rounded-xl text-[11px] min-h-[80px] text-white/90 placeholder:text-white/20 italic"
-                                                       value={d.comment || ""}
-                                                       onChange={(e) => {
-                                                         const draft = dailyReportDraftSignal.value;
-                                                         const updatedActs = draft.selectedActivities.map(a => {
-                                                           if (a.id === act.id) {
-                                                             return {
-                                                               ...a,
-                                                               details: a.details?.map(item => {
-                                                                 if (item.id === d.id) return { ...item, comment: e.target.value };
-                                                                 return item;
-                                                               })
-                                                             };
-                                                           }
-                                                           return a;
-                                                         });
-                                                         updateReportDraft({ selectedActivities: updatedActs });
-                                                       }}
-                                                     />
-                                                   </div>
-
-                                                   <div className="pt-2 border-t border-white/5">
-                                                     <Label className="text-[8px] font-black uppercase text-white/30 block mb-2">Fotos do Item</Label>
-                                                     <PhotoUploadZone 
-                                                       photos={d.photos || []} 
-                                                       onChange={(photos) => {
-                                                         const draft = dailyReportDraftSignal.value;
-                                                         const updatedActs = draft.selectedActivities.map(a => {
-                                                           if (a.id === act.id) {
-                                                             return {
-                                                               ...a,
-                                                               details: a.details?.map(item => {
-                                                                 if (item.id === d.id) return { ...item, photos };
-                                                                 return item;
-                                                               })
-                                                             };
-                                                           }
-                                                           return a;
-                                                         });
-                                                         updateReportDraft({ selectedActivities: updatedActs });
-                                                       }}
-                                                       compact
-                                                     />
-                                                   </div>
-                                                 </div>
-                                               </PopoverContent>
-                                             </Popover>
                                          </div>
                                        </div>
                                      </div>

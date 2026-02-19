@@ -67,13 +67,11 @@ class TeamService extends BaseApiService<TeamEntity, CreateTeam, UpdateTeam> {
                 return validation as ServiceResult<TeamMember>;
             }
 
+            const snakeCaseData = this.toSnakeCase({ teamId, userId, role });
+
             const { data, error } = await orionApi
                 .from<TeamMember>('team_members')
-                .insert({
-                    team_id: teamId,
-                    user_id: userId,
-                    role: role || null
-                } as any)
+                .insert(snakeCaseData)
                 .select('*')
                 .single();
 
@@ -83,11 +81,11 @@ class TeamService extends BaseApiService<TeamEntity, CreateTeam, UpdateTeam> {
 
             return {
                 success: true,
-                data: this.toCamelCase(data as Record<string, any>) as TeamMember
+                data: this.toCamelCase(data as Record<string, unknown>) as unknown as TeamMember
             };
-        } catch (error: any) {
+        } catch (error) {
             console.error('[TeamService] addMember error:', error);
-            return { success: false, error: error.message || 'Erro ao adicionar membro' };
+            return { success: false, error: (error as Error).message || 'Erro ao adicionar membro' };
         }
     }
 
@@ -107,9 +105,9 @@ class TeamService extends BaseApiService<TeamEntity, CreateTeam, UpdateTeam> {
             }
 
             return { success: true };
-        } catch (error: any) {
+        } catch (error) {
             console.error('[TeamService] removeMember error:', error);
-            return { success: false, error: error.message || 'Erro ao remover membro' };
+            return { success: false, error: (error as Error).message || 'Erro ao remover membro' };
         }
     }
 
@@ -128,13 +126,13 @@ class TeamService extends BaseApiService<TeamEntity, CreateTeam, UpdateTeam> {
             }
 
             const mapped = (data || []).map(item =>
-                this.toCamelCase(item as Record<string, any>) as TeamMember
+                this.toCamelCase(item as Record<string, unknown>) as unknown as TeamMember
             );
 
             return { success: true, data: mapped };
-        } catch (error: any) {
+        } catch (error) {
             console.error('[TeamService] getMembers error:', error);
-            return { success: false, error: error.message || 'Erro ao buscar membros' };
+            return { success: false, error: (error as Error).message || 'Erro ao buscar membros' };
         }
     }
 }

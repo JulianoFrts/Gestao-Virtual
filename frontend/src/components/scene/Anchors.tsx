@@ -1,5 +1,5 @@
-import { useAnchorStore } from '../../store/anchorStore'
-import { AnchorMarker } from './AnchorMarker'
+import { useAnchorStore } from '@/store/anchorStore'
+import { AnchorMarker } from '@/components/scene/AnchorMarker'
 
 export function Anchors() {
     const anchors = useAnchorStore(s => s.anchors)

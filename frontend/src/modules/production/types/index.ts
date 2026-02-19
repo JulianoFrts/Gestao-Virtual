@@ -61,6 +61,30 @@ export interface ActivitySchedule {
     plannedHours: number | null;
 }
 
+export interface DelayReason {
+    id: string;
+    code: string;
+    description: string;
+    category: ImpedimentType;
+}
+
+export interface HistoryLog {
+    id: string;
+    progressId: string;
+    elementId: string;
+    activityId: string;
+    status: string;
+    progress: number;
+    notes: string;
+    timestamp: string;
+    userName: string;
+    approvedBy?: string;
+    requiresApproval?: boolean;
+    isApproved?: boolean;
+    approvedAt?: string;
+    metadata?: any;
+}
+
 export interface TowerProductionData {
     id: string;
     elementId: string; // Unified mapping

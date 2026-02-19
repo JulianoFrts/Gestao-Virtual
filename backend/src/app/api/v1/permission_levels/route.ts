@@ -61,13 +61,24 @@ export async function POST(request: NextRequest) {
     await requireAdmin();
 
     const body = await request.json();
-    const data = createPermissionLevelSchema.parse(body);
+    
+    // Suporte para inserção em lote (Array) ou única (Objeto)
+    const dataArray = Array.isArray(body) ? body : [body];
+    const results = [];
 
-    const level = await accessService.createLevel(data);
+    for (const item of dataArray) {
+       const data = createPermissionLevelSchema.parse(item);
+       const level = await accessService.createLevel(data);
+       logger.info("Nível de permissão criado", { levelId: level.id });
+       results.push(level);
+    }
 
-    logger.info("Nível de permissão criado", { levelId: level.id });
+    // Se for apenas 1 (Objeto Original), retorna o primeiro
+    if (!Array.isArray(body)) {
+      return ApiResponse.json(results[0], "Nível de permissão criado com sucesso");
+    }
 
-    return ApiResponse.json(level, "Nível de permissão criado com sucesso");
+    return ApiResponse.json(results, `${results.length} níveis criados com sucesso`);
   } catch (error) {
 
     return handleApiError(error, "src/app/api/v1/permission_levels/route.ts#POST");

@@ -2,7 +2,7 @@ import React from "react";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ActivityStatus, LandStatus, ImpedimentType } from "../../types";
+import { ActivityStatus, LandStatus, ImpedimentType, DelayReason } from "@/modules/production/types";
 import { cn } from "@/lib/utils";
 
 interface StatusTabProps {
@@ -13,7 +13,7 @@ interface StatusTabProps {
     selectedReasonId: string;
     setSelectedReasonId: (val: string) => void;
     setImpedimentType: (val: ImpedimentType) => void;
-    delayReasons: any[];
+    delayReasons: DelayReason[];
     progressPercent: number;
     setProgressPercent: (val: number) => void;
     isFoundation: boolean;

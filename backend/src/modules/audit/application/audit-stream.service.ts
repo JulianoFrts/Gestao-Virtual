@@ -31,7 +31,7 @@ export class AuditStreamService {
                     // 1. Notify file scanning start
                     sendEvent("status", { message: "Mapeando estrutura de arquivos...", state: "scanning_files" });
                     
-                    const { results, summary } = await auditor.runFullAudit(userId, false, (result) => {
+                    const { results, summary } = await auditor.runFullAudit(userId, false, (result, fileIndex, totalFiles) => {
                          if (isStreamClosed) return;
                          
                          count++;
@@ -41,20 +41,11 @@ export class AuditStreamService {
                          }
                          if (isStreamClosed) return;
                          
-                         count++;
                          sendEvent("violation", {
-                             index: count,
-                             // Total ainda é desconhecido durante o stream real, ou teríamos que passar o total de arquivos?
-                             // O frontend espera `total` para a barra de progresso.
-                             // Podemos estimar ou simplesmente omitir/passar 0 se não soubermos.
-                             // Mas espere, auditor.runFullAudit calcula arquivos antes.
-                             // Porém performAuditScanParallel não expõe o total de arquivos facilmente, mas runFullAudit tem `files`.
-                             // Refatoração rápida: O createScanStream não tem acesso ao `files.length` antes.
-                             // Vou passar `100` ou um valor placeholder, ou melhor:
-                             // Atualizar a interface do onProgress para incluir (current, total)?
-                             // Por agora, vamos enviar o violation. O frontend usa total para %.
-                             // Se omitirmos total, a barra pode não funcionar, mas os logs aparecerão.
-                             total: 100, // Valor placeholder para evitar Infinity e permitir renderização (progresso será impreciso durante stream)
+                             // index represents the file completion count
+                             index: fileIndex,
+                             // total represents the absolute number of files to process
+                             total: totalFiles,
                              file: result.file,
                              severity: result.severity,
                              violation: result.violation,

@@ -4,10 +4,11 @@ import { requireAuth } from "@/lib/auth/session";
 import { z } from "zod";
 import { ProductionConfigService } from "@/modules/production/application/production-config.service";
 import { PrismaProductionConfigRepository } from "@/modules/production/infrastructure/prisma-production-config.repository";
+import { PrismaProductionCatalogueRepository } from "@/modules/production/infrastructure/prisma-production-catalogue.repository";
 
-const service = new ProductionConfigService(
-  new PrismaProductionConfigRepository(),
-);
+const configRepo = new PrismaProductionConfigRepository();
+const catalogueRepo = new PrismaProductionCatalogueRepository();
+const service = new ProductionConfigService(configRepo, catalogueRepo);
 
 const delayCostSchema = z.object({
   dailyCost: z.number().min(0),

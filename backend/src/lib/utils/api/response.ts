@@ -200,7 +200,7 @@ function handlePrismaError(error: PrismaKnownError): NextResponse {
       logger.error("Prisma connection error", logContext);
       return ApiResponse.errorJson(
         "Serviço temporariamente indisponível. Tente novamente.",
-        503, undefined, "SERVICE_UNAVAILABLE"
+        HTTP_STATUS.SERVICE_UNAVAILABLE, undefined, "SERVICE_UNAVAILABLE"
       );
     // Schema errors (table/column not found)
     case "P2021":

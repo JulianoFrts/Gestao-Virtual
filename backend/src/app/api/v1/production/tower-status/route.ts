@@ -2,11 +2,9 @@ import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth, can } from "@/lib/auth/session";
 import { z } from "zod";
-import { PrismaProductionRepository } from "@/modules/production/infrastructure/prisma-production.repository";
-import { ProductionService } from "@/modules/production/application/production.service";
+import { ProductionFactory } from "@/modules/production/application/production.factory";
 
-const repository = new PrismaProductionRepository();
-const service = new ProductionService(repository);
+const service = ProductionFactory.create();
 
 const updateStatusSchema = z.object({
   towerId: z.string().optional(),

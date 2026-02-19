@@ -126,23 +126,42 @@ export default function CustomSU() {
         setMatrix(newMatrix);
     };
 
-    const syncModules = async () => {
+    const syncModulesAndLevels = async () => {
         setIsSaving(true);
         try {
+            let changes = 0;
+            // 1. Sync Modules
             const existingCodes = modules.map(m => m.code);
             const missingModules = STANDARD_MODULES.filter(sm => !existingCodes.includes(sm.code));
 
-            if (missingModules.length === 0) {
-                toast({ title: 'Tudo em dia!', description: 'Todos os módulos do sistema já estão na matriz.' });
+            if (missingModules.length > 0) {
+                const { error } = await localApi.from('permission_modules').insert(missingModules);
+                if (error) throw error;
+                changes += missingModules.length;
+            }
+
+            // 2. Sync Levels
+            const existingLevels = levels.map(l => l.name);
+            const missingLevels = STANDARD_ROLES.filter(sr => !existingLevels.includes(sr.name)).map(r => ({
+                name: r.name,
+                rank: r.rank,
+                is_system: true
+            }));
+
+            if (missingLevels.length > 0) {
+                const { error } = await localApi.from('permission_levels').insert(missingLevels);
+                if (error) throw error;
+                changes += missingLevels.length;
+            }
+
+            if (changes === 0) {
+                toast({ title: 'Tudo em dia!', description: 'Todos os módulos e níveis já estão na matriz.' });
                 return;
             }
 
-            const { error } = await localApi.from('permission_modules').insert(missingModules);
-            if (error) throw error;
-
             toast({
                 title: 'Sincronização concluída',
-                description: `${missingModules.length} novos módulos foram adicionados à matriz.`
+                description: `${changes} novos itens foram adicionados à matriz.`
             });
 
             fetchData();
@@ -298,8 +317,8 @@ export default function CustomSU() {
                 <div className="flex items-center gap-3">
                     {isSuperAdmin && (
                         <>
-                            <Button variant="outline" size="sm" onClick={syncModules}>
-                                <RefreshCw className="w-4 h-4 mr-2" /> Sincronizar Módulos
+                            <Button variant="outline" size="sm" onClick={syncModulesAndLevels}>
+                                <RefreshCw className="w-4 h-4 mr-2" /> Sincronizar Sistema
                             </Button>
                             <Button variant="outline" size="sm" onClick={() => setIsAddingLevel(true)}>
                                 <Plus className="w-4 h-4 mr-2" /> Nível
@@ -334,27 +353,28 @@ export default function CustomSU() {
 
                 <TabsContent value="matrix" className="space-y-6">
                     <Card className="glass-card overflow-hidden">
-                        <CardHeader className="bg-primary/5 border-b py-4">
+                        <CardHeader className="bg-primary/5 border-b py-4 shadow-sm border-white/5">
                             <div className="flex items-center justify-between">
-                                <CardDescription className="flex items-center gap-2">
+                                <CardDescription className="flex items-center gap-2 font-bold text-muted-foreground w-full">
                                     <Info className="w-4 h-4" /> Matriz: Abas do Site (Col 1) x Níveis (Col 2+)
                                 </CardDescription>
-                                <Trash2 className="w-4 h-4 text-muted-foreground/50" />
+                                <Trash2 className="w-4 h-4 text-muted-foreground/50 hover:text-destructive cursor-pointer transition-colors" />
                             </div>
                         </CardHeader>
-                        <CardContent className="p-0 overflow-x-auto">
-                            <Table>
-                                <TableHeader className="bg-muted/30">
-                                    <TableRow>
-                                        <TableHead className="w-[350px] border-r-2 border-primary/20 sticky left-0 z-20 bg-background/95 backdrop-blur-md shadow-[4px_0_10px_-5px_rgba(0,0,0,0.5)]">
-                                            <div className="flex items-center gap-3">
+                        <CardContent className="p-0">
+                            <div className="relative w-full overflow-auto max-h-[70vh] custom-scrollbar">
+                                <table className="w-full caption-bottom text-sm">
+                                <TableHeader className="sticky top-0 z-40 bg-[#0B1221] shadow-sm border-b border-white/5">
+                                    <TableRow className="hover:bg-transparent">
+                                        <TableHead className="w-[350px] border-r-2 border-primary/20 sticky left-0 z-50 bg-[#0B1221] shadow-[4px_0_10px_-5px_rgba(0,0,0,0.5)]">
+                                            <div className="flex items-center  gap-3">
                                                 <Checkbox
                                                     checked={selectedModuleIds.length === modules.length && modules.length > 0}
                                                     onCheckedChange={(checked) => toggleAllModules(!!checked)}
                                                     className="border-primary/40"
                                                     disabled={!isSuperAdmin}
                                                 />
-                                                <span className="font-black text-xs uppercase tracking-tighter">Aba / Funcionalidade</span>
+                                                <span className="font-black text-xs uppercase tracking-tighter text-muted-foreground">Aba / Funcionalidade</span>
                                             </div>
                                         </TableHead>
                                         {levels.map(level => {
@@ -362,7 +382,7 @@ export default function CustomSU() {
                                             const allChecked = modules.length > 0 && modules.every(m => matrix[`${level.id}:${m.id}`]);
 
                                             return (
-                                                <TableHead key={level.id} className="text-center min-w-[120px] border-r border-white/5">
+                                                <TableHead key={level.id} className="text-center min-w-[120px] border-r border-white/5 bg-[#0B1221]">
                                                     <div className="flex flex-col items-center gap-3 py-4">
                                                         <div className={cn(
                                                             "px-3 py-1 rounded-full border text-[10px] font-black tracking-wider uppercase transition-all duration-300",
@@ -466,7 +486,8 @@ export default function CustomSU() {
                                         </React.Fragment>
                                     ))}
                                 </TableBody>
-                            </Table>
+                                </table>
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>

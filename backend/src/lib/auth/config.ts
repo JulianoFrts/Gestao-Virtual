@@ -177,7 +177,7 @@ async function findAuthCredential(identifier: string) {
 function verifyMfaCode(secret: string | null, code: string): boolean {
   if (!secret || !code) return false;
   try {
-    const time = Math.floor(Date.now() / 1000 / CONSTANTS.AUTH.MFA.TIME_STEP);
+    const time = Math.floor(Date.now() / CONSTANTS.TIME.MS_IN_SECOND / CONSTANTS.AUTH.MFA.TIME_STEP);
     const secretBuffer = base32Decode(secret);
 
     for (let i = -CONSTANTS.AUTH.MFA.WINDOW; i <= CONSTANTS.AUTH.MFA.WINDOW; i++) {
@@ -193,7 +193,7 @@ function verifyMfaCode(secret: string | null, code: string): boolean {
       const otp = (((hash[offset] & 0x7f) << 24) |
         ((hash[offset + 1] & 0xff) << 16) |
         ((hash[offset + 2] & 0xff) << 8) |
-        (hash[offset + 3] & 0xff)) % 1_000_000;
+        (hash[offset + 3] & 0xff)) % OTP_MODULUS;
 
       if (otp.toString().padStart(CONSTANTS.AUTH.TOKENS.SHORT_LENGTH, "0") === code) return true;
     }
@@ -204,16 +204,21 @@ function verifyMfaCode(secret: string | null, code: string): boolean {
   }
 }
 
+// Base32 Decoding Constants
+const BASE32_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+const BITS_PER_BASE32_CHAR = 5;
+const BITS_PER_BYTE = 8;
+const OTP_MODULUS = 1_000_000;
+
 function base32Decode(encoded: string): Buffer {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
   let bits = "";
   for (const char of encoded.toUpperCase()) {
-    const val = chars.indexOf(char);
-    if (val !== -1) bits += val.toString(2).padStart(5, "0");
+    const val = BASE32_CHARS.indexOf(char);
+    if (val !== -1) bits += val.toString(2).padStart(BITS_PER_BASE32_CHAR, "0");
   }
   const bytes: number[] = [];
-  for (let i = 0; i + 8 <= bits.length; i += 8) {
-    bytes.push(parseInt(bits.substring(i, i + 8), 2));
+  for (let i = 0; i + BITS_PER_BYTE <= bits.length; i += BITS_PER_BYTE) {
+    bytes.push(parseInt(bits.substring(i, i + BITS_PER_BYTE), 2));
   }
   return Buffer.from(bytes);
 }

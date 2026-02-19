@@ -200,7 +200,12 @@ export const TIME = {
     SECONDS: 59,
     MS: 999,
   },
+  MS_IN_SECOND: 1000,
+  SECONDS_IN_MINUTE: 60,
+  MINUTES_IN_HOUR: 60,
+  HOURS_IN_DAY: 24,
   SECONDS_IN_DAY: 86400,
+  MS_IN_HOUR: 3600000,
   MS_IN_DAY: 86400000,
 } as const;
 

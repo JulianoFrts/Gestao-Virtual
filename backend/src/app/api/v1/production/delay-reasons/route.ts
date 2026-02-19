@@ -3,12 +3,14 @@ import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth } from "@/lib/auth/session";
 import { z } from "zod";
 import { ProductionConfigService } from "@/modules/production/application/production-config.service";
-import { PrismaProductionRepository } from "@/modules/production/infrastructure/prisma-production.repository";
+import { PrismaProductionConfigRepository } from "@/modules/production/infrastructure/prisma-production-config.repository";
+import { PrismaProductionCatalogueRepository } from "@/modules/production/infrastructure/prisma-production-catalogue.repository";
 import { VALIDATION } from "@/lib/constants";
 
 // DI
-const configRepository = new PrismaProductionRepository();
-const configService = new ProductionConfigService(configRepository);
+const configRepo = new PrismaProductionConfigRepository();
+const catalogueRepo = new PrismaProductionCatalogueRepository();
+const configService = new ProductionConfigService(configRepo, catalogueRepo);
 
 const delayReasonSchema = z.object({
   code: z.string().min(1).max(VALIDATION.STRING.MAX_NAME),

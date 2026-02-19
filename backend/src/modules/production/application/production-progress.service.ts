@@ -1,7 +1,10 @@
 import {
-  ProductionRepository,
+  ProductionProgressRepository,
   ActivityStatus,
 } from "../domain/production.repository";
+import { ProjectElementRepository } from "../domain/project-element.repository";
+import { ProductionSyncRepository } from "../domain/production-sync.repository";
+import { ProductionScheduleRepository } from "../domain/production-schedule.repository";
 import { ProductionProgress } from "../domain/production-progress.entity";
 import { logger } from "@/lib/utils/logger";
 
@@ -21,10 +24,15 @@ export class ProductionProgressService {
     source: "src/modules/production/application/production-progress.service",
   };
 
-  constructor(private readonly repository: ProductionRepository) { }
+  constructor(
+    private readonly progressRepository: ProductionProgressRepository,
+    private readonly elementRepository: ProjectElementRepository,
+    private readonly syncRepository: ProductionSyncRepository,
+    private readonly scheduleRepository: ProductionScheduleRepository,
+  ) { }
 
   async getElementProgress(elementId: string): Promise<ProductionProgress[]> {
-    const results = await this.repository.findByElement(elementId);
+    const results = await this.progressRepository.findByElement(elementId);
     return results.map((r) => new ProductionProgress(r));
   }
 
@@ -33,7 +41,7 @@ export class ProductionProgressService {
     companyId?: string | null,
     siteId?: string,
   ): Promise<any[]> {
-    const elements = await this.repository.findElementsWithProgress(
+    const elements = await this.elementRepository.findByProjectId(
       projectId,
       companyId,
       siteId,
@@ -135,7 +143,7 @@ export class ProductionProgressService {
     elementId: string,
     companyId?: string | null,
   ): Promise<any[]> {
-    const records = await this.repository.findByElement(elementId);
+    const records = await this.progressRepository.findByElement(elementId);
 
     const results: any[] = [];
     for (const record of records) {
@@ -164,7 +172,7 @@ export class ProductionProgressService {
   }
 
   async getPendingLogs(companyId?: string | null): Promise<any[]> {
-    const records = await this.repository.findPendingLogs(companyId);
+    const records = await this.progressRepository.findPendingLogs(companyId);
 
     return records.map((record) => {
       const history = Array.isArray(record.history) ? record.history : [];
@@ -223,9 +231,9 @@ export class ProductionProgressService {
       userId,
     );
 
-    const saved = await this.repository.save(entity);
+    const saved = await this.progressRepository.save(entity);
 
-    await this.repository.syncWorkStages?.(
+    await this.syncRepository.syncWorkStages(
       elementId,
       activityId,
       finalProjectId,
@@ -240,7 +248,7 @@ export class ProductionProgressService {
     projectId?: string | null,
   ): Promise<string> {
     const finalProjectId =
-      projectId || (await this.repository.findElementProjectId(elementId));
+      projectId || (await this.elementRepository.findProjectId(elementId));
 
     if (!finalProjectId) {
       throw new Error(
@@ -257,7 +265,7 @@ export class ProductionProgressService {
     startDate?: string | null,
     endDate?: string | null,
   ): Promise<ProductionProgress> {
-    const existing = await this.repository.findByElement(elementId);
+    const existing = await this.progressRepository.findByElement(elementId);
     const record = existing.find((p) => p.activityId === activityId);
 
     if (record) {
@@ -291,13 +299,13 @@ export class ProductionProgressService {
       { ...this.logContext, userId },
     );
 
-    const record = await this.repository.findById(progressId);
+    const record = await this.progressRepository.findById(progressId);
     if (!record) throw new Error(`Registro de progresso ${progressId} não encontrado.`);
 
     const entity = new ProductionProgress(record);
     entity.approveLog(logTimestamp, approvedBy);
 
-    const saved = await this.repository.save(entity);
+    const saved = await this.progressRepository.save(entity);
     return new ProductionProgress(saved);
   }
 
@@ -311,7 +319,7 @@ export class ProductionProgressService {
     let finalEndDate = dates?.end;
 
     if (!finalStartDate || (!finalEndDate && status === "FINISHED")) {
-      const schedule = await this.repository.findSchedule?.(
+      const schedule = await this.scheduleRepository.findSchedule(
         elementId,
         activityId,
       );
@@ -322,13 +330,13 @@ export class ProductionProgressService {
         (status === "IN_PROGRESS" || status === "FINISHED")
       ) {
         finalStartDate = schedule?.plannedStart
-          ? schedule.plannedStart.toISOString()
+          ? new Date(schedule.plannedStart).toISOString()
           : now.toISOString();
       }
 
       if (!finalEndDate && status === "FINISHED") {
         finalEndDate = schedule?.plannedEnd
-          ? schedule.plannedEnd.toISOString()
+          ? new Date(schedule.plannedEnd).toISOString()
           : now.toISOString();
       }
     }

@@ -245,6 +245,37 @@ class AuthService {
             unsubscribe: () => data.subscription.unsubscribe()
         };
     }
+
+    /**
+     * Atualiza dados do usuário logado
+     */
+    async updateMe(data: any): Promise<ServiceResult<any>> {
+        try {
+            const { data: user, error } = await orionApi.auth.updateUser(data);
+            if (error) throw error;
+            return { success: true, data: user };
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Atualiza dados da empresa
+     */
+    async updateCompany(data: any): Promise<ServiceResult<any>> {
+        try {
+            // Assume que estamos atualizando a empresa atual do usuário no perfil
+            const { data: profile } = await orionApi.auth.getUser();
+            const companyId = profile?.user?.companyId;
+            if (!companyId) throw new Error("ID da empresa não encontrado no perfil.");
+
+            const { data: updated, error } = await orionApi.from('companies').update(data).eq('id', companyId).single();
+            if (error) throw error;
+            return { success: true, data: updated };
+        } catch (error: any) {
+            return { success: false, error: error.message };
+        }
+    }
 }
 
 // Singleton instance

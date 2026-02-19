@@ -2,25 +2,68 @@ import { prisma } from "@/lib/prisma/client";
 
 export interface PreviewIntervalParams {
     projectId: string;
-    subPointType: 'TORRE' | 'VAO' | 'TRECHO' | 'GERAL';
+    subPointType: 'TORRE' | 'VAO' | 'TRECHO' | 'GERAL' | 'ESTRUTURA';
     subPoint: string;
     subPointEnd?: string;
     isMultiSelection: boolean;
+    stageId?: string;
+    companyId?: string;
 }
 
 export class ReportMetadataService {
     async previewInterval(params: PreviewIntervalParams) {
-        const { projectId, subPointType, subPoint, subPointEnd, isMultiSelection } = params;
+        const { projectId, subPointType, subPoint, subPointEnd, isMultiSelection, stageId } = params;
+
+        let result: { expandedTowers: string[], finalLabel: string, metrics: { towers: number, km: string } };
 
         if (subPointType === 'VAO' || subPointType === 'TRECHO') {
-            return this.handleSpanInterval(projectId, subPoint, isMultiSelection, subPointEnd);
+            result = await this.handleSpanInterval(projectId, subPoint, isMultiSelection, subPointEnd);
+        } else if (subPointType === 'TORRE' || subPointType === 'ESTRUTURA') {
+            result = await this.handleTowerInterval(projectId, subPoint, isMultiSelection, subPointEnd);
+        } else {
+            result = { expandedTowers: [], finalLabel: subPoint, metrics: { towers: 0, km: "0.00" } };
         }
 
-        if (subPointType === 'TORRE') {
-            return this.handleTowerInterval(projectId, subPoint, isMultiSelection, subPointEnd);
+        // Se tivermos um stageId, vamos enriquecer com o progresso atual
+        if (stageId && result.expandedTowers.length > 0) {
+            const enrichedDetails = await this.getDetailedProgress(projectId, stageId, result.expandedTowers);
+            return {
+                ...result,
+                details: enrichedDetails
+            };
         }
 
-        return { expandedTowers: [], finalLabel: subPoint, metrics: { towers: 0, km: "0.00" } };
+        return result;
+    }
+
+    // Método para buscar progresso real
+    private async getDetailedProgress(projectId: string, stageId: string, towerIds: string[]) {
+        const elements = await prisma.mapElementTechnicalData.findMany({
+            where: {
+                projectId,
+                OR: [
+                    { id: { in: towerIds } },
+                    { externalId: { in: towerIds } },
+                    { name: { in: towerIds } }
+                ]
+            },
+            include: {
+                mapElementProductionProgress: {
+                    where: { activityId: stageId }
+                }
+            }
+        });
+
+        return towerIds.map(id => {
+            const element = elements.find((e: any) => e.id === id || e.externalId === id || e.name === id);
+            const progress = element?.mapElementProductionProgress?.[0];
+            
+            return {
+                id,
+                progress: progress?.progressPercent || 0,
+                status: (progress?.status as 'IN_PROGRESS' | 'FINISHED' | 'BLOCKED') || 'IN_PROGRESS'
+            };
+        });
     }
 
     private async handleSpanInterval(projectId: string, start: string, multi: boolean, end?: string) {
@@ -29,7 +72,7 @@ export class ReportMetadataService {
             orderBy: { sequence: 'asc' }
         });
 
-        let selected = this.sliceRange(spans, start, multi, end);
+        const selected = this.sliceRange(spans, start, multi, end);
         if (selected.length === 0) return { expandedTowers: [], finalLabel: start, metrics: { towers: 0, km: "0.00" } };
 
         const uniqueTowers = new Set<string>();
@@ -69,7 +112,7 @@ export class ReportMetadataService {
             };
         }
 
-        const idx = startIdx !== -1 ? startIdx : towers.findIndex(t => t.id === start || t.externalId === start || t.name === start);
+        const idx = startIdx !== -1 ? startIdx : towers.findIndex((t: any) => t.id === start || t.externalId === start || t.name === start);
         const tower = towers[idx];
         return {
             expandedTowers: tower ? [tower.externalId || tower.name || tower.id] : [],
@@ -82,7 +125,7 @@ export class ReportMetadataService {
         const findIdx = (val: string) => {
             if (!val) return -1;
             const l = val.trim().toLowerCase();
-            return elements.findIndex(e => String(e.id).toLowerCase() === l || String(e.externalId || '').toLowerCase() === l || String(e.name || '').toLowerCase() === l);
+            return elements.findIndex((e: any) => String(e.id).toLowerCase() === l || String(e.externalId || '').toLowerCase() === l || String(e.name || '').toLowerCase() === l);
         };
 
         if (multi && end) {
@@ -97,7 +140,7 @@ export class ReportMetadataService {
     private findTowerIdx(towers: any[], val: string) {
         if (!val) return -1;
         const l = val.trim().toLowerCase();
-        return towers.findIndex(t => {
+        return towers.findIndex((t: any) => {
             const objId = String((t.metadata as any)?.objectId || '').toLowerCase();
             return String(t.id).toLowerCase() === l || String(t.externalId || '').toLowerCase() === l || String(t.name || '').toLowerCase() === l || objId === l;
         });

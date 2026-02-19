@@ -1,7 +1,7 @@
 import { useGLTF, Center } from '@react-three/drei'
 import { ThreeEvent } from '@react-three/fiber'
 import { v4 as uuid } from 'uuid'
-import { useAnchorStore } from '../../store/anchorStore'
+import { useAnchorStore } from '@/store/anchorStore'
 import { useEffect } from 'react'
 export function Model() {
     const MODEL_URL = '/models/towers/scene.gltf'

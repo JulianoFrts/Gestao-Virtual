@@ -1,4 +1,4 @@
-import { Anchor } from '../../types/anchor'
+import { Anchor } from '@/types/anchor'
 
 export function AnchorMarker({ anchor }: { anchor: Anchor }) {
     const type = anchor.type || 'cable_attach'

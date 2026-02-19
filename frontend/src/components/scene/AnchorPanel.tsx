@@ -1,9 +1,9 @@
 import { Trash2, X, Download, Save, Upload } from 'lucide-react'
-import { useAnchorStore } from '../../store/anchorStore'
-import { Button } from '../ui/button'
-import { serializeAnchors, saveAnchors, loadTemplateAnchors, saveAsTemplate, STANDARD_PROJECT_ID } from '../../services/anchorService'
+import { useAnchorStore } from '@/store/anchorStore'
+import { Button } from '@/components/ui/button'
+import { serializeAnchors, saveAnchors, loadTemplateAnchors, saveAsTemplate, STANDARD_PROJECT_ID } from '@/services/anchorService'
 import { useState, useRef } from 'react'
-import { useToast } from '../../hooks/use-toast'
+import { useToast } from '@/hooks/use-toast'
 import { Copy, FileUp } from 'lucide-react'
 import * as THREE from 'three'
 

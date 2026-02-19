@@ -87,7 +87,7 @@ export class ArchitecturalAuditor {
   public async runFullAudit(
     userId?: string,
     incremental: boolean = false,
-    onProgress?: (result: AuditResult) => void
+    onProgress?: (result: AuditResult | null, fileIndex: number, totalFiles: number) => void
   ): Promise<{ results: AuditResult[]; summary: AuditSummary }> {
     logger.info(`Iniciando Auditoria Arquitetural de Sistema (v3.1) [Incremental: ${incremental}]`, {
       source: "Auditoria/AuditorArquitetural",
@@ -126,10 +126,12 @@ export class ArchitecturalAuditor {
     files: string[],
     results: AuditResult[],
     userId?: string,
-    onProgress?: (result: AuditResult) => void
+    onProgress?: (result: AuditResult | null, fileIndex: number, totalFiles: number) => void
   ): Promise<Set<string>> {
     const activeViolations = new Set<string>();
     const CONCURRENCY_LIMIT = 10;
+
+    let processedFiles = 0;
 
     const processBatch = async (batch: string[]) => {
       const promises = batch.map(async (file) => {
@@ -138,6 +140,12 @@ export class ArchitecturalAuditor {
             this.processFile(file),
             CONSTANTS.API.TIMEOUTS.DEFAULT / 10 // 3 segundos per file as before
           );
+          
+          processedFiles++;
+
+          if (onProgress) {
+            onProgress(null, processedFiles, files.length);
+          }
 
           if (fileResults.length > 0) {
             results.push(...fileResults);
@@ -148,7 +156,7 @@ export class ArchitecturalAuditor {
               await this.persistViolation(res, userId);
 
               if (onProgress) {
-                onProgress(res);
+                onProgress(res, processedFiles, files.length);
               }
             }
           }

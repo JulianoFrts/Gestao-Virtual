@@ -4,7 +4,7 @@
  * Service para operações de relatório diário com validação Zod e integração com ORION API.
  */
 
-import { BaseApiService, ServiceResult } from '../BaseApiService';
+import { BaseApiService, ServiceResult } from '@/services/api/BaseApiService';
 import {
     DailyReportSchema,
     CreateDailyReportSchema,

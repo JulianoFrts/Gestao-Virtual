@@ -36,7 +36,15 @@ export class AccessControlService {
       throw new Error("Nível de permissão com este nome já existe");
     }
 
-    return this.repository.createLevel(data);
+    const { randomUUID } = require('crypto');
+    const { permissions, ...sanitizedData } = data;
+    
+    const enrichedData = {
+      ...sanitizedData,
+      id: randomUUID(),
+    };
+
+    return this.repository.createLevel(enrichedData);
   }
 
   async listMatrix() {

@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useNavigate } from "react-router-dom";
-import { LoadingScreen } from "@/components/ui/LoadingScreen";
+
 import { db } from "@/integrations/database";
 import { useUsers, SystemUser } from "@/hooks/useUsers";
 import { useAuth } from "@/contexts/AuthContext";
@@ -925,36 +925,65 @@ export default function Users() {
     return <div className="flex flex-wrap items-center gap-1.5">{badges}</div>;
   };
 
-  if (usersLoading && users.length === 0) {
-    return (
-      <LoadingScreen
-        isLoading={true}
-        title="GESTÃO DE USUÁRIOS"
-        message={
-          isPerformingAction
-            ? "PROCESSANDO ALTERAÇÕES"
-            : "SINCRONIZANDO USUÁRIOS"
-        }
-        details={[
-          { label: "Usuários", isLoading: usersLoading },
-          { label: "Processamento em Massa", isLoading: isPerformingAction },
-        ]}
-      />
-    );
-  }
-
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-6 animate-fade-in h-full flex flex-col p-6 overflow-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shrink-0">
         <div>
-          <h1 className="text-3xl font-display font-bold gradient-text">
+          <h1 className="text-3xl font-display font-bold gradient-text uppercase italic tracking-tighter">
             Gestão de Usuários
           </h1>
-          <p className="text-muted-foreground">
-            Controle quem acessa o painel administrativo
+          <p className="text-muted-foreground mt-1 font-medium text-sm">
+            Configure credenciais, níveis de acesso e permissões sistêmicas.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex items-center gap-4">
+          {canCreate && (
+            <Button
+              onClick={() => {
+                setUserToEdit(null);
+                setCreateForm({
+                  name: "",
+                  email: "",
+                  password: "",
+                  role: "WORKER",
+                  companyId: currentUserProfile?.companyId || "",
+                  projectId: "",
+                  siteId: "",
+                  registrationNumber: "",
+                  image: "",
+                  cpf: "",
+                  gender: "",
+                  birthDate: "",
+                  phone: "",
+                  cep: "",
+                  street: "",
+                  number: "",
+                  neighborhood: "",
+                  city: "",
+                  state: "",
+                  laborType: "",
+                  iapName: "",
+                });
+                setIsCreateOpen(true);
+              }}
+              className="gradient-primary text-white shadow-glow px-6 font-bold uppercase tracking-widest text-[10px]"
+            >
+              <UserPlus className="mr-2 h-4 w-4" />
+              Novo Usuário
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {(usersLoading && users.length === 0) ? (
+        <div className="flex-1 flex flex-col items-center justify-center space-y-4 min-h-[400px]">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <p className="text-sm font-bold uppercase tracking-widest text-primary/60">
+            {isPerformingAction ? "Processando Alterações..." : "Sincronizando Usuários..."}
+          </p>
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col space-y-6 overflow-auto pb-10 scrollbar-thin scrollbar-thumb-primary/20">
           {show("showMaintenance") && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -1875,8 +1904,6 @@ export default function Users() {
               </Dialog>
             </>
           )}
-        </div>
-      </div>
 
       <div className="space-y-4 mb-6">
         <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
@@ -3519,6 +3546,8 @@ export default function Users() {
           </div>
         </DialogContent>
       </Dialog>
+        </div>
+      )}
     </div>
   );
 }

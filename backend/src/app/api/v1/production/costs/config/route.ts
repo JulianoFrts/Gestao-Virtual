@@ -1,12 +1,14 @@
 import { NextRequest } from "next/server";
-import { PrismaProductionRepository } from "@/modules/production/infrastructure/prisma-production.repository";
+import { PrismaProductionConfigRepository } from "@/modules/production/infrastructure/prisma-production-config.repository";
+import { PrismaProductionCatalogueRepository } from "@/modules/production/infrastructure/prisma-production-catalogue.repository";
 import { ProductionConfigService } from "@/modules/production/application/production-config.service";
 import { getCurrentSession } from "@/lib/auth/session";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { HTTP_STATUS, MESSAGES } from "@/lib/constants";
 
-const repository = new PrismaProductionRepository();
-const configService = new ProductionConfigService(repository);
+const configRepo = new PrismaProductionConfigRepository();
+const catalogueRepo = new PrismaProductionCatalogueRepository();
+const configService = new ProductionConfigService(configRepo, catalogueRepo);
 
 // GET: Fetch unit costs for a project
 export async function GET(req: NextRequest) {

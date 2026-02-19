@@ -1,4 +1,5 @@
-import { ProductionRepository } from "../domain/production.repository";
+import { ProductionProgressRepository } from "../domain/production.repository";
+import { ProjectElementRepository } from "../domain/project-element.repository";
 import { ProductionProgress } from "../domain/production-progress.entity";
 import { logger } from "@/lib/utils/logger";
 import { RecordDailyProductionDTO } from "./dtos/record-daily-production.dto";
@@ -8,7 +9,10 @@ export class DailyProductionService {
     source: "src/modules/production/application/daily-production.service",
   };
 
-  constructor(private readonly repository: ProductionRepository) { }
+  constructor(
+    private readonly progressRepository: ProductionProgressRepository,
+    private readonly elementRepository: ProjectElementRepository,
+  ) { }
 
   async recordDailyProduction(
     dto: RecordDailyProductionDTO,
@@ -20,7 +24,7 @@ export class DailyProductionService {
       { ...this.logContext, userId },
     );
 
-    const existing = await this.repository.findByElement(elementId);
+    const existing = await this.progressRepository.findByElement(elementId);
     const progressRecord = existing.find((p) => p.activityId === activityId);
 
     let entity: ProductionProgress;
@@ -40,7 +44,7 @@ export class DailyProductionService {
     }
 
     entity.recordDailyProduction(date, data, userId);
-    const saved = await this.repository.save(entity);
+    const saved = await this.progressRepository.save(entity);
     return new ProductionProgress(saved);
   }
 
@@ -49,7 +53,7 @@ export class DailyProductionService {
     activityId?: string,
     user?: { role: string; companyId?: string | null },
   ) {
-    const progress = await this.repository.findProgress(towerId, activityId);
+    const progress = await this.progressRepository.findProgress(towerId, activityId);
     if (!progress) return [];
 
     if (user) {
@@ -57,7 +61,7 @@ export class DailyProductionService {
       const isAdmin = isUserAdmin(user.role);
       if (!isAdmin || !user.role.includes("SUPER_ADMIN")) {
         const elementCompanyId =
-          await this.repository.findElementCompanyId(towerId);
+          await this.elementRepository.findCompanyId(towerId);
         if (elementCompanyId !== user.companyId) {
           throw new Error("Forbidden: You do not have access to this element");
         }

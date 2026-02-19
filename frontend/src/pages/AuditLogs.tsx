@@ -644,7 +644,8 @@ export default function AuditLogs() {
           console.debug("[AuditLogs:Scan] SSE Message:", data.type, data);
           setStreamLogs((prev) => [...prev, { type: data.type, data }]);
 
-          if (data.type === "violation" && data.total) {
+          if (data.type === "progress" && data.total) {
+            // The percentage now accurately climbs 0-100% since backend calculates Total Files
             setStreamProgress(Math.round((data.index / data.total) * 100));
           }
 

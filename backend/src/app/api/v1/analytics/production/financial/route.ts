@@ -1,9 +1,9 @@
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { FinancialAnalyticsService } from "@/modules/performance/application/financial-analytics.service";
+import { ProductionAnalyticsService } from "@/modules/production/application/production-analytics.service";
 import { z } from "zod";
 
-const analyticsService = new FinancialAnalyticsService();
+const analyticsService = new ProductionAnalyticsService();
 
 const querySchema = z.object({
     projectId: z.string().min(1),

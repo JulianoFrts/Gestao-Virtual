@@ -124,6 +124,9 @@ export const SiteSchema = z.object({
     address: z.string().nullable().optional(),
 }).passthrough();
 
+export const CreateSiteSchema = SiteSchema.omit({ id: true });
+export const UpdateSiteSchema = SiteSchema.partial();
+
 // ============================================================
 // TEAM SCHEMAS
 // ============================================================
@@ -143,6 +146,9 @@ export const TeamMemberSchema = z.object({
     userId: IdSchema,
 }).passthrough();
 
+export const CreateTeamSchema = TeamSchema.omit({ id: true });
+export const UpdateTeamSchema = TeamSchema.partial();
+
 // ============================================================
 // TIME RECORD SCHEMAS
 // ============================================================
@@ -151,9 +157,9 @@ export const TimeRecordSchema = z.object({
     id: IdSchema.optional(),
     userId: IdSchema,
     type: z.string(),
-    timestamp: z.any(),
-    latitude: z.any().optional(),
-    longitude: z.any().optional(),
+    timestamp: z.string().or(z.date()),
+    latitude: z.number().optional(),
+    longitude: z.number().optional(),
     photoUrl: z.string().nullable().optional(),
 }).passthrough();
 
@@ -163,15 +169,15 @@ export const TimeRecordSchema = z.object({
 
 export const DailyReportSchema = z.object({
     id: IdSchema.optional(),
-    date: z.any(), // Flexível para o que o backend enviar
-    reportDate: z.any().optional(), // Alias para suporte legado/novo
-    content: z.any(),
-    activities: z.any().optional(),
+    date: z.string().or(z.date()),
+    reportDate: z.string().or(z.date()).optional(),
+    content: z.record(z.unknown()),
+    activities: z.array(z.unknown()).optional(),
     teamId: IdSchema.nullable().optional(),
     teamIds: z.array(IdSchema).optional(),
     projectId: IdSchema.nullable().optional(),
     createdById: IdSchema.optional(),
-    metadata: z.any().optional(),
+    metadata: z.record(z.unknown()).optional(),
 }).passthrough();
 
 export const CreateDailyReportSchema = DailyReportSchema.omit({ id: true });
@@ -199,7 +205,7 @@ export const AuditLogSchema = z.object({
     action: z.string().optional(),
     entity: z.string().optional(),
     entityId: z.string().optional(),
-    details: z.any().optional(),
+    details: z.record(z.unknown()).optional(),
 }).passthrough();
 
 // ============================================================

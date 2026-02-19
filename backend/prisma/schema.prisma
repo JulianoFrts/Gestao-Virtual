@@ -226,9 +226,9 @@ model ConstructionDocument {
   createdAt               DateTime                  @default(now()) @map("created_at")
   updatedAt               DateTime                  @updatedAt @map("updated_at")
   company                 Company?                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy               User?                     @relation(fields: [createdById], references: [id])
   project                 Project?                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   site                    Site?                     @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  createdBy               User?                     @relation(fields: [createdById], references: [id])
   mapElementTechnicalData MapElementTechnicalData[]
   mapElementVisibility    MapElementVisibility[]
 
@@ -451,8 +451,8 @@ model MapElementVisibility {
   createdAt               DateTime                @default(now()) @map("created_at")
   updatedAt               DateTime                @updatedAt @map("updated_at")
   constructionDocument    ConstructionDocument?   @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  project                 Project?                @relation(fields: [projectId], references: [id], onDelete: Cascade)
   mapElementTechnicalData MapElementTechnicalData @relation(fields: [elementId], references: [id], onDelete: Cascade)
+  project                 Project?                @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([userId, projectId, elementId, documentId])
   @@map("map_element_visibility")
@@ -972,8 +972,8 @@ model User {
   systemMessages         SystemMessage[]
   teamMember             TeamMember?
   teams                  Team[]
-  timeRecordsAsUser      TimeRecord[]             @relation("time_records_user_idTousers")
   timeRecordsCreated     TimeRecord[]             @relation("time_records_created_byTousers")
+  timeRecordsAsUser      TimeRecord[]             @relation("time_records_user_idTousers")
   address                UserAddress?
   affiliation            UserAffiliation?
   jobFunction            JobFunction?             @relation(fields: [functionId], references: [id])

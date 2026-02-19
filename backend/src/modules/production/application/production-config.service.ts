@@ -2,20 +2,24 @@ import {
   ProductionConfigRepository,
   DelayCostConfig,
 } from "../domain/production-config.repository";
+import { ProductionCatalogueRepository } from "../domain/production-catalogue.repository";
 
 export class ProductionConfigService {
-  constructor(private readonly repository: ProductionConfigRepository) { }
+  constructor(
+    private readonly configRepo: ProductionConfigRepository,
+    private readonly catalogueRepo: ProductionCatalogueRepository
+  ) { }
 
   // ==========================================
   // DELAY COST
   // ==========================================
 
   async getDelayCostConfig(companyId: string, projectId: string) {
-    return this.repository.getDelayCostConfig(companyId, projectId);
+    return this.configRepo.getDelayCostConfig(companyId, projectId);
   }
 
   async upsertDelayCostConfig(data: DelayCostConfig) {
-    return this.repository.upsertDelayCostConfig(data);
+    return this.configRepo.upsertDelayCostConfig(data);
   }
 
   // ==========================================
@@ -23,7 +27,7 @@ export class ProductionConfigService {
   // ==========================================
 
   async listDelayReasons(projectId: string) {
-    return this.repository.listDelayReasons(projectId);
+    return this.configRepo.listDelayReasons(projectId);
   }
 
   async createDelayReason(data: {
@@ -40,14 +44,14 @@ export class ProductionConfigService {
       );
     }
 
-    return this.repository.createDelayReason({
+    return this.configRepo.createDelayReason({
       ...data,
       category: data.category as any,
     });
   }
 
   async deleteDelayReason(id: string) {
-    return this.repository.deleteDelayReason(id);
+    return this.configRepo.deleteDelayReason(id);
   }
 
   // ==========================================
@@ -55,7 +59,7 @@ export class ProductionConfigService {
   // ==========================================
 
   async listCategories() {
-    return this.repository.listCategories();
+    return this.catalogueRepo.listCategories();
   }
 
   async createCategory(data: {
@@ -63,7 +67,7 @@ export class ProductionConfigService {
     description?: string;
     order?: number;
   }) {
-    return this.repository.createCategory(data);
+    return this.catalogueRepo.createCategory(data);
   }
 
   // ==========================================
@@ -71,7 +75,7 @@ export class ProductionConfigService {
   // ==========================================
 
   async listActivities(categoryId?: string) {
-    return this.repository.listActivities(categoryId);
+    return this.catalogueRepo.listActivities(categoryId);
   }
 
   async createActivity(data: {
@@ -81,7 +85,7 @@ export class ProductionConfigService {
     weight?: number;
     order?: number;
   }) {
-    return this.repository.createActivity(data);
+    return this.catalogueRepo.createActivity(data);
   }
 
   // ==========================================
@@ -89,10 +93,10 @@ export class ProductionConfigService {
   // ==========================================
 
   async listUnitCosts(projectId: string) {
-    return this.repository.listUnitCosts(projectId);
+    return this.catalogueRepo.listUnitCosts(projectId);
   }
 
   async upsertUnitCosts(projectId: string, costs: any[]) {
-    return this.repository.upsertUnitCosts(projectId, costs);
+    return this.catalogueRepo.upsertUnitCosts(projectId, costs);
   }
 }

@@ -15,13 +15,20 @@ interface LogContext {
   [key: string]: unknown;
 }
 
+const LOG_LEVEL_DEBUG = 0;
+const LOG_LEVEL_TEST = 1;
+const LOG_LEVEL_SUCCESS = 2;
+const LOG_LEVEL_INFO = 3;
+const LOG_LEVEL_WARN = 4;
+const LOG_LEVEL_ERROR = 5;
+
 const LOG_LEVELS: Record<LogLevel, number> = {
-  debug: 0,
-  test: 1,
-  success: 2,
-  info: 3,
-  warn: 4,
-  error: 5,
+  debug: LOG_LEVEL_DEBUG,
+  test: LOG_LEVEL_TEST,
+  success: LOG_LEVEL_SUCCESS,
+  info: LOG_LEVEL_INFO,
+  warn: LOG_LEVEL_WARN,
+  error: LOG_LEVEL_ERROR,
 };
 
 const CURRENT_LEVEL: LogLevel =

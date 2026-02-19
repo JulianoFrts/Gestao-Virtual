@@ -2,11 +2,9 @@ import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth } from "@/lib/auth/session";
 import { ProductionService } from "@/modules/production/application/production.service";
-import { PrismaProductionRepository } from "@/modules/production/infrastructure/prisma-production.repository";
+import { ProductionFactory } from "@/modules/production/application/production.factory";
 
-// DI (Manual)
-const productionRepository = new PrismaProductionRepository();
-const productionService = new ProductionService(productionRepository);
+const productionService = ProductionFactory.create();
 
 export async function GET(_request: NextRequest) {
   try {
