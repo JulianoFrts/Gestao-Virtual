@@ -14,6 +14,7 @@ export interface EmployeeFilters {
   projectId?: string;
   siteId?: string;
   excludeCorporate?: boolean;
+  roles?: string[];
 }
 
 export function useEmployees(options?: EmployeeFilters) {
@@ -26,7 +27,8 @@ export function useEmployees(options?: EmployeeFilters) {
         companyId: options.companyId || '',
         projectId: options.projectId || '',
         siteId: options.siteId || '',
-        excludeCorporate: options.excludeCorporate ?? true
+        excludeCorporate: options.excludeCorporate ?? true,
+        roles: options.roles || ["WORKER"]
       });
     }
 
@@ -359,8 +361,15 @@ export function useEmployees(options?: EmployeeFilters) {
     }
 
     try {
-      const { error } = await db.from("rpc/bulk_update_users" as any).post({ ids, data });
-      if (error) throw error;
+      // Usar a lógica já existente no updateEmployee para cada funcionário
+      // para garantir a atualização nas tabelas corretas (users e user_addresses)
+      const updatePromises = ids.map(id => updateEmployee(id, data));
+      const results = await Promise.all(updatePromises);
+      
+      const failed = results.filter(r => !r.success);
+      if (failed.length > 0) {
+        throw new Error(`${failed.length} atualizações falharam.`);
+      }
 
       toast({
         title: "Atualização concluída",
@@ -371,9 +380,9 @@ export function useEmployees(options?: EmployeeFilters) {
       return { success: true };
     } catch (error: any) {
       logError("Employees Bulk Update", error);
-      const userMessage = mapDatabaseError(error);
+      const userMessage = error.message || "Erro na atualização em massa";
       toast({
-        title: "Erro na atualização em massa",
+        title: "Erro na atualização",
         description: userMessage,
         variant: "destructive",
       });

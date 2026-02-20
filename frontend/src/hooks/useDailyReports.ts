@@ -1,8 +1,24 @@
 import { useState, useEffect, useCallback } from 'react';
 import { db } from "@/integrations/database";
+import { orionApi } from '@/integrations/orion/client';
 import { storageService } from "@/services/storageService";
 import { useToast } from "@/hooks/use-toast";
 import { generateId, safeDate } from "@/lib/utils";
+
+export enum DailyReportStatus {
+  PROGRAMMED = 'PROGRAMMED',
+  DRAFT = 'DRAFT',
+  SENT = 'SENT',
+  APPROVED = 'APPROVED',
+  RETURNED = 'RETURNED'
+}
+
+export enum ActivityStatus {
+  PENDING = 'PENDING',
+  IN_PROGRESS = 'IN_PROGRESS',
+  FINISHED = 'FINISHED',
+  BLOCKED = 'BLOCKED'
+}
 
 export interface DailyReport {
   id: string;
@@ -21,7 +37,19 @@ export interface DailyReport {
   subPointType?: "TORRE" | "VAO" | "TRECHO" | "GERAL" | null;
   metadata?: any;
   selectedActivities?: any[];
+  status: DailyReportStatus;
+  approvedById?: string | null;
+  rejectionReason?: string | null;
   createdAt: Date;
+  weather?: any;
+  manpower?: any[];
+  equipment?: any[];
+  rdoNumber?: string | null;
+  revision?: string | null;
+  projectDeadline?: number | null;
+  scheduledAt?: Date | null;
+  executedAt?: Date | null;
+  reviewedAt?: Date | null;
 }
 
 export function useDailyReports() {
@@ -34,16 +62,20 @@ export function useDailyReports() {
     await storageService.setItem("dailyReports", reportsToSave);
   };
 
-  const loadReports = useCallback(async () => {
+  const loadReports = useCallback(async (options?: { hard?: boolean }) => {
     setIsLoading(true);
     try {
+      if (options?.hard) {
+        await storageService.removeItem("dailyReports");
+      }
+
       // Always load local reports first to preserve offline data
       const localCached =
         (await storageService.getItem<DailyReport[]>("dailyReports")) || [];
       const unsyncedReports = localCached.filter((r) => !r.syncedAt);
 
       if (navigator.onLine) {
-        const { data, error } = await db
+        const { data, error } = await orionApi
           .from("daily_reports")
           .select(
             `
@@ -56,9 +88,11 @@ export function useDailyReports() {
 
         if (error) throw error;
 
+        console.log("[useDailyReports] RAW Data from Supabase:", data.slice(0, 3));
+
         const mapped = (data || []).map(
-          (r) =>
-            ({
+          (r) => {
+            const mappedReport = {
               id: r.id,
               teamId: r.team_id,
               teamName: r.teams?.name, // This will be undefined if teams are not selected
@@ -71,13 +105,31 @@ export function useDailyReports() {
               subPointType: r.sub_point_type,
               metadata: r.metadata,
               selectedActivities: (r.metadata as any)?.selectedActivities || [],
-              employeeId: r.user_id, // Mapeado corretamente para user_id
+              employeeId: r.user_id || r.employee_id || r.employeeId || r.userId, // Mapeado mais agressivamente
               companyId: (r as any).company_id,
+              status: (r.status as DailyReportStatus) || DailyReportStatus.SENT,
+              approvedById: r.approved_by_id,
+              rejectionReason: r.rejection_reason,
               createdBy: r.created_by,
               syncedAt: safeDate(r.synced_at),
+              weather: r.weather || (r.metadata as any)?.weather,
+              manpower: r.manpower || (r.metadata as any)?.manpower,
+              equipment: r.equipment || (r.metadata as any)?.equipment,
+              rdoNumber: r.rdo_number || r.rdoNumber || (r.metadata as any)?.rdoNumber,
+              revision: r.revision || (r.metadata as any)?.revision,
+              projectDeadline: r.project_deadline || r.projectDeadline || (r.metadata as any)?.projectDeadline,
               localId: r.local_id,
               createdAt: safeDate(r.created_at) || new Date(),
-            }) as DailyReport,
+              scheduledAt: safeDate(r.scheduled_at),
+              executedAt: safeDate(r.executed_at),
+              reviewedAt: safeDate(r.reviewed_at),
+            } as DailyReport;
+            
+            if (r.status === DailyReportStatus.PROGRAMMED) {
+              console.log("[useDailyReports] Mapping Programmed Report:", { rawUserId: r.user_id, rawEmployeeId: r.employee_id, mappedEmployeeId: mappedReport.employeeId, status: r.status });
+            }
+            return mappedReport;
+          }
         );
 
         // Merge unsynced local reports with server reports
@@ -89,10 +141,21 @@ export function useDailyReports() {
           (r) => !r.localId || !serverLocalIds.has(r.localId),
         );
 
-        const mergedReports = [...uniqueUnsynced, ...mapped];
+        // Priorizar DADOS DO SERVIDOR (mapped) sobre dados locais (uniqueUnsynced)
+        // Isso garante que mudanças de status no server reflitam imediatamente
+        const mergedReports = [...mapped, ...uniqueUnsynced];
+        
+        // Final deduplication by ID to prevent memory bloat/key collisions
+        const seenIds = new Set();
+        const deduplicated = mergedReports.filter(r => {
+          if (seenIds.has(r.id)) return false;
+          seenIds.add(r.id);
+          return true;
+        });
 
-        setReports(mergedReports);
-        await saveToStorage(mergedReports);
+        console.log("[useDailyReports] Final deduplicated reports count:", deduplicated.length);
+        setReports(deduplicated);
+        await saveToStorage(deduplicated);
       } else {
         setReports(localCached);
       }
@@ -119,8 +182,18 @@ export function useDailyReports() {
     teamIds?: string[];
     subPoint?: string;
     subPointType?: string;
+    status?: DailyReportStatus;
     metadata?: any;
-    selectedActivities?: Array<{ stageId: string; status: 'IN_PROGRESS' | 'FINISHED' }>;
+    selectedActivities?: Array<{ stageId: string; status: ActivityStatus }>;
+    weather?: any;
+    manpower?: any[];
+    equipment?: any[];
+    rdoNumber?: string;
+    revision?: string;
+    projectDeadline?: number;
+    reportDate?: string | Date;
+    generalObservations?: string;
+    generalPhotos?: any[];
   }) => {
     const localId = generateId();
 
@@ -164,10 +237,12 @@ export function useDailyReports() {
 
     const reportMetadata = { ...(data.metadata || {}), teamIds: data.teamIds || [], selectedActivities: data.selectedActivities || data.metadata?.selectedActivities || [] };
 
+    const parsedDate = data.reportDate ? (safeDate(data.reportDate) || today) : today;
+
     const newReport: DailyReport = {
       id: localId,
       teamId: data.teamId || null,
-      reportDate: today,
+      reportDate: parsedDate,
       activities: data.activities,
       observations: data.observations || null,
       employeeId: data.employeeId,
@@ -177,9 +252,16 @@ export function useDailyReports() {
       subPointType: (data.subPointType as any) || null,
       metadata: reportMetadata,
       selectedActivities: reportMetadata.selectedActivities,
+      status: (data.status as DailyReportStatus) || DailyReportStatus.SENT,
       syncedAt: null,
       localId,
       createdAt: today,
+      weather: data.weather,
+      manpower: data.manpower,
+      equipment: data.equipment,
+      rdoNumber: data.rdoNumber,
+      revision: data.revision,
+      projectDeadline: data.projectDeadline,
     };
 
     const isOnline = navigator.onLine;
@@ -192,11 +274,17 @@ export function useDailyReports() {
 
     if (isOnline) {
       try {
+        // Obter a data local no formato YYYY-MM-DD considerando fuso horário
+        // Se foi providenciado uma data (ex: do agendamento) em formato string ISO date
+        const localDateStr = typeof data.reportDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.reportDate)
+          ? data.reportDate
+          : new Date(parsedDate.getTime() - (parsedDate.getTimezoneOffset() * 60000)).toISOString().split("T")[0];
+
         const { data: created, error } = await db
           .from("daily_reports")
           .insert({
             team_id: data.teamId || null,
-            report_date: today.toISOString().split("T")[0],
+            report_date: localDateStr,
             activities: data.activities,
             observations: data.observations || null,
             user_id: data.employeeId, // Mapeado para user_id na tabela users
@@ -205,8 +293,15 @@ export function useDailyReports() {
             sub_point: data.subPoint || null,
             sub_point_type: data.subPointType || null,
             metadata: reportMetadata,
+            status: (data.status as DailyReportStatus) || DailyReportStatus.SENT,
             synced_at: new Date().toISOString(),
             local_id: localId,
+            weather: data.weather,
+            manpower: data.manpower,
+            equipment: data.equipment,
+            rdo_number: data.rdoNumber,
+            revision: data.revision,
+            project_deadline: data.projectDeadline,
           } as any)
           .select(`*, teams(name), user:users!daily_reports_user_id_fkey(name)`)
           .single();
@@ -216,6 +311,7 @@ export function useDailyReports() {
         const updatedReport = {
           ...newReport,
           id: created.id,
+          employeeId: created.user_id, // Fix missing mapped property
           teamName: created.teams?.name,
           syncedAt: new Date(created.synced_at || new Date()),
         };
@@ -283,10 +379,25 @@ export function useDailyReports() {
   };
 
   const getTodayReports = () => {
-    const today = new Date().toDateString();
-    return reports.filter(
-      (r) => safeDate(r.reportDate)?.toDateString() === today,
-    );
+    // Pegamos a data atual e aplicamos o offset de fuso horário local para garantir a string YYYY-MM-DD correta do local do usuário
+    const now = new Date();
+    const todayLocalStr = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split("T")[0];
+    
+    return reports.filter((r) => {
+      if (!r.reportDate) return false;
+      
+      // Se já for string YYYY-MM-DD, compara direto
+      if (typeof r.reportDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.reportDate)) {
+        return r.reportDate === todayLocalStr;
+      }
+      
+      // Do contrário faz o parse seguro e extrai o formato YYYY-MM-DD local
+      const parsed = safeDate(r.reportDate);
+      if (!parsed) return false;
+      const rDateLocalStr = new Date(parsed.getTime() - (parsed.getTimezoneOffset() * 60000)).toISOString().split("T")[0];
+      
+      return rDateLocalStr === todayLocalStr;
+    });
   };
 
   return {

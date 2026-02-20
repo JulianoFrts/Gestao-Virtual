@@ -48,6 +48,7 @@ export const employeeFilters = signal<{
   biometric: string;
   level: string;
   cpfOrRegistration: string;
+  roles: string[] | null;
 }>({
   companyId: "",
   projectId: "",
@@ -59,6 +60,7 @@ export const employeeFilters = signal<{
   biometric: "all",
   level: "all",
   cpfOrRegistration: "",
+  roles: ["WORKER"],
 });
 
 const hasInitialFetched = signal<boolean>(false);
@@ -84,8 +86,9 @@ export const filteredEmployees = computed(() => {
     const matchesCompany = !companyId || e.companyId === companyId;
     const matchesProject = !projectId || e.projectId === projectId;
     const matchesSite = !siteId || e.siteId === siteId;
+    const isCorporate = e.role !== "WORKER";
     const matchesExcludeCorporate =
-      !excludeCorporate || (e as any).excludeCorporate !== false;
+      !excludeCorporate || !isCorporate;
 
     const matchesStatus =
       status === "all" ||
@@ -166,16 +169,22 @@ export const fetchEmployees = async (force = false) => {
       functionId,
       searchTerm,
       cpfOrRegistration,
+      roles,
     } = employeeFilters.value;
     // Usando db.from() que já inclui o token de autenticação
     let query = db.from("users").select("*, jobFunction:job_functions(name, hierarchyLevel, canLeadTeam)");
 
-    // Aplicar filtros via eq()
-    query = query.eq("role", "WORKER");
+    // Aplicar filtros via eq() / in()
+    if (roles && roles.length > 0) {
+      query = query.in("role", roles);
+    } else {
+      query = query.eq("role", "WORKER"); // Default seguro
+    }
+
     if (companyId) query = query.eq("companyId", companyId);
     if (projectId) query = query.eq("projectId", projectId);
     if (siteId) query = query.eq("siteId", siteId);
-    if (excludeCorporate) query = query.eq("excludeCorporate", "true");
+    // excludeCorporate agora é tratado client-side no filteredEmployees
     if (status && status !== "all")
       query = query.eq("status", status === "active" ? "ACTIVE" : "INACTIVE");
     if (functionId && functionId !== "all")

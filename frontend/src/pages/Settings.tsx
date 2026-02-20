@@ -200,7 +200,7 @@ export default function Settings() {
                       const simulatedPerms: Record<string, boolean> = {};
                       const simulatedUi: Record<string, boolean> = {};
 
-                      const relevantMatrix = (matrixRes.data as any[]).filter(m => m.level_id === targetLevel.id);
+                      const relevantMatrix = (matrixRes.data as any[]).filter(m => m.level_id === targetLevel.id && m.is_granted === true);
                       
                       relevantMatrix.forEach(item => {
                           const mod = (modulesRes.data as any[]).find(m => m.id === item.module_id);
@@ -213,6 +213,7 @@ export default function Settings() {
                               }
                           }
                       });
+
 
                       permissionsSignal.value = simulatedPerms;
                       uiSignal.value = simulatedUi;

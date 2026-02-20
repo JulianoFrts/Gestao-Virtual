@@ -8,6 +8,12 @@ export class PrismaProjectElementRepository implements ProjectElementRepository 
     });
   }
 
+  async findByIds(ids: string[]): Promise<any[]> {
+    return prisma.mapElementTechnicalData.findMany({
+      where: { id: { in: ids } },
+    });
+  }
+
   async findByProjectId(
     projectId: string,
     companyId?: string | null,

@@ -280,7 +280,7 @@ export class ProductionAnalyticsService {
      */
     async getPerformanceMetrics(projectId: string) {
         const [schedules, unitCosts, productionProgress, timeRecords] = await Promise.all([
-            prisma.activitySchedule.findMany({ where: { element: { projectId } } }),
+            prisma.activitySchedule.findMany({ where: { mapElementTechnicalData: { projectId } } }),
             prisma.activityUnitCost.findMany({ where: { projectId } }),
             prisma.mapElementProductionProgress.findMany({ where: { projectId } }),
             prisma.timeRecord.findMany({ where: { team: { site: { projectId } } } })
@@ -313,7 +313,7 @@ export class ProductionAnalyticsService {
 
         const progressMap = new Map<string, number>();
         productionProgress.forEach(pp => {
-            progressMap.set(`${pp.mapElementTechnicalDataId}-${pp.activityId}`, Number(pp.progressPercent || 0) / 100);
+            progressMap.set(`${pp.elementId}-${pp.activityId}`, Number(pp.progressPercent || 0) / 100);
         });
 
         schedules.forEach(sched => {

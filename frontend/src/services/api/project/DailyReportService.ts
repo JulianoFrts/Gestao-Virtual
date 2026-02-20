@@ -5,6 +5,7 @@
  */
 
 import { BaseApiService, ServiceResult } from '@/services/api/BaseApiService';
+import { orionApi } from '@/integrations/orion/client';
 import {
     DailyReportSchema,
     CreateDailyReportSchema,
@@ -57,6 +58,62 @@ class DailyReportService extends BaseApiService<DailyReportEntity, CreateDailyRe
      */
     async getByDate(date: Date): Promise<ServiceResult<DailyReportEntity[]>> {
         return this.findBy('date', date.toISOString().split('T')[0]);
+    }
+
+    /**
+     * Aprova um relatório diário
+     */
+    async approve(id: string): Promise<ServiceResult<DailyReportEntity>> {
+        try {
+            const response = await orionApi.post<DailyReportEntity>(`/daily_reports/${id}/approve`);
+            if (response.error) return { success: false, error: response.error.message };
+            
+            const mapped = this.toCamelCase(response.data as Record<string, unknown>) as unknown as DailyReportEntity;
+            return { success: true, data: mapped };
+        } catch (error: any) {
+            return { success: false, error: error.message || 'Erro ao aprovar relatório' };
+        }
+    }
+
+    /**
+     * Rejeita um relatório diário
+     */
+    async reject(id: string, reason: string): Promise<ServiceResult<DailyReportEntity>> {
+        try {
+            const response = await orionApi.post<DailyReportEntity>(`/daily_reports/${id}/reject`, { reason });
+            if (response.error) return { success: false, error: response.error.message };
+            
+            const mapped = this.toCamelCase(response.data as Record<string, unknown>) as unknown as DailyReportEntity;
+            return { success: true, data: mapped };
+        } catch (error: any) {
+            return { success: false, error: error.message || 'Erro ao rejeitar relatório' };
+        }
+    }
+
+    /**
+     * Aprova múltiplos relatórios em lote
+     */
+    async bulkApprove(ids: string[]): Promise<ServiceResult<any>> {
+        try {
+            const response = await orionApi.post<any>(`/daily_reports/bulk/approve`, { ids });
+            if (response.error) return { success: false, error: response.error.message };
+            return { success: true, data: response.data };
+        } catch (error: any) {
+            return { success: false, error: error.message || 'Erro na aprovação em lote' };
+        }
+    }
+
+    /**
+     * Rejeita múltiplos relatórios em lote com o mesmo motivo
+     */
+    async bulkReject(ids: string[], reason: string): Promise<ServiceResult<any>> {
+        try {
+            const response = await orionApi.post<any>(`/daily_reports/bulk/reject`, { ids, reason });
+            if (response.error) return { success: false, error: response.error.message };
+            return { success: true, data: response.data };
+        } catch (error: any) {
+            return { success: false, error: error.message || 'Erro na rejeição em lote' };
+        }
     }
 }
 

@@ -12,6 +12,10 @@ Aplicação: Backend + Frontend
 3. src/index.css é a única fonte de verdade visual.
 4. Código deve seguir DDD + SOLID + Clean Code.
 5. Workspace deve permanecer limpo.
+6. NÃO  FIQUE CONVERSANDO  SEM EU TER  PERGUNTADO, FAÇA SOMENTE O oque  for te ordenado.
+7. seja objetivo e direto ao ponto e rapido e eficiente.
+8. não perca tempo com coisas que não são importantes.
+9. não faça nada sem minha permissão.   
 
 ## 2. Comunicação
 

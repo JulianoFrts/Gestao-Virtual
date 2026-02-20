@@ -13,6 +13,7 @@ export interface ProductionSchedule {
 
 export interface ProductionScheduleRepository {
   findSchedule(elementId: string, activityId: string): Promise<any | null>;
+  findSchedulesBatch(elementIds: string[], activityIds: string[]): Promise<any[]>;
   findScheduleByElement(elementId: string, activityId: string): Promise<any | null>;
   findScheduleById(id: string): Promise<any | null>;
   saveSchedule(data: any): Promise<any>;

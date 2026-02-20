@@ -15,6 +15,14 @@ export function generateId() {
 
 export function safeDate(date: string | number | Date | null | undefined): Date | null {
     if (!date) return null;
+    
+    // Se for string YYYY-MM-DD (e.g., vindo da API do Supabase), parse para local time,
+    // pois 'new Date("2026-02-20")' é UTC midnight e vira 2026-02-19 em fusos negativos
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        const [year, month, day] = date.split('-');
+        return new Date(Number(year), Number(month) - 1, Number(day));
+    }
+
     const d = new Date(date);
     return isNaN(d.getTime()) ? null : d;
 }

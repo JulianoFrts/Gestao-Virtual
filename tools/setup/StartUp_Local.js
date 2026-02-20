@@ -161,13 +161,13 @@ async function start() {
       frontendDir
     );
 
-    const worker = !isLite ? startProcess(
+    const worker = startProcess(
       "node",
       [`"${tsxBin}"`, "worker.ts"],
       "WORKER",
       colors.yellow,
-      path.join(__dirname, "backend")
-    ) : null;
+      path.join(rootDir, "backend")
+    );
 
     log("\n===================================================", colors.cyan);
     log("🛸 SERVIÇOS LANÇADOS!", colors.bright + colors.green);

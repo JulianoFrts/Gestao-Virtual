@@ -34,6 +34,7 @@ async function registerHandlers(worker: any, deps: Dependencies) {
         return new PermissionMatrixHandler();
       },
     },
+    /* 
     {
       name: "EMPLOYEE_IMPORT",
       loader: async () => {
@@ -50,6 +51,31 @@ async function registerHandlers(worker: any, deps: Dependencies) {
           "@/modules/common/infrastructure/worker/handlers/job-function-import.handler"
         );
         return new JobFunctionImportHandler(deps.importService);
+      },
+    },
+    */
+    {
+      name: "daily_report_bulk_approve",
+      loader: async () => {
+        const { DailyReportBulkApproveHandler } = await import(
+          "@/modules/production/infrastructure/worker/handlers/daily-report-bulk-approve.handler"
+        );
+        const { ProductionFactory } = await import(
+          "@/modules/production/application/production.factory"
+        );
+        return new DailyReportBulkApproveHandler(ProductionFactory.createDailyReportService());
+      },
+    },
+    {
+      name: "daily_report_bulk_reject",
+      loader: async () => {
+        const { DailyReportBulkRejectHandler } = await import(
+          "@/modules/production/infrastructure/worker/handlers/daily-report-bulk-reject.handler"
+        );
+        const { ProductionFactory } = await import(
+          "@/modules/production/application/production.factory"
+        );
+        return new DailyReportBulkRejectHandler(ProductionFactory.createDailyReportService());
       },
     },
   ];

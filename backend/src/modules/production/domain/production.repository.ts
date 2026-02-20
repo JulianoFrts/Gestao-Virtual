@@ -20,8 +20,10 @@ export interface ProductionProgress {
 
 export interface ProductionProgressRepository {
   save(progress: ProductionProgress): Promise<ProductionProgress>;
+  saveMany(progresses: ProductionProgress[]): Promise<void>;
   findById(id: string): Promise<ProductionProgress | null>;
   findByElement(elementId: string): Promise<ProductionProgress[]>;
+  findByElementsBatch(elementIds: string[]): Promise<ProductionProgress[]>;
   findByActivity(
     projectId: string,
     activityId: string,

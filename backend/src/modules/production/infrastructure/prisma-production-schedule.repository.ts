@@ -8,6 +8,15 @@ export class PrismaProductionScheduleRepository implements ProductionScheduleRep
     });
   }
 
+  async findSchedulesBatch(elementIds: string[], activityIds: string[]): Promise<any[]> {
+    return await prisma.activitySchedule.findMany({
+      where: {
+        elementId: { in: elementIds },
+        activityId: { in: activityIds },
+      },
+    });
+  }
+
   async findScheduleByElement(elementId: string, activityId: string): Promise<any | null> {
     return await prisma.activitySchedule.findFirst({
       where: { elementId, activityId },

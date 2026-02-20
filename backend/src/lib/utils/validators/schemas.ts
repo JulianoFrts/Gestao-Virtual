@@ -155,6 +155,18 @@ export const roleSchema = z
   })
   .transform((v) => v.toUpperCase()); // Return uppercase for database consistency
 
+export const roleFilterSchema = z
+  .string()
+  .transform((v) => v.trim())
+  .refine((v) => {
+    if (!v) return true;
+    const roles = v.split(',');
+    return roles.every(r => Object.keys(ROLE_LEVELS).includes(r.trim().toLowerCase()));
+  }, {
+    message: "Uma ou mais roles são inválidas",
+  })
+  .transform((v) => v ? v.split(',').map(r => r.trim().toUpperCase()).join(',') : v);
+
 export const accountStatusSchema = z.nativeEnum(ACCOUNT_STATUS);
 
 // ======================================================
@@ -297,7 +309,7 @@ export const paginationSchema = z.object({
 export const userFiltersSchema = z.object({
   id: z.preprocess(stripOperator, z.string().optional()),
   search: z.preprocess(emptyToUndefined, z.string().max(100).optional()),
-  role: z.preprocess(emptyToUndefined, roleSchema.optional()),
+  role: z.preprocess(emptyToUndefined, roleFilterSchema.optional()),
   status: z.preprocess(emptyToUndefined, accountStatusSchema.optional()),
   emailVerified: z.preprocess(emptyToUndefined, z.coerce.boolean().optional()),
   createdAfter: z.preprocess(emptyToUndefined, z.coerce.date().optional()),

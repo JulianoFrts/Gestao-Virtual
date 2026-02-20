@@ -1,5 +1,6 @@
 export interface ProjectElementRepository {
   findById(id: string): Promise<any | null>;
+  findByIds(ids: string[]): Promise<any[]>;
   findByProjectId(
     projectId: string,
     companyId?: string | null,

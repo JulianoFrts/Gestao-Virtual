@@ -8,13 +8,13 @@ export class PrismaGanttRepository implements GanttRepository {
                 OR: [{ projectId }, { site: { projectId } }],
             },
             include: {
-                progress: {
+                stageProgress: {
                     orderBy: { recordedDate: "desc" },
                     take: 1,
                 },
-                productionActivity: {
+                activity: {
                     include: {
-                        category: true,
+                        productionCategory: true,
                     },
                 },
             },
@@ -25,7 +25,7 @@ export class PrismaGanttRepository implements GanttRepository {
     async listSchedulesByProject(projectId: string): Promise<any[]> {
         return prisma.activitySchedule.findMany({
             where: {
-                element: { projectId },
+                mapElementTechnicalData: { projectId },
             },
             select: {
                 activityId: true,

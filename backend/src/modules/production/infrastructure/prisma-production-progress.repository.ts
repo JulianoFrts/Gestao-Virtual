@@ -34,6 +34,39 @@ export class PrismaProductionProgressRepository implements ProductionProgressRep
     });
   }
 
+  async saveMany(progresses: ProductionProgress[]): Promise<void> {
+    if (progresses.length === 0) return;
+
+    const transactions = progresses.map((progress) => {
+      const dataToSave: any = {
+        currentStatus: progress.currentStatus,
+        progressPercent: progress.progressPercent,
+        startDate: progress.startDate,
+        endDate: progress.endDate,
+        history: progress.history,
+        dailyProduction: progress.dailyProduction,
+        requiresApproval: progress.requiresApproval,
+        approvalReason: progress.approvalReason,
+        projectId: progress.projectId,
+        elementId: progress.elementId,
+        activityId: progress.activityId,
+      };
+
+      return prisma.mapElementProductionProgress.upsert({
+        where: {
+          elementId_activityId: {
+            elementId: progress.elementId,
+            activityId: progress.activityId,
+          },
+        },
+        update: dataToSave,
+        create: dataToSave,
+      });
+    });
+
+    await prisma.$transaction(transactions);
+  }
+
   private async performUpsert(
     elementId: string,
     activityId: string,
@@ -88,6 +121,20 @@ export class PrismaProductionProgressRepository implements ProductionProgressRep
     } as any));
   }
 
+  async findByElementsBatch(elementIds: string[]): Promise<ProductionProgress[]> {
+    const results = await prisma.mapElementProductionProgress.findMany({
+      where: { elementId: { in: elementIds } },
+    });
+
+    return results.map((res: any) => new ProductionProgress({
+      ...res,
+      currentStatus: res.currentStatus as ActivityStatus,
+      progressPercent: Number(res.progressPercent),
+      history: res.history as any[],
+      dailyProduction: res.dailyProduction as any,
+    } as any));
+  }
+
   async findByActivity(
     projectId: string,
     activityId: string,
@@ -108,7 +155,7 @@ export class PrismaProductionProgressRepository implements ProductionProgressRep
       where,
       include: {
         productionActivity: true,
-        element: {
+        mapElementTechnicalData: {
           select: { name: true, externalId: true, elementType: true },
         },
         project: {
@@ -132,7 +179,7 @@ export class PrismaProductionProgressRepository implements ProductionProgressRep
       where,
       include: {
         productionActivity: true,
-        element: { select: { projectId: true } },
+        mapElementTechnicalData: { select: { projectId: true } },
       },
     });
 
@@ -140,7 +187,7 @@ export class PrismaProductionProgressRepository implements ProductionProgressRep
 
     return new ProductionProgress({
       ...res,
-      projectId: res.element.projectId,
+      projectId: res.mapElementTechnicalData?.projectId,
       currentStatus: res.currentStatus as ActivityStatus,
       progressPercent: Number(res.progressPercent),
       history: res.history as any[],

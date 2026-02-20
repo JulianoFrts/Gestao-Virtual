@@ -167,6 +167,12 @@ export class OrionApiClient {
         : `${window.location.origin}${cleanBaseUrl}${cleanEndpoint}`;
 
       const url = new URL(fullUrl);
+      
+      // Cache-busting para GET - Garante dados frescos do banco
+      if (method === "GET") {
+        url.searchParams.append("_t", Date.now().toString());
+      }
+
       if (params) {
         Object.entries(params).forEach(([key, value]) => {
           url.searchParams.append(key, value);

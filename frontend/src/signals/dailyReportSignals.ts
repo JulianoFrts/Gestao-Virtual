@@ -1,14 +1,37 @@
 import { signal, effect } from "@preact/signals-react";
 import { storageService } from "@/services/storageService";
+import { ActivityStatus } from "@/hooks/useDailyReports";
 
 export interface DailyReportPhoto {
     url: string; // base64
     comment?: string;
 }
 
+export interface WeatherRecord {
+    morning: 'GOOD' | 'RAIN' | 'IMPRACTICABLE';
+    afternoon: 'GOOD' | 'RAIN' | 'IMPRACTICABLE';
+    night: 'GOOD' | 'RAIN' | 'IMPRACTICABLE';
+}
+
+export interface ManpowerRecord {
+    registration?: string;
+    name: string;
+    role: string;
+    observations?: string;
+}
+
+export interface EquipmentRecord {
+    equipment: string;
+    type: string;
+    model?: string;
+    driverName?: string;
+    plate?: string;
+    observations?: string;
+}
+
 export interface DailyReportSubPointDetail {
     id: string; // Identificação (ex: Nome da Torre ou ID do Vão)
-    status: 'IN_PROGRESS' | 'FINISHED' | 'BLOCKED';
+    status: ActivityStatus;
     progress: number; // Porcentagem de 0 a 100
     comment?: string; // Comentário individual opcional
     startTime?: string; // Horário inicial (HH:mm)
@@ -25,7 +48,7 @@ export interface DailyReportActivity {
     subPointEnd?: string;
     isMultiSelection: boolean;
     observations: string;
-    status: 'IN_PROGRESS' | 'FINISHED';
+    status: ActivityStatus;
     details: DailyReportSubPointDetail[];
     photos?: DailyReportPhoto[];
 }
@@ -35,6 +58,16 @@ export interface DailyReportDraft {
     teamIds: string[];
     selectedActivities: DailyReportActivity[];
     siteId?: string;
+    projectId?: string;
+    companyId?: string;
+    weather?: WeatherRecord;
+    manpower?: ManpowerRecord[];
+    equipment?: EquipmentRecord[];
+    generalObservations?: string;
+    generalPhotos?: DailyReportPhoto[];
+    rdoNumber?: string;
+    revision?: string;
+    projectDeadline?: number;
     step: number;
     updatedAt: number;
 }
@@ -44,6 +77,20 @@ const DEFAULT_DRAFT: DailyReportDraft = {
     teamIds: [],
     selectedActivities: [],
     siteId: '',
+    projectId: '',
+    companyId: '',
+    weather: {
+        morning: 'GOOD',
+        afternoon: 'GOOD',
+        night: 'GOOD'
+    },
+    manpower: [],
+    equipment: [],
+    generalObservations: '',
+    generalPhotos: [],
+    rdoNumber: '',
+    revision: '0A',
+    projectDeadline: undefined,
     step: 1,
     updatedAt: Date.now()
 };

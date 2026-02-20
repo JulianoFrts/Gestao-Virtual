@@ -136,9 +136,10 @@ export function buildUserWhereClause(
   }
 
   if (filters.role && (filters.role as string) !== "") {
+    const roles = (filters.role as string).split(',').map(r => r.trim());
     where.authCredential = {
       ...(where.authCredential as any),
-      role: filters.role as Role,
+      ...(roles.length > 1 ? { role: { in: roles as Role[] } } : { role: roles[0] as Role }),
     };
   }
 

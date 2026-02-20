@@ -10,9 +10,9 @@ interface RouteParams {
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
   try {
     await requireAuth();
-    const { id } = await params;
 
     const task = await prisma.taskQueue.findUnique({
       where: { id },
@@ -29,6 +29,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       updatedAt: task.updatedAt,
     });
   } catch (error) {
+    console.error(`[API/TASK_QUEUE] Error fetching task ${id}:`, error);
     return handleApiError(error, "src/app/api/v1/task_queue/[id]/route.ts#GET");
   }
 }

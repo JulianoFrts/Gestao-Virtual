@@ -3,14 +3,11 @@ import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
-import { DailyReportService } from "@/modules/production/application/daily-report.service";
-import { PrismaDailyReportRepository } from "@/modules/production/infrastructure/prisma-daily-report.repository";
+import { ProductionFactory } from "@/modules/production/application/production.factory";
 import { API } from "@/lib/constants";
 
 // DI
-const dailyReportService = new DailyReportService(
-  new PrismaDailyReportRepository(),
-);
+const dailyReportService = ProductionFactory.createDailyReportService();
 
 const createDailyReportSchema = z.object({
   teamId: z.string().optional().or(z.string().nullable()),
@@ -68,6 +65,12 @@ const querySchema = z.object({
     .nullable()
     .or(z.literal(""))
     .transform((val) => val || undefined),
+  status: z
+    .string()
+    .optional()
+    .nullable()
+    .or(z.literal(""))
+    .transform((val) => val || undefined),
 });
 
 export async function GET(request: NextRequest) {
@@ -82,6 +85,7 @@ export async function GET(request: NextRequest) {
       userId: searchParams.get("userId"),
       startDate: searchParams.get("startDate"),
       endDate: searchParams.get("endDate"),
+      status: searchParams.get("status"),
     });
 
     const { isUserAdmin } = await import("@/lib/auth/session");
@@ -128,6 +132,12 @@ export async function POST(request: NextRequest) {
       subPointType: rawData.subPointType || rawData.sub_point_type || null,
       metadata: rawData.metadata || (body as any).metadata || {},
       createdBy: rawData.createdBy || rawData.created_by || (user as any).id,
+      weather: rawData.weather || {},
+      manpower: rawData.manpower || [],
+      equipment: rawData.equipment || [],
+      rdoNumber: rawData.rdoNumber || rawData.rdo_number || null,
+      revision: rawData.revision || "0A",
+      projectDeadline: rawData.projectDeadline || rawData.project_deadline || null,
     };
 
     const report = await dailyReportService.createReport(data);

@@ -16,6 +16,8 @@ import {
   ClipboardList,
   History,
   Briefcase,
+  CalendarClock,
+  FileCheck,
 } from "lucide-react";
 
 // Lazy-loaded components for better split and initial load
@@ -25,6 +27,8 @@ const Employees = lazy(() => import("../pages/Employees"));
 const Teams = lazy(() => import("../pages/Teams"));
 const TimeClock = lazy(() => import("../pages/TimeClock"));
 const DailyReport = lazy(() => import("../pages/DailyReport"));
+const RDOScheduling = lazy(() => import("../pages/RDOScheduling"));
+const RDOAudit = lazy(() => import("../pages/RDOAudit"));
 
 const SettingsPage = lazy(() => import("../pages/Settings"));
 const UsersPage = lazy(() => import("../pages/Users"));
@@ -92,7 +96,7 @@ export const routes: RouteConfig[] = [
   {
     path: "/functions",
     element: <Functions />,
-    moduleId: "users.manage",
+    moduleId: "functions.manage",
     requireConnection: true,
     layout: "app",
     label: "Funções",
@@ -125,10 +129,26 @@ export const routes: RouteConfig[] = [
   {
     path: "/daily-report",
     element: <DailyReport />,
-    moduleId: "daily_reports",
+    moduleId: "daily_report.create",
     layout: "app",
     label: "RDO",
     icon: ClipboardList,
+  },
+  {
+    path: "/rdo/scheduling",
+    element: <RDOScheduling />,
+    moduleId: "daily_report.schedule",
+    layout: "app",
+    label: "Programação RDO",
+    icon: CalendarClock,
+  },
+  {
+    path: "/rdo/audit",
+    element: <RDOAudit />,
+    moduleId: "daily_report.audit",
+    layout: "app",
+    label: "Auditoria RDO",
+    icon: FileCheck,
   },
   {
     path: "/users",
@@ -168,7 +188,7 @@ export const routes: RouteConfig[] = [
   {
     path: "/messages",
     element: <Messages />,
-    moduleId: "dashboard",
+    moduleId: "messages.view",
     layout: "app",
     label: "Mensagens",
     icon: MessageSquare,
@@ -200,7 +220,7 @@ export const routes: RouteConfig[] = [
   {
     path: "/reports",
     element: <Reports />,
-    moduleId: "daily_reports",
+    moduleId: "daily_report.list",
     layout: "app",
     label: "Relatórios",
     icon: ClipboardList,
@@ -238,7 +258,7 @@ export const routes: RouteConfig[] = [
   {
     path: "/database-hub",
     element: <DatabaseHub />,
-    moduleId: "custom_su.manage",
+    moduleId: "db_hub.manage",
     requireConnection: true,
     layout: "app",
     label: "Banco de Dados",
@@ -247,7 +267,7 @@ export const routes: RouteConfig[] = [
   {
     path: "/producao",
     element: <ProductionPage />,
-    moduleId: "projects.progress",
+    moduleId: "production.planning",
     layout: "app",
     label: "Produção",
     icon: HardHat,
@@ -255,7 +275,7 @@ export const routes: RouteConfig[] = [
   {
     path: "/producao/analytics",
     element: <ProductionAnalyticsPage />,
-    moduleId: "projects.progress",
+    moduleId: "production.analytics",
     layout: "app",
     label: "Analytics",
     icon: BarChart3,
@@ -281,13 +301,13 @@ export const routes: RouteConfig[] = [
   {
     path: "/viewer-3d",
     element: <Viewer3D />,
-    moduleId: "projects.view",
+    moduleId: "viewer_3d.view",
     layout: "fullscreen",
   },
   {
     path: "/geo-viewer",
     element: <GeoViewerPage />,
-    moduleId: "projects.view",
+    moduleId: "geo_viewer.view",
     layout: "fullscreen",
   },
   {

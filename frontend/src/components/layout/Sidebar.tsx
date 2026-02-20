@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { useSignals } from "@preact/signals-react/runtime";
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { getRoleStyle, getRoleLabel } from '@/utils/roleUtils';
@@ -34,6 +35,8 @@ import {
   ChevronDown,
   LucideIcon,
   Zap,
+  CalendarClock,
+  FileCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEmployees } from "@/hooks/useEmployees";
@@ -90,14 +93,14 @@ const menuGroups: SidebarGroup[] = [
         requiresProject: true,
       },
       {
-        id: "projects.progress",
+        id: "production.planning",
         icon: ClipboardList,
         label: "Planejamento",
         path: "/producao",
         requiresProject: true,
       },
       {
-        id: "projects.progress",
+        id: "production.analytics",
         icon: PieChart,
         label: "Analytics",
         path: "/producao/analytics",
@@ -141,6 +144,18 @@ const menuGroups: SidebarGroup[] = [
         path: "/reports",
       },
       {
+        id: "daily_report.schedule",
+        icon: CalendarClock,
+        label: "Programação de RDO",
+        path: "/rdo/scheduling",
+      },
+      {
+        id: "daily_report.audit",
+        icon: FileCheck,
+        label: "Auditoria de RDO",
+        path: "/rdo/audit",
+      },
+      {
         id: "time_records.view",
         icon: Clock,
         label: "Espelho de Ponto",
@@ -164,7 +179,7 @@ const menuGroups: SidebarGroup[] = [
         path: "/employees",
       },
       {
-        id: "users.manage",
+        id: "functions.manage",
         icon: Briefcase,
         label: "Funções",
         path: "/functions",
@@ -194,13 +209,13 @@ const menuGroups: SidebarGroup[] = [
         path: "/custom-su",
       },
       {
-        id: "custom_su.manage",
+        id: "db_hub.manage",
         icon: Database,
         label: "Database Hub",
         path: "/database-hub",
       },
       {
-        id: "projects.view",
+        id: "viewer_3d.view",
         icon: Box,
         label: "3D Anchor Lab",
         path: "/viewer-3d",
@@ -246,9 +261,17 @@ function SidebarGroupItem({
   isTeamLeader: boolean;
   handleNavClick: (e: React.MouseEvent, item: SidebarItem) => void;
 }) {
+  useSignals();
   const isCollapsible = group.title !== "Principal"; // Agora quase todos são colapsáveis
   const visibleItems = group.items.filter((item) => {
-    if (isProtectedSignal.value || show("showAdminMenu")) return true;
+    const isProtected = isProtectedSignal.value;
+    const hasAdminMenu = show("showAdminMenu");
+    
+    if (item.id === "custom_su.manage") {
+       console.log(`[Sidebar Debug - Custom SU] isProtected: ${isProtected}, hasAdminMenu: ${hasAdminMenu}, signals mapped correctly.`);
+    }
+
+    if (isProtected || hasAdminMenu) return true;
     const moduleId = item.id;
     if (moduleId === "dashboard" || moduleId === "settings.profile")
       return true;
@@ -354,6 +377,7 @@ function SidebarGroupItem({
 }
 
 export function Sidebar({ isOpen, onClose, desktopOpen = true }: SidebarProps) {
+  useSignals();
   const { user, profile } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();

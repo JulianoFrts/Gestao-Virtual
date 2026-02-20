@@ -143,6 +143,7 @@ export const HTTP = {
 export const ROLE_LEVELS: Record<string, number> = {
   helper_system: 2000,
   super_admin_god: 1500,
+  super_admin: 1200,
   socio_diretor: 1000,
   admin: 950,
   ti_software: 900,
@@ -156,6 +157,7 @@ export const ROLE_LEVELS: Record<string, number> = {
   worker: 100,
   user: 100,
   viewer: 50,
+  guest: 10,
 } as const;
 
 export const REGEX = {

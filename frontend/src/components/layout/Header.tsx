@@ -34,6 +34,7 @@ import {
   Shield,
   ShieldCheck,
   QrCode,
+  Loader2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -49,8 +50,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { QRScanner } from "@/components/auth/QRScanner";
 import { Logo } from "@/components/common/Logo";
+
+// Lazy load QRScanner to optimize initial bundle (html5-qrcode is ~1MB)
+const QRScanner = React.lazy(() => import("@/components/auth/QRScanner").then(module => ({ default: module.QRScanner })));
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -166,10 +169,17 @@ export function Header({ onMenuClick, title: propTitle }: HeaderProps) {
               <DialogHeader>
                 <DialogTitle>Aprovar Acesso</DialogTitle>
               </DialogHeader>
-              <QRScanner
-                onClose={() => setIsQRModalOpen(false)}
-                onSuccess={() => setIsQRModalOpen(false)}
-              />
+              <React.Suspense fallback={
+                <div className="flex flex-col items-center justify-center py-12 gap-3 text-primary animate-pulse w-full">
+                  <Loader2 className="w-8 h-8 animate-spin" />
+                  <span className="text-xs font-black uppercase tracking-widest opacity-50">Carregando Scanner...</span>
+                </div>
+              }>
+                <QRScanner
+                  onClose={() => setIsQRModalOpen(false)}
+                  onSuccess={() => setIsQRModalOpen(false)}
+                />
+              </React.Suspense>
             </DialogContent>
           </Dialog>
 

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeams } from "@/hooks/useTeams";
-import { useDailyReports } from "@/hooks/useDailyReports";
+import { useDailyReports, DailyReportStatus, ActivityStatus } from "@/hooks/useDailyReports";
 import { useSites } from "@/hooks/useSites";
 import { orionApi } from "@/integrations/orion/client";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,11 @@ import {
   Camera,
   Image as ImageIcon,
   Trash2,
-  X
+  X,
+  CloudSun,
+  Users,
+  Truck,
+  MessageSquare,
 } from "lucide-react";
 import { isProtectedSignal, can } from "@/signals/authSignals";
 import { useSignals } from "@preact/signals-react/runtime";
@@ -74,7 +78,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Check, ChevronsUpDown, Info, Search, Plus } from "lucide-react";
+import { Check, ChevronsUpDown, Info, Search, Plus, RefreshCw } from "lucide-react";
 import { useWorkStages } from "@/hooks/useWorkStages";
 import { fetchWorkStages, hasWorkStagesFetchedSignal } from "@/signals/workStageSignals";
 import { Progress } from "@/components/ui/progress";
@@ -91,25 +95,7 @@ interface Tower {
   sequence: number;
 }
 
-interface DailyReportDraft {
-  employeeId: string;
-  teamIds: string[];
-  subPointType: 'GERAL' | 'TORRE' | 'VAO' | 'TRECHO' | 'ESTRUTURA';
-  subPoint: string;
-  subPointEnd: string;
-  isMultiSelection: boolean;
-  activities: string;
-  observations: string;
-  siteId?: string;
-  selectedSpanIds: string[];
-  selectedActivities: Array<{
-    stageId: string;
-    status: 'IN_PROGRESS' | 'FINISHED';
-  }>;
-  photos?: DailyReportPhoto[];
-  step: number;
-  updatedAt: number;
-}
+
 
 // Função para corrigir caracteres corrompidos ("?" ou "??") em nomes de atividades
 const fixBrokenEncoding = (str: string) => {
@@ -344,6 +330,8 @@ export default function DailyReport() {
 
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string | undefined>(profile?.companyId);
   const [selectedProjectId, setSelectedProjectId] = React.useState<string | undefined>(undefined);
+  const [hasAttemptedAutoLoad, setHasAttemptedAutoLoad] = React.useState(false);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   // Se for Super Admin, permitir selecionar empresa
   const { companies } = useCompanies();
@@ -357,7 +345,7 @@ export default function DailyReport() {
   const { teams } = useTeams(selectedCompanyId);
   const { projects } = useProjects();
   const { sites } = useSites(selectedProjectId, selectedCompanyId);
-  const { createReport, getTodayReports } = useDailyReports();
+  const { createReport, getTodayReports, refresh } = useDailyReports();
 
   const filteredProjects = React.useMemo(() => {
     if (!selectedCompanyId) return [];
@@ -370,15 +358,178 @@ export default function DailyReport() {
     teamIds,
     selectedActivities,
     siteId,
-    step, // Added step to draft destructuring
+    step,
+    weather,
+    manpower,
+    equipment,
+    projectId,
+    rdoNumber,
+    revision,
+    projectDeadline,
+    generalObservations,
+    generalPhotos
   } = draft;
+
+  const timerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const [selectedPhoto, setSelectedPhoto] = React.useState<string | null>(null);
+
+    // Carregamento automático de programação
+    React.useEffect(() => {
+      if (!employeeId || selectedActivities.length > 0 || hasAttemptedAutoLoad) return;
+
+      const allToday = getTodayReports();
+      console.log("[DailyReport] Scheduling Auto-Load. Employee:", employeeId);
+      setHasAttemptedAutoLoad(true);
+
+      // 1. Identificar atividades que já foram relatadas HOJE (Relatórios reais, não programações)
+      const alreadyReported = allToday.filter(r => 
+        r.status !== DailyReportStatus.PROGRAMMED
+      );
+
+      const normalizeSubPoint = (sp: any) => String(sp || "").replace(/^TORRE:\s*/i, "").trim();
+
+      const doneKeys = new Set<string>();
+      alreadyReported.forEach(r => {
+        const acts = r.selectedActivities || (r.metadata as any)?.selectedActivities || [];
+        acts.forEach((act: any) => {
+          const sp = normalizeSubPoint(act.subPoint);
+          doneKeys.add(`${act.stageId}-${sp}-${act.subPointType}`);
+        });
+      });
+
+      // 2. Buscar RDOs que são de fato programações
+      const scheduledReports = allToday.filter(r => {
+        const matchesEmp = r.employeeId === employeeId || (r.metadata as any)?.employeeId === employeeId;
+        const isProg = r.status === DailyReportStatus.PROGRAMMED; 
+        return matchesEmp && isProg;
+      });
+
+      console.log("[DailyReport] Found Programs:", scheduledReports.length, "Already Reported Keys:", doneKeys.size);
+
+      if (scheduledReports.length > 0) {
+        const pendingActivities: any[] = [];
+        let firstValidReport = scheduledReports[0];
+
+        scheduledReports.forEach(r => {
+          const acts = r.metadata?.selectedActivities || [];
+          acts.forEach((act: any) => {
+            const sp = normalizeSubPoint(act.subPoint);
+            const key = `${act.stageId}-${sp}-${act.subPointType}`;
+            // Só adiciona se não estiver no Set de já relatados
+            if (!doneKeys.has(key)) {
+              pendingActivities.push(act);
+            }
+          });
+        });
+
+        if (pendingActivities.length > 0) {
+          // Deduplicação final por segurança (caso haja mais de uma programação para a mesma coisa)
+          const uniqueActivities = pendingActivities.filter((act, index, self) =>
+            index === self.findIndex((t) => (
+              t.stageId === act.stageId && normalizeSubPoint(t.subPoint) === normalizeSubPoint(act.subPoint) && t.subPointType === act.subPointType
+            ))
+          );
+
+          toast({
+            title: "Programações Localizadas",
+            description: `${uniqueActivities.length} atividades agendadas foram carregadas automaticamente.`,
+            className: "bg-amber-500/10 border-amber-500/20 text-amber-500"
+          });
+
+          console.log("[DailyReport] Loading activities from programs:", uniqueActivities.length);
+
+          updateReportDraft({
+            selectedActivities: uniqueActivities,
+            companyId: firstValidReport.companyId || undefined,
+            siteId: (firstValidReport.metadata as any)?.siteId || undefined,
+            projectId: (firstValidReport.metadata as any)?.projectId || undefined,
+          });
+
+          if (firstValidReport.companyId) setSelectedCompanyId(firstValidReport.companyId);
+          const pId = (firstValidReport.metadata as any)?.projectId;
+          if (pId) setSelectedProjectId(pId);
+        }
+      }
+    }, [employeeId, getTodayReports, selectedActivities.length, toast]);
 
   // Estados locais para o "Mini-Relatório" de adição de atividade
   const employeesFilter = React.useMemo(
-    () => ({ companyId: selectedCompanyId }),
+    () => ({ 
+      companyId: selectedCompanyId,
+      excludeCorporate: false,
+      roles: ["WORKER", "SUPERVISOR", "MANAGER", "ADMIN", "SUPER_ADMIN", "GESTOR_PROJECT", "GESTOR_CANTEIRO", "TECHNICIAN"]
+    }),
     [selectedCompanyId],
   );
   const { employees } = useEmployees(employeesFilter);
+
+  // Componente de Seleção de Funcionário com Busca
+  const EmployeePicker = ({ value, onChange, placeholder }: any) => {
+    const [open, setOpen] = React.useState(false);
+    const [searchTerm, setSearchTerm] = React.useState("");
+
+    const filteredEmployees = React.useMemo(() => {
+      if (!searchTerm) return employees.slice(0, 10);
+      const search = searchTerm.toLowerCase();
+      return employees.filter(e => 
+        e.fullName.toLowerCase().includes(search) || 
+        (e.registrationNumber || "").toLowerCase().includes(search) ||
+        (e.email || "").toLowerCase().includes(search)
+      ).slice(0, 50);
+    }, [employees, searchTerm]);
+
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="w-full justify-between bg-black/20 border-primary/20 hover:bg-black/40 hover:border-primary/40 text-foreground h-11 rounded-xl font-normal transition-all"
+            disabled={!selectedCompanyId}
+          >
+            <span className="truncate">
+              {value ? employees.find((e) => e.id === value)?.fullName : placeholder}
+            </span>
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[300px] p-0 glass-card border-primary/20" align="start">
+          <Command shouldFilter={false} className="bg-transparent text-foreground">
+            <CommandInput 
+              placeholder="Buscar por nome, email ou matrícula..." 
+              value={searchTerm}
+              onValueChange={setSearchTerm}
+              className="h-11 border-none focus:ring-0 text-foreground text-xs" 
+            />
+            <CommandList>
+              <CommandEmpty className="text-muted-foreground py-4 text-center text-xs">Nenhum colaborador encontrado.</CommandEmpty>
+              <CommandGroup heading={searchTerm ? "Resultados da Busca" : "Sugestões Recentes"}>
+                {filteredEmployees.map((e) => (
+                  <CommandItem
+                    key={e.id}
+                    value={e.id}
+                    onSelect={() => {
+                      onChange(e.id);
+                      setOpen(false);
+                      setSearchTerm("");
+                    }}
+                    className="hover:bg-primary/20 cursor-pointer text-foreground data-[selected=true]:bg-primary/20 p-2"
+                  >
+                    <Check className={cn("mr-2 h-4 w-4 text-primary shrink-0", value === e.id ? "opacity-100" : "opacity-0")} />
+                    <div className="flex flex-col min-w-0 pr-2">
+                      <span className="font-bold text-sm truncate">{e.fullName}</span>
+                      <span className="text-[10px] text-muted-foreground truncate">{e.registrationNumber || e.email}</span>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    );
+  };
 
   // Encontrar a equipe do trabalhador logado
   const workerTeam = React.useMemo(() => {
@@ -460,10 +611,9 @@ export default function DailyReport() {
       updatedActivities[existingActivityIndex] = {
         ...existing,
         details: [...existing.details, ...currentDetails],
-        observations: existing.observations && currentObservations
-          ? `${existing.observations}\n${currentObservations}`
-          : (existing.observations || currentObservations),
-        photos: [...(existing.photos || []), ...currentPhotos],
+        // observations e photos agora são globais, removidos do item individual se possível ou mantidos se necessário pelo types
+        observations: "", 
+        photos: [],
         // Atualiza subPoint para refletir múltiplos se for diferente
         subPoint: (existing.subPoint === effectiveSubPoint || !effectiveSubPoint) ? existing.subPoint : `${existing.subPoint}, ${effectiveSubPoint}`,
         isMultiSelection: existing.isMultiSelection || effectiveIsMultiSelection
@@ -481,10 +631,10 @@ export default function DailyReport() {
         subPoint: effectiveSubPoint,
         subPointEnd: effectiveSubPointEnd,
         isMultiSelection: effectiveIsMultiSelection,
-        observations: currentObservations,
+        observations: "",
         status: currentStatus,
         details: currentDetails,
-        photos: currentPhotos
+        photos: []
       };
 
       updateReportDraft({
@@ -495,10 +645,8 @@ export default function DailyReport() {
 
     // Reset local form
     setCurrentStageIds([]);
-    setCurrentObservations("");
     setCurrentDetails([]);
     setLockedDetails([]);
-    setCurrentPhotos([]);
     setCurrentSubPoint("");
     setCurrentSubPointEnd("");
     toast({
@@ -675,7 +823,7 @@ export default function DailyReport() {
     expandedTowers: string[];
     finalLabel: string;
     metrics: { towers: number; km: string };
-    details?: Array<{ id: string; progress: number; status: 'IN_PROGRESS' | 'FINISHED' | 'BLOCKED' }>;
+    details?: Array<{ id: string; progress: number; status: ActivityStatus }>;
   }>({ expandedTowers: [], finalLabel: "", metrics: { towers: 0, km: "0.00" } });
   const [isPreviewing, setIsPreviewing] = React.useState(false);
 
@@ -686,7 +834,7 @@ export default function DailyReport() {
   const [currentSubPointEnd, setCurrentSubPointEnd] = React.useState<string>("");
   const [currentIsMultiSelection, setCurrentIsMultiSelection] = React.useState<boolean>(false);
   const [currentObservations, setCurrentObservations] = React.useState<string>("");
-  const [currentStatus, setCurrentStatus] = React.useState<'IN_PROGRESS' | 'FINISHED'>('FINISHED');
+  const [currentStatus, setCurrentStatus] = React.useState<ActivityStatus>(ActivityStatus.FINISHED);
   const [currentDetails, setCurrentDetails] = React.useState<DailyReportSubPointDetail[]>([]);
   const [lockedDetails, setLockedDetails] = React.useState<DailyReportSubPointDetail[]>([]);
   const [currentPhotos, setCurrentPhotos] = React.useState<DailyReportPhoto[]>([]);
@@ -748,7 +896,7 @@ export default function DailyReport() {
 
       activeDetails = previewData.details.map((d, idx) => ({
         id: d.id,
-        status: d.status,
+        status: d.status as ActivityStatus,
         progress: d.progress,
         comment: "",
         startTime: idx === 0 ? lastReportEndTime : "" ,
@@ -763,7 +911,7 @@ export default function DailyReport() {
 
           return {
             id,
-            status: currentStatus,
+            status: currentStatus as ActivityStatus,
             progress: 0,
             comment: "",
             startTime: idx === 0 ? lastReportEndTime : "" ,
@@ -778,7 +926,7 @@ export default function DailyReport() {
 
       activeDetails = [{
         id: currentSubPoint,
-        status: currentStatus,
+        status: currentStatus as ActivityStatus,
         progress: 0,
         comment: "",
         startTime: lastReportEndTime,
@@ -935,8 +1083,22 @@ export default function DailyReport() {
         companyId: selectedCompanyId, 
         activities: selectedActivities.map(a => `${a.stageName} (${a.subPoint})`).join(", "),
         selectedActivities: selectedActivities,
+        status: 'SENT' as any,
+        weather: weather,
+        manpower: manpower,
+        equipment: equipment,
+        generalObservations: generalObservations,
+        generalPhotos: generalPhotos,
+        rdoNumber: rdoNumber,
+        revision: revision,
+        projectDeadline: projectDeadline,
         metadata: {
           selectedActivities: selectedActivities,
+          weather,
+          manpower,
+          equipment,
+          generalObservations,
+          generalPhotos
         },
       });
 
@@ -1028,812 +1190,1249 @@ export default function DailyReport() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in pb-10">
-      <div className="flex flex-col lg:grid lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-12">
-          <Card
-            className={cn(
-              "glass-card transition-all duration-500 border-none shadow-2xl relative overflow-hidden",
-              step === 1
-                ? "bg-primary/5 ring-1 ring-primary/20"
-                : "bg-primary/5 ring-1 ring-primary/20",
-            )}
-          >
-            {/* Decoração de topo similar ao mockup */}
-            <div
+    <>
+      <div className="space-y-6 animate-fade-in pb-10">
+        <div className="flex flex-col lg:grid lg:grid-cols-12 gap-8">
+          <div className="lg:col-span-12">
+            <Card
               className={cn(
-                "absolute top-0 left-0 right-0 h-1.5 bg-primary shadow-[0_0_15px_rgba(var(--primary),0.3)]",
+                "glass-card transition-all duration-500 border-none shadow-2xl relative overflow-hidden",
+                step === 1
+                  ? "bg-primary/5 ring-1 ring-primary/20"
+                  : "bg-primary/5 ring-1 ring-primary/20",
               )}
-            />
+            >
+              {/* Decoração de topo similar ao mockup */}
+              <div
+                className={cn(
+                  "absolute top-0 left-0 right-0 h-1.5 bg-primary shadow-[0_0_15px_rgba(var(--primary),0.3)]",
+                )}
+              />
 
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-3 text-2xl font-bold tracking-tight">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={toggleSidebar}
-                      className="h-8 w-8 text-primary hover:bg-primary/10 rounded-lg transition-colors hidden lg:flex"
-                      title={isSidebarOpen ? "Ocultar Menu" : "Expandir Menu"}
-                    >
-                      {isSidebarOpen ? (
-                        <PanelLeftClose className="w-5 h-5" />
-                      ) : (
-                        <PanelLeftOpen className="w-5 h-5" />
-                      )}
-                    </Button>
-                    <FileText className="w-6 h-6 text-primary" />
-                    Novo Relatório
-                  </CardTitle>
-                  <CardDescription className="text-muted-foreground/60 mt-1 pl-11">
-                    Preencha os dados de identificação e as atividades realizadas abaixo
-                  </CardDescription>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <div className="flex gap-1.5">
-                    <div className="w-24 h-1.5 rounded-full bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)] transition-all duration-500" />
-                  </div>
-                  <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-muted-foreground/40">
-                    Formulário Unificado
-                  </span>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-8 p-4">
-                <div className="space-y-8">
-                  {/* IDENTIFICAÇÃO BÁSICA (Fica fixo no topo) */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-primary/5 rounded-3xl border border-primary/10">
-                      {isSuperAdmin && (
-                        <div className="space-y-3">
-                          <Label className="text-primary/80 font-bold uppercase text-[10px] tracking-widest pl-1">Empresa</Label>
-                          <Select value={selectedCompanyId || ""} onValueChange={(val) => { setSelectedCompanyId(val); setSelectedProjectId(undefined); updateReportDraft({ siteId: "" }); }}>
-                            <SelectTrigger className="bg-black/20 border-primary/20 rounded-xl h-11"><SelectValue placeholder="Selecione a empresa..." /></SelectTrigger>
-                            <SelectContent className="glass-card">{companies?.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}</SelectContent>
-                          </Select>
-                        </div>
-                      )}
-
-                      <div className="space-y-3">
-                        <Label className="text-primary/80 font-bold uppercase text-[10px] tracking-widest pl-1">Obra / Projeto</Label>
-                        <Select value={selectedProjectId || ""} onValueChange={(val) => { setSelectedProjectId(val); updateReportDraft({ siteId: "" }); }} disabled={!selectedCompanyId}>
-                          <SelectTrigger className="bg-black/20 border-primary/20 rounded-xl h-11"><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
-                          <SelectContent className="glass-card">{filteredProjects.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}</SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-3">
-                        <Label className="text-primary/80 font-bold uppercase text-[10px] tracking-widest pl-1">Canteiro</Label>
-                        <Select value={effectiveSiteId || ""} onValueChange={(val) => updateReportDraft({ siteId: val })} disabled={!selectedProjectId}>
-                          <SelectTrigger className="bg-black/20 border-primary/20 rounded-xl h-11"><SelectValue placeholder="Selecione o canteiro..." /></SelectTrigger>
-                          <SelectContent className="glass-card">{sites.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-3">
-                        <Label className="text-primary/80 font-bold uppercase text-[10px] tracking-widest pl-1">Responsável</Label>
-                        {isWorker ? (
-                          <div className="bg-black/20 border border-primary/10 h-11 flex items-center px-4 rounded-xl text-xs font-bold">{profile?.fullName}</div>
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-3 text-2xl font-bold tracking-tight">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={toggleSidebar}
+                        className="h-8 w-8 text-primary hover:bg-primary/10 rounded-lg transition-colors hidden lg:flex"
+                        title={isSidebarOpen ? "Ocultar Menu" : "Expandir Menu"}
+                      >
+                        {isSidebarOpen ? (
+                          <PanelLeftClose className="w-5 h-5" />
                         ) : (
-                          <Select value={employeeId} onValueChange={(val) => updateReportDraft({ employeeId: val })} disabled={!selectedCompanyId}>
-                            <SelectTrigger className="bg-black/20 border-primary/20 rounded-xl h-11"><SelectValue placeholder="Responsável..." /></SelectTrigger>
-                            <SelectContent className="glass-card">{employees.map((e) => (<SelectItem key={e.id} value={e.id}>{e.fullName}</SelectItem>))}</SelectContent>
-                          </Select>
+                          <PanelLeftOpen className="w-5 h-5" />
                         )}
-                      </div>
+                      </Button>
+                      <FileText className="w-6 h-6 text-primary" />
+                      Novo Relatório
+                    </CardTitle>
+                    <CardDescription className="text-muted-foreground/60 mt-1 pl-11">
+                      Preencha os dados de identificação e as atividades realizadas abaixo
+                    </CardDescription>
                   </div>
-
-                  <div className="space-y-4">
-                    <Label className="text-primary/80 font-bold uppercase text-[10px] tracking-widest pl-1">Equipes Envolvidas</Label>
-                    <div className="flex flex-wrap gap-2 p-2 border border-primary/5 rounded-2xl bg-black/10">
-                      {teams.map((t) => (
-                        <Button
-                          key={t.id}
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className={cn(
-                            "rounded-full text-[10px] font-bold px-4 h-8 transition-all",
-                            teamIds.includes(t.id) ? "bg-primary text-white border-primary shadow-lg shadow-primary/20" : "bg-transparent border-primary/10 text-muted-foreground"
-                          )}
-                          onClick={() => {
-                            const newIds = teamIds.includes(t.id) ? teamIds.filter(id => id !== t.id) : [...teamIds, t.id];
-                            updateReportDraft({ teamIds: newIds });
-                          }}
-                        >
-                          {t.name}
-                        </Button>
-                      ))}
+                  <div className="flex flex-col items-end gap-2">
+                    <div className="flex gap-1.5">
+                      <div className="w-24 h-1.5 rounded-full bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)] transition-all duration-500" />
                     </div>
+                    <span className="text-[10px] uppercase font-bold tracking-[0.2em] text-muted-foreground/40">
+                      Formulário Unificado
+                    </span>
                   </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-8 p-4">
+                  <div className="space-y-8">
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-[10px] uppercase font-black tracking-widest text-primary/40 hover:text-primary transition-all flex items-center gap-2"
+                        onClick={async () => {
+                          setIsRefreshing(true);
+                          try {
+                            await refresh({ hard: true });
+                            setHasAttemptedAutoLoad(false); // Permite tentar auto-load de novo após limpar cache
+                            toast({
+                              title: "Cache Limpo",
+                              description: "As programações foram atualizadas com o servidor.",
+                            });
+                          } finally {
+                            setIsRefreshing(false);
+                          }
+                        }}
+                        disabled={isRefreshing}
+                      >
+                        <RefreshCw className={cn("w-3 h-3", isRefreshing && "animate-spin")} />
+                        Limpar Cache e Sincronizar
+                      </Button>
+                    </div>
 
-                  {/* SEÇÃO: ADICIONAR NOVA ATIVIDADE (MINI-RELATÓRIO) */}
-                  <div className="p-8 bg-amber-500/5 border-2 border-amber-500/20 rounded-[2.5rem] space-y-8 relative overflow-hidden group/form">
-                      <div className="absolute top-0 right-0 p-6 opacity-5 group-hover/form:opacity-10 transition-opacity">
-                         <Plus className="w-32 h-32" />
-                      </div>
-                      
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-amber-500/20 flex items-center justify-center">
-                          <Plus className="w-6 h-6 text-amber-500" />
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-black text-amber-500 uppercase tracking-tight">Relatar Atividade Executada</h3>
-                          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Identifique a tarefa, o local e o que foi feito</p>
-                        </div>
-                      </div>
+                    {/* IDENTIFICAÇÃO BÁSICA (Fica fixo no topo) */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-primary/5 rounded-3xl border border-primary/10">
+                        {isSuperAdmin && (
+                          <div className="space-y-3">
+                            <Label className="text-primary/80 font-bold uppercase text-[10px] tracking-widest pl-1">Empresa</Label>
+                            <Select value={selectedCompanyId || ""} onValueChange={(val) => { setSelectedCompanyId(val); setSelectedProjectId(undefined); updateReportDraft({ siteId: "" }); }}>
+                              <SelectTrigger className="bg-black/20 border-primary/20 rounded-xl h-11"><SelectValue placeholder="Selecione a empresa..." /></SelectTrigger>
+                              <SelectContent className="glass-card">{companies?.map((c) => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}</SelectContent>
+                            </Select>
+                          </div>
+                        )}
 
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 relative z-10">
-                        <div className="space-y-4">
-                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500/40">1. Qual Atividade?</Label>
-                          <Popover open={isActivityPopoverOpen} onOpenChange={setIsActivityPopoverOpen}>
-                            <PopoverTrigger asChild>
-                              <Button variant="outline" className="w-full justify-start h-14 bg-black/40 border-amber-500/20 rounded-2xl hover:bg-black/60 transition-all text-left px-6">
-                                <Search className="w-5 h-5 mr-3 text-amber-500/60" />
-                                <span className="font-bold truncate">
-                                  {currentStageIds.length > 0 
-                                    ? (currentStageIds.length === 1 
-                                        ? fixBrokenEncoding(workStages.find(s => s.id === currentStageIds[0])?.name || "")
-                                        : `${currentStageIds.length} Atividades selecionadas`)
-                                    : "Escolha as atividades..."}
-                                </span>
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[450px] p-0 glass-card border-amber-500/30 shadow-2xl">
-                              <Command className="bg-[#0c0c0e]">
-                                <CommandInput placeholder="Filtrar atividades..." className="h-12 border-none" />
-                                <CommandList className="max-h-[350px]">
-                                  {workStagesGrouped.map((group) => (
-                                    <CommandGroup key={group.category} heading={<span className="text-amber-500/60 font-black text-[10px] tracking-widest uppercase px-2">{group.category}</span>}>
-                                      {group.items.map((stage) => (
-                                        <CommandItem 
-                                          key={stage.id} 
-                                          value={stage.name} 
-                                          onSelect={() => {
-                                            if (currentStageIds.includes(stage.id)) {
-                                              setCurrentStageIds(currentStageIds.filter(id => id !== stage.id));
-                                            } else {
-                                              setCurrentStageIds([...currentStageIds, stage.id]);
-                                            }
-                                          }} 
-                                          className="cursor-pointer aria-selected:bg-amber-500/20 rounded-xl m-1 px-4 py-3"
-                                        >
-                                          <div className="flex items-center justify-between w-full">
-                                            <div className="flex flex-col">
-                                              <span className="font-bold text-sm">{stage.name}</span>
-                                              {stage.description && <span className="text-[10px] text-muted-foreground">{stage.description}</span>}
-                                            </div>
-                                            {currentStageIds.includes(stage.id) && (
-                                              <div className="w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center">
-                                                <Check className="w-3 h-3 text-black" />
+                        <div className="space-y-3">
+                          <Label className="text-primary/80 font-bold uppercase text-[10px] tracking-widest pl-1">Obra / Projeto</Label>
+                          <Select value={selectedProjectId || ""} onValueChange={(val) => { setSelectedProjectId(val); updateReportDraft({ siteId: "" }); }} disabled={!selectedCompanyId}>
+                            <SelectTrigger className="bg-black/20 border-primary/20 rounded-xl h-11"><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
+                            <SelectContent className="glass-card">{filteredProjects.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}</SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-3">
+                          <Label className="text-primary/80 font-bold uppercase text-[10px] tracking-widest pl-1">Canteiro</Label>
+                          <Select value={effectiveSiteId || ""} onValueChange={(val) => updateReportDraft({ siteId: val })} disabled={!selectedProjectId}>
+                            <SelectTrigger className="bg-black/20 border-primary/20 rounded-xl h-11"><SelectValue placeholder="Selecione o canteiro..." /></SelectTrigger>
+                            <SelectContent className="glass-card">{sites.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-3">
+                          <Label className="text-primary/80 font-bold uppercase text-[10px] tracking-widest pl-1">Responsável</Label>
+                          {isWorker ? (
+                            <div className="bg-black/20 border border-primary/10 h-11 flex items-center px-4 rounded-xl text-xs font-bold">{profile?.fullName}</div>
+                          ) : (
+                            <EmployeePicker 
+                              value={employeeId} 
+                              onChange={(val: string) => updateReportDraft({ employeeId: val })} 
+                              placeholder="Buscar responsável..." 
+                            />
+                          )}
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <Label className="text-primary/80 font-bold uppercase text-[10px] tracking-widest pl-1">Equipes Envolvidas</Label>
+                      <div className="flex flex-wrap gap-2 p-2 border border-primary/5 rounded-2xl bg-black/10">
+                        {teams.map((t) => (
+                          <Button
+                            key={t.id}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className={cn(
+                              "rounded-full text-[10px] font-bold px-4 h-8 transition-all",
+                              teamIds.includes(t.id) ? "bg-primary text-white border-primary shadow-lg shadow-primary/20" : "bg-transparent border-primary/10 text-muted-foreground"
+                            )}
+                            onClick={() => {
+                              const newIds = teamIds.includes(t.id) ? teamIds.filter(id => id !== t.id) : [...teamIds, t.id];
+                              updateReportDraft({ teamIds: newIds });
+                            }}
+                          >
+                            {t.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* SEÇÃO: ADICIONAR NOVA ATIVIDADE (MINI-RELATÓRIO) */}
+                    <div className="p-8 bg-amber-500/5 border-2 border-amber-500/20 rounded-[2.5rem] space-y-8 relative overflow-hidden group/form">
+                        <div className="absolute top-0 right-0 p-6 opacity-5 group-hover/form:opacity-10 transition-opacity">
+                           <Plus className="w-32 h-32" />
+                        </div>
+                        
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-amber-500/20 flex items-center justify-center">
+                            <Plus className="w-6 h-6 text-amber-500" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-black text-amber-500 uppercase tracking-tight">Relatar Atividade Executada</h3>
+                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Identifique a tarefa, o local e o que foi feito</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 relative z-10">
+                          <div className="space-y-4">
+                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500/40">1. Qual Atividade?</Label>
+                            <Popover open={isActivityPopoverOpen} onOpenChange={setIsActivityPopoverOpen}>
+                              <PopoverTrigger asChild>
+                                <Button variant="outline" className="w-full justify-start h-14 bg-black/40 border-amber-500/20 rounded-2xl hover:bg-black/60 transition-all text-left px-6">
+                                  <Search className="w-5 h-5 mr-3 text-amber-500/60" />
+                                  <span className="font-bold truncate">
+                                    {currentStageIds.length > 0 
+                                      ? (currentStageIds.length === 1 
+                                          ? fixBrokenEncoding(workStages.find(s => s.id === currentStageIds[0])?.name || "")
+                                          : `${currentStageIds.length} Atividades selecionadas`)
+                                      : "Escolha as atividades..."}
+                                  </span>
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[450px] p-0 glass-card border-amber-500/30 shadow-2xl">
+                                <Command className="bg-[#0c0c0e]">
+                                  <CommandInput placeholder="Filtrar atividades..." className="h-12 border-none" />
+                                  <CommandList className="max-h-[350px]">
+                                    {workStagesGrouped.map((group) => (
+                                      <CommandGroup key={group.category} heading={<span className="text-amber-500/60 font-black text-[10px] tracking-widest uppercase px-2">{group.category}</span>}>
+                                        {group.items.map((stage) => (
+                                          <CommandItem 
+                                            key={stage.id} 
+                                            value={stage.name} 
+                                            onSelect={() => {
+                                              if (currentStageIds.includes(stage.id)) {
+                                                setCurrentStageIds(currentStageIds.filter(id => id !== stage.id));
+                                              } else {
+                                                setCurrentStageIds([...currentStageIds, stage.id]);
+                                              }
+                                            }} 
+                                            className="cursor-pointer aria-selected:bg-amber-500/20 rounded-xl m-1 px-4 py-3"
+                                          >
+                                            <div className="flex items-center justify-between w-full">
+                                              <div className="flex flex-col">
+                                                <span className="font-bold text-sm">{stage.name}</span>
+                                                {stage.description && <span className="text-[10px] text-muted-foreground">{stage.description}</span>}
                                               </div>
-                                            )}
-                                          </div>
-                                        </CommandItem>
-                                      ))}
-                                    </CommandGroup>
-                                  ))}
-                                </CommandList>
-                              </Command>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
+                                              {currentStageIds.includes(stage.id) && (
+                                                <div className="w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center">
+                                                  <Check className="w-3 h-3 text-black" />
+                                                </div>
+                                              )}
+                                            </div>
+                                          </CommandItem>
+                                        ))}
+                                      </CommandGroup>
+                                    ))}
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
 
-                        <div className="space-y-4">
-                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500/40">2. Onde? (Localização)</Label>
-                          
-                          <div className="flex flex-wrap items-center gap-4 lg:gap-6 relative z-10">
-                            {/* Seletor de Tipo */}
-                            <div className="min-w-[140px]">
-                              <Select value={currentSubPointType} onValueChange={(val: any) => setCurrentSubPointType(val)}>
-                                <SelectTrigger className="bg-black/40 border-amber-500/20 rounded-2xl h-14 font-bold text-xs"><SelectValue /></SelectTrigger>
-                                <SelectContent className="glass-card">
-                                  <SelectItem value="GERAL">Geral</SelectItem>
-                                  <SelectItem value="TORRE">Torre</SelectItem>
-                                  <SelectItem value="VAO">Vão</SelectItem>
-                                  <SelectItem value="TRECHO">Trecho</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
+                          <div className="space-y-4">
+                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500/40">2. Onde? (Localização)</Label>
+                            
+                            <div className="flex flex-wrap items-center gap-4 lg:gap-6 relative z-10">
+                              {/* Seletor de Tipo */}
+                              <div className="min-w-[140px]">
+                                <Select value={currentSubPointType} onValueChange={(val: any) => setCurrentSubPointType(val)}>
+                                  <SelectTrigger className="bg-black/40 border-amber-500/20 rounded-2xl h-14 font-bold text-xs"><SelectValue /></SelectTrigger>
+                                  <SelectContent className="glass-card">
+                                    <SelectItem value="GERAL">Geral</SelectItem>
+                                    <SelectItem value="TORRE">Torre</SelectItem>
+                                    <SelectItem value="VAO">Vão</SelectItem>
+                                    <SelectItem value="TRECHO">Trecho</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
 
-                            {/* Checkbox de Seleção Múltipla */}
-                            <label className="flex items-center gap-2 text-[10px] font-bold text-amber-500/60 cursor-pointer whitespace-nowrap px-2">
-                              <input 
-                                type="checkbox" 
-                                checked={currentIsMultiSelection} 
-                                onChange={e => { setCurrentIsMultiSelection(e.target.checked); setCurrentSubPointEnd(""); }} 
-                                className="rounded border-amber-500/30 bg-black/40 text-amber-500" 
-                              />
-                              SELEÇÃO MÚLTIPLA
-                            </label>
+                              {/* Checkbox de Seleção Múltipla */}
+                              <label className="flex items-center gap-2 text-[10px] font-bold text-amber-500/60 cursor-pointer whitespace-nowrap px-2">
+                                <input 
+                                  type="checkbox" 
+                                  checked={currentIsMultiSelection} 
+                                  onChange={e => { setCurrentIsMultiSelection(e.target.checked); setCurrentSubPointEnd(""); }} 
+                                  className="rounded border-amber-500/30 bg-black/40 text-amber-500" 
+                                />
+                                SELEÇÃO MÚLTIPLA
+                              </label>
 
-                            {/* Seletores de Localização e Botão de Adicionar */}
-                            <div className="flex gap-3 items-center animate-in fade-in duration-500 flex-1 min-w-[300px]">
-                               <div className="flex flex-row gap-2 flex-1">
-                                  <div className="flex-1 relative">
-                                    <LocationPicker value={currentSubPoint} onChange={setCurrentSubPoint} placeholder={currentIsMultiSelection ? "INÍCIO..." : "TORRE..."} />
-                                  </div>
-                                  
-                                  {currentIsMultiSelection && (
-                                    <div className="flex-1 animate-in slide-in-from-left-2 duration-300">
-                                      <LocationPicker value={currentSubPointEnd} onChange={setCurrentSubPointEnd} placeholder="FIM..." />
+                              {/* Seletores de Localização e Botão de Adicionar */}
+                              <div className="flex gap-3 items-center animate-in fade-in duration-500 flex-1 min-w-[300px]">
+                                 <div className="flex flex-row gap-2 flex-1">
+                                    <div className="flex-1 relative">
+                                      <LocationPicker value={currentSubPoint} onChange={setCurrentSubPoint} placeholder={currentIsMultiSelection ? "INÍCIO..." : "TORRE..."} />
                                     </div>
-                                  )}
-                               </div>
+                                    
+                                    {currentIsMultiSelection && (
+                                      <div className="flex-1 animate-in slide-in-from-left-2 duration-300">
+                                        <LocationPicker value={currentSubPointEnd} onChange={setCurrentSubPointEnd} placeholder="FIM..." />
+                                      </div>
+                                    )}
+                                 </div>
 
-                               {currentSubPoint && (
-                                 <Button 
-                                   type="button" 
-                                   variant="outline" 
-                                   size="icon" 
-                                   onClick={() => {
-                                     const activeSelection = currentDetails.filter(d => !lockedDetails.some(ld => ld.id === d.id));
-                                     setLockedDetails([...lockedDetails, ...activeSelection]);
-                                     setCurrentSubPoint("");
-                                     setCurrentSubPointEnd("");
-                                   }}
-                                   className="bg-amber-500/20 border-amber-500/40 text-amber-500 hover:bg-amber-500 hover:text-black h-14 w-14 rounded-2xl shrink-0 transition-all active:scale-90"
-                                 >
-                                   <Plus className="w-6 h-6" />
-                                 </Button>
-                               )}
+                                 {currentSubPoint && (
+                                   <Button 
+                                     type="button" 
+                                     variant="outline" 
+                                     size="icon" 
+                                     onClick={() => {
+                                       const activeSelection = currentDetails.filter(d => !lockedDetails.some(ld => ld.id === d.id));
+                                       setLockedDetails([...lockedDetails, ...activeSelection]);
+                                       setCurrentSubPoint("");
+                                       setCurrentSubPointEnd("");
+                                     }}
+                                     className="bg-amber-500/20 border-amber-500/40 text-amber-500 hover:bg-amber-500 hover:text-black h-14 w-14 rounded-2xl shrink-0 transition-all active:scale-90"
+                                   >
+                                     <Plus className="w-6 h-6" />
+                                   </Button>
+                                 )}
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
 
-                      {/* LISTA DE TORRES PARA REGISTRO INDIVIDUAL */}
-                      {currentDetails.length > 0 && currentSubPointType !== 'GERAL' && (
-                        <div className="space-y-4 relative z-10 animate-in fade-in slide-in-from-top-4 duration-500">
-                          <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500/40">Status Individual das Torres/Vãos</Label>
-                          <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                            {currentDetails.map((detail, idx) => {
-                              const isInvalid = timeConflicts.invalidIds.has(detail.id);
-                              const isInternalOverlap = timeConflicts.internalOverlapIds.has(detail.id);
-                              const isExternalOverlap = timeConflicts.externalOverlapIds.has(detail.id);
-                              const isChronologyError = timeConflicts.chronologyErrorIds.has(detail.id);
-                              const hasAnyConflict = isInvalid || isInternalOverlap || isExternalOverlap || isChronologyError;
+                        {/* LISTA DE TORRES PARA REGISTRO INDIVIDUAL */}
+                        {currentDetails.length > 0 && (
+                          <div className="space-y-4 animate-in fade-in duration-500">
+                            <div className="flex items-center justify-between px-2">
+                               <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500/40">2. Detalhamento por Localização ({currentDetails.length})</Label>
+                               {currentDetails.length > 20 && (
+                                 <span className="text-[8px] font-black text-amber-500/60 uppercase">Dica: Use a propagação sequencial para ganhar tempo</span>
+                               )}
+                            </div>
+                            <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                              {currentDetails.slice(0, 50).map((detail, idx) => {
+                                const isInvalid = timeConflicts.invalidIds.has(detail.id);
+                                const isInternalOverlap = timeConflicts.internalOverlapIds.has(detail.id);
+                                const isExternalOverlap = timeConflicts.externalOverlapIds.has(detail.id);
+                                const isChronologyError = timeConflicts.chronologyErrorIds.has(detail.id);
+                                const hasAnyConflict = isInvalid || isInternalOverlap || isExternalOverlap || isChronologyError;
 
-                              return (
-                                <div key={`${detail.id}-${idx}`} className="space-y-2">
-                                  <div className={cn(
-                                    "flex flex-col md:flex-row items-center gap-4 bg-black/40 border p-4 rounded-3xl transition-all group/tower",
-                                    hasAnyConflict ? "border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]" : "border-amber-500/10 hover:border-amber-500/30"
-                                  )}>
-                                    <div className="flex items-center gap-3 min-w-[150px]">
-                                       <div className={cn(
-                                         "w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black transition-colors",
-                                         hasAnyConflict ? "bg-red-500 text-white" : "bg-amber-500/10 text-amber-500 group-hover/tower:bg-amber-500 group-hover/tower:text-black"
-                                       )}>
-                                         {idx + 1}
-                                       </div>
-                                    <span className="font-black text-xs uppercase tracking-tight w-12">{detail.id}</span>
-                                    {lockedDetails.some(ld => ld.id === detail.id) && (
-                                      <Button 
-                                        type="button" 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        onClick={() => setLockedDetails(prev => prev.filter(ld => ld.id !== detail.id))}
-                                        className="h-8 w-8 text-red-500/20 hover:text-red-500 hover:bg-red-500/10 rounded-xl -ml-2"
-                                      >
-                                        <X className="w-4 h-4" />
-                                      </Button>
-                                    )}
-                                    <div className="flex gap-2">
-                                      <div className="flex flex-col gap-0.5">
-                                        <label className="text-[7px] font-black text-white/30 uppercase pl-1">Início</label>
-                                        <TimePicker24h 
-                                          value={detail.startTime || ""}
-                                          onChange={(val) => {
-                                            const newDetails = [...currentDetails];
-                                            newDetails[idx].startTime = val;
-                                            // Sempre preencher 1 minuto a mais para o fim ao preencher o início
-                                            if (!newDetails[idx].endTime || toMinutes(newDetails[idx].endTime) <= toMinutes(val)) {
-                                              newDetails[idx].endTime = addOneMinute(val);
-                                            }
-                                            setCurrentDetails(newDetails);
-                                          }}
-                                          className="text-amber-500"
-                                          isError={timeConflicts.invalidIds.has(detail.id) || timeConflicts.chronologyErrorIds.has(detail.id) || timeConflicts.internalOverlapIds.has(detail.id) || timeConflicts.externalOverlapIds.has(detail.id)}
-                                        />
-                                      </div>
-                                      <div className="flex flex-col gap-0.5">
-                                        <label className="text-[7px] font-black text-white/30 uppercase pl-1">Fim</label>
+                                return (
+                                  <div key={`${detail.id}-${idx}`} className="space-y-2">
+                                    <div className={cn(
+                                      "flex flex-col md:flex-row items-center gap-4 bg-black/40 border p-4 rounded-3xl transition-all group/tower",
+                                      hasAnyConflict ? "border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]" : "border-amber-500/10 hover:border-amber-500/30"
+                                    )}>
+                                      <div className="flex items-center gap-3 min-w-[150px]">
+                                         <div className={cn(
+                                           "w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-black transition-colors",
+                                           hasAnyConflict ? "bg-red-500 text-white" : "bg-amber-500/10 text-amber-500 group-hover/tower:bg-amber-500 group-hover/tower:text-black"
+                                         )}>
+                                           {idx + 1}
+                                         </div>
+                                      <span className="font-black text-xs uppercase tracking-tight w-12">{detail.id}</span>
+                                      {lockedDetails.some(ld => ld.id === detail.id) && (
+                                        <Button 
+                                          type="button" 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          onClick={() => setLockedDetails(prev => prev.filter(ld => ld.id !== detail.id))}
+                                          className="h-8 w-8 text-red-500/20 hover:text-red-500 hover:bg-red-500/10 rounded-xl -ml-2"
+                                        >
+                                          <X className="w-4 h-4" />
+                                        </Button>
+                                      )}
+                                      <div className="flex gap-2">
+                                        <div className="flex flex-col gap-0.5">
+                                          <label className="text-[7px] font-black text-white/30 uppercase pl-1">Início</label>
                                           <TimePicker24h 
-                                            value={detail.endTime || ""}
+                                            value={detail.startTime || ""}
                                             onChange={(val) => {
                                               const newDetails = [...currentDetails];
-                                              const endTime = val;
-                                              newDetails[idx].endTime = endTime;
-                                              
-                                              // Propagação Sequencial: Se houver um próximo item, preencher o início dele
-                                              if (newDetails[idx + 1] && !newDetails[idx + 1].startTime) {
-                                                newDetails[idx + 1].startTime = endTime;
+                                              newDetails[idx].startTime = val;
+                                              // Sempre preencher 1 minuto a mais para o fim ao preencher o início
+                                              if (!newDetails[idx].endTime || toMinutes(newDetails[idx].endTime) <= toMinutes(val)) {
+                                                newDetails[idx].endTime = addOneMinute(val);
                                               }
-                                              
                                               setCurrentDetails(newDetails);
                                             }}
-                                            isError={timeConflicts.invalidIds.has(detail.id) || timeConflicts.internalOverlapIds.has(detail.id) || timeConflicts.externalOverlapIds.has(detail.id)}
+                                            className="text-amber-500"
+                                            isError={timeConflicts.invalidIds.has(detail.id) || timeConflicts.chronologyErrorIds.has(detail.id) || timeConflicts.internalOverlapIds.has(detail.id) || timeConflicts.externalOverlapIds.has(detail.id)}
                                           />
+                                        </div>
+                                        <div className="flex flex-col gap-0.5">
+                                          <label className="text-[7px] font-black text-white/30 uppercase pl-1">Fim</label>
+                                            <TimePicker24h 
+                                              value={detail.endTime || ""}
+                                              onChange={(val) => {
+                                                const newDetails = [...currentDetails];
+                                                const endTime = val;
+                                                newDetails[idx].endTime = endTime;
+                                                
+                                                // Propagação Sequencial: Se houver um próximo item, preencher o início dele
+                                                if (newDetails[idx + 1] && !newDetails[idx + 1].startTime) {
+                                                  newDetails[idx + 1].startTime = endTime;
+                                                }
+                                                
+                                                setCurrentDetails(newDetails);
+                                              }}
+                                              isError={timeConflicts.invalidIds.has(detail.id) || timeConflicts.internalOverlapIds.has(detail.id) || timeConflicts.externalOverlapIds.has(detail.id)}
+                                            />
+                                        </div>
                                       </div>
+                                   </div>
+                                  
+                                  <div className="min-w-[140px]">
+                                    <Select 
+                                      value={detail.status} 
+                                      onValueChange={(val: ActivityStatus) => {
+                                        const newDetails = [...currentDetails];
+                                        newDetails[idx].status = val;
+                                        if (val === ActivityStatus.FINISHED) newDetails[idx].progress = 100;
+                                        else if (val === ActivityStatus.BLOCKED) newDetails[idx].progress = 0;
+                                        else if (newDetails[idx].progress === 100) newDetails[idx].progress = 50;
+                                        setCurrentDetails(newDetails);
+                                      }}
+                                    >
+                                      <SelectTrigger className={cn(
+                                        "h-9 rounded-xl border-none font-black text-[10px] uppercase transition-all shadow-lg",
+                                        detail.status === ActivityStatus.FINISHED ? "bg-green-600 text-white shadow-green-500/20 hover:bg-green-500" :
+                                        detail.status === ActivityStatus.BLOCKED ? "bg-red-600 text-white shadow-red-500/20 hover:bg-red-500" :
+                                        "bg-amber-500 text-black shadow-amber-500/20 hover:bg-amber-400"
+                                      )}>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent className="glass-card border-white/10">
+                                        <SelectItem value={ActivityStatus.IN_PROGRESS} className="text-[10px] font-black uppercase">ANDAMENTO</SelectItem>
+                                        <SelectItem value={ActivityStatus.FINISHED} className="text-[10px] font-black uppercase text-green-500">CONCLUÍDO</SelectItem>
+                                        <SelectItem value={ActivityStatus.BLOCKED} className="text-[10px] font-black uppercase text-red-500">SEM ATIVIDADES</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+
+                                  {detail.status === ActivityStatus.BLOCKED && !detail.comment && (
+                                    <div className="flex items-center gap-2 px-3 py-1 bg-red-500/10 border border-red-500/20 rounded-lg animate-pulse">
+                                      <Info className="w-3 h-3 text-red-500" />
+                                      <span className="text-[8px] font-black text-red-500 uppercase">Atenção: É obrigatório adicionar um comentário justificando a falta de atividade!</span>
+                                    </div>
+                                  )}
+
+                                  {detail.status === ActivityStatus.IN_PROGRESS && (
+                                    <div className="flex items-center gap-3 flex-1 min-w-[150px]">
+                                       <input 
+                                         type="range" 
+                                         min="0" 
+                                         max="100" 
+                                         step="5"
+                                         value={detail.progress}
+                                         onChange={(e) => {
+                                           const newDetails = [...currentDetails];
+                                           newDetails[idx].progress = parseInt(e.target.value);
+                                           setCurrentDetails(newDetails);
+                                         }}
+                                         className="w-full accent-amber-500 h-1.5 bg-black/40 rounded-full appearance-none cursor-pointer"
+                                       />
+                                       <span className="text-[10px] font-black text-amber-500 w-8">{detail.progress}%</span>
+                                    </div>
+                                  )}
+                                  
+                                  <div className="flex items-center gap-2">
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <Button 
+                                          type="button" 
+                                          size="sm" 
+                                          variant="outline" 
+                                          className={cn("rounded-xl h-8 px-3 gap-2", detail.photos?.length ? "bg-primary/20 border-primary/40 text-primary" : "bg-black/20 border-white/5 opacity-40 hover:opacity-100")}
+                                        >
+                                          <Camera className="w-3.5 h-3.5" />
+                                          <span className="text-[9px] font-black uppercase">{detail.photos?.length ? `${detail.photos.length} Fotos` : "Fotos"}</span>
+                                        </Button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-96 p-4 glass-card border-white/10 shadow-2xl">
+                                        <div className="space-y-3">
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black uppercase text-primary">Fotos da Localização - {detail.id}</span>
+                                          </div>
+                                          <PhotoUploadZone 
+                                            photos={detail.photos || []} 
+                                            onChange={(photos) => {
+                                              const newDetails = [...currentDetails];
+                                              newDetails[idx].photos = photos;
+                                              setCurrentDetails(newDetails);
+                                            }}
+                                            compact
+                                          />
+                                        </div>
+                                      </PopoverContent>
+                                    </Popover>
+
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <Button 
+                                          type="button" 
+                                          size="sm" 
+                                          variant="outline" 
+                                          className={cn("rounded-xl h-8 px-3 gap-2", detail.comment ? "bg-primary/20 border-primary/40 text-primary" : (detail.status === ActivityStatus.BLOCKED ? "bg-red-500/20 border-red-500 text-red-500 animate-bounce" : "bg-black/20 border-white/5 opacity-40 hover:opacity-100"))}
+                                        >
+                                          <Info className="w-3.5 h-3.5" />
+                                          <span className="text-[9px] font-black uppercase">{detail.comment ? "Comentário OK" : "Comentar"}</span>
+                                        </Button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-80 p-4 glass-card border-white/10 shadow-2xl">
+                                        <div className="space-y-3">
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black uppercase text-primary">Comentário - {detail.id}</span>
+                                          </div>
+                                          <Textarea 
+                                            placeholder={detail.status === ActivityStatus.BLOCKED ? "Descreva o motivo de não haver atividades nesta torre..." : "Descreva observações específicas para esta torre..."}
+                                            className="bg-black/40 border-white/5 rounded-xl text-xs min-h-[100px]"
+                                            value={detail.comment || ""}
+                                            onChange={(e) => {
+                                              const newDetails = [...currentDetails];
+                                              newDetails[idx].comment = e.target.value;
+                                              setCurrentDetails(newDetails);
+                                            }}
+                                          />
+                                        </div>
+                                      </PopoverContent>
+                                    </Popover>
+                                  </div>
+                                </div>
+                                       {/* Mensagens de Erro de Tempo */}
+                                       {hasAnyConflict && (
+                                         <div className="px-6 py-2 bg-red-500/5 rounded-2xl border border-red-500/10 flex flex-wrap gap-4 animate-in slide-in-from-top-2">
+                                            {isInvalid && <span className="text-[9px] font-bold text-red-500 uppercase flex items-center gap-1"><Info className="w-3 h-3" /> Fim deve ser após Início</span>}
+                                            {isInternalOverlap && <span className="text-[9px] font-bold text-red-400 uppercase flex items-center gap-1"><Info className="w-3 h-3" /> Sobreposição nesta lista</span>}
+                                            {isExternalOverlap && <span className="text-[9px] font-bold text-orange-500 uppercase flex items-center gap-1"><Info className="w-3 h-3" /> Conflito com atividade já salva</span>}
+                                            {isChronologyError && <span className="text-[9px] font-bold text-red-600 uppercase flex items-center gap-1"><Info className="w-3 h-3" /> Horário anterior ao último lançamento</span>}
+                                         </div>
+                                       )}
+                                  </div>
+                                );
+                              })}
+                               
+                               {currentDetails.length > 50 && (
+                                 <div className="p-6 bg-amber-500/5 border border-dashed border-amber-500/20 rounded-3xl text-center">
+                                    <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest leading-relaxed">
+                                      Exibindo as primeiras 50 localizações de {currentDetails.length}.<br/>
+                                      Para melhor performance, edite os itens em blocos menores ou use a propagação automática.
+                                    </p>
+                                    <Button 
+                                      variant="ghost" 
+                                      className="mt-3 text-[10px] font-bold text-amber-500 hover:bg-amber-500/10"
+                                      onClick={() => toast({ title: "Performance", description: "A exibição está limitada para evitar lentidão. Os dados de todas as torres serão salvos normalmente." })}
+                                    >
+                                      POR QUE NÃO VEJO TUDO?
+                                    </Button>
+                                 </div>
+                               )}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between gap-6 pt-4 relative z-10">
+
+                           <Button 
+                            type="button" 
+                            onClick={handleAddItem}
+                             disabled={
+                               currentStageIds.length === 0 || 
+                               (currentSubPointType !== 'GERAL' && currentDetails.length === 0) || 
+                               currentDetails.some(d => d.status === ActivityStatus.BLOCKED && !d.comment) ||
+                               (currentSubPointType !== 'GERAL' && (
+                                 currentDetails.some(d => !d.startTime || !d.endTime) ||
+                                 timeConflicts.invalidIds.size > 0 ||
+                                 timeConflicts.internalOverlapIds.size > 0 ||
+                                 timeConflicts.externalOverlapIds.size > 0 ||
+                                 timeConflicts.chronologyErrorIds.size > 0
+                               ))
+                             }
+                            className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black uppercase tracking-widest rounded-3xl h-16 shadow-xl shadow-amber-500/10 group active:scale-95 transition-all"
+                           >
+                             <Plus className="w-6 h-6 mr-3 group-hover:rotate-90 transition-transform" />
+                             Adicionar Atividade ao RDO
+                           </Button>
+                        </div>
+                    </div>
+
+                    {/* LISTA DE ATIVIDADES JÁ RELATADAS */}
+                    <div className="space-y-6 pt-10">
+                      <div className="flex items-center justify-between px-2">
+                         <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+                           <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                           Atividades no Relatório ({selectedActivities.length})
+                         </h3>
+                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Resumo do dia</span>
+                      </div>
+
+                      {selectedActivities.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-white/5 rounded-[3rem] bg-white/5">
+                           <Info className="w-10 h-10 text-white/10 mb-4" />
+                           <p className="text-sm font-bold text-white/20 uppercase tracking-widest">Nenhuma atividade adicionada ainda</p>
+                        </div>
+                      ) : (
+                        <div className={cn(
+                          "grid gap-4",
+                          selectedActivities.length === 1 ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"
+                        )}>
+                          {selectedActivities.map((act) => (
+                            <div key={act.id} className="group/item glass-card p-6 rounded-4xl border-white/5 hover:border-primary/30 transition-all animate-in zoom-in-95">
+                               <div className="flex items-start justify-between mb-4">
+                                 <div className="flex flex-col gap-1">
+                                    <span className="text-xs font-black text-primary uppercase tracking-tighter line-clamp-1">{fixBrokenEncoding(act.stageName || "")}</span>
+                                    <div className="flex items-center gap-2">
+                                       <span className="text-[10px] font-bold text-muted-foreground uppercase bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
+                                         {act.subPointType}: {act.subPoint} {act.isMultiSelection && `→ ${act.subPointEnd}`}
+                                       </span>
+                                       <span className={cn("text-[8px] font-black px-2 py-0.5 rounded-full", act.status === 'FINISHED' ? 'bg-green-500/20 text-green-500 border border-green-500/20' : 'bg-amber-500/20 text-amber-500 border border-amber-500/20')}>
+                                         {act.status === 'FINISHED' ? 'CONCLUÍDO' : 'ANDAMENTO'}
+                                       </span>
                                     </div>
                                  </div>
-                                
-                                <div className="min-w-[140px]">
-                                  <Select 
-                                    value={detail.status} 
-                                    onValueChange={(val: any) => {
-                                      const newDetails = [...currentDetails];
-                                      newDetails[idx].status = val;
-                                      if (val === 'FINISHED') newDetails[idx].progress = 100;
-                                      else if (val === 'BLOCKED') newDetails[idx].progress = 0;
-                                      else if (newDetails[idx].progress === 100) newDetails[idx].progress = 50;
-                                      setCurrentDetails(newDetails);
-                                    }}
-                                  >
-                                    <SelectTrigger className={cn(
-                                      "h-9 rounded-xl border-none font-black text-[10px] uppercase transition-all shadow-lg",
-                                      detail.status === 'FINISHED' ? "bg-green-600 text-white shadow-green-500/20 hover:bg-green-500" :
-                                      detail.status === 'BLOCKED' ? "bg-red-600 text-white shadow-red-500/20 hover:bg-red-500" :
-                                      "bg-amber-500 text-black shadow-amber-500/20 hover:bg-amber-400"
-                                    )}>
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="glass-card border-white/10">
-                                      <SelectItem value="IN_PROGRESS" className="text-[10px] font-black uppercase">ANDAMENTO</SelectItem>
-                                      <SelectItem value="FINISHED" className="text-[10px] font-black uppercase text-green-500">CONCLUÍDO</SelectItem>
-                                      <SelectItem value="BLOCKED" className="text-[10px] font-black uppercase text-red-500">SEM ATIVIDADES</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
+                                 <Button size="icon" variant="ghost" className="h-8 w-8 text-white/20 hover:text-red-500 hover:bg-red-500/10 rounded-xl" onClick={() => handleRemoveItem(act.id)}>
+                                   <Plus className="w-5 h-5 rotate-45" />
+                                 </Button>
+                               </div>
+                               {act.observations && (
+                                 <p className="text-xs text-muted-foreground/60 leading-relaxed italic line-clamp-2 px-3 border-l-2 border-primary/20">"{act.observations}"</p>
+                               )}
 
-                                {detail.status === 'BLOCKED' && !detail.comment && (
-                                  <div className="flex items-center gap-2 px-3 py-1 bg-red-500/10 border border-red-500/20 rounded-lg animate-pulse">
-                                    <Info className="w-3 h-3 text-red-500" />
-                                    <span className="text-[8px] font-black text-red-500 uppercase">Atenção: É obrigatório adicionar um comentário justificando a falta de atividade!</span>
-                                  </div>
-                                )}
-
-                                {detail.status === 'IN_PROGRESS' && (
-                                  <div className="flex items-center gap-3 flex-1 min-w-[150px]">
-                                     <input 
-                                       type="range" 
-                                       min="0" 
-                                       max="100" 
-                                       step="5"
-                                       value={detail.progress}
-                                       onChange={(e) => {
-                                         const newDetails = [...currentDetails];
-                                         newDetails[idx].progress = parseInt(e.target.value);
-                                         setCurrentDetails(newDetails);
-                                       }}
-                                       className="w-full accent-amber-500 h-1.5 bg-black/40 rounded-full appearance-none cursor-pointer"
-                                     />
-                                     <span className="text-[10px] font-black text-amber-500 w-8">{detail.progress}%</span>
-                                  </div>
-                                )}
-                                
-                                <div className="flex items-center gap-2">
-                                  <Popover>
-                                    <PopoverTrigger asChild>
-                                      <Button 
-                                        type="button" 
-                                        size="sm" 
-                                        variant="outline" 
-                                        className={cn("rounded-xl h-8 px-3 gap-2", detail.photos?.length ? "bg-primary/20 border-primary/40 text-primary" : "bg-black/20 border-white/5 opacity-40 hover:opacity-100")}
-                                      >
-                                        <Camera className="w-3.5 h-3.5" />
-                                        <span className="text-[9px] font-black uppercase">{detail.photos?.length ? `${detail.photos.length} Fotos` : "Fotos"}</span>
-                                      </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-96 p-4 glass-card border-white/10 shadow-2xl">
+                               <div className="mt-4 flex flex-wrap gap-2">
+                                 <Popover>
+                                   <PopoverTrigger asChild>
+                                     <Button variant="ghost" size="sm" className={cn("h-7 px-2 text-[8px] font-black uppercase rounded-lg gap-1.5", act.photos?.length ? "text-primary bg-primary/10" : "text-white/20 hover:text-white/40")}>
+                                       <Camera className="w-3 h-3" />
+                                       {act.photos?.length ? `${act.photos.length} Fotos Gerais` : "Fotos Gerais"}
+                                     </Button>
+                                   </PopoverTrigger>
+                                   <PopoverContent className="w-96 p-4 glass-card border-white/10 shadow-2xl backdrop-blur-xl">
                                       <div className="space-y-3">
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-[10px] font-black uppercase text-primary">Fotos da Localização - {detail.id}</span>
-                                        </div>
+                                        <span className="text-[10px] font-black uppercase text-primary">Fotos Gerais da Atividade</span>
                                         <PhotoUploadZone 
-                                          photos={detail.photos || []} 
+                                          photos={act.photos || []} 
                                           onChange={(photos) => {
-                                            const newDetails = [...currentDetails];
-                                            newDetails[idx].photos = photos;
-                                            setCurrentDetails(newDetails);
+                                            const draft = dailyReportDraftSignal.value;
+                                            const updatedActs = draft.selectedActivities.map(a => {
+                                              if (a.id === act.id) return { ...a, photos };
+                                              return a;
+                                            });
+                                            updateReportDraft({ selectedActivities: updatedActs });
                                           }}
                                           compact
                                         />
                                       </div>
-                                    </PopoverContent>
-                                  </Popover>
+                                   </PopoverContent>
+                                 </Popover>
+                               </div>
 
-                                  <Popover>
-                                    <PopoverTrigger asChild>
-                                      <Button 
-                                        type="button" 
-                                        size="sm" 
-                                        variant="outline" 
-                                        className={cn("rounded-xl h-8 px-3 gap-2", detail.comment ? "bg-primary/20 border-primary/40 text-primary" : (detail.status === 'BLOCKED' ? "bg-red-500/20 border-red-500 text-red-500 animate-bounce" : "bg-black/20 border-white/5 opacity-40 hover:opacity-100"))}
-                                      >
-                                        <Info className="w-3.5 h-3.5" />
-                                        <span className="text-[9px] font-black uppercase">{detail.comment ? "Comentário OK" : "Comentar"}</span>
-                                      </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-80 p-4 glass-card border-white/10 shadow-2xl">
-                                      <div className="space-y-3">
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-[10px] font-black uppercase text-primary">Comentário - {detail.id}</span>
+                               {/* Detalhamento de Itens Individuais (Formato Tabelado) */}
+                               {act.details && act.details.length > 0 && (
+                                 <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
+                                   <div className="flex items-center px-4 py-2 bg-white/5 rounded-t-xl border-x border-t border-white/5">
+                                     <span className="w-20 text-[10px] font-black uppercase text-muted-foreground/60 tracking-wider">Início</span>
+                                     <span className="w-20 text-[10px] font-black uppercase text-muted-foreground/60 tracking-wider">Fim</span>
+                                     <span className="w-24 text-[10px] font-black uppercase text-muted-foreground/60 tracking-wider">Item/Local</span>
+                                     <span className="w-24 text-[10px] font-black uppercase text-muted-foreground/60 tracking-wider text-center">Status</span>
+                                     <span className="flex-1 text-[10px] font-black uppercase text-muted-foreground/60 tracking-wider pl-4">Comentário</span>
+                                     <span className="w-10 text-[10px] font-black uppercase text-muted-foreground/60 tracking-wider text-right">#</span>
+                                   </div>
+                                   <div className="max-h-[300px] overflow-y-auto space-y-px rounded-b-xl border border-white/5 divide-y divide-white/5">
+                                     {act.details.map((d, dIdx) => (
+                                       <div key={`${d.id}-${dIdx}`} className="space-y-px">
+                                         <div className="group/row flex items-center px-4 py-2.5 bg-black/20 hover:bg-black/40 transition-colors">
+                                           {/* Hora Início */}
+                                           <div className="w-20">
+                                             <span className="text-[10px] font-black text-amber-500/80 bg-amber-500/5 px-1.5 py-0.5 rounded border border-amber-500/10 whitespace-nowrap">
+                                               {d.startTime || "--:--"}
+                                             </span>
+                                           </div>
+
+                                           {/* Hora Fim */}
+                                           <div className="w-20">
+                                             <span className="text-[10px] font-black text-primary/80 bg-primary/5 px-1.5 py-0.5 rounded border border-primary/10 whitespace-nowrap">
+                                               {d.endTime || "--:--"}
+                                             </span>
+                                           </div>
+
+                                           {/* ID do Item */}
+                                           <div className="w-24 flex items-center gap-2">
+                                             <span className="text-[11px] font-black text-white/70">{d.id}</span>
+                                           </div>
+                                           
+                                           {/* Status */}
+                                           <div className="w-24 flex justify-center">
+                                             <div className={cn(
+                                               "px-2 py-0.5 rounded-full text-[8px] font-black border whitespace-nowrap",
+                                               d.status === 'FINISHED' ? "bg-green-500/10 text-green-500 border-green-500/20" : 
+                                               d.status === ActivityStatus.BLOCKED ? "bg-red-500/10 text-red-500 border-red-500/20" : 
+                                               "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                                             )}>
+                                               {d.status === 'FINISHED' ? 'CONCLUÍDO' : 
+                                                d.status === ActivityStatus.BLOCKED ? 'SEM ATIVIDADES' : 
+                                                `ANDAMENTO - ${d.progress}%`}
+                                             </div>
+                                           </div>
+
+                                           {/* Texto do Comentário (Truncado) */}
+                                           <div className="flex-1 px-4 overflow-hidden">
+                                             <p className="text-[10px] text-muted-foreground/70 italic truncate">
+                                               {d.comment || '-'}
+                                             </p>
+                                           </div>
+
+                                            {/* Ação/FullView (Edição Ativada) */}
+                                            <div className="w-10 flex justify-end">
+                                                <Dialog>
+                                                  <DialogTrigger asChild>
+                                                    <button className={cn(
+                                                      "p-1 hover:bg-primary/20 rounded-lg transition-colors",
+                                                      d.comment ? "text-amber-500" : "text-white/10 hover:text-white/40"
+                                                    )}>
+                                                      <Info className="w-3.5 h-3.5 shadow-sm" />
+                                                    </button>
+                                                  </DialogTrigger>
+                                                  <DialogContent className="sm:max-w-xl p-8 glass-card border-white/10 shadow-2xl backdrop-blur-xl">
+                                                    <DialogHeader className="pb-4 border-b border-white/5">
+                                                      <div className="flex items-center justify-between">
+                                                        <DialogTitle className="text-xl font-black uppercase text-primary tracking-widest">{d.id}</DialogTitle>
+                                                        <DialogDescription className="sr-only">
+                                                          Edite os detalhes da atividade para o item {d.id}
+                                                        </DialogDescription>
+                                                        <span className="text-xs font-black text-muted-foreground px-3 py-1 bg-white/5 rounded-full">EDITAR ITEM</span>
+                                                      </div>
+                                                    </DialogHeader>
+                                                    
+                                                    <div className="space-y-6 pt-6">
+                                                      <div className="grid grid-cols-2 gap-6">
+                                                        <div className="space-y-2.5">
+                                                          <Label className="text-[10px] font-black uppercase text-white/40 tracking-widest flex items-center gap-2">
+                                                            <Clock className="w-3 h-3 text-amber-500" />
+                                                            H. Início
+                                                          </Label>
+                                                          <input
+                                                            type="time" 
+                                                            value={d.startTime || ""}
+                                                            className="w-full bg-black/40 border-white/5 rounded-2xl text-sm text-amber-500 font-bold p-3 focus:ring-primary/20 color-scheme-dark"
+                                                            onChange={(e) => {
+                                                              const val = e.target.value;
+                                                              const draft = dailyReportDraftSignal.value;
+                                                              const updatedActs = draft.selectedActivities.map(a => {
+                                                                if (a.id === act.id) {
+                                                                  return {
+                                                                    ...a,
+                                                                    details: a.details?.map((item, itemIdx) => {
+                                                                      if (itemIdx === dIdx) {
+                                                                        const newItem = { ...item, startTime: val };
+                                                                        if (!newItem.endTime || toMinutes(newItem.endTime) <= toMinutes(val)) {
+                                                                          newItem.endTime = addOneMinute(val);
+                                                                        }
+                                                                        return newItem;
+                                                                      }
+                                                                      return item;
+                                                                    })
+                                                                  };
+                                                                }
+                                                                return a;
+                                                              });
+                                                              updateReportDraft({ selectedActivities: updatedActs });
+                                                            }}
+                                                          />
+                                                        </div>
+                                                        <div className="space-y-2.5">
+                                                          <Label className="text-[10px] font-black uppercase text-white/40 tracking-widest flex items-center gap-2">
+                                                            <Clock className="w-3 h-3 text-primary" />
+                                                            H. Fim
+                                                          </Label>
+                                                          <input
+                                                            type="time" 
+                                                            value={d.endTime || ""}
+                                                            className="w-full bg-black/40 border-white/5 rounded-2xl text-sm text-primary font-bold p-3 focus:ring-primary/20 color-scheme-dark"
+                                                            onChange={(e) => {
+                                                              const val = e.target.value;
+                                                              const draft = dailyReportDraftSignal.value;
+                                                              const updatedActs = draft.selectedActivities.map(a => {
+                                                                if (a.id === act.id) {
+                                                                  return {
+                                                                    ...a,
+                                                                    details: a.details?.map((item, itemIdx) => {
+                                                                      if (itemIdx === dIdx) {
+                                                                        return { ...item, endTime: val };
+                                                                      }
+                                                                      return item;
+                                                                    })
+                                                                  };
+                                                                }
+                                                                return a;
+                                                              });
+                                                              updateReportDraft({ selectedActivities: updatedActs });
+                                                            }}
+                                                          />
+                                                        </div>
+                                                      </div>
+
+                                                      <div className="grid grid-cols-2 gap-6 pt-2">
+                                                        <div className="space-y-2.5">
+                                                          <Label className="text-[10px] font-black uppercase text-white/40 tracking-widest flex items-center gap-2">
+                                                            <Info className="w-3 h-3 text-white/60" />
+                                                            Status Atividade
+                                                          </Label>
+                                                          <Select
+                                                            value={d.status || ActivityStatus.IN_PROGRESS}
+                                                            onValueChange={(val: ActivityStatus) => {
+                                                              const draft = dailyReportDraftSignal.value;
+                                                              const updatedActs = draft.selectedActivities.map(a => {
+                                                                if (a.id === act.id) {
+                                                                  return {
+                                                                    ...a,
+                                                                    details: a.details?.map((item, itemIdx) => {
+                                                                      if (itemIdx === dIdx) {
+                                                                        return { ...item, status: val, progress: val === ActivityStatus.FINISHED ? 100 : item.progress };
+                                                                      }
+                                                                      return item;
+                                                                    })
+                                                                  };
+                                                                }
+                                                                return a;
+                                                              });
+                                                              updateReportDraft({ selectedActivities: updatedActs });
+                                                            }}
+                                                          >
+                                                            <SelectTrigger className="w-full bg-black/40 border-white/5 rounded-2xl h-12 text-sm font-bold">
+                                                              <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent className="glass-card">
+                                                              <SelectItem value={ActivityStatus.IN_PROGRESS} className="font-bold text-amber-500">EM ANDAMENTO</SelectItem>
+                                                              <SelectItem value={ActivityStatus.FINISHED} className="font-bold text-green-500">CONCLUÍDO</SelectItem>
+                                                              <SelectItem value={ActivityStatus.BLOCKED} className="font-bold text-red-500">SEM ATIVIDADES / BLOQUEADO</SelectItem>
+                                                            </SelectContent>
+                                                          </Select>
+                                                        </div>
+                                                        <div className="space-y-2.5">
+                                                          <div className="flex items-center justify-between">
+                                                            <Label className="text-[10px] font-black uppercase text-white/40 tracking-widest flex items-center gap-2">
+                                                              Andamento
+                                                            </Label>
+                                                            <span className="text-[10px] font-black text-primary">{d.progress}%</span>
+                                                          </div>
+                                                          <input
+                                                            title="Andamento da atividade"
+                                                            type="range"
+                                                            min="0"
+                                                            max="100"
+                                                            step="5"
+                                                            value={d.progress || 0}
+                                                            disabled={d.status === ActivityStatus.FINISHED || d.status === ActivityStatus.BLOCKED}
+                                                            className={cn("w-full accent-primary", (d.status === ActivityStatus.FINISHED || d.status === ActivityStatus.BLOCKED) ? "opacity-50" : "")}
+                                                            onChange={(e) => {
+                                                              const progressVal = parseInt(e.target.value);
+                                                              const draft = dailyReportDraftSignal.value;
+                                                              const updatedActs = draft.selectedActivities.map(a => {
+                                                                if (a.id === act.id) {
+                                                                  return {
+                                                                    ...a,
+                                                                    details: a.details?.map((item, itemIdx) => {
+                                                                      if (itemIdx === dIdx) return { ...item, progress: progressVal };
+                                                                      return item;
+                                                                    })
+                                                                  };
+                                                                }
+                                                                return a;
+                                                              });
+                                                              updateReportDraft({ selectedActivities: updatedActs });
+                                                            }}
+                                                          />
+                                                        </div>
+                                                      </div>
+ 
+                                                      <div className="space-y-2.5">
+                                                        <Label className="text-[10px] font-black uppercase text-white/40 tracking-widest">Observação / Comentário</Label>
+                                                        <Textarea 
+                                                          placeholder="Adicionar observação para este item..."
+                                                          className="bg-black/40 border-white/5 rounded-2xl text-sm min-h-[120px] text-white/90 placeholder:text-white/20 italic p-4 focus:ring-primary/20"
+                                                          value={d.comment || ""}
+                                                          onChange={(e) => {
+                                                            const draft = dailyReportDraftSignal.value;
+                                                            const updatedActs = draft.selectedActivities.map(a => {
+                                                              if (a.id === act.id) {
+                                                                return {
+                                                                  ...a,
+                                                                  details: a.details?.map((item, itemIdx) => {
+                                                                    if (itemIdx === dIdx) return { ...item, comment: e.target.value };
+                                                                    return item;
+                                                                  })
+                                                                };
+                                                              }
+                                                              return a;
+                                                            });
+                                                            updateReportDraft({ selectedActivities: updatedActs });
+                                                          }}
+                                                        />
+                                                      </div>
+ 
+                                                      <div className="pt-4 border-t border-white/5">
+                                                        <Label className="text-[10px] font-black uppercase text-white/40 tracking-widest block mb-4">Fotos do Item</Label>
+                                                        <PhotoUploadZone 
+                                                          photos={d.photos || []} 
+                                                          onChange={(photos) => {
+                                                            const draft = dailyReportDraftSignal.value;
+                                                            const updatedActs = draft.selectedActivities.map(a => {
+                                                              if (a.id === act.id) {
+                                                                return {
+                                                                  ...a,
+                                                                  details: a.details?.map((item, itemIdx) => {
+                                                                    if (itemIdx === dIdx) return { ...item, photos };
+                                                                    return item;
+                                                                    })
+                                                                  };
+                                                                }
+                                                                return a;
+                                                              });
+                                                              updateReportDraft({ selectedActivities: updatedActs });
+                                                            }}
+                                                            compact={false}
+                                                          />
+                                                        </div>
+                                                      </div>
+                                                    </DialogContent>
+                                                  </Dialog>
+
+                                           </div>
+                                         </div>
+                                         </div>
+                                       ))}
+                                     </div>
+                                   </div>
+                                 )}
+                               {/* FOTOS DA ATIVIDADE E ELEMENTOS (RELATORIO FOTOGRAFICO) */}
+                               {(() => {
+                                 const allPhotos: any[] = [];
+                                 let docCounter = 1;
+
+                                 if (act.photos && act.photos.length > 0) {
+                                   allPhotos.push(...act.photos.map((p: any) => ({ ...p, source: 'Geral', displayLabel: `Doc. ${String(docCounter++).padStart(3, '0')}` })));
+                                 }
+                                 if (act.details && act.details.length > 0) {
+                                   act.details.forEach((d: any) => {
+                                     if (d.photos && d.photos.length > 0) {
+                                       allPhotos.push(...d.photos.map((p: any) => ({ ...p, source: d.id })));
+                                     }
+                                   });
+                                 }
+
+                                 if (allPhotos.length === 0) return null;
+
+                                 return (
+                                   <div className="mt-8 pt-6 border-t border-white/5 space-y-6">
+                                     <div className="flex items-center gap-3 border-b border-primary/20 pb-4 px-2">
+                                        <div className="w-8 h-8 rounded-xl bg-primary/20 flex items-center justify-center">
+                                          <Camera className="w-4 h-4 text-primary" />
                                         </div>
-                                        <Textarea 
-                                          placeholder={detail.status === 'BLOCKED' ? "Descreva o motivo de não haver atividades nesta torre..." : "Descreva observações específicas para esta torre..."}
-                                          className="bg-black/40 border-white/5 rounded-xl text-xs min-h-[100px]"
-                                          value={detail.comment || ""}
-                                          onChange={(e) => {
-                                            const newDetails = [...currentDetails];
-                                            newDetails[idx].comment = e.target.value;
-                                            setCurrentDetails(newDetails);
-                                          }}
-                                        />
-                                      </div>
-                                    </PopoverContent>
-                                  </Popover>
-                                </div>
-                              </div>
-                                     {/* Mensagens de Erro de Tempo */}
-                                     {hasAnyConflict && (
-                                       <div className="px-6 py-2 bg-red-500/5 rounded-2xl border border-red-500/10 flex flex-wrap gap-4 animate-in slide-in-from-top-2">
-                                          {isInvalid && <span className="text-[9px] font-bold text-red-500 uppercase flex items-center gap-1"><Info className="w-3 h-3" /> Fim deve ser após Início</span>}
-                                          {isInternalOverlap && <span className="text-[9px] font-bold text-red-400 uppercase flex items-center gap-1"><Info className="w-3 h-3" /> Sobreposição nesta lista</span>}
-                                          {isExternalOverlap && <span className="text-[9px] font-bold text-orange-500 uppercase flex items-center gap-1"><Info className="w-3 h-3" /> Conflito com atividade já salva</span>}
-                                          {isChronologyError && <span className="text-[9px] font-bold text-red-600 uppercase flex items-center gap-1"><Info className="w-3 h-3" /> Horário anterior ao último lançamento</span>}
-                                       </div>
-                                     )}
+                                        <h4 className="text-sm font-black uppercase tracking-widest text-white/90">Registro Fotográfico</h4>
+                                     </div>
+                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-2">
+                                        {allPhotos.map((photo: any, pIdx: number) => (
+                                          <div key={pIdx} className="group flex flex-col glass-card border-white/5 bg-black/40 rounded-3xl overflow-hidden hover:border-primary/50 transition-all cursor-zoom-in" onClick={() => setSelectedPhoto(photo.url || photo.uri)}>
+                                            <div className="relative w-full aspect-video bg-black/60 overflow-hidden">
+                                              <img src={photo.url || photo.uri} alt={`Foto ${photo.source}`} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
+                                              <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-sm text-[9px] font-black uppercase text-primary px-2 py-0.5 rounded-md border border-white/10 shadow-[0_0_15px_rgba(0,0,0,0.5)]">
+                                                {photo.source === 'Geral' ? photo.displayLabel : `ID: ${photo.source}`}
+                                              </div>
+                                            </div>
+                                            {photo.comment && (
+                                              <div className="p-4 bg-white/5 border-t border-white/5 flex-1 flex items-start gap-3">
+                                                <MessageSquare className="w-4 h-4 text-primary/60 shrink-0 mt-0.5" />
+                                                <p className="text-xs font-medium text-white/80 leading-relaxed italic">
+                                                  "{photo.comment}"
+                                                </p>
+                                              </div>
+                                            )}
+                                          </div>
+                                        ))}
+                                     </div>
+                                   </div>
+                                 );
+                               })()}
+                             </div>
+                           ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* SEÇÃO: RELATO GERAL E EVIDÊNCIAS FOTOGRÁFICAS (GLOBAL) */}
+                    <div className="space-y-8 pt-10 px-2">
+                      <div className="flex items-center justify-between">
+                         <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+                           <MessageSquare className="w-6 h-6 text-primary" />
+                           Relato do Dia e Fotos
+                         </h3>
+                      </div>
+
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                         <div className="space-y-4">
+                           <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/40">Relato Geral (Opcional)</Label>
+                           <Textarea 
+                             value={generalObservations || ""} 
+                             onChange={e => updateReportDraft({ generalObservations: e.target.value })}
+                             placeholder="Descreva as atividades gerais do dia, condições encontradas, etc..."
+                             className="bg-black/40 border-primary/20 focus:ring-primary/40 rounded-3xl min-h-[200px] p-6 text-sm placeholder:text-muted-foreground/30 shadow-inner"
+                           />
+                         </div>
+                         <div className="space-y-4">
+                            <PhotoUploadZone 
+                              photos={generalPhotos || []} 
+                              onChange={(photos) => updateReportDraft({ generalPhotos: photos })} 
+                              title="Evidências Fotográficas Gerais (Opcional)"
+                            />
+                         </div>
+                      </div>
+                    </div>
+
+                    {/* SEÇÃO: CLIMA, EFETIVO E EQUIPAMENTOS */}
+                    <div className="space-y-8 pt-10 px-2">
+                      <div className="flex items-center justify-between">
+                         <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+                           <CloudSun className="w-6 h-6 text-primary" />
+                           Condições e Recursos
+                         </h3>
+                      </div>
+
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Clima */}
+                        <Card className="glass-card border-white/5 bg-white/5 p-6 rounded-3xl">
+                          <Label className="text-[10px] font-black uppercase tracking-widest text-primary mb-4 block">Condições Climáticas</Label>
+                          <div className="space-y-4">
+                            {(['Manhã', 'Tarde', 'Noite'] as const).map((period) => {
+                              const key = (period === 'Manhã' ? 'morning' : period === 'Tarde' ? 'afternoon' : 'night') as keyof typeof weather;
+                              const currentVal = weather?.[key];
+                              return (
+                                <div key={period} className="flex items-center justify-between bg-black/20 p-3 rounded-2xl">
+                                  <span className="text-[10px] font-bold uppercase">{period}</span>
+                                  <div className="flex gap-1">
+                                    {(['GOOD', 'RAIN', 'IMPRACTICABLE'] as const).map((status) => (
+                                      <Button
+                                        key={status}
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className={cn(
+                                          "h-7 px-2 text-[8px] font-black rounded-lg transition-all",
+                                          currentVal === status 
+                                            ? (status === 'GOOD' ? "bg-green-600 text-white shadow-lg shadow-green-500/20" : status === 'RAIN' ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20" : "bg-red-600 text-white shadow-lg shadow-red-500/20")
+                                            : "text-white/20 hover:text-white/40"
+                                        )}
+                                        onClick={() => {
+                                          const newWeather = { ...weather, [key]: status };
+                                          updateReportDraft({ weather: newWeather as any });
+                                        }}
+                                      >
+                                        {status === 'GOOD' ? 'BOM' : status === 'RAIN' ? 'CHUVA' : 'IMPRAT.'}
+                                      </Button>
+                                    ))}
+                                  </div>
                                 </div>
                               );
                             })}
                           </div>
-                        </div>
-                      )}
+                        </Card>
 
-                      <div className="space-y-4 relative z-10">
-                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500/40">3. Relato Geral (Opcional)</Label>
-                        <Textarea 
-                          value={currentObservations} 
-                          onChange={e => setCurrentObservations(e.target.value)}
-                          placeholder="Ex: Escavação da base concluída com martelete, material rochoso encontrado..."
-                          className="bg-black/40 border-amber-500/20 focus:ring-amber-500/40 rounded-3xl min-h-[120px] p-6 text-sm placeholder:text-muted-foreground/30 shadow-inner"
-                        />
-                        
-                        <PhotoUploadZone 
-                          photos={currentPhotos} 
-                          onChange={setCurrentPhotos} 
-                          title="Evidências Fotográficas Gerais (Opcional)"
-                        />
+                        {/* Efetivo */}
+                        <Card className="glass-card border-white/5 bg-white/5 p-6 rounded-3xl lg:col-span-2">
+                          <div className="flex items-center justify-between mb-4">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                              <Users className="w-3.5 h-3.5" />
+                              Quadro de Efetivo
+                            </Label>
+                            <Button 
+                              type="button" 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-7 px-3 rounded-full bg-primary/10 border-primary/20 text-primary text-[9px] font-black"
+                              onClick={() => {
+                                const newManpower = [...(manpower || []), { registration: '', name: '', role: '' }];
+                                updateReportDraft({ manpower: newManpower });
+                              }}
+                            >
+                              <Plus className="w-3 h-3 mr-1" /> ADICIONAR
+                            </Button>
+                          </div>
+                          
+                          {/* Cabeçalho de Colunas */}
+                          {(manpower || []).length > 0 && (
+                            <div className="grid grid-cols-[100px_1fr_1fr_40px] gap-4 px-4 mb-2">
+                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Matrícula</span>
+                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Nome do Colaborador</span>
+                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Função / Cargo</span>
+                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider text-right">#</span>
+                            </div>
+                          )}
+
+                          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                            {(manpower || []).length === 0 ? (
+                                <div className="text-center py-10 text-white/10 text-[10px] uppercase font-bold">Nenhum efetivo adicionado</div>
+                            ) : (
+                              (manpower || []).map((m, idx) => (
+                                <div key={idx} className="grid grid-cols-[100px_1fr_1fr_40px] gap-4 items-center bg-black/20 p-2.5 rounded-2xl animate-in slide-in-from-right-2 border border-white/5 hover:border-primary/20 transition-all">
+                                  <input 
+                                    placeholder="Ex: 005655" 
+                                    className="bg-black/40 border-none rounded-xl text-[11px] font-bold text-white px-3 py-2 focus:ring-1 focus:ring-primary/40 transition-all font-mono"
+                                    value={m.registration || ""}
+                                    onChange={(e) => {
+                                      const newManpower = [...(manpower || [])];
+                                      newManpower[idx] = { ...newManpower[idx], registration: e.target.value };
+                                      updateReportDraft({ manpower: newManpower });
+                                    }}
+                                  />
+                                  <input 
+                                    placeholder="Nome Completo..." 
+                                    className="bg-black/40 border-none rounded-xl text-[11px] font-bold text-white px-3 py-2 focus:ring-1 focus:ring-primary/40 transition-all"
+                                    value={m.name}
+                                    onChange={(e) => {
+                                      const newManpower = [...(manpower || [])];
+                                      newManpower[idx] = { ...newManpower[idx], name: e.target.value };
+                                      updateReportDraft({ manpower: newManpower });
+                                    }}
+                                  />
+                                  <input 
+                                    placeholder="Função (Ex: Pedreiro...)" 
+                                    className="bg-black/40 border-none rounded-xl text-[11px] font-bold text-white px-3 py-2 focus:ring-1 focus:ring-primary/40 transition-all"
+                                    value={m.role}
+                                    onChange={(e) => {
+                                      const newManpower = [...(manpower || [])];
+                                      newManpower[idx] = { ...newManpower[idx], role: e.target.value };
+                                      updateReportDraft({ manpower: newManpower });
+                                    }}
+                                  />
+                                  <div className="flex justify-end">
+                                    <Button 
+                                      type="button" 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-8 w-8 text-red-500/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl"
+                                      onClick={() => {
+                                        const newManpower = (manpower || []).filter((_, i) => i !== idx);
+                                        updateReportDraft({ manpower: newManpower });
+                                      }}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </Card>
+
+                        {/* Equipamentos */}
+                        <Card className="glass-card border-white/5 bg-white/5 p-6 rounded-3xl lg:col-span-3">
+                          <div className="flex items-center justify-between mb-4 px-2">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                              <Truck className="w-3.5 h-3.5" />
+                              Quadro de Equipamentos
+                            </Label>
+                            <Button 
+                              type="button" 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-7 px-3 rounded-full bg-primary/10 border-primary/20 text-primary text-[9px] font-black"
+                              onClick={() => {
+                                const newEquip = [...(equipment || []), { equipment: '', type: '', model: '', driverName: '', plate: '' }];
+                                updateReportDraft({ equipment: newEquip });
+                              }}
+                            >
+                              <Plus className="w-3 h-3 mr-1" /> ADICIONAR
+                            </Button>
+                          </div>
+
+                          {/* Cabeçalho de Colunas */}
+                          {(equipment || []).length > 0 && (
+                            <div className="grid grid-cols-[1fr_1fr_120px_1fr_40px] gap-4 px-6 mb-2">
+                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Tipo / Equipamento</span>
+                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Modelo</span>
+                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Placa/ID</span>
+                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Motorista / Operador</span>
+                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider text-right">#</span>
+                            </div>
+                          )}
+
+                          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar p-1">
+                            {(equipment || []).length === 0 ? (
+                              <div className="text-center py-10 text-white/10 text-[10px] uppercase font-bold">Nenhum equipamento adicionado</div>
+                            ) : (
+                              (equipment || []).map((e, idx) => (
+                                <div key={idx} className="grid grid-cols-[1fr_1fr_120px_1fr_40px] gap-4 items-center bg-black/20 p-3 rounded-2xl animate-in zoom-in-95 group/equip border border-white/5 hover:border-primary/20 transition-all">
+                                  <input 
+                                    placeholder="Ex: Caminhão Munck..." 
+                                    className="bg-black/40 border-none rounded-xl text-[11px] font-bold text-white px-3 py-2.5 focus:ring-1 focus:ring-primary/40 transition-all"
+                                    value={e.equipment}
+                                    onChange={(val) => {
+                                      const newEquip = [...(equipment || [])];
+                                      newEquip[idx] = { ...newEquip[idx], equipment: val.target.value };
+                                      updateReportDraft({ equipment: newEquip });
+                                    }}
+                                  />
+                                  <input 
+                                    placeholder="Modelo..." 
+                                    className="bg-black/40 border-none rounded-xl text-[11px] font-bold text-white px-3 py-2.5 focus:ring-1 focus:ring-primary/40 transition-all"
+                                    value={e.model || ""}
+                                    onChange={(val) => {
+                                      const newEquip = [...(equipment || [])];
+                                      newEquip[idx] = { ...newEquip[idx], model: val.target.value };
+                                      updateReportDraft({ equipment: newEquip });
+                                    }}
+                                  />
+                                  <input 
+                                    placeholder="ABC-1234 / ID..." 
+                                    className="bg-black/40 border-none rounded-xl text-[11px] font-bold text-white px-3 py-2.5 focus:ring-1 focus:ring-primary/40 transition-all font-mono"
+                                    value={e.plate || ""}
+                                    onChange={(val) => {
+                                      const newEquip = [...(equipment || [])];
+                                      newEquip[idx] = { ...newEquip[idx], plate: val.target.value };
+                                      updateReportDraft({ equipment: newEquip });
+                                    }}
+                                  />
+                                  <input 
+                                    placeholder="Nome do Condutor..." 
+                                    className="bg-black/40 border-none rounded-xl text-[11px] font-bold text-white px-3 py-2.5 focus:ring-1 focus:ring-primary/40 transition-all"
+                                    value={e.driverName || ""}
+                                    onChange={(val) => {
+                                      const newEquip = [...(equipment || [])];
+                                      newEquip[idx] = { ...newEquip[idx], driverName: val.target.value };
+                                      updateReportDraft({ equipment: newEquip });
+                                    }}
+                                  />
+                                  <div className="flex justify-end">
+                                    <Button 
+                                      type="button" 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-8 w-8 text-red-500/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl"
+                                      onClick={() => {
+                                        const newEquip = (equipment || []).filter((_, i) => i !== idx);
+                                        updateReportDraft({ equipment: newEquip });
+                                      }}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </Card>
                       </div>
-
-                      <div className="flex items-center justify-between gap-6 pt-4 relative z-10">
-
-                         <Button 
-                          type="button" 
-                          onClick={handleAddItem}
-                           disabled={
-                             currentStageIds.length === 0 || 
-                             (currentSubPointType !== 'GERAL' && currentDetails.length === 0) || 
-                             currentDetails.some(d => d.status === 'BLOCKED' && !d.comment) ||
-                             (currentSubPointType !== 'GERAL' && (
-                               currentDetails.some(d => !d.startTime || !d.endTime) ||
-                               timeConflicts.invalidIds.size > 0 ||
-                               timeConflicts.internalOverlapIds.size > 0 ||
-                               timeConflicts.externalOverlapIds.size > 0 ||
-                               timeConflicts.chronologyErrorIds.size > 0
-                             ))
-                           }
-                          className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black uppercase tracking-widest rounded-3xl h-16 shadow-xl shadow-amber-500/10 group active:scale-95 transition-all"
-                         >
-                           <Plus className="w-6 h-6 mr-3 group-hover:rotate-90 transition-transform" />
-                           Adicionar Atividade ao RDO
-                         </Button>
-                      </div>
-                  </div>
-
-                  {/* LISTA DE ATIVIDADES JÁ RELATADAS */}
-                  <div className="space-y-6 pt-10">
-                    <div className="flex items-center justify-between px-2">
-                       <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
-                         <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                         Atividades no Relatório ({selectedActivities.length})
-                       </h3>
-                       <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Resumo do dia</span>
                     </div>
 
-                    {selectedActivities.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-white/5 rounded-[3rem] bg-white/5">
-                         <Info className="w-10 h-10 text-white/10 mb-4" />
-                         <p className="text-sm font-bold text-white/20 uppercase tracking-widest">Nenhuma atividade adicionada ainda</p>
-                      </div>
-                    ) : (
-                      <div className={cn(
-                        "grid gap-4",
-                        selectedActivities.length === 1 ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"
-                      )}>
-                        {selectedActivities.map((act) => (
-                          <div key={act.id} className="group/item glass-card p-6 rounded-4xl border-white/5 hover:border-primary/30 transition-all animate-in zoom-in-95">
-                             <div className="flex items-start justify-between mb-4">
-                               <div className="flex flex-col gap-1">
-                                  <span className="text-xs font-black text-primary uppercase tracking-tighter line-clamp-1">{fixBrokenEncoding(act.stageName || "")}</span>
-                                  <div className="flex items-center gap-2">
-                                     <span className="text-[10px] font-bold text-muted-foreground uppercase bg-white/5 px-2 py-0.5 rounded-full border border-white/5">
-                                       {act.subPointType}: {act.subPoint} {act.isMultiSelection && `→ ${act.subPointEnd}`}
-                                     </span>
-                                     <span className={cn("text-[8px] font-black px-2 py-0.5 rounded-full", act.status === 'FINISHED' ? 'bg-green-500/20 text-green-500 border border-green-500/20' : 'bg-amber-500/20 text-amber-500 border border-amber-500/20')}>
-                                       {act.status === 'FINISHED' ? 'CONCLUÍDO' : 'ANDAMENTO'}
-                                     </span>
-                                  </div>
-                               </div>
-                               <Button size="icon" variant="ghost" className="h-8 w-8 text-white/20 hover:text-red-500 hover:bg-red-500/10 rounded-xl" onClick={() => handleRemoveItem(act.id)}>
-                                 <Plus className="w-5 h-5 rotate-45" />
-                               </Button>
-                             </div>
-                             {act.observations && (
-                               <p className="text-xs text-muted-foreground/60 leading-relaxed italic line-clamp-2 px-3 border-l-2 border-primary/20">"{act.observations}"</p>
-                             )}
-
-                             <div className="mt-4 flex flex-wrap gap-2">
-                               <Popover>
-                                 <PopoverTrigger asChild>
-                                   <Button variant="ghost" size="sm" className={cn("h-7 px-2 text-[8px] font-black uppercase rounded-lg gap-1.5", act.photos?.length ? "text-primary bg-primary/10" : "text-white/20 hover:text-white/40")}>
-                                     <Camera className="w-3 h-3" />
-                                     {act.photos?.length ? `${act.photos.length} Fotos Gerais` : "Fotos Gerais"}
-                                   </Button>
-                                 </PopoverTrigger>
-                                 <PopoverContent className="w-96 p-4 glass-card border-white/10 shadow-2xl backdrop-blur-xl">
-                                    <div className="space-y-3">
-                                      <span className="text-[10px] font-black uppercase text-primary">Fotos Gerais da Atividade</span>
-                                      <PhotoUploadZone 
-                                        photos={act.photos || []} 
-                                        onChange={(photos) => {
-                                          const draft = dailyReportDraftSignal.value;
-                                          const updatedActs = draft.selectedActivities.map(a => {
-                                            if (a.id === act.id) return { ...a, photos };
-                                            return a;
-                                          });
-                                          updateReportDraft({ selectedActivities: updatedActs });
-                                        }}
-                                        compact
-                                      />
-                                    </div>
-                                 </PopoverContent>
-                               </Popover>
-                             </div>
-
-                             {/* Detalhamento de Itens Individuais (Formato Tabelado) */}
-                             {act.details && act.details.length > 0 && (
-                               <div className="mt-4 pt-4 border-t border-white/5 space-y-2">
-                                 <div className="flex items-center px-4 py-2 bg-white/5 rounded-t-xl border-x border-t border-white/5">
-                                   <span className="w-20 text-[10px] font-black uppercase text-muted-foreground/60 tracking-wider">Início</span>
-                                   <span className="w-20 text-[10px] font-black uppercase text-muted-foreground/60 tracking-wider">Fim</span>
-                                   <span className="w-24 text-[10px] font-black uppercase text-muted-foreground/60 tracking-wider">Item/Local</span>
-                                   <span className="w-24 text-[10px] font-black uppercase text-muted-foreground/60 tracking-wider text-center">Status</span>
-                                   <span className="flex-1 text-[10px] font-black uppercase text-muted-foreground/60 tracking-wider pl-4">Comentário</span>
-                                   <span className="w-10 text-[10px] font-black uppercase text-muted-foreground/60 tracking-wider text-right">#</span>
-                                 </div>
-                                 <div className="max-h-[300px] overflow-y-auto space-y-px rounded-b-xl border border-white/5 divide-y divide-white/5">
-                                   {act.details.map((d, dIdx) => (
-                                     <div key={`${d.id}-${dIdx}`} className="space-y-px">
-                                       <div className="group/row flex items-center px-4 py-2.5 bg-black/20 hover:bg-black/40 transition-colors">
-                                         {/* Hora Início */}
-                                         <div className="w-20">
-                                           <span className="text-[10px] font-black text-amber-500/80 bg-amber-500/5 px-1.5 py-0.5 rounded border border-amber-500/10 whitespace-nowrap">
-                                             {d.startTime || "--:--"}
-                                           </span>
-                                         </div>
-
-                                         {/* Hora Fim */}
-                                         <div className="w-20">
-                                           <span className="text-[10px] font-black text-primary/80 bg-primary/5 px-1.5 py-0.5 rounded border border-primary/10 whitespace-nowrap">
-                                             {d.endTime || "--:--"}
-                                           </span>
-                                         </div>
-
-                                         {/* ID do Item */}
-                                         <div className="w-24 flex items-center gap-2">
-                                           <span className="text-[11px] font-black text-white/70">{d.id}</span>
-                                         </div>
-                                         
-                                         {/* Status */}
-                                         <div className="w-24 flex justify-center">
-                                           <div className={cn(
-                                             "px-2 py-0.5 rounded-full text-[8px] font-black border whitespace-nowrap",
-                                             d.status === 'FINISHED' ? "bg-green-500/10 text-green-500 border-green-500/20" : 
-                                             d.status === 'BLOCKED' ? "bg-red-500/10 text-red-500 border-red-500/20" : 
-                                             "bg-amber-500/10 text-amber-500 border-amber-500/20"
-                                           )}>
-                                             {d.status === 'FINISHED' ? 'CONCLUÍDO' : 
-                                              d.status === 'BLOCKED' ? 'SEM ATIVIDADES' : 
-                                              `ANDAMENTO - ${d.progress}%`}
-                                           </div>
-                                         </div>
-
-                                         {/* Texto do Comentário (Truncado) */}
-                                         <div className="flex-1 px-4 overflow-hidden">
-                                           <p className="text-[10px] text-muted-foreground/70 italic truncate">
-                                             {d.comment || '-'}
-                                           </p>
-                                         </div>
-
-                                          {/* Ação/FullView (Edição Ativada) */}
-                                          <div className="w-10 flex justify-end">
-                                              <Dialog>
-                                                <DialogTrigger asChild>
-                                                  <button className={cn(
-                                                    "p-1 hover:bg-primary/20 rounded-lg transition-colors",
-                                                    d.comment ? "text-amber-500" : "text-white/10 hover:text-white/40"
-                                                  )}>
-                                                    <Info className="w-3.5 h-3.5 shadow-sm" />
-                                                  </button>
-                                                </DialogTrigger>
-                                                <DialogContent className="sm:max-w-xl p-8 glass-card border-white/10 shadow-2xl backdrop-blur-xl">
-                                                  <DialogHeader className="pb-4 border-b border-white/5">
-                                                    <div className="flex items-center justify-between">
-                                                      <DialogTitle className="text-xl font-black uppercase text-primary tracking-widest">{d.id}</DialogTitle>
-                                                      <DialogDescription className="sr-only">
-                                                        Edite os detalhes da atividade para o item {d.id}
-                                                      </DialogDescription>
-                                                      <span className="text-xs font-black text-muted-foreground px-3 py-1 bg-white/5 rounded-full">EDITAR ITEM</span>
-                                                    </div>
-                                                  </DialogHeader>
-                                                  
-                                                  <div className="space-y-6 pt-6">
-                                                    <div className="grid grid-cols-2 gap-6">
-                                                      <div className="space-y-2.5">
-                                                        <Label className="text-[10px] font-black uppercase text-white/40 tracking-widest flex items-center gap-2">
-                                                          <Clock className="w-3 h-3 text-amber-500" />
-                                                          H. Início
-                                                        </Label>
-                                                        <TimePicker24h 
-                                                          value={d.startTime || ""}
-                                                          className="text-amber-500 scale-110 origin-left"
-                                                          onChange={(val) => {
-                                                            const draft = dailyReportDraftSignal.value;
-                                                            const updatedActs = draft.selectedActivities.map(a => {
-                                                              if (a.id === act.id) {
-                                                                return {
-                                                                  ...a,
-                                                                  details: a.details?.map((item, itemIdx) => {
-                                                                    if (itemIdx === dIdx) {
-                                                                      const newItem = { ...item, startTime: val };
-                                                                      // Sempre preencher 1 minuto a mais para o fim ao preencher o início
-                                                                      if (!newItem.endTime || toMinutes(newItem.endTime) <= toMinutes(val)) {
-                                                                        newItem.endTime = addOneMinute(val);
-                                                                      }
-                                                                      return newItem;
-                                                                    }
-                                                                    return item;
-                                                                  })
-                                                                };
-                                                              }
-                                                              return a;
-                                                            });
-                                                            updateReportDraft({ selectedActivities: updatedActs });
-                                                          }}
-                                                        />
-                                                      </div>
-                                                      <div className="space-y-2.5">
-                                                        <Label className="text-[10px] font-black uppercase text-white/40 tracking-widest flex items-center gap-2">
-                                                          <Clock className="w-3 h-3 text-primary" />
-                                                          H. Fim
-                                                        </Label>
-                                                        <TimePicker24h 
-                                                          value={d.endTime || ""}
-                                                          className="scale-110 origin-left"
-                                                          onChange={(val) => {
-                                                            const draft = dailyReportDraftSignal.value;
-                                                            const updatedActs = draft.selectedActivities.map(a => {
-                                                              if (a.id === act.id) {
-                                                                return {
-                                                                  ...a,
-                                                                  details: a.details?.map((item, itemIdx) => {
-                                                                    if (itemIdx === dIdx) {
-                                                                      return { ...item, endTime: val };
-                                                                    }
-                                                                    return item;
-                                                                  })
-                                                                };
-                                                              }
-                                                              return a;
-                                                            });
-                                                            updateReportDraft({ selectedActivities: updatedActs });
-                                                          }}
-                                                        />
-                                                      </div>
-                                                    </div>
- 
-                                                    <div className="space-y-2.5">
-                                                      <Label className="text-[10px] font-black uppercase text-white/40 tracking-widest">Observação / Comentário</Label>
-                                                      <Textarea 
-                                                        placeholder="Adicionar observação para este item..."
-                                                        className="bg-black/40 border-white/5 rounded-2xl text-sm min-h-[120px] text-white/90 placeholder:text-white/20 italic p-4 focus:ring-primary/20"
-                                                        value={d.comment || ""}
-                                                        onChange={(e) => {
-                                                          const draft = dailyReportDraftSignal.value;
-                                                          const updatedActs = draft.selectedActivities.map(a => {
-                                                            if (a.id === act.id) {
-                                                              return {
-                                                                ...a,
-                                                                details: a.details?.map((item, itemIdx) => {
-                                                                  if (itemIdx === dIdx) return { ...item, comment: e.target.value };
-                                                                  return item;
-                                                                })
-                                                              };
-                                                            }
-                                                            return a;
-                                                          });
-                                                          updateReportDraft({ selectedActivities: updatedActs });
-                                                        }}
-                                                      />
-                                                    </div>
- 
-                                                    <div className="pt-4 border-t border-white/5">
-                                                      <Label className="text-[10px] font-black uppercase text-white/40 tracking-widest block mb-4">Fotos do Item</Label>
-                                                      <PhotoUploadZone 
-                                                        photos={d.photos || []} 
-                                                        onChange={(photos) => {
-                                                          const draft = dailyReportDraftSignal.value;
-                                                          const updatedActs = draft.selectedActivities.map(a => {
-                                                            if (a.id === act.id) {
-                                                              return {
-                                                                ...a,
-                                                                details: a.details?.map((item, itemIdx) => {
-                                                                  if (itemIdx === dIdx) return { ...item, photos };
-                                                                  return item;
-                                                                  })
-                                                                };
-                                                              }
-                                                              return a;
-                                                            });
-                                                            updateReportDraft({ selectedActivities: updatedActs });
-                                                          }}
-                                                          compact={false}
-                                                        />
-                                                      </div>
-                                                    </div>
-                                                  </DialogContent>
-                                                </Dialog>
-
-                                         </div>
-                                       </div>
-                                     </div>
-                                   ))}
-                                 </div>
-                               </div>
-                             )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    <div className="pt-10">
+                      <Button
+                        type="submit"
+                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-[2.5rem] py-14 group shadow-[0_25px_60px_rgba(var(--primary),0.4)] border-0 text-2xl font-black transition-all hover:scale-[1.01] active:scale-[0.98]"
+                        disabled={isSaving || selectedActivities.length === 0}
+                      >
+                        {isSaving ? (
+                          <Loader2 className="w-10 h-10 mr-4 animate-spin" />
+                        ) : (
+                          <Send className="w-10 h-10 mr-4 transition-transform group-hover:-translate-y-2 group-hover:translate-x-2" />
+                        )}
+                        REGISTRAR E ENVIAR RELATÓRIO COMPLETO
+                      </Button>
+                      <p className="text-[10px] text-center text-muted-foreground/40 mt-8 uppercase font-bold tracking-[0.3em]">
+                        Este relatório contém {selectedActivities.length} mini-relatórios granulares
+                      </p>
+                    </div>
                   </div>
-
-                  <div className="pt-10">
-                    <Button
-                      type="submit"
-                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-[2.5rem] py-14 group shadow-[0_25px_60px_rgba(var(--primary),0.4)] border-0 text-2xl font-black transition-all hover:scale-[1.01] active:scale-[0.98]"
-                      disabled={isSaving || selectedActivities.length === 0}
-                    >
-                      {isSaving ? (
-                        <Loader2 className="w-10 h-10 mr-4 animate-spin" />
-                      ) : (
-                        <Send className="w-10 h-10 mr-4 transition-transform group-hover:-translate-y-2 group-hover:translate-x-2" />
-                      )}
-                      REGISTRAR E ENVIAR RELATÓRIO COMPLETO
-                    </Button>
-                    <p className="text-[10px] text-center text-muted-foreground/40 mt-8 uppercase font-bold tracking-[0.3em]">
-                      Este relatório contém {selectedActivities.length} mini-relatórios granulares
-                    </p>
-                  </div>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
-    </div>
+      
+      {/* Dialog para Expandir Foto */}
+      <Dialog open={!!selectedPhoto} onOpenChange={(open) => !open && setSelectedPhoto(null)}>
+        <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 border-none bg-transparent shadow-none [&>button]:text-white [&>button]:bg-black/50 [&>button]:hover:bg-black [&>button]:w-10 [&>button]:h-10 [&>button]:rounded-full [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:top-4 [&>button]:right-4">
+          <DialogTitle className="sr-only">Visualização de Foto Expandida</DialogTitle>
+          <DialogDescription className="sr-only">Imagem em alta resolução anexada à atividade</DialogDescription>
+          {selectedPhoto && (
+            <div className="relative w-full h-[85vh] flex items-center justify-center">
+              <img src={selectedPhoto} alt="Foto Expandida" className="max-w-full max-h-full object-contain rounded-xl shadow-2xl" />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

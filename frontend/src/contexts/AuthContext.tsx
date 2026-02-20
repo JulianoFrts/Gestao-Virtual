@@ -13,7 +13,9 @@ import {
   uiSignal,
   currentUserSignal,
   isAuthLoadingSignal,
-  simulationRoleSignal
+  simulationRoleSignal,
+  realPermissionsSignal,
+  realUiSignal
 } from "@/signals/authSignals";
 import { useSignals } from "@preact/signals-react/runtime";
 
@@ -192,9 +194,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
 
         setProfile(newProfile);
-        permissionsSignal.value = permissions; // Popular Signal global
-        uiSignal.value = ui; // Popular UI Signal global
-        currentUserSignal.value = newProfile;
+        
+        if (simulationRoleSignal.value) {
+            // Se estivermos simulando um papel, não destrua a simulação!
+            // Atualize apenas os backups com as permissões reais frescas.
+            realPermissionsSignal.value = permissions;
+            realUiSignal.value = ui;
+            
+            // Mas atualize o currentUserSignal para refletir a simulação ativa e ocultar as permissões de God do usuário real
+            currentUserSignal.value = {
+                ...newProfile,
+                role: simulationRoleSignal.value as any,
+                isSystemAdmin: false, // Segredo do Sandbox: Corta flag verdadeira de Admin
+                permissions: permissionsSignal.value,
+                ui: uiSignal.value,
+            };
+        } else {
+            permissionsSignal.value = permissions;
+            uiSignal.value = ui;
+            currentUserSignal.value = newProfile;
+        }
 
         const cacheKey = `profile_cache_${newProfile.id}`;
         await storageService.setItem(cacheKey, newProfile);

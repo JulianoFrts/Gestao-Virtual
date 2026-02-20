@@ -14,7 +14,7 @@ import { RecordDailyProductionDTO } from "./dtos/record-daily-production.dto";
 import { PrismaProductionCatalogueRepository } from "../infrastructure/prisma-production-catalogue.repository";
 
 export class ProductionService {
-  private readonly progressService: ProductionProgressService;
+  public readonly progressService: ProductionProgressService;
   private readonly scheduleService: ProductionScheduleService;
   private readonly dailyService: DailyProductionService;
 

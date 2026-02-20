@@ -1,7 +1,6 @@
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
-  binaryTargets   = ["native", "debian-openssl-3.0.x"]
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -258,24 +257,37 @@ model ControlIap {
 }
 
 model DailyReport {
-  id           String    @id @default(cuid())
-  teamId       String?   @map("team_id")
-  userId       String?   @map("user_id")
-  companyId    String?   @map("company_id")
-  reportDate   DateTime  @map("report_date") @db.Date
-  activities   String
-  observations String?
-  createdBy    String?   @map("created_by")
-  localId      String?   @map("local_id")
-  syncedAt     DateTime? @map("synced_at")
-  subPoint     String?   @map("sub_point")
-  subPointType String?   @map("sub_point_type")
-  metadata     Json?     @default("{}")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
-  company      Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  team         Team?     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  user         User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String            @id @default(cuid())
+  teamId          String?           @map("team_id")
+  userId          String?           @map("user_id")
+  companyId       String?           @map("company_id")
+  reportDate      DateTime          @map("report_date") @db.Date
+  activities      String
+  observations    String?
+  createdBy       String?           @map("created_by")
+  localId         String?           @map("local_id")
+  syncedAt        DateTime?         @map("synced_at")
+  subPoint        String?           @map("sub_point")
+  subPointType    String?           @map("sub_point_type")
+  metadata        Json?             @default("{}")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  company         Company?          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  team            Team?             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user            User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status          DailyReportStatus @default(SENT)
+  approvedById    String?           @map("approved_by_id")
+  approvedBy      User?             @relation("ApprovedReports", fields: [approvedById], references: [id])
+  rejectionReason String?           @map("rejection_reason")
+  weather         Json?             @default("{}") @map("weather")
+  manpower        Json?             @default("{}") @map("manpower")
+  equipment       Json?             @default("{}") @map("equipment")
+  rdoNumber       String?           @map("rdo_number")
+  revision        String?           @default("0A") @map("revision")
+  projectDeadline Int?              @map("project_deadline")
+  scheduledAt     DateTime?         @map("scheduled_at")
+  executedAt      DateTime?         @map("executed_at")
+  reviewedAt      DateTime?         @map("reviewed_at")
 
   @@index([reportDate])
   @@index([teamId])
@@ -420,17 +432,20 @@ model MapElementTechnicalData {
   geometry                     Json?
   name                         String?
   path                         Json?
+  siteId                       String?                        @map("site_id")
   activitySchedules            ActivitySchedule[]
   mapElementProductionProgress MapElementProductionProgress[]
   company                      Company                        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   constructionDocument         ConstructionDocument?          @relation(fields: [documentId], references: [id])
   project                      Project                        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  site                         Site?                          @relation(fields: [siteId], references: [id])
   mapElementVisibility         MapElementVisibility[]
 
   @@unique([projectId, externalId])
   @@index([companyId])
   @@index([elementType])
   @@index([projectId])
+  @@index([siteId])
   @@map("map_element_technical_data")
 }
 
@@ -734,24 +749,25 @@ model SiteResponsible {
 }
 
 model Site {
-  id                    String                 @id @default(cuid())
-  projectId             String                 @map("project_id")
-  name                  String
-  code                  String?
-  locationDetails       String?                @map("location_details")
-  plannedHours          Decimal                @default(0) @map("planned_hours") @db.Decimal(10, 2)
-  createdAt             DateTime               @default(now()) @map("created_at")
-  updatedAt             DateTime               @updatedAt @map("updated_at")
-  xLat                  Decimal?               @map("x_lat") @db.Decimal(30, 20)
-  yLa                   Decimal?               @map("y_la") @db.Decimal(30, 20)
-  constructionDocuments ConstructionDocument[]
-  projectMonthlyTargets ProjectMonthlyTarget[]
-  responsibles          SiteResponsible[]
-  project               Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  systemMessages        SystemMessage[]
-  teams                 Team[]
-  userAffiliations      UserAffiliation[]
-  workStages            WorkStage[]
+  id                      String                    @id @default(cuid())
+  projectId               String                    @map("project_id")
+  name                    String
+  code                    String?
+  locationDetails         String?                   @map("location_details")
+  plannedHours            Decimal                   @default(0) @map("planned_hours") @db.Decimal(10, 2)
+  createdAt               DateTime                  @default(now()) @map("created_at")
+  updatedAt               DateTime                  @updatedAt @map("updated_at")
+  xLat                    Decimal?                  @map("x_lat") @db.Decimal(30, 20)
+  yLa                     Decimal?                  @map("y_la") @db.Decimal(30, 20)
+  constructionDocuments   ConstructionDocument[]
+  projectMonthlyTargets   ProjectMonthlyTarget[]
+  responsibles            SiteResponsible[]
+  mapElementTechnicalData MapElementTechnicalData[]
+  project                 Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  systemMessages          SystemMessage[]
+  teams                   Team[]
+  userAffiliations        UserAffiliation[]
+  workStages              WorkStage[]
 
   @@unique([projectId, code])
   @@index([projectId])
@@ -969,6 +985,7 @@ model User {
   routeHealthHistory     RouteHealthHistory[]
   sessions               Session[]
   stageProgress          StageProgress[]
+  approvedDailyReports   DailyReport[]            @relation("ApprovedReports")
   systemMessages         SystemMessage[]
   teamMember             TeamMember?
   teams                  Team[]
@@ -1027,6 +1044,7 @@ enum ActivityStatus {
   PENDING
   IN_PROGRESS
   FINISHED
+  BLOCKED
 }
 
 enum ImpedimentType {
@@ -1105,4 +1123,12 @@ enum TaskStatus {
   processing
   completed
   failed
+}
+
+enum DailyReportStatus {
+  PROGRAMMED
+  DRAFT
+  SENT
+  APPROVED
+  RETURNED
 }

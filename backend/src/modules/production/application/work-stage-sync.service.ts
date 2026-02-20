@@ -51,13 +51,16 @@ export class WorkStageSyncService {
             }
         });
 
-        // 3. Função recursiva para calcular e persistir progresso
-        const calculateAndPersist = async (nodeId: string): Promise<number> => {
+        // 3. Função recursiva para calcular o progresso na memória
+        const calculatedProgress = new Map<string, number>();
+
+        const calculateProgress = (nodeId: string): number => {
             const node = stageMap.get(nodeId);
             if (!node) return 0;
             
             // Se não tiver filhos, apenas retornamos o progresso atual.
             if (node.children.length === 0) {
+                calculatedProgress.set(node.id, node.actualPercentage);
                 return node.actualPercentage;
             }
 
@@ -66,7 +69,7 @@ export class WorkStageSyncService {
             let totalWeightedProgress = 0;
 
             for (const child of node.children) {
-                const childProgress = await calculateAndPersist(child.id);
+                const childProgress = calculateProgress(child.id);
                 const weight = Number(child.weight) || 0;
 
                 totalWeight += weight;
@@ -76,49 +79,93 @@ export class WorkStageSyncService {
             const aggregatedProgress = totalWeight > 0 ? totalWeightedProgress / totalWeight : 0;
             const finalProgress = Math.min(100, aggregatedProgress);
 
-            // 4. Persistir progresso agregado
-            await this.updateStageProgress(node.id, finalProgress);
-
+            calculatedProgress.set(node.id, finalProgress);
             return finalProgress;
         };
 
         // Iniciar cálculo a partir das raízes
         for (const rootId of rootIds) {
-            await calculateAndPersist(rootId);
+            calculateProgress(rootId);
         }
+
+        // 4. Persistir progresso agregado em lote (SELECT UPDATE)
+        await this.persistProgressBatch(calculatedProgress);
 
         logger.info(`[WorkStageSyncService] Sincronização recursiva concluída`, { projectId, siteId });
     }
 
-    private async updateStageProgress(stageId: string, progress: number) {
+    private async persistProgressBatch(calculatedProgress: Map<string, number>) {
+        if (calculatedProgress.size === 0) return;
+
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        // Buscar progresso de hoje
-        const existing = await prisma.stageProgress.findFirst({
-            where: { stageId, recordedDate: today }
+        const stageIds = Array.from(calculatedProgress.keys());
+
+        // SELECT: Buscar progresso de hoje para todas as etapas calculadas
+        const existingProgresses = await prisma.stageProgress.findMany({
+            where: {
+                stageId: { in: stageIds },
+                recordedDate: today
+            }
         });
 
-        if (existing) {
-            // Só atualizar se o progresso mudou significativamente
-            if (Math.abs(Number(existing.actualPercentage) - progress) > 0.01) {
-                await prisma.stageProgress.update({
-                    where: { id: existing.id },
-                    data: { 
-                        actualPercentage: progress,
-                        notes: "Agregação Ponderada (Recursive Sync)"
-                    }
-                });
-            }
-        } else {
-            await prisma.stageProgress.create({
-                data: {
+        const existingMap = new Map(existingProgresses.map(p => [p.stageId, p]));
+
+        const toCreate = [];
+        const toUpdate: { id: string, actualPercentage: number }[] = [];
+
+        for (const [stageId, progress] of calculatedProgress.entries()) {
+            const existing = existingMap.get(stageId);
+            
+            if (existing) {
+                // UPDATE PRE-CHECK: Evita atualizar se a diferença for irrisória (falso update)
+                if (Math.abs(Number(existing.actualPercentage) - progress) > 0.01) {
+                    toUpdate.push({
+                        id: existing.id,
+                        actualPercentage: progress
+                    });
+                }
+            } else {
+                toCreate.push({
                     stageId,
                     actualPercentage: progress,
                     recordedDate: today,
                     notes: "Agregação Ponderada (Recursive Sync)"
-                }
-            });
+                });
+            }
+        }
+
+        const transactions: any[] = [];
+
+        // Inserções em Lote (createMany)
+        if (toCreate.length > 0) {
+            transactions.push(
+                prisma.stageProgress.createMany({
+                    data: toCreate,
+                    skipDuplicates: true
+                })
+            );
+        }
+
+        // Atualizações em Lote ($transaction com múltiplos updates)
+        for (const update of toUpdate) {
+            transactions.push(
+                prisma.stageProgress.update({
+                    where: { id: update.id },
+                    data: { 
+                        actualPercentage: update.actualPercentage,
+                        notes: "Agregação Ponderada (Recursive Sync)"
+                    }
+                })
+            );
+        }
+
+        if (transactions.length > 0) {
+            await prisma.$transaction(transactions);
+            logger.info(`[WorkStageSyncService] Persistência em lote concluída: ${toCreate.length} novos, ${toUpdate.length} atualizados.`);
+        } else {
+            logger.info(`[WorkStageSyncService] Nenhum progresso novo ou alterado para persistir (Pre-check validou ausência de mudanças).`);
         }
     }
 }

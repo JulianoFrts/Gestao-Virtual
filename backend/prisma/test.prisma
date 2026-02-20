@@ -1,15 +1,1 @@
-generator client {
-  provider = "prisma-client-js"
-  previewFeatures = ["multiSchema"]
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = "postgresql://postgres:AZWshL4wmcAxzLsc@db.nvwsrnxsmxwqoixgcugr.supabase.co:5432/postgres?sslmode=no-verify"
-  schemas  = ["public"]
-}
-
-model Test {
-  id String @id @default(cuid())
-  @@schema("public")
-}
+// Arquivo de teste temporário limpo

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useDailyReports, DailyReport } from '@/hooks/useDailyReports';
+import { useDailyReports, DailyReport, ActivityStatus } from '@/hooks/useDailyReports';
 import { useTeams } from '@/hooks/useTeams';
 import { useUsers } from '@/hooks/useUsers';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -363,11 +363,11 @@ export default function Reports() {
                             </span>
                           )}
                           <Badge variant="outline" className={`text-[10px] font-bold ml-auto ${
-                            act.status === 'FINISHED' 
+                            act.status === ActivityStatus.FINISHED 
                               ? 'border-green-500/30 text-green-500' 
                               : 'border-amber-500/30 text-amber-500'
                           }`}>
-                            {act.status === 'FINISHED' ? 'CONCLUÍDO' : 'ANDAMENTO'}
+                            {act.status === ActivityStatus.FINISHED ? 'CONCLUÍDO' : 'ANDAMENTO'}
                           </Badge>
                         </div>
 
@@ -407,12 +407,12 @@ export default function Reports() {
                                     </td>
                                     <td className="p-2 text-center">
                                       <Badge variant="outline" className={`text-[9px] font-bold ${
-                                        d.status === 'FINISHED' ? 'border-green-500/30 text-green-500' :
-                                        d.status === 'BLOCKED' ? 'border-red-500/30 text-red-500' :
+                                        d.status === ActivityStatus.FINISHED ? 'border-green-500/30 text-green-500' :
+                                        d.status === ActivityStatus.BLOCKED ? 'border-red-500/30 text-red-500' :
                                         'border-amber-500/30 text-amber-500'
                                       }`}>
-                                        {d.status === 'FINISHED' ? 'CONCLUÍDO' :
-                                         d.status === 'BLOCKED' ? 'PARADO' :
+                                        {d.status === ActivityStatus.FINISHED ? 'CONCLUÍDO' :
+                                         d.status === ActivityStatus.BLOCKED ? 'PARADO' :
                                          `AND. ${d.progress || 0}%`}
                                       </Badge>
                                     </td>
