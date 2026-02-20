@@ -8,7 +8,9 @@ import { useMessages } from '@/hooks/useMessages';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { localApi } from '@/integrations/orion/client';
 import { Input } from '@/components/ui/input';
+
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { InstallPrompt } from '@/components/pwa/InstallPrompt';
@@ -37,7 +39,16 @@ import {
   Settings2,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { isProtectedSignal } from "@/signals/authSignals";
+import { 
+    isProtectedSignal, 
+    simulationRoleSignal,
+    permissionsSignal, 
+    uiSignal,
+    realPermissionsSignal,
+    realUiSignal,
+} from "@/signals/authSignals";
+import { useSignals } from "@preact/signals-react/runtime";
+
 import { 
     logoUrlSignal, 
     logoWidthSignal, 
@@ -46,8 +57,9 @@ import {
     isLoadingSettingsSignal 
 } from "@/signals/settingsSignals";
 import { loaderConcurrencySignal } from "@/signals/loaderSignals";
-import { getRoleStyle, getRoleLabel } from "@/utils/roleUtils";
+import { getRoleStyle, getRoleLabel, STANDARD_ROLES } from "@/utils/roleUtils";
 import { cn } from "@/lib/utils";
+import { Users, Eye, LogOut as LogOutIcon } from 'lucide-react';
 import { MfaSetup } from "@/components/auth/MfaSetup";
 import { ConfirmationDialog } from "@/components/shared/ConfirmationDialog";
 import { AlertTriangle } from "lucide-react";
@@ -67,6 +79,7 @@ import {
 import { MoreVertical } from "lucide-react";
 
 export default function Settings() {
+  useSignals();
   const { user, profile, logout, disableMfa, refreshProfile } = useAuth();
   const queryClient = useQueryClient();
   const { isOnline, pendingChanges, syncNow } = useSync();
@@ -97,6 +110,7 @@ export default function Settings() {
     React.useState(false);
   const [countdown, setCountdown] = React.useState<number | null>(null);
   const [showCountdown, setShowCountdown] = React.useState(false);
+  const [isRoleSimulationModalOpen, setIsRoleSimulationModalOpen] = React.useState(false);
 
   // States for Photo Crop/Adjustment
   const [imageToAdjust, setImageToAdjust] = React.useState<string | null>(null);
@@ -155,6 +169,94 @@ export default function Settings() {
       if (timer) clearInterval(timer);
     };
   }, [showCountdown, countdown, logout]);
+  
+  const handleStartSimulation = async (role: string) => {
+      try {
+          // Backup permissões reais se ainda não houver backup
+          if (!realPermissionsSignal.value) {
+              realPermissionsSignal.value = { ...permissionsSignal.value };
+              realUiSignal.value = { ...uiSignal.value };
+          }
+
+          // Se for um God Role simulado, damos wildcard total
+          const GodRoles = ['SUPER_ADMIN_GOD', 'HELPER_SYSTEM'];
+          if (GodRoles.includes(role.toUpperCase())) {
+              permissionsSignal.value = { '*': true, 'system.full_access': true, 'system.is_protected': true };
+              uiSignal.value = { showAdminMenu: true, showSettings: true };
+          } else {
+              // Caso contrário, BUSCAMOS NO BACKEND (No Bypass!)
+              toast({ title: 'Simulando...', description: `Carregando permissões do papel ${getRoleLabel(role)}...` });
+              
+              const [levelsRes, modulesRes, matrixRes] = await Promise.all([
+                  localApi.from('permission_levels').select('*'),
+                  localApi.from('permission_modules').select('*'),
+                  localApi.from('permission_matrix').select('*').eq('is_granted', true)
+              ]);
+
+              if (levelsRes.data && modulesRes.data && matrixRes.data) {
+                  const targetLevel = levelsRes.data.find((l: any) => l.name.toUpperCase() === role.toUpperCase());
+                  
+                  if (targetLevel) {
+                      const simulatedPerms: Record<string, boolean> = {};
+                      const simulatedUi: Record<string, boolean> = {};
+
+                      const relevantMatrix = (matrixRes.data as any[]).filter(m => m.level_id === targetLevel.id);
+                      
+                      relevantMatrix.forEach(item => {
+                          const mod = (modulesRes.data as any[]).find(m => m.id === item.module_id);
+                          if (mod) {
+                              simulatedPerms[mod.code] = true;
+                              // Se for permissão de UI, jogamos no UI signal também
+                              if (mod.code.startsWith('ui.') || mod.code.endsWith('.view') || mod.code.includes('access')) {
+                                  simulatedUi[mod.code] = true;
+                                  if (mod.code === 'ui.admin_access') simulatedUi['showAdminMenu'] = true;
+                              }
+                          }
+                      });
+
+                      permissionsSignal.value = simulatedPerms;
+                      uiSignal.value = simulatedUi;
+                  } else {
+                      // Se não achar o nível no banco, deixa sem permissão nenhuma (Backend decide!)
+                      permissionsSignal.value = {};
+                      uiSignal.value = {};
+                  }
+              }
+          }
+
+          simulationRoleSignal.value = role;
+          setIsRoleSimulationModalOpen(false);
+          
+          toast({
+              title: "Modo Simulação Ativo",
+              description: `Você agora está visualizando o sistema como ${getRoleLabel(role)}.`,
+          });
+      } catch (error) {
+          console.error('[Settings] Falha ao iniciar simulação:', error);
+          toast({
+              title: "Erro na Simulação",
+              description: "Não foi possível carregar as permissões do papel selecionado.",
+              variant: "destructive"
+          });
+      }
+  };
+
+  const handleStopSimulation = () => {
+      // Restaurar permissões reais se houver backup
+      if (realPermissionsSignal.value) {
+          permissionsSignal.value = { ...realPermissionsSignal.value };
+          uiSignal.value = { ...realUiSignal.value || {} };
+          realPermissionsSignal.value = null;
+          realUiSignal.value = null;
+      }
+
+      simulationRoleSignal.value = null;
+      toast({
+          title: "Simulação Encerrada",
+          description: "Seu nível de acesso real foi restaurado.",
+      });
+  };
+
 
   const handleEditProfile = () => {
     setEditForm({
@@ -476,6 +578,43 @@ export default function Settings() {
               >
                 {getRoleLabel(profile?.role || "worker")}
               </p>
+
+              {/* Role Simulation Switcher (Visible only for God Roles) */}
+              {(profile?.role === 'HELPER_SYSTEM' || profile?.role === 'SUPER_ADMIN_GOD') && (
+                <div className="mt-4 pt-4 border-t border-white/5 flex flex-col gap-2">
+                    <Label className="text-[10px] uppercase text-muted-foreground font-bold tracking-widest flex items-center gap-1.5">
+                        <ShieldCheck className="w-3 h-3 text-indigo-400" />
+                        Modo Simulação
+                    </Label>
+                    {!simulationRoleSignal.value ? (
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="bg-indigo-500/5 border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/10 h-8 text-[11px] w-full justify-start px-3"
+                            onClick={() => setIsRoleSimulationModalOpen(true)}
+                        >
+                            <Users className="w-3.5 h-3.5 mr-2" />
+                            Alternar Nível de Acesso (Teste)
+                        </Button>
+                    ) : (
+                        <div className="flex items-center justify-between gap-2 bg-indigo-500/10 border border-indigo-500/20 rounded-md p-2">
+                            <div className="flex flex-col">
+                                <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-tighter">Simulando como:</span>
+                                <span className="text-[11px] text-indigo-200 font-mono font-bold leading-none">{getRoleLabel(simulationRoleSignal.value)}</span>
+                            </div>
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 px-2 text-[10px] text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 bg-rose-500/5 border border-rose-500/10"
+                                onClick={handleStopSimulation}
+                            >
+                                <LogOutIcon className="w-3 h-3 mr-1" />
+                                Parar
+                            </Button>
+                        </div>
+                    )}
+                </div>
+              )}
             </div>
           </div>
         </CardContent>
@@ -1351,6 +1490,58 @@ export default function Settings() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Role Selection Dialog for Simulation */}
+      <Dialog open={isRoleSimulationModalOpen} onOpenChange={setIsRoleSimulationModalOpen}>
+        <DialogContent className="max-w-md bg-zinc-950 border-white/10 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-indigo-400">
+              <Users className="w-5 h-5" />
+              Simular Nível de Acesso
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground text-xs">
+              Selecione um papel para visualizar o sistema como se tivesse esse nível de privilégio. 
+              Esta mudança é temporária e afetará apenas as permissões de UI e navegação.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid grid-cols-1 gap-2 mt-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+            {STANDARD_ROLES.map((role) => (
+              <button
+                key={role.name}
+                onClick={() => handleStartSimulation(role.name)}
+                className={cn(
+                  "flex items-center justify-between p-3 rounded-lg border transition-all text-left group",
+                  simulationRoleSignal.value === role.name 
+                    ? "bg-indigo-500/10 border-indigo-500/40" 
+                    : "bg-white/5 border-white/5 hover:border-white/20 hover:bg-white/10"
+                )}
+              >
+                 <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-semibold group-hover:text-indigo-300 transition-colors">
+                        {getRoleLabel(role.name)}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground font-mono opacity-60">
+                        {role.name}
+                    </span>
+                 </div>
+                 <div className={cn(
+                    "px-2 py-0.5 rounded-full text-[9px] font-bold uppercase",
+                    getRoleStyle(role.name)
+                 )}>
+                    {role.rank} pts
+                 </div>
+              </button>
+            ))}
+          </div>
+          <div className="flex justify-end mt-4">
+            <Button variant="ghost" onClick={() => setIsRoleSimulationModalOpen(false)}>
+              Cancelar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

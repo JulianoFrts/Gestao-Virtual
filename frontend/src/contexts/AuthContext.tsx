@@ -13,7 +13,9 @@ import {
   uiSignal,
   currentUserSignal,
   isAuthLoadingSignal,
+  simulationRoleSignal
 } from "@/signals/authSignals";
+import { useSignals } from "@preact/signals-react/runtime";
 
 interface Profile {
   id: string;
@@ -93,6 +95,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  useSignals();
   const [user, setUser] = useState<
     ({ id: string; email?: string } & Record<string, unknown>) | null
   >(null);
@@ -181,24 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           companyId: userData.companyId || userData.company_id,
           projectId: userData.projectId || userData.project_id,
           siteId: userData.siteId || userData.site_id,
-          isSystemAdmin: (() => {
-            const GodRoles = [
-              "SUPER_ADMIN_GOD",
-              "SUPERADMINGOD",
-              "SUPER_ADMIN",
-              "SUPERADMIN",
-              "SOCIO_DIRETOR",
-              "SOCIODIRETOR",
-              "TI_SOFTWARE",
-              "TISOFTWARE",
-              "HELPER_SYSTEM",
-              "ADMIN",
-            ];
-            return (
-              !!userData.isSystemAdmin ||
-              GodRoles.includes((userData.role || "").toUpperCase())
-            );
-          })(),
+          isSystemAdmin: !!userData.isSystemAdmin,
           mfaEnabled: !!userData.mfaEnabled,
           mfaSecret: userData?.mfaSecret,
           permissionsMap: permissions,
@@ -557,7 +543,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       session,
-      profile,
+      profile: profile ? {
+        ...profile,
+        role: (simulationRoleSignal.value || profile.role) as any
+      } : null,
       isLoading,
       login,
       loginOffline,
@@ -578,6 +567,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       session,
       profile,
+      simulationRoleSignal.value,
       isLoading,
       login,
       loginOffline,

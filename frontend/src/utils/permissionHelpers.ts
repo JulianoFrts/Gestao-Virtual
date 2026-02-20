@@ -30,23 +30,16 @@ export interface UserScope {
   permissionsMap?: Record<string, boolean>;
 }
 
-/**
- * Verifica se o usuário é o nível máximo (God)
- */
 export const isSuperAdminGod = (profile: UserScope | undefined): boolean => {
   if (!profile) return false;
 
-  // God Mode bypass flags
+  // God Mode bypass flags (Somente o que o Backend disse)
   if (profile.isSystemAdmin) return true;
+  if (profile.permissionsMap?.["*"]) return true;
   if (profile.permissionsMap?.["system.full_access"]) return true;
 
-  // Check role as fallback (God Roles)
-  const role = (profile.role || "").toUpperCase();
-  const GodRoles = ["SUPER_ADMIN_GOD", "SUPERADMINGOD"];
-  if (GodRoles.includes(role)) return true;
-
-  // Hierarchy Level God check (Level 1500+ is automatically God)
-  if ((profile.hierarchyLevel || 0) >= 1500) return true;
+  // Hierarchy Level God check (Ainda aceitável se alinhado ao backend, mas o mapa deve bastar)
+  if ((profile.hierarchyLevel || 0) >= 2000) return true;
 
   return false;
 };
@@ -56,22 +49,10 @@ export const isGestaoGlobal = (profile: UserScope | undefined): boolean => {
 
   if (isSuperAdminGod(profile)) return true;
 
-  // Check role as fallback
-  const role = (profile.role || "").toUpperCase();
-  const GlobalRoles = [
-    "SOCIO_DIRETOR",
-    "SOCIODIRETOR",
-    "ADMIN",
-    "TI_SOFTWARE",
-    "TISOFTWARE",
-    "MANAGER",
-  ];
-  if (GlobalRoles.includes(role)) return true;
-
-  // Hierarchy Level Global check (Level 900+ is global management)
+  // Hierarchy Level Global check (Baseado em nível, sem hardcode de role name)
   if ((profile.hierarchyLevel || 0) >= 900) return true;
 
-  return false;
+  return !!profile.permissionsMap?.["system.is_corporate"] || !!profile.permissionsMap?.["ui.admin_access"];
 };
 
 export const isCorporateRole = (
@@ -87,9 +68,8 @@ export const isCorporateRole = (
 
 export const isProtectedUser = (user: UserScope | undefined): boolean => {
   if (!user) return false;
-  const role = (user.role || "").toUpperCase();
-  // Somente SUPER_ADMIN_GOD pode ter Protect (Escudo e impedimento de exclusão)
-  return role === "SUPER_ADMIN_GOD" || role === "SUPERADMINGOD";
+  // Somente o que o Backend definiu como protegido (Escudo Dourado)
+  return !!user.permissionsMap?.["system.is_protected"] || !!user.isSystemAdmin;
 };
 
 /**
@@ -101,9 +81,12 @@ export const isFieldWorker = (role: string | undefined): boolean => {
   return r === "WORKER";
 };
 
+/**
+ * Verifica se o usuário é um suporte especializado do sistema.
+ */
 export const isHelperSystem = (profile: UserScope | undefined): boolean => {
   if (!profile) return false;
-  return (profile.role || "").toUpperCase() === "HELPER_SYSTEM";
+  return !!profile.permissionsMap?.["system.is_helper"] || profile.role?.toUpperCase() === "HELPER_SYSTEM";
 };
 
 /**
@@ -183,6 +166,7 @@ export const canAssignRole = (
   const role = roleToAssign.toLowerCase();
   if (["helper_system", "super_admin_god", "super_admin"].includes(role))
     return false;
+  
   if (isSuperAdminGod(currentUser)) return true;
 
   return !!currentUser.permissionsMap?.["roles.assign"];

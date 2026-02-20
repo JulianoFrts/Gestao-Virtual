@@ -179,27 +179,26 @@ export default function CustomSU() {
         setIsSaving(true);
         try {
             const updates = Object.entries(matrix).map(([key, isGranted]) => {
-                const [level_id, module_id] = key.split(':');
+                const [levelId, moduleId] = key.split(':');
                 return {
-                    level_id,
-                    module_id,
-                    is_granted: isGranted
+                    levelId,
+                    moduleId,
+                    isGranted,
                 };
             });
 
-            const result = await localApi
-                .from('permission_matrix')
-                .upsert(updates);
+            // Usando POST no endpoint dedicado, não upsert genérico!
+            const response = await localApi.post('/permission_matrix', updates);
+            
+            if (response.error) throw response.error;
 
-            if (result.error) throw result.error;
-
-            const responseData = Array.isArray(result.data) ? result.data[0] : result.data;
-            const taskId = responseData?.taskId;
+            const responseData = response.data as any;
+            const taskId = responseData?.taskId || responseData?.id;
 
             if (taskId) {
                 toast({ title: 'Processando...', description: 'Aguarde a conclusão do salvamento em segundo plano.' });
 
-                // Polling de status
+                // Polling de status usando a localApi wrapper
                 let isDone = false;
                 let attempts = 0;
 
@@ -208,19 +207,16 @@ export default function CustomSU() {
                     attempts++;
 
                     try {
-                        const baseUrl = (localApi as any).baseUrl || '';
-                        const res = await fetch(`${baseUrl}/task_queue/${taskId}`, {
-                            headers: { 'Authorization': `Bearer ${(localApi as any).token}` }
-                        });
-                        const statusJson = await res.json();
-                        const status = statusJson.data?.status || statusJson.status;
+                        const statusRes = await localApi.get(`/task_queue/${taskId}`);
+                        const statusJson = statusRes.data as any;
+                        const status = statusJson?.status;
 
                         if (status === 'completed') {
                             isDone = true;
                             toast({ title: 'Matriz atualizada', description: 'Todas as permissões foram salvas com sucesso!' });
                         } else if (status === 'failed') {
                             isDone = true;
-                            throw new Error(statusJson.data?.error || 'Falha no processamento da tarefa');
+                            throw new Error(statusJson?.error || 'Falha no processamento da tarefa');
                         }
                     } catch (pollErr) {
                         console.error('Polling error:', pollErr);

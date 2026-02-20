@@ -8,9 +8,14 @@ export const permissionsSignal = signal<Record<string, boolean>>({});
 
 /**
  * Mapa de visibilidade de UI (Backend Driven UI).
- * Ex: { "showAdminMenu": true, "showSettings": false }
  */
 export const uiSignal = signal<Record<string, boolean>>({});
+
+/**
+ * Backups das permissões reais durante simulação.
+ */
+export const realPermissionsSignal = signal<Record<string, boolean> | null>(null);
+export const realUiSignal = signal<Record<string, boolean> | null>(null);
 
 /**
  * Perfil do usuário logado.
@@ -23,6 +28,12 @@ export const currentUserSignal = signal<{
     permissions?: Record<string, boolean>;
     ui?: Record<string, boolean>;
 } | null>(null);
+
+/**
+ * Papel simulado (Impersonation).
+ */
+export const simulationRoleSignal = signal<string | null>(null);
+
 
 /**
  * Indicador de carregamento da sessão.
@@ -40,32 +51,20 @@ export const isSystemAdminSignal = computed(() => {
     const user = currentUserSignal.value;
     if (!user) return false;
 
-    // Alinhado com SYSTEM_OWNERS do Backend
-    const SystemOwners = [
-        'HELPER_SYSTEM', 
-        'SUPER_ADMIN_GOD', 
-        'SOCIO_DIRETOR', 
-        'ADMIN', 
-        'TI_SOFTWARE'
-    ];
-    
-    const role = (user.role || '').toUpperCase();
-    return !!user.isSystemAdmin || SystemOwners.includes(role);
+    // Confiamos exclusivamente na flag vinda do Backend
+    return !!user.isSystemAdmin;
 });
+
 
 /**
  * Verifica se o usuário tem Proteção Suprema (Escudo Dourado).
  */
 export const isProtectedSignal = computed(() => {
-    const user = currentUserSignal.value;
-    if (!user) return false;
-    const role = (user.role || '').toUpperCase();
-    
-    // God Roles ou Flag de Proteção ativa
-    const isGod = role === 'SUPER_ADMIN_GOD' || role === 'HELPER_SYSTEM';
-    const hasFullAccess = !!permissionsSignal.value['*'] || !!permissionsSignal.value['system.full_access'];
-    
-    return isGod || hasFullAccess || !!permissionsSignal.value['system.is_protected'];
+    // Se estiver em simulação, a proteção depende estritamente do mapa simulado
+    // que será injetado no permissionsSignal
+    return !!permissionsSignal.value['*'] || 
+           !!permissionsSignal.value['system.full_access'] || 
+           !!permissionsSignal.value['system.is_protected'];
 });
 
 /**
@@ -87,8 +86,8 @@ export const canAccessAdminSignal = computed(() =>
  * Uso: can('employees.delete')
  */
 export const can = (permission: string, targetLevel?: number) => {
-    // Regra de Ouro: Mestre Supremo ignora o mapa de permissões (Full Access)
-    if (isProtectedSignal.value) return true;
+    // Regra de Ouro: Confia no mapa do backend (incluindo Wildcards)
+    if (permissionsSignal.value['*'] || permissionsSignal.value['system.full_access']) return true;
 
     const hasPerm = !!permissionsSignal.value[permission];
     if (!hasPerm) return false;

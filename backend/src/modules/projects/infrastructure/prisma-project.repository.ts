@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma/client";
 import { Project, Prisma } from "@prisma/client";
 import { ProjectRepository } from "../domain/project.repository";
+import { randomUUID } from "crypto";
 
 export class PrismaProjectRepository implements ProjectRepository {
   async findAll(params: {
@@ -72,6 +73,7 @@ export class PrismaProjectRepository implements ProjectRepository {
       where: { projectId },
       update: { settings },
       create: {
+        id: randomUUID(),
         projectId,
         settings,
       },

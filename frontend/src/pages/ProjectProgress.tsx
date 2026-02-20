@@ -710,6 +710,8 @@ export default function ProjectProgress() {
           .eq("projectId", projectId)
           .maybeSingle();
 
+        let loadedConnections: { from: string; to: string }[] = [];
+
         if (settingsData?.settings) {
           const s = settingsData.settings as Record<string, unknown>;
           if (s.scale) setScale(s.scale as number);
@@ -725,9 +727,27 @@ export default function ProjectProgress() {
             setPhases(mergedPhases);
           }
 
-          if (s.connections)
-            setConnections(s.connections as { from: string; to: string }[]);
+          if (s.connections && Array.isArray(s.connections) && s.connections.length > 0) {
+            loadedConnections = s.connections as { from: string; to: string }[];
+          }
         }
+
+        // Auto-connect fallback if no connections were loaded
+        if (loadedConnections.length === 0 && mappedTowers.length > 1) {
+          const sortedTowers = [...mappedTowers].sort((a,b) => {
+             const seqA = Number(a.metadata?.sequence || 0);
+             const seqB = Number(b.metadata?.sequence || 0);
+             if (seqA !== seqB) return seqA - seqB;
+             return a.name.localeCompare(b.name, undefined, { numeric: true });
+          });
+          
+          loadedConnections = sortedTowers.slice(0, -1).map((t, i) => ({
+            from: t.name,
+            to: sortedTowers[i+1].name
+          }));
+        }
+
+        setConnections(loadedConnections);
       } catch (error) {
         console.error("Error loading project data:", error);
       } finally {
@@ -804,13 +824,21 @@ export default function ProjectProgress() {
         const towersToUpdate = Array.from(towersMap.values());
 
         if (towersToUpdate.length > 0) {
-          console.log(`[ProjectProgress] Sending batch update for ${towersToUpdate.length} towers/elements...`);
-          const { error: towerError } = await orionApi
-            .from("map_elements")
-            .insert(towersToUpdate);
-          if (towerError) {
-            console.error("[ProjectProgress] Tower save error details:", towerError);
-            throw new Error(towerError.message);
+          console.log(`[ProjectProgress] Sending batch update for ${towersToUpdate.length} towers/elements in chunks...`);
+          
+          const CHUNK_SIZE = 50;
+          for (let i = 0; i < towersToUpdate.length; i += CHUNK_SIZE) {
+            const chunk = towersToUpdate.slice(i, i + CHUNK_SIZE);
+            console.log(`[ProjectProgress] Saving chunk ${i / CHUNK_SIZE + 1} (${chunk.length} elements)...`);
+            
+            const { error: towerError } = await orionApi
+              .from("map_elements")
+              .insert(chunk);
+              
+            if (towerError) {
+              console.error(`[ProjectProgress] Tower save error details on chunk ${i / CHUNK_SIZE + 1}:`, towerError);
+              throw new Error(towerError.message);
+            }
           }
         }
 
