@@ -24,6 +24,22 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useEmployees } from "@/hooks/useEmployees";
 import {
+  Camera,
+  ImageIcon,
+  Trash2,
+  X,
+  CloudSun,
+  Users,
+  Truck,
+  MessageSquare,
+  ChevronUp,
+  ChevronDown,
+  Check,
+  ChevronsUpDown,
+  Info,
+  Search,
+  Plus,
+  RefreshCw,
   FileText,
   Send,
   Calendar,
@@ -33,15 +49,7 @@ import {
   ChevronLeft,
   PanelLeft,
   PanelLeftClose,
-  PanelLeftOpen,
-  Camera,
-  Image as ImageIcon,
-  Trash2,
-  X,
-  CloudSun,
-  Users,
-  Truck,
-  MessageSquare,
+  PanelLeftOpen
 } from "lucide-react";
 import { isProtectedSignal, can } from "@/signals/authSignals";
 import { useSignals } from "@preact/signals-react/runtime";
@@ -78,7 +86,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Check, ChevronsUpDown, Info, Search, Plus, RefreshCw } from "lucide-react";
+
 import { useWorkStages } from "@/hooks/useWorkStages";
 import { fetchWorkStages, hasWorkStagesFetchedSignal } from "@/signals/workStageSignals";
 import { Progress } from "@/components/ui/progress";
@@ -133,6 +141,28 @@ const addOneMinute = (timeStr: string) => {
   const newH = Math.floor(totalMinutes / 60).toString().padStart(2, '0');
   const newM = (totalMinutes % 60).toString().padStart(2, '0');
   return `${newH}:${newM}`;
+};
+
+// Helper para resolver URL de fotos (local ou remota com proxy)
+const getPhotoUrl = (photo: DailyReportPhoto) => {
+  if (!photo) return "";
+  
+  // Prioridade 1: URI Local (Blob) para preview imediato
+  if (photo.uri) return photo.uri;
+  
+  // Prioridade 2: URL Remota
+  const url = photo.url || "";
+  if (url.startsWith("/api/v1/storage")) {
+    const fallbackBaseUrl = import.meta.env.VITE_API_URL || "";
+    if (url.startsWith("http")) return url;
+    // Evitar duplicação de /api/v1 se presente na base e no caminho
+    if (fallbackBaseUrl.endsWith("/api/v1") && url.startsWith("/api/v1")) {
+      return `${fallbackBaseUrl}${url.replace("/api/v1", "")}`;
+    }
+    return `${fallbackBaseUrl}${url}`;
+  }
+  
+  return url;
 };
 
 // Componente de Relógio Universal 24h
@@ -226,22 +256,35 @@ const PhotoUploadZone = ({
   compact?: boolean;
 }) => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+  const [uploading, setUploading] = React.useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        onChange([...photos, { url: base64String, comment: "" }]);
-      };
-      reader.readAsDataURL(file);
-    });
-    
-    // Reset input
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    setUploading(true);
+    let newUploadedPhotos = [...photos];
+
+    try {
+      for (const file of files) {
+        // Criamos uma URL temporária apenas para preview no navegador
+        const objectUrl = URL.createObjectURL(file);
+        
+        newUploadedPhotos.push({
+          file: file, // mantemos o arquivo original instanciado
+          uri: objectUrl,
+          comment: ""
+        });
+      }
+      
+      onChange(newUploadedPhotos);
+    } catch (err) {
+      toast({ title: "Erro", description: "Falha ao processar imagens localmente.", variant: "destructive" });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const removePhoto = (index: number) => {
@@ -261,49 +304,90 @@ const PhotoUploadZone = ({
       {!compact && (
         <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/40 flex items-center gap-2">
           <Camera className="w-3 h-3" />
-          {title} ({photos.length})
+          {title} ({photos.length}) {uploading && <Loader2 className="w-3 h-3 animate-spin text-primary ml-2" />}
         </Label>
       )}
       
       <div className="flex flex-wrap gap-3">
         {/* Thumbnails */}
         {photos.map((photo, idx) => (
-          <div key={idx} className={cn(
-            "group relative bg-black/40 border border-white/5 rounded-2xl overflow-hidden transition-all hover:border-primary/40",
-            compact ? "w-24" : "w-32"
-          )}>
-            <img src={photo.url} alt={`Foto ${idx + 1}`} className="w-full h-20 object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
-            
-            <button 
-              onClick={() => removePhoto(idx)}
-              className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-10"
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
+          <Dialog key={idx}>
+            <DialogTrigger asChild>
+              <div className={cn(
+                "group relative bg-black/40 border border-white/5 rounded-2xl overflow-hidden transition-all hover:border-primary/40 flex flex-col cursor-pointer",
+                compact ? "w-24 h-[106px]" : "w-32 h-[114px]"
+              )}>
+                <img src={getPhotoUrl(photo)} alt={`Foto ${idx + 1}`} className="w-full flex-1 object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
+                
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removePhoto(idx);
+                  }}
+                  className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
 
-            <div className="p-1 px-1.5 pb-2">
-              <input 
-                type="text" 
-                placeholder="Comentário..." 
-                className="w-full bg-transparent border-none text-[8px] font-bold text-white/50 focus:text-primary outline-none placeholder:text-white/10"
-                value={photo.comment || ""}
-                onChange={(e) => updateComment(idx, e.target.value)}
-              />
-            </div>
-          </div>
+                <div className="p-1 px-1.5 pb-2 bg-black/60 shrink-0">
+                  <span className="text-[8px] font-bold text-white/50 truncate block">
+                    {photo.comment || "Sem comentário..."}
+                  </span>
+                </div>
+              </div>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl bg-[#0c0c0e] border-white/10 p-8 rounded-[2.5rem] shadow-2xl backdrop-blur-xl">
+               <DialogHeader>
+                  <DialogTitle className="text-xl font-black uppercase text-primary tracking-widest flex items-center gap-2">
+                    <Camera className="w-5 h-5" />
+                    Comentário da Evidência
+                  </DialogTitle>
+                  <DialogDescription className="text-muted-foreground font-bold">
+                    Adicione uma nota técnica sobre o que esta foto comprova no campo.
+                  </DialogDescription>
+               </DialogHeader>
+               
+               <div className="space-y-6 pt-6">
+                  <div className="relative aspect-video rounded-3xl overflow-hidden border border-white/5 bg-black/40">
+                    <img src={getPhotoUrl(photo)} className="w-full h-full object-contain" />
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase text-white/40 tracking-widest flex items-center gap-2">
+                      <MessageSquare className="w-3 h-3 text-primary" />
+                      Descrição / Nota Técnica
+                    </Label>
+                    <Textarea 
+                      placeholder="Descreva os detalhes observados nesta foto..."
+                      className="bg-black/60 border-white/5 rounded-2xl text-sm min-h-[140px] text-white/90 placeholder:text-white/20 italic p-4 focus:ring-primary/20"
+                      value={photo.comment || ""}
+                      onChange={(e) => updateComment(idx, e.target.value)}
+                    />
+                  </div>
+               </div>
+            </DialogContent>
+          </Dialog>
         ))}
 
         {/* Upload Button */}
         <button 
           type="button"
           onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
           className={cn(
             "flex flex-col items-center justify-center border-2 border-dashed border-white/5 hover:border-primary/20 bg-white/5 hover:bg-primary/5 rounded-2xl transition-all gap-2 group",
-            compact ? "w-24 h-[106px]" : "w-32 h-[114px]"
+            compact ? "w-24 h-[106px]" : "w-32 h-[114px]",
+            uploading && "opacity-50 pointer-events-none"
           )}
         >
-          <Plus className="w-5 h-5 text-white/20 group-hover:text-primary transition-colors" />
-          <span className="text-[8px] font-black uppercase text-white/20 group-hover:text-primary">Adicionar</span>
+          {uploading ? (
+            <Loader2 className="w-5 h-5 text-primary animate-spin" />
+          ) : (
+            <Plus className="w-5 h-5 text-white/20 group-hover:text-primary transition-colors" />
+          )}
+          <span className="text-[8px] font-black uppercase text-white/20 group-hover:text-primary">
+             {uploading ? 'Enviando...' : 'Adicionar'}
+          </span>
         </button>
       </div>
 
@@ -372,6 +456,8 @@ export default function DailyReport() {
 
   const timerRef = React.useRef<NodeJS.Timeout | null>(null);
   const [selectedPhoto, setSelectedPhoto] = React.useState<string | null>(null);
+  const [showManpower, setShowManpower] = React.useState(true);
+  const [showEquipment, setShowEquipment] = React.useState(true);
 
     // Carregamento automático de programação
     React.useEffect(() => {
@@ -381,9 +467,9 @@ export default function DailyReport() {
       console.log("[DailyReport] Scheduling Auto-Load. Employee:", employeeId);
       setHasAttemptedAutoLoad(true);
 
-      // 1. Identificar atividades que já foram relatadas HOJE (Relatórios reais, não programações)
+      // 1. Identificar atividades que já foram relatadas HOJE (Relatórios reais, não programações nem devolvidos)
       const alreadyReported = allToday.filter(r => 
-        r.status !== DailyReportStatus.PROGRAMMED
+        r.status !== DailyReportStatus.PROGRAMMED && r.status !== DailyReportStatus.RETURNED
       );
 
       const normalizeSubPoint = (sp: any) => String(sp || "").replace(/^TORRE:\s*/i, "").trim();
@@ -397,14 +483,14 @@ export default function DailyReport() {
         });
       });
 
-      // 2. Buscar RDOs que são de fato programações
+      // 2. Buscar RDOs que são programações OU que foram DEVOLVIDOS (para correção)
       const scheduledReports = allToday.filter(r => {
         const matchesEmp = r.employeeId === employeeId || (r.metadata as any)?.employeeId === employeeId;
-        const isProg = r.status === DailyReportStatus.PROGRAMMED; 
-        return matchesEmp && isProg;
+        const isProgOrReturned = r.status === DailyReportStatus.PROGRAMMED || r.status === DailyReportStatus.RETURNED; 
+        return matchesEmp && isProgOrReturned;
       });
 
-      console.log("[DailyReport] Found Programs:", scheduledReports.length, "Already Reported Keys:", doneKeys.size);
+      console.log("[DailyReport] Found Programs/Returned:", scheduledReports.length, "Already Reported Keys:", doneKeys.size);
 
       if (scheduledReports.length > 0) {
         const pendingActivities: any[] = [];
@@ -1007,6 +1093,7 @@ export default function DailyReport() {
           .from("map_elements")
           .select("*")
           .eq("projectId", site.projectId)
+          .eq("companyId", selectedCompanyId)
           .eq("type", "TOWER")
           .order("sequence", { ascending: true });
 
@@ -1076,29 +1163,105 @@ export default function DailyReport() {
     setIsSaving(true);
 
     try {
-      // O payload agora é puramente baseado em selectedActivities
+      // 1. Função Helper para Uploads Deferidos (GCS)
+      const uploadPhotos = async (photosToUpload: DailyReportPhoto[], torreName: string, atividadeName: string) => {
+        const updatedPhotos: DailyReportPhoto[] = [];
+        
+        // Dados dinâmicos puxados da seleção do RDO
+        const companyName = companies?.find(c => c.id === selectedCompanyId)?.name || "EMPRESA_PADRAO";
+        const projectName = projects.find(p => p.id === selectedProjectId)?.name || "PROJETO_ATUAL";
+        const siteName = sites.find(s => s.id === effectiveSiteId)?.name || "SITE_ATUAL";
+        const respName = profile?.fullName || "USUARIO";
+
+        const now = new Date();
+        const utc3Date = new Date(now.getTime() - (3 * 60 * 60 * 1000));
+        const day = String(utc3Date.getUTCDate()).padStart(2, '0');
+        const month = String(utc3Date.getUTCMonth() + 1).padStart(2, '0');
+        const year = String(utc3Date.getUTCFullYear());
+        const formattedDate = `${day}${month}${year}`;
+
+        for (const photo of photosToUpload) {
+          if (photo.file) {
+            try {
+              const formData = new FormData();
+              formData.append("file", photo.file);
+              formData.append("empresa", companyName);
+              formData.append("obra", projectName);
+              formData.append("canteiro", siteName);
+              formData.append("torre", torreName);
+              formData.append("atividade", atividadeName);
+              formData.append("dataPostagem", formattedDate);
+              formData.append("responsavel", respName);
+
+              const response = await fetch("/api/upload", { method: "POST", body: formData });
+              const data = await response.json();
+
+              if (data.success) {
+                 updatedPhotos.push({ url: data.url, comment: photo.comment });
+              } else {
+                 console.error("GCS Upload failed for file:", photo.file.name, data.message);
+              }
+            } catch (e) {
+              console.error("Network error during GCS upload:", e);
+            }
+          } else if (photo.url) {
+            // Já foi feito upload antes ou é legada (base64)
+            updatedPhotos.push(photo);
+          }
+        }
+        return updatedPhotos;
+      };
+
+      toast({
+        title: "Processando...",
+        description: "Enviando imagens para a nuvem. Aguarde...",
+      });
+
+      // 2. Upload de fotos gerais
+      const processedGeneralPhotos = await uploadPhotos(generalPhotos || [], "", "");
+
+      // 3. Upload de fotos de atividades e detalhes
+      const processedActivities = await Promise.all(selectedActivities.map(async (act) => {
+        // Para fotos atreladas à atividade macro, usamos o subPoint (nome da torre/vão)
+        const torreNameMacro = act.subPoint || "";
+        const actPhotos = await uploadPhotos(act.photos || [], torreNameMacro, act.stageName || "");
+        
+        const details = await Promise.all((act.details || []).map(async (d) => {
+          // Para fotos atreladas a um detalhe específico (ex: uma torre dentro de um trecho)
+          // Se o id do detalhe for um UUID genérico, usamos o da macro. Senão, assumimos que é o nome.
+          const isGenericId = d.id && d.id.length > 20; 
+          const torreNameDetail = isGenericId ? torreNameMacro : (d.id || torreNameMacro);
+
+          const detailPhotos = await uploadPhotos(d.photos || [], torreNameDetail, act.stageName || "");
+          return { ...d, photos: detailPhotos };
+        }));
+
+        return { ...act, photos: actPhotos, details };
+      }));
+
+      // 4. Salvar RDO no Backend
       const result = await createReport({
         teamIds: teamIds,
         employeeId: effectiveEmployeeId,
         companyId: selectedCompanyId, 
         activities: selectedActivities.map(a => `${a.stageName} (${a.subPoint})`).join(", "),
-        selectedActivities: selectedActivities,
+        selectedActivities: processedActivities, // Usamos as atividades com URLs finais
         status: 'SENT' as any,
         weather: weather,
         manpower: manpower,
         equipment: equipment,
         generalObservations: generalObservations,
-        generalPhotos: generalPhotos,
+        generalPhotos: processedGeneralPhotos, // Usamos as fotos gerais com URLs finais
         rdoNumber: rdoNumber,
         revision: revision,
         projectDeadline: projectDeadline,
         metadata: {
-          selectedActivities: selectedActivities,
+          selectedActivities: processedActivities,
           weather,
           manpower,
           equipment,
           generalObservations,
-          generalPhotos
+          generalPhotos: processedGeneralPhotos
         },
       });
 
@@ -1108,7 +1271,20 @@ export default function DailyReport() {
           title: "Relatório enviado!",
           description: `O rdo com ${selectedActivities.length} atividades foi salvo com sucesso.`,
         });
+      } else {
+         toast({
+          title: "Erro ao salvar RDO",
+          description: "Não foi possível sincronizar com o servidor.",
+          variant: "destructive",
+        });
       }
+    } catch (err) {
+      console.error("Submit Error:", err);
+      toast({
+        title: "Ocorreu um Erro",
+        description: "Falha catastrófica ao finalizar o relatório.",
+        variant: "destructive",
+      });
     } finally {
       setIsSaving(false);
     }
@@ -1338,6 +1514,7 @@ export default function DailyReport() {
                       </div>
                     </div>
 
+                    {/* EQUIPAMENTOS */}
                     {/* SEÇÃO: ADICIONAR NOVA ATIVIDADE (MINI-RELATÓRIO) */}
                     <div className="p-8 bg-amber-500/5 border-2 border-amber-500/20 rounded-[2.5rem] space-y-8 relative overflow-hidden group/form">
                         <div className="absolute top-0 right-0 p-6 opacity-5 group-hover/form:opacity-10 transition-opacity">
@@ -2103,25 +2280,30 @@ export default function DailyReport() {
                                         </div>
                                         <h4 className="text-sm font-black uppercase tracking-widest text-white/90">Registro Fotográfico</h4>
                                      </div>
-                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-2">
-                                        {allPhotos.map((photo: any, pIdx: number) => (
-                                          <div key={pIdx} className="group flex flex-col glass-card border-white/5 bg-black/40 rounded-3xl overflow-hidden hover:border-primary/50 transition-all cursor-zoom-in" onClick={() => setSelectedPhoto(photo.url || photo.uri)}>
+                                     <div className="flex flex-wrap justify-center gap-8 px-2">
+                                        {allPhotos.map((photo: any, pIdx: number) => {
+                                          const displayUrl = getPhotoUrl(photo);
+
+                                          return (
+                                          <div key={pIdx} className="group flex flex-col glass-card border-white/5 bg-black/40 rounded-3xl overflow-hidden hover:border-primary/50 transition-all cursor-zoom-in w-full md:w-[calc(50%-2rem)] lg:w-[calc(33.33%-2.5rem)]" onClick={() => setSelectedPhoto(displayUrl)}>
                                             <div className="relative w-full aspect-video bg-black/60 overflow-hidden">
-                                              <img src={photo.url || photo.uri} alt={`Foto ${photo.source}`} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
+                                              <img src={displayUrl} alt={`Foto ${photo.source}`} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
                                               <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-sm text-[9px] font-black uppercase text-primary px-2 py-0.5 rounded-md border border-white/10 shadow-[0_0_15px_rgba(0,0,0,0.5)]">
                                                 {photo.source === 'Geral' ? photo.displayLabel : `ID: ${photo.source}`}
                                               </div>
                                             </div>
-                                            {photo.comment && (
-                                              <div className="p-4 bg-white/5 border-t border-white/5 flex-1 flex items-start gap-3">
-                                                <MessageSquare className="w-4 h-4 text-primary/60 shrink-0 mt-0.5" />
-                                                <p className="text-xs font-medium text-white/80 leading-relaxed italic">
-                                                  "{photo.comment}"
-                                                </p>
-                                              </div>
-                                            )}
+                                            <div className="p-4 bg-white/5 border-t border-white/5 flex-1 flex items-start gap-3 min-h-[60px]">
+                                              <MessageSquare className="w-4 h-4 text-primary/60 shrink-0 mt-0.5" />
+                                              <p className={cn(
+                                                "text-xs font-medium leading-relaxed italic",
+                                                photo.comment ? "text-white/80" : "text-white/20"
+                                              )}>
+                                                {photo.comment ? `"${photo.comment}"` : "Sem observação técnica."}
+                                              </p>
+                                            </div>
                                           </div>
-                                        ))}
+                                        );
+                                      })}
                                      </div>
                                    </div>
                                  );
@@ -2209,136 +2391,160 @@ export default function DailyReport() {
                           </div>
                         </Card>
 
-                        {/* Efetivo */}
-                        <Card className="glass-card border-white/5 bg-white/5 p-6 rounded-3xl lg:col-span-2">
-                          <div className="flex items-center justify-between mb-4">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                              <Users className="w-3.5 h-3.5" />
-                              Quadro de Efetivo
-                            </Label>
-                            <Button 
-                              type="button" 
-                              variant="outline" 
-                              size="sm" 
-                              className="h-7 px-3 rounded-full bg-primary/10 border-primary/20 text-primary text-[9px] font-black"
-                              onClick={() => {
-                                const newManpower = [...(manpower || []), { registration: '', name: '', role: '' }];
-                                updateReportDraft({ manpower: newManpower });
-                              }}
-                            >
-                              <Plus className="w-3 h-3 mr-1" /> ADICIONAR
-                            </Button>
-                          </div>
-                          
-                          {/* Cabeçalho de Colunas */}
-                          {(manpower || []).length > 0 && (
-                            <div className="grid grid-cols-[100px_1fr_1fr_40px] gap-4 px-4 mb-2">
-                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Matrícula</span>
-                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Nome do Colaborador</span>
-                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Função / Cargo</span>
-                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider text-right">#</span>
-                            </div>
-                          )}
+                         {/* Efetivo */}
+                         <Card className="glass-card border-white/5 bg-white/5 p-6 rounded-3xl lg:col-span-2 flex flex-col">
+                           <div 
+                             className="flex items-center justify-between group/header cursor-pointer select-none mb-4"
+                             onClick={() => setShowManpower(!showManpower)}
+                           >
+                             <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2 group-hover:text-white transition-colors">
+                               <Users className="w-3.5 h-3.5" />
+                               Quadro de Efetivo
+                             </Label>
+                             <div className="flex items-center gap-2">
+                               <Button 
+                                 type="button" 
+                                 variant="outline" 
+                                 size="sm" 
+                                 className="h-7 px-3 rounded-full bg-primary/10 border-primary/20 text-primary text-[9px] font-black"
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   const newManpower = [...(manpower || []), { registration: '', name: '', role: '' }];
+                                   updateReportDraft({ manpower: newManpower });
+                                 }}
+                               >
+                                 <Plus className="w-3 h-3 mr-1" /> ADICIONAR
+                               </Button>
+                               <Button variant="ghost" size="icon" className="h-6 w-6 text-primary/40">
+                                 {showManpower ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                               </Button>
+                             </div>
+                           </div>
+                           
+                           {showManpower && (
+                             <div className="space-y-4 animate-in slide-in-from-top-2 duration-300">
+                               {/* Cabeçalho de Colunas */}
+                               {(manpower || []).length > 0 && (
+                                 <div className="grid grid-cols-[100px_1fr_1fr_40px] gap-4 px-4 mb-2">
+                                   <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Matrícula</span>
+                                   <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Nome do Colaborador</span>
+                                   <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Função / Cargo</span>
+                                   <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider text-right">#</span>
+                                 </div>
+                               )}
 
-                          <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                            {(manpower || []).length === 0 ? (
-                                <div className="text-center py-10 text-white/10 text-[10px] uppercase font-bold">Nenhum efetivo adicionado</div>
-                            ) : (
-                              (manpower || []).map((m, idx) => (
-                                <div key={idx} className="grid grid-cols-[100px_1fr_1fr_40px] gap-4 items-center bg-black/20 p-2.5 rounded-2xl animate-in slide-in-from-right-2 border border-white/5 hover:border-primary/20 transition-all">
-                                  <input 
-                                    placeholder="Ex: 005655" 
-                                    className="bg-black/40 border-none rounded-xl text-[11px] font-bold text-white px-3 py-2 focus:ring-1 focus:ring-primary/40 transition-all font-mono"
-                                    value={m.registration || ""}
-                                    onChange={(e) => {
-                                      const newManpower = [...(manpower || [])];
-                                      newManpower[idx] = { ...newManpower[idx], registration: e.target.value };
-                                      updateReportDraft({ manpower: newManpower });
-                                    }}
-                                  />
-                                  <input 
-                                    placeholder="Nome Completo..." 
-                                    className="bg-black/40 border-none rounded-xl text-[11px] font-bold text-white px-3 py-2 focus:ring-1 focus:ring-primary/40 transition-all"
-                                    value={m.name}
-                                    onChange={(e) => {
-                                      const newManpower = [...(manpower || [])];
-                                      newManpower[idx] = { ...newManpower[idx], name: e.target.value };
-                                      updateReportDraft({ manpower: newManpower });
-                                    }}
-                                  />
-                                  <input 
-                                    placeholder="Função (Ex: Pedreiro...)" 
-                                    className="bg-black/40 border-none rounded-xl text-[11px] font-bold text-white px-3 py-2 focus:ring-1 focus:ring-primary/40 transition-all"
-                                    value={m.role}
-                                    onChange={(e) => {
-                                      const newManpower = [...(manpower || [])];
-                                      newManpower[idx] = { ...newManpower[idx], role: e.target.value };
-                                      updateReportDraft({ manpower: newManpower });
-                                    }}
-                                  />
-                                  <div className="flex justify-end">
-                                    <Button 
-                                      type="button" 
-                                      variant="ghost" 
-                                      size="icon" 
-                                      className="h-8 w-8 text-red-500/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl"
-                                      onClick={() => {
-                                        const newManpower = (manpower || []).filter((_, i) => i !== idx);
-                                        updateReportDraft({ manpower: newManpower });
-                                      }}
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </Card>
+                               <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                                 {(manpower || []).length === 0 ? (
+                                     <div className="text-center py-10 text-white/10 text-[10px] uppercase font-bold">Nenhum efetivo adicionado</div>
+                                 ) : (
+                                   (manpower || []).map((m, idx) => (
+                                     <div key={idx} className="grid grid-cols-[100px_1fr_1fr_40px] gap-4 items-center bg-black/20 p-2.5 rounded-2xl animate-in slide-in-from-right-2 border border-white/5 hover:border-primary/20 transition-all">
+                                       <input 
+                                         placeholder="Ex: 005655" 
+                                         className="bg-black/40 border-none rounded-xl text-[11px] font-bold text-white px-3 py-2 focus:ring-1 focus:ring-primary/40 transition-all font-mono"
+                                         value={m.registration || ""}
+                                         onChange={(e) => {
+                                           const newManpower = [...(manpower || [])];
+                                           newManpower[idx] = { ...newManpower[idx], registration: e.target.value };
+                                           updateReportDraft({ manpower: newManpower });
+                                         }}
+                                       />
+                                       <input 
+                                         placeholder="Nome Completo..." 
+                                         className="bg-black/40 border-none rounded-xl text-[11px] font-bold text-white px-3 py-2 focus:ring-1 focus:ring-primary/40 transition-all"
+                                         value={m.name}
+                                         onChange={(e) => {
+                                           const newManpower = [...(manpower || [])];
+                                           newManpower[idx] = { ...newManpower[idx], name: e.target.value };
+                                           updateReportDraft({ manpower: newManpower });
+                                         }}
+                                       />
+                                       <input 
+                                         placeholder="Função (Ex: Pedreiro...)" 
+                                         className="bg-black/40 border-none rounded-xl text-[11px] font-bold text-white px-3 py-2 focus:ring-1 focus:ring-primary/40 transition-all"
+                                         value={m.role}
+                                         onChange={(e) => {
+                                           const newManpower = [...(manpower || [])];
+                                           newManpower[idx] = { ...newManpower[idx], role: e.target.value };
+                                           updateReportDraft({ manpower: newManpower });
+                                         }}
+                                       />
+                                       <div className="flex justify-end">
+                                         <Button 
+                                           type="button" 
+                                           variant="ghost" 
+                                           size="icon" 
+                                           className="h-8 w-8 text-red-500/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl"
+                                           onClick={() => {
+                                             const newManpower = (manpower || []).filter((_, i) => i !== idx);
+                                             updateReportDraft({ manpower: newManpower });
+                                           }}
+                                         >
+                                           <Trash2 className="w-4 h-4" />
+                                         </Button>
+                                       </div>
+                                     </div>
+                                   ))
+                                 )}
+                               </div>
+                             </div>
+                           )}
+                         </Card>
 
-                        {/* Equipamentos */}
-                        <Card className="glass-card border-white/5 bg-white/5 p-6 rounded-3xl lg:col-span-3">
-                          <div className="flex items-center justify-between mb-4 px-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                              <Truck className="w-3.5 h-3.5" />
-                              Quadro de Equipamentos
-                            </Label>
-                            <Button 
-                              type="button" 
-                              variant="outline" 
-                              size="sm" 
-                              className="h-7 px-3 rounded-full bg-primary/10 border-primary/20 text-primary text-[9px] font-black"
-                              onClick={() => {
-                                const newEquip = [...(equipment || []), { equipment: '', type: '', model: '', driverName: '', plate: '' }];
-                                updateReportDraft({ equipment: newEquip });
-                              }}
-                            >
-                              <Plus className="w-3 h-3 mr-1" /> ADICIONAR
-                            </Button>
-                          </div>
+                         {/* Equipamentos */}
+                         <Card className="glass-card border-white/5 bg-white/5 p-6 rounded-3xl lg:col-span-3 flex flex-col">
+                           <div 
+                             className="flex items-center justify-between group/header cursor-pointer select-none mb-4 px-2"
+                             onClick={() => setShowEquipment(!showEquipment)}
+                           >
+                             <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2 group-hover:text-white transition-colors">
+                               <Truck className="w-3.5 h-3.5" />
+                               Quadro de Equipamentos
+                             </Label>
+                             <div className="flex items-center gap-2">
+                               <Button 
+                                 type="button" 
+                                 variant="outline" 
+                                 size="sm" 
+                                 className="h-7 px-3 rounded-full bg-primary/10 border-primary/20 text-primary text-[9px] font-black"
+                                 onClick={(e) => {
+                                   e.stopPropagation();
+                                   const newEquip = [...(equipment || []), { equipment: '', type: '', model: '', driverName: '', plate: '' }];
+                                   updateReportDraft({ equipment: newEquip });
+                                 }}
+                               >
+                                 <Plus className="w-3 h-3 mr-1" /> ADICIONAR
+                               </Button>
+                               <Button variant="ghost" size="icon" className="h-6 w-6 text-primary/40">
+                                 {showEquipment ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                               </Button>
+                             </div>
+                           </div>
 
-                          {/* Cabeçalho de Colunas */}
-                          {(equipment || []).length > 0 && (
-                            <div className="grid grid-cols-[1fr_1fr_120px_1fr_40px] gap-4 px-6 mb-2">
-                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Tipo / Equipamento</span>
-                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Modelo</span>
-                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Placa/ID</span>
-                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Motorista / Operador</span>
-                              <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider text-right">#</span>
-                            </div>
-                          )}
+                           {showEquipment && (
+                             <div className="space-y-3 animate-in slide-in-from-top-2 duration-300">
+                               {/* Cabeçalho de Colunas */}
+                               {(equipment || []).length > 0 && (
+                                 <div className="grid grid-cols-[1fr_1fr_120px_1fr_40px] gap-4 px-6 mb-2">
+                                   <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Tipo / Equipamento</span>
+                                   <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Modelo</span>
+                                   <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Placa/ID</span>
+                                   <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">Motorista / Operador</span>
+                                   <span className="text-[9px] font-black text-muted-foreground uppercase tracking-wider text-right">#</span>
+                                 </div>
+                               )}
 
-                          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar p-1">
-                            {(equipment || []).length === 0 ? (
-                              <div className="text-center py-10 text-white/10 text-[10px] uppercase font-bold">Nenhum equipamento adicionado</div>
-                            ) : (
-                              (equipment || []).map((e, idx) => (
-                                <div key={idx} className="grid grid-cols-[1fr_1fr_120px_1fr_40px] gap-4 items-center bg-black/20 p-3 rounded-2xl animate-in zoom-in-95 group/equip border border-white/5 hover:border-primary/20 transition-all">
-                                  <input 
-                                    placeholder="Ex: Caminhão Munck..." 
-                                    className="bg-black/40 border-none rounded-xl text-[11px] font-bold text-white px-3 py-2.5 focus:ring-1 focus:ring-primary/40 transition-all"
-                                    value={e.equipment}
-                                    onChange={(val) => {
+                               <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar p-1">
+                                 {(equipment || []).length === 0 ? (
+                                   <div className="text-center py-10 text-white/10 text-[10px] uppercase font-bold">Nenhum equipamento adicionado</div>
+                                 ) : (
+                                   (equipment || []).map((e, idx) => (
+                                     <div key={idx} className="grid grid-cols-[1fr_1fr_120px_1fr_40px] gap-4 items-center bg-black/20 p-3 rounded-2xl animate-in zoom-in-95 group/equip border border-white/5 hover:border-primary/20 transition-all">
+                                       <input 
+                                         placeholder="Ex: Caminhão Munck..." 
+                                         className="bg-black/40 border-none rounded-xl text-[11px] font-bold text-white px-3 py-2.5 focus:ring-1 focus:ring-primary/40 transition-all"
+                                         value={e.equipment}
+                                         onChange={(val) => {
                                       const newEquip = [...(equipment || [])];
                                       newEquip[idx] = { ...newEquip[idx], equipment: val.target.value };
                                       updateReportDraft({ equipment: newEquip });
@@ -2392,7 +2598,9 @@ export default function DailyReport() {
                               ))
                             )}
                           </div>
-                        </Card>
+                        </div>
+                        )}
+                      </Card>
                       </div>
                     </div>
 

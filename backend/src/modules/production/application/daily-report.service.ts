@@ -1,4 +1,4 @@
-import { DailyReportStatus, ActivityStatus } from "@prisma/client";
+import { DailyReportStatus } from "@prisma/client";
 import { DailyReportRepository } from "../domain/daily-report.repository";
 import { ProductionProgressService } from "./production-progress.service";
 import { logger } from "@/lib/utils/logger";
@@ -20,14 +20,13 @@ export class DailyReportService {
       startDate,
       endDate,
       status,
-      isAdmin,
       companyId,
     } = params;
     const skip = (page - 1) * limit;
 
     const where: Record<string, any> = {};
-    if (!isAdmin && companyId) {
-      where.user = { companyId };
+    if (companyId) {
+      where.companyId = companyId;
     }
     if (teamId) where.teamId = teamId;
     if (userId) where.userId = userId;
@@ -59,15 +58,30 @@ export class DailyReportService {
   }
 
   async createReport(data: any) {
-    const status = (data.status as DailyReportStatus) || DailyReportStatus.SENT;
-    const now = new Date();
-    
-    return this.repository.create({
-      ...data,
-      reportDate: new Date(data.reportDate || new Date()),
-      scheduledAt: status === DailyReportStatus.PROGRAMMED ? now : null,
-      executedAt: status === DailyReportStatus.SENT ? now : null,
-    });
+    try {
+      // Sanitização final para remover campos legados que causam erro no Prisma
+      const sanitizedData = { ...data };
+      const fieldsToRemove = [
+        'scheduledAt', 'executedAt', 'reviewedAt', 'syncedAt', 
+        'scheduled_at', 'executed_at', 'reviewed_at'
+      ];
+      
+      fieldsToRemove.forEach(field => delete sanitizedData[field]);
+
+      const result = await this.repository.create({
+        ...sanitizedData,
+        reportDate: new Date(data.reportDate || new Date()),
+      });
+      return result;
+    } catch (error: any) {
+      logger.error("Prisma error during createReport in DailyReportService:", {
+        message: error.message,
+        code: error.code,
+        meta: error.meta,
+        dataPayload: data
+      });
+      throw error;
+    }
   }
 
   async getReportById(id: string) {
@@ -83,11 +97,10 @@ export class DailyReportService {
     const updatedReport = await this.repository.update(id, {
       status: DailyReportStatus.APPROVED,
       approvedById,
-      reviewedAt: new Date(),
     });
 
     // 2. Sincronizar progresso de produção
-    await this.syncProductionProgress(report, approvedById);
+    await this.syncProductionProgress(updatedReport, approvedById);
 
     return updatedReport;
   }
@@ -96,7 +109,6 @@ export class DailyReportService {
     return this.repository.update(id, {
       status: DailyReportStatus.RETURNED,
       rejectionReason: reason,
-      reviewedAt: new Date(),
     });
   }
 
@@ -133,7 +145,6 @@ export class DailyReportService {
     await this.repository.updateMany(pendingIds, {
       status: 'APPROVED',
       approvedById,
-      reviewedAt: new Date(),
     });
 
     // 3. Sincronizar progresso de forma ultra-otimizada (Agregação de DTOs)
@@ -144,7 +155,10 @@ export class DailyReportService {
     for (const report of pendingReports) {
       try {
       // Extração robusta do ProjectId
-      const projectId = report.projectId || report.metadata?.projectId || (report as any).project_id;
+      const projectId = report.projectId || 
+                        report.metadata?.projectId || 
+                        (report as any).project_id || 
+                        report.team?.site?.projectId;
       const activities = report.metadata?.selectedActivities || [];
 
         for (const act of activities) {
@@ -215,7 +229,6 @@ export class DailyReportService {
     return this.repository.updateMany(ids, {
       status: DailyReportStatus.RETURNED,
       rejectionReason: reason,
-      reviewedAt: new Date(),
     });
   }
 
@@ -240,7 +253,11 @@ export class DailyReportService {
             activityId: act.stageId,
             status: detail.status,
             progress: Number(detail.progress),
-            projectId: projectId || report.projectId || report.metadata?.projectId || (report as any).project_id,
+            projectId: projectId || 
+                       report.projectId || 
+                       report.metadata?.projectId || 
+                       (report as any).project_id || 
+                       report.team?.site?.projectId,
             userId,
             skipSync, // PERFORMANCE: Suprime o AVG pesado para cada detalhe
             metadata: {

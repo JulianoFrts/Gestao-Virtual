@@ -20,6 +20,11 @@ class StorageService {
         return this.toSafeObject(obj.value);
       }
 
+      // Preserve native Blobs and Files for offline storage
+      if (typeof window !== 'undefined' && (obj instanceof Blob || obj instanceof File)) {
+        return obj;
+      }
+
       // Se for um objeto com toJSON (Data, etc), usa a serialização padrão
       if (typeof obj.toJSON === 'function') {
         return JSON.parse(JSON.stringify(obj));

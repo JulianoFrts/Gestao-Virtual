@@ -28,7 +28,13 @@ export class PrismaDailyReportRepository implements DailyReportRepository {
     return prisma.dailyReport.findUnique({
       where: { id },
       include: {
-        team: { select: { id: true, name: true } },
+        team: { 
+          select: { 
+            id: true, 
+            name: true,
+            site: { select: { projectId: true } }
+          } 
+        },
         user: { select: { id: true, name: true } },
         approvedBy: { select: { id: true, name: true } },
       },
@@ -58,12 +64,13 @@ export class PrismaDailyReportRepository implements DailyReportRepository {
   }
 
   async updateMany(ids: string[], data: any): Promise<any> {
-    return prisma.dailyReport.updateMany({
-      where: {
-        id: { in: ids },
-      },
-      data,
-    });
+    const updates = ids.map(id => 
+      prisma.dailyReport.update({
+        where: { id },
+        data
+      })
+    );
+    return Promise.all(updates);
   }
 
   async findAllMinimal(ids: string[]): Promise<any[]> {
@@ -73,6 +80,13 @@ export class PrismaDailyReportRepository implements DailyReportRepository {
         id: true,
         status: true,
         metadata: true,
+        team: {
+          select: {
+            site: {
+              select: { projectId: true }
+            }
+          }
+        }
       },
     });
   }

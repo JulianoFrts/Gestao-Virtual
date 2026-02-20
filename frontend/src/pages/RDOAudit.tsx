@@ -10,8 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { 
-  FileText, Filter, Search, Eye, Calendar, User, Users as UsersIcon, 
+import {
+  FileText, Filter, Search, Eye, Calendar, User, Users, 
   Clock, MapPin, CheckCircle2, XCircle, AlertCircle, AlertTriangle,
   X, Loader2, Camera, CloudSun, Truck, Plus, Trash2, Printer,
   MessageSquare,
@@ -19,8 +19,17 @@ import {
   Check,
   ArrowUpDown,
   ChevronUp,
-  ChevronDown
-} from 'lucide-react';
+  ChevronDown,
+  Image as ImageIcon,
+  ChevronsUpDown,
+  RefreshCw,
+  Send,
+  ChevronRight,
+  ChevronLeft,
+  PanelLeft,
+  PanelLeftClose,
+  PanelLeftOpen
+} from "lucide-react";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
 import { format } from 'date-fns';
@@ -28,6 +37,7 @@ import { ptBR } from 'date-fns/locale';
 import { dailyReportService } from '@/services/api/project/DailyReportService';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Color } from 'three';
 
 export default function RDOAudit() {
   const { reports, isLoading, refresh } = useDailyReports();
@@ -43,12 +53,14 @@ export default function RDOAudit() {
     key: 'reportDate',
     direction: 'desc'
   });
-  
+
   const [selectedReport, setSelectedReport] = useState<DailyReport | null>(null);
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [showManpower, setShowManpower] = useState(true);
+  const [showEquipment, setShowEquipment] = useState(true);
 
   // Helper for safe date formatting
   const safeFormatDate = (date: any, formatStr: string, options?: any) => {
@@ -131,6 +143,8 @@ export default function RDOAudit() {
     });
   }, [reports, filterDate, filterTeam, filterStatus, searchTerm, sortConfig, users, teams]);
 
+
+
   const getReporterName = (userId: string | null) => {
     if (!userId) return "Desconhecido";
     const user = users.find((u) => u.id === userId);
@@ -168,13 +182,12 @@ export default function RDOAudit() {
 
   const handleApprove = async () => {
     if (!selectedReport) return;
-    
+
     setIsProcessing(true);
     try {
       const result = await dailyReportService.approve(selectedReport.id);
       if (result.success) {
         toast({
-          title: "Relatório aprovado!",
           description: "O progresso foi atualizado com sucesso.",
         });
         setSelectedReport(null);
@@ -199,7 +212,7 @@ export default function RDOAudit() {
 
   const handleReject = async () => {
     if (!selectedReport || !rejectionReason.trim()) return;
-    
+
     setIsProcessing(true);
     try {
       const result = await dailyReportService.reject(selectedReport.id, rejectionReason);
@@ -251,12 +264,12 @@ export default function RDOAudit() {
 
   const handleBulkApprove = async () => {
     if (selectedIds.size === 0) return;
-    
+
     setIsBulkProcessing(true);
-    
+
     try {
       const result = await dailyReportService.bulkApprove(Array.from(selectedIds));
-      
+
       if (result.success) {
         toast({
           title: "Processamento iniciado",
@@ -285,12 +298,12 @@ export default function RDOAudit() {
 
   const handleBulkReject = async () => {
     if (selectedIds.size === 0 || !rejectionReason.trim()) return;
-    
+
     setIsBulkProcessing(true);
-    
+
     try {
       const result = await dailyReportService.bulkReject(Array.from(selectedIds), rejectionReason);
-      
+
       if (result.success) {
         toast({
           title: "Processamento iniciado",
@@ -332,7 +345,7 @@ export default function RDOAudit() {
             Existem <strong>{reports.filter(r => r.status === DailyReportStatus.SENT).length}</strong> relatórios aguardando sua revisão.
           </p>
         </div>
-        
+
         <div className="flex flex-wrap gap-4 glass-card p-3 rounded-2xl items-end">
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Status</label>
@@ -386,8 +399,8 @@ export default function RDOAudit() {
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Ordem</label>
-              <Select 
-                value={sortConfig.direction} 
+              <Select
+                value={sortConfig.direction}
                 onValueChange={(v: "desc" | "asc") => setSortConfig(prev => ({ ...prev, direction: v }))}
               >
                 <SelectTrigger className="bg-primary/5 border-primary/20 w-[140px] h-10 rounded-xl">
@@ -415,9 +428,9 @@ export default function RDOAudit() {
                  <span className="text-[9px] font-bold text-primary uppercase">Selecionados</span>
                </div>
             </div>
-            
+
             <div className="h-10 w-px bg-white/10" />
-            
+
             <div className="flex gap-3">
               <Button
                 size="sm"
@@ -444,14 +457,14 @@ export default function RDOAudit() {
 
       <Card className="bg-card text-card-foreground glass-card border-none shadow-2xl rounded-4xl flex flex-col overflow-hidden min-h-0 mt-2">
         <CardContent className="p-0 flex flex-col overflow-hidden min-h-0">
-          <Table 
+          <Table
             className="border-separate border-spacing-0"
             containerClassName="relative w-full overflow-auto flex-1 custom-scrollbar min-h-0"
           >
             <TableHeader className="sticky top-0 z-30 bg-[#0c0c0e] shadow-xl">
               <TableRow className="border-primary/10 hover:bg-transparent">
                 <TableHead className="w-14 items-center justify-center pl-8 sticky top-0 left-0 z-50 bg-[#0c0c0e] border-b border-primary/20 shadow-[4px_0_10px_-5px_rgba(0,0,0,0.5)]">
-                  <div 
+                  <div
                     className={cn(
                       "w-5 h-5 rounded-md border-2 border-primary/30 flex items-center justify-center cursor-pointer transition-all",
                       selectedIds.size === filteredReports.length && filteredReports.length > 0 ? "bg-primary border-primary shadow-lg shadow-primary/20" : "bg-white/5 hover:border-primary/60"
@@ -461,7 +474,7 @@ export default function RDOAudit() {
                     {selectedIds.size === filteredReports.length && filteredReports.length > 0 && <Check className="w-3.5 h-3.5 text-white" />}
                   </div>
                 </TableHead>
-                <TableHead 
+                <TableHead
                   className="font-black text-primary uppercase text-[10px] tracking-widest h-14 cursor-pointer hover:bg-primary/10 transition-colors sticky top-0 z-20 bg-[#0c0c0e] border-b border-primary/20 shadow-xl"
                   onClick={() => {
                     const direction = sortConfig.key === 'reportDate' && sortConfig.direction === 'asc' ? 'desc' : 'asc';
@@ -475,7 +488,7 @@ export default function RDOAudit() {
                     ) : <ArrowUpDown className="w-3 h-3 opacity-30" />}
                   </div>
                 </TableHead>
-                <TableHead 
+                <TableHead
                   className="font-black text-primary uppercase text-[10px] tracking-widest h-14 cursor-pointer hover:bg-primary/10 transition-colors sticky top-0 z-30 bg-[#0c0c0e] border-b border-primary/20 shadow-xl"
                   onClick={() => {
                     const direction = sortConfig.key === 'status' && sortConfig.direction === 'asc' ? 'desc' : 'asc';
@@ -489,7 +502,7 @@ export default function RDOAudit() {
                     ) : <ArrowUpDown className="w-3 h-3 opacity-30" />}
                   </div>
                 </TableHead>
-                <TableHead 
+                <TableHead
                   className="font-black text-primary uppercase text-[10px] tracking-widest h-14 cursor-pointer hover:bg-primary/10 transition-colors sticky top-0 z-30 bg-[#0c0c0e] border-b border-primary/20 shadow-xl"
                   onClick={() => {
                     const direction = sortConfig.key === 'reporter' && sortConfig.direction === 'asc' ? 'desc' : 'asc';
@@ -504,7 +517,7 @@ export default function RDOAudit() {
                   </div>
                 </TableHead>
                 <TableHead className="font-black text-primary uppercase text-[10px] tracking-widest h-14 sticky top-0 z-30 bg-[#0c0c0e] border-b border-primary/20 shadow-xl">Atividades Principais</TableHead>
-                <TableHead 
+                <TableHead
                   className="font-black text-primary uppercase text-[10px] tracking-widest h-14 text-center cursor-pointer hover:bg-primary/10 transition-colors sticky top-0 z-30 bg-[#0c0c0e] border-b border-primary/20 shadow-xl"
                   onClick={() => {
                     const direction = sortConfig.key === 'items' && sortConfig.direction === 'asc' ? 'desc' : 'asc';
@@ -545,7 +558,7 @@ export default function RDOAudit() {
                 filteredReports.map((report) => (
                   <TableRow key={report.id} className={cn("border-primary/5 hover:bg-primary/5 transition-colors group", selectedIds.has(report.id) && "bg-primary/5")}>
                     <TableCell className="pl-8 py-5 sticky left-0 z-10 bg-[#0c0c0e]/80 backdrop-blur-sm border-r border-primary/10">
-                       <div 
+                       <div
                         className={cn(
                           "w-5 h-5 rounded-md border-2 border-primary/30 flex items-center justify-center cursor-pointer transition-all",
                           selectedIds.has(report.id) ? "bg-primary border-primary shadow-lg shadow-primary/20" : "bg-white/5 group-hover:border-primary/60"
@@ -643,86 +656,83 @@ export default function RDOAudit() {
             <div className="flex flex-col h-full">
               {/* Header Fixo */}
               <div className="p-6 bg-linear-to-br from-primary/10 to-transparent border-b border-white/5 relative shrink-0">
-                <div className="flex justify-between items-start relative z-10 max-w-7xl mx-auto w-full">
-                  <div className="space-y-2">
-                    {selectedReport.status === DailyReportStatus.APPROVED ? (
-                      <Badge className="bg-green-500 text-white font-black px-4 py-1 rounded-full mb-2 uppercase tracking-widest text-[10px]">Aprovado</Badge>
-                    ) : selectedReport.status === DailyReportStatus.RETURNED ? (
-                      <Badge className="bg-red-500 text-white font-black px-4 py-1 rounded-full mb-2 uppercase tracking-widest text-[10px]">Devolvido</Badge>
-                    ) : (
-                      <Badge className="bg-amber-500 text-white font-black px-4 py-1 rounded-full mb-2 uppercase tracking-widest text-[10px]">Aguardando Aprovação</Badge>
-                    )}
+                <div className="flex flex-col items-center justify-center relative z-10 max-w-7xl mx-auto w-full text-center py-4">
+                  <div className="flex flex-wrap items-center justify-center gap-4 mb-6">
                     <h2 className="text-4xl font-black tracking-tighter text-white uppercase">Relatório Diário de Obra</h2>
-                    <div className="flex flex-wrap items-center gap-6 mt-4">
-                       <div className="flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-primary" />
-                          <span className="text-sm font-bold text-muted-foreground tracking-tight">
-                            {safeFormatDate(selectedReport.reportDate, "dd 'de' MMMM, yyyy", { locale: ptBR })}
-                          </span>
-                       </div>
-                       <div className="flex items-center gap-2">
-                          <UsersIcon className="w-4 h-4 text-primary" />
-                          <span className="text-sm font-bold text-muted-foreground tracking-tight">{getTeamName(selectedReport.teamId, selectedReport.teamName)}</span>
-                       </div>
-                       <div className="flex bg-black/40 border border-white/5 rounded-2xl p-2 px-4 gap-6 items-center">
-                         <div className="flex flex-col">
-                           <span className="text-[9px] uppercase text-muted-foreground/50 font-black tracking-widest mb-1">Responsável</span>
-                           <div className="flex items-center gap-2">
-                             <User className="w-4 h-4 text-primary" />
-                             <span className="text-sm font-black text-white tracking-tight">{getReporterName(selectedReport.employeeId || (selectedReport as any).userId)}</span>
-                           </div>
-                         </div>
-                         <div className="w-px h-8 bg-white/10" />
-                         <div className="flex flex-col">
-                           <span className="text-[9px] uppercase text-muted-foreground/50 font-black tracking-widest mb-1">Supervisão</span>
-                           <div className="flex items-center gap-2">
-                             <User className="w-4 h-4 text-white/40" />
-                             <span className="text-sm font-black text-white tracking-tight">{getReporterName(selectedReport.createdBy)}</span>
-                           </div>
-                         </div>
-                       </div>
-                    </div>
+                    {selectedReport.status === DailyReportStatus.APPROVED ? (
+                      <Badge className="bg-green-500 text-white font-black px-4 py-1.5 rounded-full uppercase tracking-widest text-[10px] shadow-lg shadow-green-500/20">Aprovado</Badge>
+                    ) : selectedReport.status === DailyReportStatus.RETURNED ? (
+                      <Badge className="bg-red-500 text-white font-black px-4 py-1.5 rounded-full uppercase tracking-widest text-[10px] shadow-lg shadow-red-500/20">Devolvido</Badge>
+                    ) : (
+                      <Badge className="bg-amber-500 text-white font-black px-4 py-1.5 rounded-full uppercase tracking-widest text-[10px] shadow-lg shadow-amber-500/20">Aguardando Aprovação</Badge>
+                    )}
                   </div>
-                  
-                  <div className="flex items-center gap-4">
-                    <div className="w-20 h-20 rounded-3xl bg-white/5 items-center justify-center border border-white/10 shadow-inner hidden sm:flex">
-                       <FileText className="w-10 h-10 text-primary opacity-50" />
+
+                  <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 pb-2">
+                    <div className="flex items-center gap-2">
+                       <Calendar className="w-4 h-4 text-primary" />
+                       <div className="flex flex-col items-start">
+                         <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest">Data do Relatório</span>
+                         <span className="text-sm font-bold text-white tracking-tight">
+                           {safeFormatDate(selectedReport.reportDate, "dd 'de' MMMM, yyyy", { locale: ptBR }).toUpperCase()}
+                         </span>
+                       </div>
                     </div>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="rounded-full hover:bg-white/10 text-white/40 hover:text-white"
-                      onClick={() => setSelectedReport(null)}
-                    >
-                      <X className="w-6 h-6" />
-                    </Button>
+
+                    <div className="w-px h-8 bg-white/10 hidden md:block" />
+
+                    <div className="flex items-center gap-2">
+                       <Users className="w-4 h-4 text-primary" />
+                       <div className="flex flex-col items-start">
+                         <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest">Equipe Executora</span>
+                         <span className="text-sm font-bold text-white tracking-tight">{getTeamName(selectedReport.teamId, selectedReport.teamName).toUpperCase()}</span>
+                       </div>
+                    </div>
+
+                    <div className="w-px h-8 bg-white/10 hidden md:block" />
+
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-white/40" />
+                      <div className="flex flex-col items-start">
+                        <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest">Supervisão</span>
+                        <span className="text-sm font-black text-white tracking-tight">{getReporterName(selectedReport.createdBy).toUpperCase()}</span>
+                      </div>
+                    </div>
+
+                    <div className="w-px h-8 bg-white/10 hidden md:block" />
+
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4 text-primary" />
+                      <div className="flex flex-col items-start">
+                        <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest">Responsável</span>
+                        <span className="text-sm font-black text-white tracking-tight">{getReporterName(selectedReport.employeeId || (selectedReport as any).userId).toUpperCase()}</span>
+                      </div>
+                    </div>
+
+                    <div className="w-px h-8 bg-white/10 hidden md:block" />
+
+                    <div className="flex items-center gap-2">
+                      <div className="flex flex-col items-start">
+                        <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest">RDO Numero</span>
+                        <span className="text-sm font-black text-white tracking-tight">{selectedReport.rdoNumber || `RDO-${selectedReport.id.slice(-5).toUpperCase()}`}</span>
+                      </div>
+                    </div>
+
+                    <div className="w-px h-8 bg-white/10 hidden md:block" />
+
+                    <div className="flex items-center gap-2">
+                      <div className="flex flex-col items-start">
+                        <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest">Revisão</span>
+                        <span className="text-sm font-black text-white tracking-tight">{selectedReport.revision || `00`}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
+                </div>
 
               {/* Conteúdo Scrollável */}
               <ScrollArea className="flex-1">
                 <div className="p-6 max-w-7xl mx-auto w-full space-y-8 pb-32">
-                  
-                  {/* SEÇÃO: CABEÇALHO PROFISSIONAL (A4) */}
-                  <div className="bg-white/5 rounded-4xl border border-white/10 p-8 grid grid-cols-1 md:grid-cols-4 gap-6 shadow-2xl">
-                    <div className="space-y-1">
-                       <Label className="text-[10px] font-black uppercase tracking-widest text-primary">RDO Numero</Label>
-                       <p className="text-xl font-black text-white">{selectedReport.rdoNumber || `LT-RDO-${selectedReport.id.slice(-5).toUpperCase()}`}</p>
-                    </div>
-                    <div className="space-y-1">
-                       <Label className="text-[10px] font-black uppercase tracking-widest text-primary">Revisão</Label>
-                       <p className="text-xl font-black text-white">{selectedReport.revision || "0A"}</p>
-                    </div>
-                    <div className="space-y-1">
-                       <Label className="text-[10px] font-black uppercase tracking-widest text-primary">Prazo Contratual</Label>
-                       <p className="text-xl font-black text-white">{selectedReport.projectDeadline || "---"} DIAS</p>
-                    </div>
-                    <div className="space-y-1">
-                       <Label className="text-[10px] font-black uppercase tracking-widest text-primary">Status</Label>
-                       <Badge className="bg-primary/20 text-primary border-primary/30 font-black tracking-widest px-3 py-1">PROFISSIONAL</Badge>
-                    </div>
-                  </div>
 
                   {/* SEÇÃO: CONDIÇÕES CLIMÁTICAS */}
                   {selectedReport.weather && (
@@ -749,77 +759,6 @@ export default function RDOAudit() {
                       </div>
                     </div>
                   )}
-
-                  {/* SEÇÃO: RECURSOS (EFETIVO E EQUIPAMENTOS) */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                      {/* EFETIVO */}
-                      <div className="space-y-4">
-                        <h3 className="text-xs font-black uppercase tracking-[0.3em] text-primary/60 pl-2 flex items-center gap-2">
-                          <UsersIcon className="w-4 h-4" /> Quadro de Efetivo
-                        </h3>
-                         <div className="bg-white/5 rounded-4xl border border-white/10 overflow-hidden">
-                            <Table>
-                              <TableHeader className="bg-white/5">
-                                <TableRow className="border-white/5">
-                                  <TableHead className="text-[10px] font-black uppercase py-4 pl-6">Matrícula</TableHead>
-                                  <TableHead className="text-[10px] font-black uppercase py-4">Nome do Colaborador</TableHead>
-                                  <TableHead className="text-[10px] font-black uppercase py-4">Função / Cargo</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {selectedReport.manpower && selectedReport.manpower.length > 0 ? (
-                                  selectedReport.manpower.map((m: any, idx: number) => (
-                                    <TableRow key={idx} className="border-white/5">
-                                      <TableCell className="pl-6 font-mono text-xs text-primary/60">{m.registration || "---"}</TableCell>
-                                      <TableCell className="font-bold text-sm text-white uppercase">{m.name || "---"}</TableCell>
-                                      <TableCell className="font-bold text-xs text-muted-foreground uppercase">{m.role}</TableCell>
-                                    </TableRow>
-                                  ))
-                                ) : (
-                                  <TableRow>
-                                    <TableCell colSpan={3} className="text-center py-6 text-muted-foreground text-xs italic">Nenhum dado informado</TableCell>
-                                  </TableRow>
-                                )}
-                              </TableBody>
-                            </Table>
-                         </div>
-                      </div>
-
-                      {/* EQUIPAMENTOS */}
-                      <div className="space-y-4">
-                        <h3 className="text-xs font-black uppercase tracking-[0.3em] text-primary/60 pl-2 flex items-center gap-2">
-                          <Truck className="w-4 h-4" /> Quadro de Equipamentos
-                        </h3>
-                         <div className="bg-white/5 rounded-4xl border border-white/10 overflow-hidden">
-                            <Table>
-                              <TableHeader className="bg-white/5">
-                                <TableRow className="border-white/5">
-                                  <TableHead className="text-[10px] font-black uppercase py-4 pl-6">Tipo / Equipamento</TableHead>
-                                  <TableHead className="text-[10px] font-black py-4 uppercase">Modelo</TableHead>
-                                  <TableHead className="text-[10px] font-black uppercase py-4">Placa / ID</TableHead>
-                                  <TableHead className="text-[10px] font-black uppercase py-4">Motorista / Operador</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {selectedReport.equipment && selectedReport.equipment.length > 0 ? (
-                                  selectedReport.equipment.map((e: any, idx: number) => (
-                                    <TableRow key={idx} className="border-white/5">
-                                      <TableCell className="pl-6 font-bold text-sm text-white uppercase">{e.equipment}</TableCell>
-                                      <TableCell className="font-bold text-xs text-muted-foreground uppercase">{e.model || "---"}</TableCell>
-                                      <TableCell className="font-mono text-xs text-primary/60 uppercase">{e.plate || "---"}</TableCell>
-                                      <TableCell className="font-bold text-xs text-white/80 uppercase">{e.driverName || "---"}</TableCell>
-                                    </TableRow>
-                                  ))
-                                ) : (
-                                  <TableRow>
-                                    <TableCell colSpan={4} className="text-center py-6 text-muted-foreground text-xs italic">Nenhum dado informado</TableCell>
-                                  </TableRow>
-                                )}
-                              </TableBody>
-                            </Table>
-                         </div>
-                      </div>
-                  </div>
 
                   {/* ATIVIDADES DETALHADAS */}
                   <div className="space-y-4">
@@ -883,12 +822,34 @@ export default function RDOAudit() {
                                         <h4 className="text-sm font-black uppercase tracking-widest text-white/90">Registro Fotográfico</h4>
                                      </div>
                                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                        {allPhotos.map((photo: any, pIdx: number) => (
-                                          <div key={pIdx} className="group flex flex-col glass-card border-white/5 bg-black/40 rounded-3xl overflow-hidden hover:border-primary/50 transition-all cursor-zoom-in" onClick={() => setSelectedPhoto(photo.url)}>
-                                            <div className="relative w-full aspect-video bg-black/60 overflow-hidden">
-                                              <img src={photo.url} alt={`Foto ${photo.source}`} className="w-full h-full object-contain hover:scale-105 transition-transform duration-500" />
-                                              <div className="absolute top-2 left-2 bg-black/80 backdrop-blur-sm text-[9px] font-black uppercase text-primary px-2 py-0.5 rounded-md border border-white/10 shadow-[0_0_15px_rgba(0,0,0,0.5)]">
-                                                {photo.source === 'Geral' ? photo.displayLabel : `Torre: ${photo.source}`}
+                                        {allPhotos.map((photo: any, pIdx: number) => {
+                                          let displayUrl = photo.url || photo.uri;
+                                          
+                                          // Se for uma URL absoluta do GCS, reescrevemos para passar pelo nosso Proxy Seguro
+                                          if (displayUrl && displayUrl.includes('storage.googleapis.com')) {
+                                              try {
+                                                  const urlObj = new URL(displayUrl);
+                                                  // O pathname normal é /nome-do-bucket/caminho/do/arquivo
+                                                  // Vamos extrair apenas o caminho do arquivo
+                                                  const pathParts = urlObj.pathname.split('/').filter(Boolean);
+                                                  if (pathParts.length > 1) {
+                                                      const bucketName = pathParts.shift(); // Remove o nome do bucket
+                                                      const filePath = pathParts.join('/');
+                                                      displayUrl = `/api/v1/storage/gcs?path=${encodeURIComponent(filePath)}`;
+                                                  }
+                                              } catch(e) {}
+                                          } else if (displayUrl && displayUrl.startsWith('/api/v1/storage/gcs')) {
+                                              // Se já for proxy, garantimos que a rota base da API seja usada sem conflitos de CORS, 
+                                              // o Vite e o Nginx resolvem rotas relativas perfeitamente.
+                                              displayUrl = displayUrl; 
+                                          }
+
+                                          return (
+                                          <div key={pIdx} className="group flex flex-col glass-card border-white/5 bg-black/40 rounded-3xl overflow-hidden hover:border-primary/50 transition-all cursor-zoom-in" onClick={() => setSelectedPhoto(displayUrl)}>
+                                            <div className="relative w-full aspect-4/3 bg-[#0A0A0B]/80 overflow-hidden ring-1 ring-white/10 rounded-t-3xl">
+                                              <img src={displayUrl} alt={`Foto ${photo.source}`} className="w-full h-full object-cover object-center hover:scale-105 transition-transform duration-700 ease-out" />
+                                              <div className="absolute top-3 left-3 bg-black/90 backdrop-blur-md text-[9px] font-black uppercase text-primary px-2.5 py-1 rounded-md border border-primary/20 shadow-[0_4px_20px_rgba(var(--primary-rgb),0.3)]">
+                                                {photo.source === 'Geral' ? photo.displayLabel : `ID: ${photo.source}`}
                                               </div>
                                             </div>
                                             {photo.comment && (
@@ -900,7 +861,8 @@ export default function RDOAudit() {
                                               </div>
                                             )}
                                           </div>
-                                        ))}
+                                        );
+                                      })}
                                      </div>
                                    </div>
                                  );
@@ -988,9 +950,100 @@ export default function RDOAudit() {
                               {selectedReport.activities}
                            </p>
                         </div>
-                      )}
-                    </div>
+                       )}
+                   </div>
                   </div>
+
+                  {/* SEÇÃO: RECURSOS (EFETIVO E EQUIPAMENTOS) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      {/* EFETIVO */}
+                      <div className="space-y-4">
+                        <div
+                          className="flex items-center justify-between group/header cursor-pointer select-none pl-2"
+                          onClick={() => setShowManpower(!showManpower)}
+                        >
+                          <h3 className="text-xs font-black uppercase tracking-[0.3em] text-primary/60 flex items-center gap-2 group-hover/header:text-primary transition-colors">
+                            <Users className="w-4 h-4" /> Quadro de Efetivo
+                          </h3>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-primary/40 group-hover/header:text-primary">
+                            {showManpower ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </Button>
+                        </div>
+                         {showManpower && (
+                           <div className="bg-white/5 rounded-4xl border border-white/10 overflow-hidden animate-in slide-in-from-top-2 duration-300">
+                            <Table>
+                              <TableHeader className="bg-white/5">
+                                <TableRow className="border-white/5">
+                                  <TableHead className="text-[10px] font-black uppercase py-4 pl-6">Matrícula</TableHead>
+                                  <TableHead className="text-[10px] font-black uppercase py-4">Nome do Colaborador</TableHead>
+                                  <TableHead className="text-[10px] font-black uppercase py-4">Função / Cargo</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {selectedReport.manpower && selectedReport.manpower.length > 0 ? (
+                                  selectedReport.manpower.map((m: any, idx: number) => (
+                                    <TableRow key={idx} className="border-white/5">
+                                      <TableCell className="pl-6 font-mono text-xs text-primary/60">{m.registration || "---"}</TableCell>
+                                      <TableCell className="font-bold text-sm text-white uppercase">{m.name || "---"}</TableCell>
+                                      <TableCell className="font-bold text-xs text-muted-foreground uppercase">{m.role}</TableCell>
+                                    </TableRow>
+                                  ))
+                                ) : (
+                                  <TableRow>
+                                    <TableCell colSpan={3} className="text-center py-6 text-muted-foreground text-xs italic">Nenhum dado informado</TableCell>
+                                  </TableRow>
+                                )}
+                              </TableBody>
+                            </Table>
+                         </div>
+                         )}
+                      </div>
+
+                      {/* EQUIPAMENTOS */}
+                      <div className="space-y-4">
+                        <div
+                          className="flex items-center justify-between group/header cursor-pointer select-none pl-2"
+                          onClick={() => setShowEquipment(!showEquipment)}
+                        >
+                          <h3 className="text-xs font-black uppercase tracking-[0.3em] text-primary/60 flex items-center gap-2 group-hover/header:text-primary transition-colors">
+                            <Truck className="w-4 h-4" /> Quadro de Equipamentos
+                          </h3>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-primary/40 group-hover/header:text-primary">
+                            {showEquipment ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </Button>
+                        </div>
+                         {showEquipment && (
+                           <div className="bg-white/5 rounded-4xl border border-white/10 overflow-hidden animate-in slide-in-from-top-2 duration-300">
+                            <Table>
+                              <TableHeader className="bg-white/5">
+                                <TableRow className="border-white/5">
+                                  <TableHead className="text-[10px] font-black uppercase py-4 pl-6">Tipo / Equipamento</TableHead>
+                                  <TableHead className="text-[10px] font-black py-4 uppercase">Modelo</TableHead>
+                                  <TableHead className="text-[10px] font-black uppercase py-4">Placa / ID</TableHead>
+                                  <TableHead className="text-[10px] font-black uppercase py-4">Motorista / Operador</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {selectedReport.equipment && selectedReport.equipment.length > 0 ? (
+                                  selectedReport.equipment.map((e: any, idx: number) => (
+                                    <TableRow key={idx} className="border-white/5">
+                                      <TableCell className="pl-6 font-bold text-sm text-white uppercase">{e.equipment}</TableCell>
+                                      <TableCell className="font-bold text-xs text-muted-foreground uppercase">{e.model || "---"}</TableCell>
+                                      <TableCell className="font-mono text-xs text-primary/60 uppercase">{e.plate || "---"}</TableCell>
+                                      <TableCell className="font-bold text-xs text-white/80 uppercase">{e.driverName || "---"}</TableCell>
+                                    </TableRow>
+                                  ))
+                                ) : (
+                                  <TableRow>
+                                    <TableCell colSpan={4} className="text-center py-6 text-muted-foreground text-xs italic">Nenhum dado informado</TableCell>
+                                  </TableRow>
+                                )}
+                              </TableBody>
+                            </Table>
+                          </div>
+                          )}
+                       </div>
+                   </div>
 
                   {selectedReport.observations && (
                     <div className="space-y-4">

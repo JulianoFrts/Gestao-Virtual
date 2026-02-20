@@ -94,35 +94,35 @@ export function useDailyReports() {
           (r) => {
             const mappedReport = {
               id: r.id,
-              teamId: r.team_id,
-              teamName: r.teams?.name, // This will be undefined if teams are not selected
-              userId: r.user_id,
-              userName: (r as any).user?.name || "Sistema",
-              reportDate: safeDate(r.report_date) || new Date(),
+              teamId: r.teamId || r.team_id,
+              teamName: r.team?.name || r.teams?.name,
+              userId: r.userId || r.user_id,
+              userName: r.user?.name || (r as any).userName || "Sistema",
+              reportDate: safeDate(r.reportDate || r.report_date) || new Date(),
               activities: r.activities,
               observations: r.observations,
-              subPoint: r.sub_point,
-              subPointType: r.sub_point_type,
+              subPoint: r.subPoint || r.sub_point,
+              subPointType: r.subPointType || r.sub_point_type,
               metadata: r.metadata,
               selectedActivities: (r.metadata as any)?.selectedActivities || [],
-              employeeId: r.user_id || r.employee_id || r.employeeId || r.userId, // Mapeado mais agressivamente
-              companyId: (r as any).company_id,
+              employeeId: r.employeeId || r.userId || r.user_id || r.employee_id,
+              companyId: r.companyId || (r as any).company_id,
               status: (r.status as DailyReportStatus) || DailyReportStatus.SENT,
-              approvedById: r.approved_by_id,
-              rejectionReason: r.rejection_reason,
-              createdBy: r.created_by,
-              syncedAt: safeDate(r.synced_at),
+              approvedById: r.approvedById || r.approved_by_id,
+              rejectionReason: r.rejectionReason || r.rejection_reason,
+              createdBy: r.createdBy || r.created_by,
+              syncedAt: safeDate(r.syncedAt || r.synced_at),
               weather: r.weather || (r.metadata as any)?.weather,
               manpower: r.manpower || (r.metadata as any)?.manpower,
               equipment: r.equipment || (r.metadata as any)?.equipment,
-              rdoNumber: r.rdo_number || r.rdoNumber || (r.metadata as any)?.rdoNumber,
+              rdoNumber: r.rdoNumber || r.rdo_number || (r.metadata as any)?.rdoNumber,
               revision: r.revision || (r.metadata as any)?.revision,
-              projectDeadline: r.project_deadline || r.projectDeadline || (r.metadata as any)?.projectDeadline,
-              localId: r.local_id,
-              createdAt: safeDate(r.created_at) || new Date(),
-              scheduledAt: safeDate(r.scheduled_at),
-              executedAt: safeDate(r.executed_at),
-              reviewedAt: safeDate(r.reviewed_at),
+              projectDeadline: r.projectDeadline || r.project_deadline || (r.metadata as any)?.projectDeadline,
+              localId: r.localId || r.local_id,
+              createdAt: safeDate(r.createdAt || r.created_at) || new Date(),
+              scheduledAt: safeDate(r.scheduledAt || r.scheduled_at),
+              executedAt: safeDate(r.executedAt || r.executed_at),
+              reviewedAt: safeDate(r.reviewedAt || r.reviewed_at),
             } as DailyReport;
             
             if (r.status === DailyReportStatus.PROGRAMMED) {
@@ -384,6 +384,9 @@ export function useDailyReports() {
     const todayLocalStr = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split("T")[0];
     
     return reports.filter((r) => {
+      // Sempre incluir relatórios retornados para correção, indepedente da data
+      if (r.status === DailyReportStatus.RETURNED) return true;
+
       if (!r.reportDate) return false;
       
       // Se já for string YYYY-MM-DD, compara direto

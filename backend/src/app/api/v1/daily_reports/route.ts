@@ -119,11 +119,8 @@ export async function POST(request: NextRequest) {
       throw zodErr;
     }
 
-    // Mapeamento de campos garantindo segurança (Herança de companyId do usuário)
-    const data = {
-      teamId: rawData.teamId || rawData.team_id || null,
-      userId: rawData.userId || rawData.user_id || (user as any).id,
-      companyId: (user as any).companyId || rawData.companyId || rawData.company_id || null,
+    // Mapeamento de campos garantindo segurança
+    const cleanData: any = {
       reportDate: rawData.reportDate || rawData.report_date,
       activities: rawData.activities || "Atividade sem descrição",
       observations: rawData.observations || null,
@@ -137,10 +134,35 @@ export async function POST(request: NextRequest) {
       equipment: rawData.equipment || [],
       rdoNumber: rawData.rdoNumber || rawData.rdo_number || null,
       revision: rawData.revision || "0A",
-      projectDeadline: rawData.projectDeadline || rawData.project_deadline || null,
+      projectDeadline: (rawData.projectDeadline || rawData.project_deadline) ? Number(rawData.projectDeadline || rawData.project_deadline) : null,
+      status: rawData.status || undefined, // Garantir que status seja enviado se existir
     };
 
-    const report = await dailyReportService.createReport(data);
+    // Conectando relações explicitamente para evitar "Unknown argument userId" do Prisma
+    const teamIdStr = rawData.teamId || rawData.team_id;
+    if (teamIdStr) cleanData.team = { connect: { id: teamIdStr } };
+
+    const userIdStr = rawData.userId || rawData.user_id || rawData.employeeId || (user as any).id;
+    if (userIdStr) cleanData.user = { connect: { id: userIdStr } };
+
+    const companyIdStr = (user as any).companyId || rawData.companyId || rawData.company_id || (user as any).company_id;
+    if (companyIdStr) cleanData.company = { connect: { id: companyIdStr } };
+
+    // Helper function to remove undefined and null values
+    const finalData = Object.fromEntries(
+      Object.entries(cleanData).filter(([, v]) => v != null)
+    );
+
+    // Remove explicitly internal fields coming from frontend sync store
+    // This is CRITICAL to prevent Prisma "Unknown argument" errors if legacy frontend sends these
+    const fieldsToRemove = [
+      'scheduledAt', 'executedAt', 'reviewedAt', 'syncedAt', 
+      'id', 'createdAt', 'updatedAt', 'scheduled_at', 'executed_at', 'reviewed_at'
+    ];
+    
+    fieldsToRemove.forEach(field => delete finalData[field]);
+
+    const report = await dailyReportService.createReport(finalData);
 
     logger.info("Relatório criado", { reportId: report.id });
 

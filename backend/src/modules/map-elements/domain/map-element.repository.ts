@@ -8,6 +8,7 @@ export type MapElementType =
 export interface MapElementTechnicalData {
   id?: string;
   companyId: string;
+  siteId: string;
   projectId: string;
   documentId?: string | null;
   elementType: MapElementType;
@@ -38,6 +39,7 @@ export interface MapElementRepository {
   ): Promise<MapElementTechnicalData | null>;
   findByProject(
     projectId: string,
+    companyId?: string,
     type?: MapElementType,
   ): Promise<MapElementTechnicalData[]>;
   findByCompany(

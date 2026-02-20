@@ -3,7 +3,9 @@ import { storageService } from "@/services/storageService";
 import { ActivityStatus } from "@/hooks/useDailyReports";
 
 export interface DailyReportPhoto {
-    url: string; // base64
+    url?: string; // URL remota (GCP) ou string base64 legada
+    uri?: string; // URL local temporária para preview no navegador
+    file?: File;  // Arquivo pendente para upload (retido pelo IndexedDB)
     comment?: string;
 }
 

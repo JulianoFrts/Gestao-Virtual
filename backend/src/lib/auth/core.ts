@@ -103,7 +103,7 @@ export async function getAuthToken(req?: NextRequest): Promise<string | null> {
                 const url = new URL(urlHeader);
                 return url.searchParams.get("token");
             }
-        } catch {}
+        } catch { /* empty */ }
 
         return null;
     } catch {

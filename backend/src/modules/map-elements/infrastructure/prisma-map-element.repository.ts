@@ -84,7 +84,8 @@ export class PrismaMapElementRepository implements MapElementRepository {
         toUpdate.push({ ...el, id: dbId! });
       } else {
         // New element
-        const { id, ...data } = el; // Remove id if present but invalid/empty
+        const data = { ...el }; // Remove id if present but invalid/empty
+        delete (data as any).id;
         toCreate.push(data);
       }
     }
@@ -147,9 +148,11 @@ export class PrismaMapElementRepository implements MapElementRepository {
 
   async findByProject(
     projectId: string,
+    companyId?: string,
     type?: MapElementType,
   ): Promise<MapElementTechnicalData[]> {
     const where: any = { projectId };
+    if (companyId) where.companyId = companyId;
     if (type) where.elementType = type;
 
     return (await prisma.mapElementTechnicalData.findMany({

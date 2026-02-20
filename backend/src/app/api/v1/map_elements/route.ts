@@ -55,10 +55,13 @@ export async function GET(request: NextRequest) {
       `GET /api/v1/map_elements: Session companyId=${user.companyId}, Requested companyId=${companyId}, projectId=${projectId}, Admin=${isSystemAdmin}`,
     );
 
-    // If projectId is provided, just return elements for that project (admins can access any)
+    // If projectId is provided, filter by project (and optionally company)
     if (projectId) {
-      const elements = await service.getElements(projectId, type);
-      return ApiResponse.json(elements);
+      const elements = await service.getElements(projectId, companyId);
+      const filtered = companyId 
+        ? elements.filter(e => e.companyId === companyId)
+        : elements;
+      return ApiResponse.json(filtered);
     }
 
     // Security: For non-admins, require their own company
@@ -102,12 +105,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const params = Object.fromEntries(request.nextUrl.searchParams.entries());
     const urlProjectId = params.projectId || params.project_id;
-    const urlCompanyId = params.companyId || params.company_id;
+    const urlSiteId = params.siteId || params.site_id;
 
     // Injetar IDs da URL no body se estiverem faltando
     const processItem = (item: any) => {
       if (!item.projectId && urlProjectId) item.projectId = urlProjectId;
-      if (!item.companyId && urlCompanyId) item.companyId = urlCompanyId;
+      if (!item.siteId && urlSiteId) item.siteId = urlSiteId;
       if (!item.companyId && user.companyId) item.companyId = user.companyId;
       return item;
     };
@@ -118,7 +121,7 @@ export async function POST(request: NextRequest) {
       isArray: Array.isArray(body), 
       count: Array.isArray(body) ? body.length : 1,
       projectId: urlProjectId,
-      companyId: urlCompanyId
+      siteId: urlSiteId
     });
 
     if (Array.isArray(finalBody)) {

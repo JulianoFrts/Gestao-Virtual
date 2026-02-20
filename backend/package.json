@@ -29,7 +29,8 @@
     "worker": "npx tsx worker.ts",
     "db:setup": "npx tsx master-setup.ts",
     "db:backup": "npx tsx prisma/backup-seeds.ts",
-    "db:restore": "npx tsx src/scripts/restore-from-backup.ts"
+    "db:restore": "npx tsx src/scripts/restore-from-backup.ts",
+    "debug:rdo": "tsx src/tests/debug-daily-report.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^6.3.0",

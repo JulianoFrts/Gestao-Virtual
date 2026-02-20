@@ -9,9 +9,10 @@ export class MapElementService {
 
   async getElements(
     projectId: string,
+    companyId?: string,
     type?: MapElementType,
   ): Promise<MapElementTechnicalData[]> {
-    return this.repository.findByProject(projectId, type);
+    return this.repository.findByProject(projectId, companyId, type);
   }
 
   async getElementsByCompany(
