@@ -1,15 +1,36 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { scanner } from '../utils/scanner.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.join(__dirname, '..', '..');
+
 export async function run() {
   const timestamp = new Date().toISOString();
+  
+  // Escaneando Frontend
+  const frontendPages = scanner.listFiles(path.join(ROOT, 'frontend', 'src', 'pages'))
+    .filter(f => f.endsWith('.tsx'));
+    
+  // Escaneando Backend
+  const backendRoutes = scanner.listFiles(path.join(ROOT, 'backend', 'src', 'app', 'api'))
+    .filter(f => f.endsWith('route.ts'));
+
   const outputs = [
-    'Regra de comunicação: idioma pt-BR',
-    'Analisado package.json root e subprojetos',
-    'Detectadas dependencias dinâmicas: ver lista',
-    'Rebranding para Gestão Virtual verificado em arquivos chave',
-    'Estrutura de Docker DB local identificada'
+    'Regra de idioma: pt-BR',
+    `Frontend: ${frontendPages.length} páginas detectadas`,
+    `Backend: ${backendRoutes.length} rotas API detectadas`,
+    'Arquitetura mapeada: Next.js + React'
   ];
-  const questions = [
-    'Existem pacotes carregados dinamicamente por string? (ex: plugins)',
-    'Qual o nível de tolerância a breaking changes?'
-  ];
-  return { status: 'OK', agent: '001_ANALYST', timestamp, outputs, questions };
+
+  return { 
+    status: 'OK', 
+    agent: '001_ANALYST', 
+    timestamp, 
+    outputs,
+    data: {
+      frontendPages: frontendPages.map(p => path.basename(p)),
+      backendRoutesCount: backendRoutes.length
+    }
+  };
 }

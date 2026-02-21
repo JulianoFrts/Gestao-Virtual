@@ -61,6 +61,7 @@ export default function RDOAudit() {
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [showManpower, setShowManpower] = useState(true);
   const [showEquipment, setShowEquipment] = useState(true);
+  const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
 
   // Helper for safe date formatting
   const safeFormatDate = (date: any, formatStr: string, options?: any) => {
@@ -648,28 +649,64 @@ export default function RDOAudit() {
       </Card>
 
       {/* DETALHES DO RDO PARA AUDITORIA - FULL PAGE  - botao close desabilitado*/}
-      <Dialog open={!!selectedReport} onOpenChange={(open) => !open }>
+
+      <Dialog open={!!selectedReport} onOpenChange={(open) => open }>
         
-        <DialogContent className="max-w-none w-screen h-screen m-0 rounded-none bg-[#0a0a0b] border-none p-0 flex flex-col overflow-hidden">
+        <DialogContent hideClose className="max-w-none w-screen h-screen m-0 rounded-none bg-[#0a0a0b] border-none p-0 flex flex-col overflow-hidden">
           <DialogTitle className="sr-only">Detalhes do Relatório</DialogTitle>
           <DialogDescription className="sr-only">Visualização detalhada do relatório para auditoria</DialogDescription>
           {selectedReport && (
             <div className="flex flex-col h-full">
               {/* Header Fixo */}
-              <div className="bg-linear-to-br from-primary/10 to-transparent border-b border-white/5 relative shrink-0">
-                <div className="flex flex-col items-center justify-center relative z-10 max-w-7xl mx-auto w-full text-center py-4">
-                  <div className="flex flex-wrap items-center justify-center gap-4 mb-6">
-                    <h2 className="text-4xl font-black tracking-tighter text-white uppercase">Relatório Diário de Obra</h2>
-                    {selectedReport.status === DailyReportStatus.APPROVED ? (
-                      <Badge className="bg-green-500 text-white font-black px-4 py-1.5 rounded-full uppercase tracking-widest text-[10px] shadow-lg shadow-green-500/20">Aprovado</Badge>
-                    ) : selectedReport.status === DailyReportStatus.RETURNED ? (
-                      <Badge className="bg-red-500 text-white font-black px-4 py-1.5 rounded-full uppercase tracking-widest text-[10px] shadow-lg shadow-red-500/20">Devolvido</Badge>
-                    ) : (
-                      <Badge className="bg-amber-500 text-white font-black px-4 py-1.5 rounded-full uppercase tracking-widest text-[10px] shadow-lg shadow-amber-500/20">Aguardando Aprovação</Badge>
-                    )}
-                  </div>
+              <div className={cn(
+                "bg-linear-to-br from-primary/10 to-transparent border-b border-white/5 relative shrink-0 transition-all duration-300",
+                isHeaderCollapsed ? "py-5" : "py-5"
+              )}>
+                {/* Botão de Alternância (Expandir/Recolher) */}
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="absolute top-4 right-4 z-90 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white"
+                  onClick={() => setIsHeaderCollapsed(!isHeaderCollapsed)}
+                >
+                  {isHeaderCollapsed ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
+                </Button>
 
-                  <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 pb-2">
+                <div className="flex flex-col items-center justify-center relative z-10 max-w-7xl mx-auto w-full text-center">
+                  {!isHeaderCollapsed && (
+                    <div className="flex flex-wrap items-center justify-center gap-4 mb-6 animate-in fade-in zoom-in duration-300">
+                      <h2 className="text-4xl font-black tracking-tighter text-white uppercase">Relatório Diário de Obra</h2>
+                      {selectedReport.status === DailyReportStatus.APPROVED ? (
+                        <Badge className="bg-green-500 text-white font-black px-4 py-1.5 rounded-full uppercase tracking-widest text-[10px] shadow-lg shadow-green-500/20">Aprovado</Badge>
+                      ) : selectedReport.status === DailyReportStatus.RETURNED ? (
+                        <Badge className="bg-red-500 text-white font-black px-4 py-1.5 rounded-full uppercase tracking-widest text-[10px] shadow-lg shadow-red-500/20">Devolvido</Badge>
+                      ) : (
+                        <Badge className="bg-amber-500 text-white font-black px-4 py-1.5 rounded-full uppercase tracking-widest text-[10px] shadow-lg shadow-amber-500/20">Aguardando Aprovação</Badge>
+                      )}
+                    </div>
+                  )}
+
+                  <div className={cn(
+                    "flex flex-wrap items-center justify-center gap-x-5 gap-y-4 pb-4 transition-all duration-300",
+                    isHeaderCollapsed && "justify-right gap-x-5"
+                  )}>
+                    {isHeaderCollapsed && (
+                      <div className="flex items-center gap-4 pr-4 border-r border-white/10 animate-in fade-in slide-in-from-left-4 duration-300">
+                        <div className="flex flex-col items-start">
+                          <span className="text-[10px] font-black text-primary uppercase tracking-tight">Relatório Diário de Obra</span>
+                          <div className="flex items-center gap-2">
+                            {selectedReport.status === DailyReportStatus.APPROVED ? (
+                              <Badge className="bg-green-500 text-white font-black px-2 py-0.5 rounded-md uppercase tracking-widest text-[8px]">Aprovado</Badge>
+                            ) : selectedReport.status === DailyReportStatus.RETURNED ? (
+                              <Badge className="bg-red-500 text-white font-black px-2 py-0.5 rounded-md uppercase tracking-widest text-[8px]">Devolvido</Badge>
+                            ) : (
+                              <Badge className="bg-amber-500 text-white font-black px-2 py-0.5 rounded-md uppercase tracking-widest text-[8px]">Pendente</Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-2">
                        <Calendar className="w-4 h-4 text-primary" />
                        <div className="flex flex-col items-start">
@@ -729,7 +766,7 @@ export default function RDOAudit() {
                     </div>
                   </div>
                 </div>
-                </div>
+              </div>
 
               {/* Conteúdo Scrollável */}
               <ScrollArea className="flex-4">
