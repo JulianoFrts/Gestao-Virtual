@@ -761,6 +761,35 @@ background: radial-gradient(circle,
   /* Chrome/Safari/Webkit */
 }
 
+/* Utility to hide standard and Radix UI scrollbars */
+.no-scrollbar {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+
+.no-scrollbar [data-radix-scroll-area-viewport] {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.no-scrollbar [data-radix-scroll-area-viewport]::-webkit-scrollbar {
+  display: none !important;
+}
+
+/* Hide Radix scrollbar track/thumb when no-scrollbar is applied */
+.no-scrollbar > div > div[style*="overflow: scroll"]::-webkit-scrollbar,
+.no-scrollbar > div > div[style*="overflow: auto"]::-webkit-scrollbar {
+  display: none !important;
+}
+
+.no-scrollbar [data-state] {
+  display: none !important;
+}
+
 /* Right-side entrance animation */
 @keyframes fadeInRight {
   from {

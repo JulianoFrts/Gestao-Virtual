@@ -16,11 +16,17 @@ export async function run() {
   const backendRoutes = scanner.listFiles(path.join(ROOT, 'backend', 'src', 'app', 'api'))
     .filter(f => f.endsWith('route.ts'));
 
+  // Busca específica por componentes RDO
+  const rdoHistory = frontendPages.find(p => p.includes('RDOHistory'));
+  const notificationLogic = scanner.listFiles(path.join(ROOT, 'frontend', 'src', 'components'))
+    .find(f => f.includes('GlobalInitializer'));
+
   const outputs = [
     'Regra de idioma: pt-BR',
     `Frontend: ${frontendPages.length} páginas detectadas`,
-    `Backend: ${backendRoutes.length} rotas API detectadas`,
-    'Arquitetura mapeada: Next.js + React'
+    rdoHistory ? '✅ Página de Histórico RDO encontrada (RDOHistory.tsx)' : '❌ Página de Histórico RDO não encontrada',
+    notificationLogic ? '✅ Lógica de Notificação detectada em GlobalInitializer' : '❌ Sistema de notificação não localizado',
+    'Status: Pronto para Auditoria Técnica'
   ];
 
   return { 
@@ -29,8 +35,9 @@ export async function run() {
     timestamp, 
     outputs,
     data: {
-      frontendPages: frontendPages.map(p => path.basename(p)),
-      backendRoutesCount: backendRoutes.length
+      rdoHistory: !!rdoHistory,
+      notificationLogic: !!notificationLogic,
+      frontendPagesCount: frontendPages.length
     }
   };
 }

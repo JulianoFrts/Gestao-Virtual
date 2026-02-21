@@ -70,6 +70,8 @@ export interface DailyReportDraft {
     rdoNumber?: string;
     revision?: string;
     projectDeadline?: number;
+    editingReportId?: string; // ID do relatório original se for uma correção
+    isCorrection?: boolean;   // Sinaliza que este rascunho é para corrigir um RDO devolvido
     step: number;
     updatedAt: number;
 }

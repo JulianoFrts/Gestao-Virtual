@@ -1239,19 +1239,18 @@ export default function DailyReport() {
         return { ...act, photos: actPhotos, details };
       }));
 
-      // 4. Salvar RDO no Backend
-      const result = await createReport({
+      const reportPayload = {
         teamIds: teamIds,
         employeeId: effectiveEmployeeId,
         companyId: selectedCompanyId, 
         activities: selectedActivities.map(a => `${a.stageName} (${a.subPoint})`).join(", "),
-        selectedActivities: processedActivities, // Usamos as atividades com URLs finais
-        status: 'SENT' as any,
+        selectedActivities: processedActivities, 
+        status: DailyReportStatus.SENT,
         weather: weather,
         manpower: manpower,
         equipment: equipment,
         generalObservations: generalObservations,
-        generalPhotos: processedGeneralPhotos, // Usamos as fotos gerais com URLs finais
+        generalPhotos: processedGeneralPhotos, 
         rdoNumber: rdoNumber,
         revision: revision,
         projectDeadline: projectDeadline,
@@ -1261,9 +1260,19 @@ export default function DailyReport() {
           manpower,
           equipment,
           generalObservations,
-          generalPhotos: processedGeneralPhotos
+          generalPhotos: processedGeneralPhotos,
+          isCorrection: draft.isCorrection,
+          originalReportId: draft.editingReportId
         },
-      });
+      };
+
+      // 4. Salvar RDO no Backend (Create ou Update se for correção)
+      let result;
+      if (draft.isCorrection && draft.editingReportId) {
+        result = await (updateReport as any)(draft.editingReportId, reportPayload);
+      } else {
+        result = await createReport(reportPayload);
+      }
 
       if (result.success) {
         resetReportDraft();
@@ -1388,6 +1397,17 @@ export default function DailyReport() {
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                   <div>
+                    {draft.isCorrection && (
+                      <div className="mb-6 p-6 bg-red-500/10 border border-red-500/20 rounded-3xl animate-in slide-in-from-top-4">
+                        <div className="flex items-center gap-3 mb-2">
+                          <AlertCircle className="w-5 h-5 text-red-500" />
+                          <h4 className="text-sm font-black uppercase text-red-500 tracking-widest">Relatório Devolvido para Correção</h4>
+                        </div>
+                        <p className="text-sm text-white/80 font-medium italic">
+                          "{(reports.find(r => r.id === draft.editingReportId) as any)?.rejectionReason || "Sem motivo específico informado."}"
+                        </p>
+                      </div>
+                    )}
                     <CardTitle className="flex items-center gap-3 text-2xl font-bold tracking-tight">
                       <Button
                         variant="ghost"
@@ -2610,12 +2630,12 @@ export default function DailyReport() {
                         className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-[2.5rem] py-14 group shadow-[0_25px_60px_rgba(var(--primary),0.4)] border-0 text-2xl font-black transition-all hover:scale-[1.01] active:scale-[0.98]"
                         disabled={isSaving || selectedActivities.length === 0}
                       >
-                        {isSaving ? (
+                         {isSaving ? (
                           <Loader2 className="w-10 h-10 mr-4 animate-spin" />
                         ) : (
                           <Send className="w-10 h-10 mr-4 transition-transform group-hover:-translate-y-2 group-hover:translate-x-2" />
                         )}
-                        REGISTRAR E ENVIAR RELATÓRIO COMPLETO
+                        {draft.isCorrection ? "REENVIAR RELATÓRIO CORRIGIDO" : "REGISTRAR E ENVIAR RELATÓRIO COMPLETO"}
                       </Button>
                       <p className="text-[10px] text-center text-muted-foreground/40 mt-8 uppercase font-bold tracking-[0.3em]">
                         Este relatório contém {selectedActivities.length} mini-relatórios granulares

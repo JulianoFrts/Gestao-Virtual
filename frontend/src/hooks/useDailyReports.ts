@@ -378,6 +378,58 @@ export function useDailyReports() {
     }
   };
 
+  const updateReport = async (id: string, data: any) => {
+    const isOnline = navigator.onLine;
+    const today = new Date();
+
+    if (isOnline) {
+      try {
+        const { data: updated, error } = await db
+          .from("daily_reports")
+          .update({
+            ...data,
+            report_date: data.reportDate instanceof Date ? data.reportDate.toISOString().split("T")[0] : data.reportDate,
+            synced_at: new Date().toISOString(),
+          } as any)
+          .eq('id', id)
+          .select(`*, teams(name), user:users!daily_reports_user_id_fkey(name)`)
+          .single();
+
+        if (error) throw error;
+
+        const mappedReport = {
+          ...updated,
+          id: updated.id,
+          employeeId: updated.user_id,
+          teamName: updated.teams?.name,
+          syncedAt: new Date(updated.synced_at || new Date()),
+          reportDate: safeDate(updated.reportDate || updated.report_date) || new Date(),
+          metadata: updated.metadata,
+          status: updated.status as DailyReportStatus,
+        } as DailyReport;
+
+        setReports((prev) =>
+          prev.map((r) => (r.id === id ? mappedReport : r)),
+        );
+
+        const freshStorage = (await storageService.getItem<DailyReport[]>("dailyReports")) || [];
+        const updatedStorage = freshStorage.map((r) => r.id === id ? mappedReport : r);
+        await saveToStorage(updatedStorage);
+
+        return { success: true, data: mappedReport };
+      } catch (error: any) {
+        console.warn("Update sync failed:", error);
+        return { success: false, error: error.message };
+      }
+    } else {
+       // Fallback offline (simplificado para atualização imediata na UI)
+       setReports((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, ...data, syncedAt: null } : r)),
+        );
+       return { success: true, offline: true };
+    }
+  };
+
   const getTodayReports = () => {
     // Pegamos a data atual e aplicamos o offset de fuso horário local para garantir a string YYYY-MM-DD correta do local do usuário
     const now = new Date();
@@ -407,6 +459,7 @@ export function useDailyReports() {
     reports,
     isLoading,
     createReport,
+    updateReport,
     getTodayReports,
     refresh: loadReports,
   };

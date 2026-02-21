@@ -29,6 +29,7 @@ const TimeClock = lazy(() => import("../pages/TimeClock"));
 const DailyReport = lazy(() => import("../pages/DailyReport"));
 const RDOScheduling = lazy(() => import("../pages/RDOScheduling"));
 const RDOAudit = lazy(() => import("../pages/RDOAudit"));
+const RDOHistory = lazy(() => import("../pages/RDOHistory"));
 
 const SettingsPage = lazy(() => import("../pages/Settings"));
 const UsersPage = lazy(() => import("../pages/Users"));
@@ -149,6 +150,14 @@ export const routes: RouteConfig[] = [
     layout: "app",
     label: "Auditoria RDO",
     icon: FileCheck,
+  },
+  {
+    path: "/rdo/history",
+    element: <RDOHistory />,
+    moduleId: "daily_report.list",
+    layout: "app",
+    label: "Meus RDOs",
+    icon: History,
   },
   {
     path: "/users",

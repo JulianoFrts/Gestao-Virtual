@@ -27,9 +27,13 @@ import {
     hasCostsFetchedSignal
 } from '@/signals/syncSignals';
 import { fetchProductionData } from '@/signals/productionSignals';
-import { useDailyReports } from '@/hooks/useDailyReports';
+import { useDailyReports, DailyReportStatus } from '@/hooks/useDailyReports';
 import { kpiService } from '@/services/kpiService';
 import { orionApi } from '@/integrations/orion/client';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { AlertCircle } from 'lucide-react';
 
 /**
  * GlobalInitializer
@@ -39,8 +43,12 @@ export const GlobalInitializer = () => {
     useSignals();
 
     // Hooks que retornam funções de refresh
+    const { reports, refresh: refreshReports } = useDailyReports();
     const { refresh: refreshUsers } = useUsers();
     const { refresh: refreshTeams } = useTeams();
+    const { toast } = useToast();
+    const { user } = useAuth();
+    const navigate = useNavigate();
 
     const loaderRef = useRef<ParallelLoader | null>(null);
     const initializedRef = useRef(false);
@@ -241,6 +249,43 @@ export const GlobalInitializer = () => {
 
         return () => clearTimeout(timer);
     }, []); // Dependência vazia para orquestrar apenas uma vez no "ciclo de vida logado"
+
+    // Background checker for returned reports
+    useEffect(() => {
+        if (!user || !reports.length) return;
+
+        const returnedReports = reports.filter(r => 
+            (r.employeeId === user.id || (r as any).userId === user.id) && 
+            r.status === DailyReportStatus.RETURNED
+        );
+
+        if (returnedReports.length > 0) {
+            const notifiedKey = `notified_returned_${user.id}`;
+            const notifiedIds = JSON.parse(localStorage.getItem(notifiedKey) || '[]');
+            
+            const newReturned = returnedReports.filter(r => !notifiedIds.includes(r.id));
+
+            if (newReturned.length > 0) {
+                toast({
+                    title: "Relatório Devolvido",
+                    description: `Você tem ${newReturned.length} relatório(s) que precisam de correção.`,
+                    variant: "destructive",
+                    action: (
+                        <button 
+                            onClick={() => navigate('/rdo/history')}
+                            className="bg-white/10 hover:bg-white/20 px-3 py-1 rounded-md text-[10px] font-bold uppercase transition-all"
+                        >
+                            Ver Agora
+                        </button>
+                    ),
+                });
+
+                // Mark current returned reports as notified
+                const allReturnedIds = returnedReports.map(r => r.id);
+                localStorage.setItem(notifiedKey, JSON.stringify(allReturnedIds));
+            }
+        }
+    }, [user, reports, toast, navigate]);
 
 
     return null;

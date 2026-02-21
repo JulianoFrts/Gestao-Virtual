@@ -460,7 +460,7 @@ export default function RDOAudit() {
         <CardContent className="p-0 flex flex-col overflow-hidden min-h-0">
           <Table
             className="border-separate border-spacing-0"
-            containerClassName="relative w-full overflow-auto flex-1 custom-scrollbar min-h-0"
+            containerClassName="relative w-full overflow-auto flex-1 no-scrollbar min-h-0"
           >
             <TableHeader className="sticky top-0 z-30 bg-[#0c0c0e] shadow-xl">
               <TableRow className="border-primary/10 hover:bg-transparent">
@@ -652,46 +652,112 @@ export default function RDOAudit() {
 
       <Dialog open={!!selectedReport} onOpenChange={(open) => open }>
         
-        <DialogContent hideClose className="max-w-none w-screen h-screen m-0 rounded-none bg-[#0a0a0b] border-none p-0 flex flex-col overflow-hidden">
+        <DialogContent 
+          hideClose 
+          className="max-w-none w-screen h-screen m-0 rounded-none bg-[#0a0a0b] border-none p-0 flex flex-col overflow-hidden print:static print:h-auto print:bg-white print:text-black print:overflow-visible"
+        >
           <DialogTitle className="sr-only">Detalhes do Relatório</DialogTitle>
           <DialogDescription className="sr-only">Visualização detalhada do relatório para auditoria</DialogDescription>
+          
+          <style dangerouslySetInnerHTML={{ __html: `
+            @media print {
+              @page {
+                size: portrait;
+                margin: 1.5cm;
+              }
+              
+              /* Force vertical flow and absolute positioning to escape fixed container */
+              body {
+                background: white !important;
+                color: black !important;
+                overflow: visible !important;
+              }
+
+              [role="dialog"] {
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                background: white !important;
+                overflow: visible !important;
+                display: block !important;
+              }
+
+              .DialogOverlay { display: none !important; }
+
+              /* Section integrity */
+              .space-y-8 > div {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                margin-bottom: 2rem !important;
+              }
+
+              h3 {
+                page-break-after: avoid !important;
+                break-after: avoid !important;
+              }
+
+              /* Hide UI artifacts */
+              .print\\:hidden, 
+              button, 
+              [role="tablist"], 
+              .sr-only {
+                display: none !important;
+              }
+
+              /* Image handling */
+              img {
+                max-width: 100% !important;
+                height: auto !important;
+                page-break-inside: avoid !important;
+                display: block !important;
+                margin: 0 auto !important;
+              }
+              
+              /* Reset background colors for clarity */
+              .bg-white\\/5 { background: transparent !important; border: 1px solid #eee !important; }
+              .bg-linear-to-br { background: none !important; }
+              .text-white { color: black !important; }
+              .text-primary\\/60 { color: #666 !important; }
+            }
+          `}} />
+
           {selectedReport && (
-            <div className="flex flex-col h-full">
+            <div className="flex flex-col h-full print:block">
               {/* Header Fixo */}
               <div className={cn(
-                "bg-linear-to-br from-primary/10 to-transparent border-b border-white/5 relative shrink-0 transition-all duration-300",
-                isHeaderCollapsed ? "py-5" : "py-5"
+                "bg-linear-to-br from-primary/10 to-transparent border-b border-white/5 relative shrink-0 transition-all duration-300 print:bg-none print:border-black/10 print:py-10 margin-y-20 overflow-y-auto",
+                !isHeaderCollapsed ? "py-5" : "py-5"
               )}>
-                {/* Botão de Alternância (Expandir/Recolher) */}
+                {/* Botão de Alternância (Expandir/Recolher) - Oculto no Print */}
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  className="absolute top-4 right-4 z-90 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white"
+                  className="absolute top-4 right-4 z-90 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white print:hidden"
                   onClick={() => setIsHeaderCollapsed(!isHeaderCollapsed)}
                 >
-                  {isHeaderCollapsed ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
+                  {!!!isHeaderCollapsed ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
                 </Button>
 
-                <div className="flex flex-col items-center justify-center relative z-10 max-w-7xl mx-auto w-full text-center">
-                  {!isHeaderCollapsed && (
-                    <div className="flex flex-wrap items-center justify-center gap-4 mb-6 animate-in fade-in zoom-in duration-300">
-                      <h2 className="text-4xl font-black tracking-tighter text-white uppercase">Relatório Diário de Obra</h2>
-                      {selectedReport.status === DailyReportStatus.APPROVED ? (
-                        <Badge className="bg-green-500 text-white font-black px-4 py-1.5 rounded-full uppercase tracking-widest text-[10px] shadow-lg shadow-green-500/20">Aprovado</Badge>
-                      ) : selectedReport.status === DailyReportStatus.RETURNED ? (
-                        <Badge className="bg-red-500 text-white font-black px-4 py-1.5 rounded-full uppercase tracking-widest text-[10px] shadow-lg shadow-red-500/20">Devolvido</Badge>
-                      ) : (
-                        <Badge className="bg-amber-500 text-white font-black px-4 py-1.5 rounded-full uppercase tracking-widest text-[10px] shadow-lg shadow-amber-500/20">Aguardando Aprovação</Badge>
-                      )}
-                    </div>
-                  )}
+                <div className="flex flex-col items-center justify-center relative z-10 max-w-7xl mx-auto w-full text-center print:max-w-none">
+                  <div className="flex flex-wrap items-center justify-center gap-4 mb-6 print:mb-4">
+                    <h2 className="text-4xl font-black tracking-tighter text-white uppercase print:text-black print:text-2xl">Relatório Diário de Obra</h2>
+                    {selectedReport.status === DailyReportStatus.APPROVED ? (
+                      <Badge className="bg-green-500 text-white font-black px-4 py-1.5 rounded-full uppercase tracking-widest text-[10px] shadow-lg shadow-green-500/20 print:bg-green-100 print:text-green-700 print:border-green-200">Aprovado</Badge>
+                    ) : selectedReport.status === DailyReportStatus.RETURNED ? (
+                      <Badge className="bg-red-500 text-white font-black px-4 py-1.5 rounded-full uppercase tracking-widest text-[10px] shadow-lg shadow-red-500/20 print:bg-red-100 print:text-red-700 print:border-red-200">Devolvido</Badge>
+                    ) : (
+                      <Badge className="bg-amber-500 text-white font-black px-4 py-1.5 rounded-full uppercase tracking-widest text-[10px] shadow-lg shadow-amber-500/20 print:bg-amber-100 print:text-amber-700 print:border-amber-200">Aguardando Aprovação</Badge>
+                    )}
+                  </div>
 
                   <div className={cn(
-                    "flex flex-wrap items-center justify-center gap-x-5 gap-y-4 pb-4 transition-all duration-300",
+                    "flex flex-wrap items-center justify-center gap-x-5 gap-y-4 pb-4 transition-all duration-300 print:gap-x-4 print:pb-0 print:justify-center",
                     isHeaderCollapsed && "justify-right gap-x-5"
                   )}>
-                    {isHeaderCollapsed && (
-                      <div className="flex items-center gap-4 pr-4 border-r border-white/10 animate-in fade-in slide-in-from-left-4 duration-300">
+                    {!!isHeaderCollapsed && (
+                      <div className="flex items-center gap-4 pr-4 border-r border-white/10 animate-in fade-in slide-in-from-left-4 duration-300 print:hidden">
                         <div className="flex flex-col items-start">
                           <span className="text-[10px] font-black text-primary uppercase tracking-tight">Relatório Diário de Obra</span>
                           <div className="flex items-center gap-2">
@@ -707,61 +773,61 @@ export default function RDOAudit() {
                       </div>
                     )}
 
-                    <div className="flex items-center gap-2">
-                       <Calendar className="w-4 h-4 text-primary" />
+                    <div className="flex items-center gap-2 print:gap-1">
+                       <Calendar className="w-4 h-4 text-primary print:text-black" />
                        <div className="flex flex-col items-start">
-                         <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest">Data do Relatório</span>
-                         <span className="text-sm font-bold text-white tracking-tight">
+                         <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest print:text-black/40">Data do Relatório</span>
+                         <span className="text-sm font-bold text-white tracking-tight print:text-black print:text-xs">
                            {safeFormatDate(selectedReport.reportDate, "dd 'de' MMMM, yyyy", { locale: ptBR }).toUpperCase()}
                          </span>
                        </div>
                     </div>
 
-                    <div className="w-px h-8 bg-white/10 hidden md:block" />
+                    <div className="w-px h-8 bg-white/10 hidden md:block print:block print:bg-black/10" />
 
-                    <div className="flex items-center gap-2">
-                       <Users className="w-4 h-4 text-primary" />
+                    <div className="flex items-center gap-2 print:gap-1">
+                       <Users className="w-4 h-4 text-primary print:text-black" />
                        <div className="flex flex-col items-start">
-                         <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest">Equipe Executora</span>
-                         <span className="text-sm font-bold text-white tracking-tight">{getTeamName(selectedReport.teamId, selectedReport.teamName).toUpperCase()}</span>
+                         <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest print:text-black/40">Equipe Executora</span>
+                         <span className="text-sm font-bold text-white tracking-tight print:text-black print:text-xs">{getTeamName(selectedReport.teamId, selectedReport.teamName).toUpperCase()}</span>
                        </div>
                     </div>
 
-                    <div className="w-px h-8 bg-white/10 hidden md:block" />
+                    <div className="w-px h-8 bg-white/10 hidden md:block print:block print:bg-black/10" />
 
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-white/40" />
+                    <div className="flex items-center gap-2 print:gap-1">
+                      <User className="w-4 h-4 text-white/40 print:text-black/40" />
                       <div className="flex flex-col items-start">
-                        <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest">Supervisão</span>
-                        <span className="text-sm font-black text-white tracking-tight">{getReporterName(selectedReport.createdBy).toUpperCase()}</span>
+                        <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest print:text-black/40">Supervisão</span>
+                        <span className="text-sm font-black text-white tracking-tight print:text-black print:text-xs">{getReporterName(selectedReport.createdBy).toUpperCase()}</span>
                       </div>
                     </div>
 
-                    <div className="w-px h-8 bg-white/10 hidden md:block" />
+                    <div className="w-px h-8 bg-white/10 hidden md:block print:block print:bg-black/10" />
 
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-primary" />
+                    <div className="flex items-center gap-2 print:gap-1">
+                      <User className="w-4 h-4 text-primary print:text-black" />
                       <div className="flex flex-col items-start">
-                        <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest">Responsável</span>
-                        <span className="text-sm font-black text-white tracking-tight">{getReporterName(selectedReport.employeeId || (selectedReport as any).userId).toUpperCase()}</span>
+                        <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest print:text-black/40">Responsável</span>
+                        <span className="text-sm font-black text-white tracking-tight print:text-black print:text-xs">{getReporterName(selectedReport.employeeId || (selectedReport as any).userId).toUpperCase()}</span>
                       </div>
                     </div>
 
-                    <div className="w-px h-8 bg-white/10 hidden md:block" />
+                    <div className="w-px h-8 bg-white/10 hidden md:block print:block print:bg-black/10" />
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 print:gap-1">
                       <div className="flex flex-col items-start">
-                        <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest">RDO Numero</span>
-                        <span className="text-sm font-black text-white tracking-tight">{selectedReport.rdoNumber || `RDO-${selectedReport.id.slice(-5).toUpperCase()}`}</span>
+                        <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest print:text-black/40">RDO Numero</span>
+                        <span className="text-sm font-black text-white tracking-tight print:text-black print:text-xs">{selectedReport.rdoNumber || `RDO-${selectedReport.id.slice(-5).toUpperCase()}`}</span>
                       </div>
                     </div>
 
-                    <div className="w-px h-8 bg-white/10 hidden md:block" />
+                    <div className="w-px h-8 bg-white/10 hidden md:block print:block print:bg-black/10" />
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 print:gap-1">
                       <div className="flex flex-col items-start">
-                        <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest">Revisão</span>
-                        <span className="text-sm font-black text-white tracking-tight">{selectedReport.revision || `00`}</span>
+                        <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest print:text-black/40">Revisão</span>
+                        <span className="text-sm font-black text-white tracking-tight print:text-black print:text-xs">{selectedReport.revision || `00`}</span>
                       </div>
                     </div>
                   </div>
@@ -769,8 +835,8 @@ export default function RDOAudit() {
               </div>
 
               {/* Conteúdo Scrollável */}
-              <ScrollArea className="flex-4">
-                <div className="p-0 max-w-9/10 mx-auto w-full space-y-8 pb-32">
+              <ScrollArea className="flex-4 print:h-auto print:overflow-visible no-scrollbar">
+                <div className="p-0 max-w-9/10 mx-auto w-full space-y-8 pb-32 print:p-0 print:max-w-none print:space-y-8">
 
                   {/* SEÇÃO: CONDIÇÕES CLIMÁTICAS */}
                   {selectedReport.weather && (
@@ -805,8 +871,8 @@ export default function RDOAudit() {
                     <div className="grid grid-cols-1 gap-8">
                       {selectedReport.selectedActivities && selectedReport.selectedActivities.length > 0 ? (
                         selectedReport.selectedActivities.map((act: any, idx: number) => (
-                          <div key={idx} className="bg-white/5 rounded-4xl border border-white/10 overflow-hidden shadow-2xl transition-all h-full">
-                            <div className="bg-primary/5 p-6 border-b border-white/5 flex justify-between items-center">
+                          <div key={idx} className="bg-white/5 rounded-4xl border border-white/10 overflow-hidden shadow-2xl transition-all h-full print:bg-white print:border-black/10 print:shadow-none print:break-inside-avoid print:mb-8">
+                            <div className="bg-primary/5 p-6 border-b border-white/5 flex justify-between items-center print:bg-black/5 print:border-black/5">
                               <div className="flex items-center gap-4">
                                 <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center font-black text-white shadow-lg shadow-primary/20 text-xl">
                                   {idx + 1}
@@ -1118,14 +1184,19 @@ export default function RDOAudit() {
                         variant="destructive"
                         className="h-10 px-5 rounded-2xl font-black uppercase tracking-widest text-xs shadow-[0_10px_40px_rgba(239,68,68,0.2)] hover:scale-[1.02] active:scale-[0.98] transition-all bg-red-600 hover:bg-red-500 border-none"
                         onClick={() => setIsRejectDialogOpen(true)}
-                        disabled={isProcessing}
+                         disabled={isProcessing || selectedReport.status === DailyReportStatus.APPROVED || selectedReport.status === DailyReportStatus.RETURNED}
                     >
                       <X className="w-4 h-4 mr-2" /> Devolver / Rejeitar
                     </Button>
                     <Button
-                        className="h-10 px-12 rounded-2xl font-black uppercase tracking-widest text-xs bg-linear-to-br from-primary to-primary/80 text-white shadow-[0_10px_40px_rgba(var(--primary-rgb),0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all border-none"
+                        className={cn(
+                          "h-10 px-12 rounded-2xl font-black uppercase tracking-widest text-xs transition-all border-none",
+                          (selectedReport.status === DailyReportStatus.APPROVED || selectedReport.status === DailyReportStatus.RETURNED) 
+                            ? "bg-gray-500/20 text-gray-500 cursor-not-allowed opacity-50" 
+                            : "bg-linear-to-br from-primary to-primary/80 text-white shadow-[0_10px_40px_rgba(var(--primary-rgb),0.3)] hover:scale-[1.02] active:scale-[0.98]"
+                        )}
                         onClick={handleApprove}
-                        disabled={isProcessing}
+                        disabled={isProcessing || selectedReport.status === DailyReportStatus.APPROVED || selectedReport.status === DailyReportStatus.RETURNED}
                     >
                       {isProcessing ? (
                         <div className="flex items-center gap-2">

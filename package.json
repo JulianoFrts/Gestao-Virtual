@@ -34,10 +34,12 @@
         "lint": "npm run lint -w backend && npm run lint -w frontend",
         "lint:backend": "npm run lint -w backend",
         "lint:frontend": "npm run lint -w frontend",
-        "agents": "node skill-workspace/skill-runner.js"
+        "agents": "node skill-workspace/skill-runner.js",
+        "devtools": "react-devtools"
     },
     "devDependencies": {
         "@types/d3-scale": "^4.0.9",
-        "@types/three": "^0.182.0"
+        "@types/three": "^0.182.0",
+        "react-devtools": "^7.0.1"
     }
 }
