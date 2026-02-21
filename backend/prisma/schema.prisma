@@ -365,6 +365,7 @@ model JobFunction {
   description                  String?
   canLeadTeam                  Boolean                       @default(false) @map("can_lead_team")
   hierarchyLevel               Int                           @default(0) @map("hierarchy_level")
+  laborType                    String?                       @default("MOD") @map("labor_type")
   createdAt                    DateTime                      @default(now()) @map("created_at")
   updatedAt                    DateTime                      @updatedAt @map("updated_at")
   company                      Company?                      @relation(fields: [companyId], references: [id], onDelete: Cascade)

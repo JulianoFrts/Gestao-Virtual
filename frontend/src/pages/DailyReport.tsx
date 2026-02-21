@@ -49,7 +49,8 @@ import {
   ChevronLeft,
   PanelLeft,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  AlertCircle
 } from "lucide-react";
 import { isProtectedSignal, can } from "@/signals/authSignals";
 import { useSignals } from "@preact/signals-react/runtime";
@@ -429,7 +430,7 @@ export default function DailyReport() {
   const { teams } = useTeams(selectedCompanyId);
   const { projects } = useProjects();
   const { sites } = useSites(selectedProjectId, selectedCompanyId);
-  const { createReport, getTodayReports, refresh } = useDailyReports();
+  const { createReport, updateReport, reports, getTodayReports, refresh } = useDailyReports();
 
   const filteredProjects = React.useMemo(() => {
     if (!selectedCompanyId) return [];

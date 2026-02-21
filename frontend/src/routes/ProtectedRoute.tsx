@@ -12,12 +12,14 @@ export interface ProtectedRouteProps {
   children: React.ReactNode;
   requireConnection?: boolean;
   moduleId?: string;
+  roles?: string[];
 }
 
 export function ProtectedRoute({
   children,
   requireConnection = false,
-  moduleId
+  moduleId,
+  roles
 }: ProtectedRouteProps) {
   useSignals();
   const { user, profile, isLoading } = useAuth();
@@ -31,6 +33,25 @@ export function ProtectedRoute({
 
   if (!user) {
     return <Navigate to="/auth" state={{ from: location }} replace />;
+  }
+
+  // Verificar permissão por papéis (RBAC) se fornecido
+  if (roles && roles.length > 0 && profile) {
+    const userRole = profile.role || (user as any).role;
+    if (!roles.includes(userRole)) {
+      return (
+        <div className="flex h-screen flex-col items-center justify-center bg-background p-6 text-center">
+          <ShieldAlert className="mb-4 h-16 w-16 text-destructive" />
+          <h2 className="mb-2 text-2xl font-bold">Acesso Restrito por Papel</h2>
+          <p className="mb-6 max-w-md text-muted-foreground">
+            Seu nível de acesso ({userRole}) não permite ver esta página.
+          </p>
+          <Button onClick={() => navigate("/")} variant="outline">
+            Voltar para o Início
+          </Button>
+        </div>
+      );
+    }
   }
 
   // Verificar permissão do módulo se fornecido
@@ -51,6 +72,22 @@ export function ProtectedRoute({
         </div>
       );
     }
+  }
+
+  // Verificar exigência de conexão (Modo Online Obrigatório)
+  if (requireConnection && !isOnline) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center bg-background p-6 text-center">
+        <ShieldAlert className="mb-4 h-16 w-16 text-warning" />
+        <h2 className="mb-2 text-2xl font-bold">Conexão Necessária</h2>
+        <p className="mb-6 max-w-md text-muted-foreground">
+          Este módulo requer uma conexão ativa com o servidor para garantir a integridade dos dados em tempo real. Por favor, verifique sua internet.
+        </p>
+        <Button onClick={() => navigate("/")} variant="outline">
+          Voltar para o Início
+        </Button>
+      </div>
+    );
   }
 
   return <>{children}</>;

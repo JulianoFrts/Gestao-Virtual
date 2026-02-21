@@ -26,6 +26,7 @@ export interface ImportFunctionData {
   description?: string;
   canLeadTeam?: boolean;
   hierarchyLevel?: number;
+  laborType?: string;
   companyId?: string | null;
 }
 
@@ -111,6 +112,7 @@ export class ImportService {
           description: func.description || "",
           canLeadTeam: func.canLeadTeam || false,
           hierarchyLevel: func.hierarchyLevel || 0,
+          laborType: func.laborType || "MOD",
           companyId: func.companyId || null,
         });
 

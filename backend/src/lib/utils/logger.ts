@@ -35,7 +35,7 @@ const CURRENT_LEVEL: LogLevel =
   (process.env.LOG_LEVEL as LogLevel) ||
   (process.env.NODE_ENV === "development" ? "debug" : "info");
 
-const IS_PRODUCTION = (process.env.NODE_ENV as string) === "production" || process.env.NODE_ENV === "remote";
+const IS_PRODUCTION = process.env.NODE_ENV === "production" || (process.env.NODE_ENV as string) === "remote";
 
 // =============================================
 // FORMATADORES
@@ -99,11 +99,11 @@ function getColorForLevel(
   switch (level) {
     case "error":
       colorCode = colors.red;
-      levelLabel = "Error";
+      levelLabel = "Erro";
       break;
     case "warn":
       colorCode = colors.orange;
-      levelLabel = "Warn";
+      levelLabel = "Aviso";
       break;
     case "info":
       colorCode = colors.blue;
@@ -111,7 +111,7 @@ function getColorForLevel(
       break;
     case "success":
       colorCode = colors.green;
-      levelLabel = "Success";
+      levelLabel = "Sucesso";
       break;
     case "debug":
       colorCode = colors.cyan;
@@ -119,7 +119,7 @@ function getColorForLevel(
       break;
     case "test":
       colorCode = colors.white;
-      levelLabel = "Test";
+      levelLabel = "Teste";
       break;
     default:
       colorCode = colors.reset;

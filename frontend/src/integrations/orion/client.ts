@@ -318,7 +318,7 @@ export class OrionApiClient {
         body = { ...body, id };
       }
 
-      const endpoint = id && method !== "POST" ? `/${activeTable}/${id}` : `/${activeTable}`;
+      const endpoint = `/${activeTable}`;
       const result = await this.request(endpoint, method, body, (method === "GET" || method === "DELETE") ? buildQueryParams() : undefined);
 
       if (result.data && Array.isArray(result.data) && orderBy) {

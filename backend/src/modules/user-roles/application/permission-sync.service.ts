@@ -21,6 +21,7 @@ export class PermissionSyncService {
           where: { name },
           update: { rank },
           create: {
+            id: name, // Usando o nome como ID já que é único e não há default no schema
             name,
             rank,
             description: `Sincronizado automaticamente: ${roleKey}`,

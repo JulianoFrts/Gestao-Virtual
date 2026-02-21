@@ -10,13 +10,21 @@ import { LoadingScreen } from "@/components/shared/LoadingScreen";
 
 export const RouteRenderer: React.FC = () => {
   const renderRoute = (route: RouteConfig) => {
+    // Se for uma função (componente normal ou lazy), usamos como está
+    // Se for um objeto com $$typeof (instância JSX), encapsulamos em um componente funcional
+    const RouteElement = route.element as any;
+    const isComponent = typeof RouteElement === 'function' || (RouteElement && RouteElement.render) || (RouteElement && RouteElement.$$typeof && !RouteElement.props);
+    
+    const Component = isComponent ? RouteElement : () => <>{RouteElement}</>;
+    
     const element = (
       <ProtectedRoute 
         moduleId={route.moduleId} 
         requireConnection={route.requireConnection}
+        roles={route.roles}
       >
         <Suspense fallback={<LoadingScreen />}>
-          {route.element}
+          <Component />
         </Suspense>
       </ProtectedRoute>
     );
@@ -32,13 +40,19 @@ export const RouteRenderer: React.FC = () => {
   return (
     <Routes>
       {/* Routes NO LAYOUT */}
-      {noneRoutes.map(route => (
-        <Route 
-          key={route.path} 
-          path={route.path} 
-          element={<Suspense fallback={<LoadingScreen />}>{route.element}</Suspense>} 
-        />
-      ))}
+      {noneRoutes.map(route => {
+        const RouteElement = route.element as any;
+        const isComponent = typeof RouteElement === 'function' || (RouteElement && RouteElement.render) || (RouteElement && RouteElement.$$typeof && !RouteElement.props);
+        const Component = isComponent ? RouteElement : () => <>{RouteElement}</>;
+        
+        return (
+          <Route 
+            key={route.path} 
+            path={route.path} 
+            element={<Suspense fallback={<LoadingScreen />}><Component /></Suspense>} 
+          />
+        );
+      })}
 
       {/* Routes WITH AppLayout */}
       <Route element={<AppLayout />}>

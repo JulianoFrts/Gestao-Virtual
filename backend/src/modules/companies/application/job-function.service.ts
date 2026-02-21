@@ -84,6 +84,11 @@ export class JobFunctionService {
       throw new Error("DUPLICATE_NAME");
     }
 
+    // Se o ID não for enviado (comum em importações ou criação manual simples), geramos um
+    if (!data.id) {
+        data.id = `jf_${Math.random().toString(36).substring(2, 11)}`;
+    }
+
     return this.repository.create(data);
   }
 

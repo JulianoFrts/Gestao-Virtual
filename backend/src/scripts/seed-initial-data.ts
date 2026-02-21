@@ -4,8 +4,12 @@ import bcrypt from "bcryptjs";
 import { fakerPT_BR as faker } from "@faker-js/faker";
 
 async function cleanDatabase() {
-  console.log("🧹 Limpando tabelas existentes...");
-  // Ordem reversa de dependências
+  console.log("🧹 Limpando tabelas existentes (Idempotência)...");
+  // Ordem reversa de dependências para evitar problemas de FK se o Cascade falhar
+  await prisma.dailyReport.deleteMany({});
+  await prisma.timeRecord.deleteMany({});
+  await prisma.teamMember.deleteMany({});
+  await prisma.team.deleteMany({});
   await prisma.userAffiliation.deleteMany({});
   await prisma.authCredential.deleteMany({});
   await prisma.site.deleteMany({});
@@ -252,13 +256,14 @@ async function seedTimeRecords(workers: any[], companyId: string) {
       // Create Entry
       await prisma.timeRecord.create({
         data: {
+          id: faker.string.uuid(),
           userId: worker.id,
           companyId,
           recordType: "entry",
           recordedAt: entryDate,
           latitude: -23.550520,
           longitude: -46.633308,
-          createdById: worker.id // Self reported
+          createdBy: worker.id // Self reported
         }
       });
 
@@ -266,6 +271,7 @@ async function seedTimeRecords(workers: any[], companyId: string) {
       if (Math.random() > 0.1) {
         await prisma.timeRecord.create({
           data: {
+            id: faker.string.uuid(),
             userId: worker.id,
             companyId,
             recordType: "exit",
@@ -322,7 +328,7 @@ async function seed() {
   const defaultPassword = "orion123";
   const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
-  // await cleanDatabase();
+  await cleanDatabase();
   const { companyId, projectId } = await seedProjectInfrastructure();
   await seedAdminUsers(hashedPassword);
   

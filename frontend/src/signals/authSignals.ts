@@ -36,6 +36,15 @@ export const simulationRoleSignal = signal<string | null>(null);
 
 
 /**
+ * Contexto selecionado (Empresa, Obra, Canteiro).
+ */
+export const selectedContextSignal = signal<{
+    companyId?: string;
+    projectId?: string;
+    siteId?: string;
+} | null>(null);
+
+/**
  * Indicador de carregamento da sessão.
  */
 export const isAuthLoadingSignal = signal<boolean>(true);

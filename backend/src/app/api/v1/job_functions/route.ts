@@ -18,6 +18,7 @@ const createJobFunctionSchema = z.object({
   description: z.string().optional(),
   canLeadTeam: z.boolean().default(false),
   hierarchyLevel: z.number().int().min(0).default(0),
+  laborType: z.string().optional().default("MOD"),
 });
 
 const querySchema = z.object({

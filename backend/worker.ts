@@ -34,16 +34,6 @@ async function registerHandlers(worker: any, deps: Dependencies) {
         return new PermissionMatrixHandler();
       },
     },
-    /* 
-    {
-      name: "EMPLOYEE_IMPORT",
-      loader: async () => {
-        const { EmployeeImportHandler } = await import(
-          "@/modules/common/infrastructure/worker/handlers/employee-import.handler"
-        );
-        return new EmployeeImportHandler(deps.importService);
-      },
-    },
     {
       name: "JOB_FUNCTION_IMPORT",
       loader: async () => {
@@ -53,7 +43,15 @@ async function registerHandlers(worker: any, deps: Dependencies) {
         return new JobFunctionImportHandler(deps.importService);
       },
     },
-    */
+    {
+      name: "EMPLOYEE_IMPORT",
+      loader: async () => {
+        const { EmployeeImportHandler } = await import(
+          "@/modules/common/infrastructure/worker/handlers/employee-import.handler"
+        );
+        return new EmployeeImportHandler(deps.importService);
+      },
+    },
     {
       name: "daily_report_bulk_approve",
       loader: async () => {
@@ -76,6 +74,21 @@ async function registerHandlers(worker: any, deps: Dependencies) {
           "@/modules/production/application/production.factory"
         );
         return new DailyReportBulkRejectHandler(ProductionFactory.createDailyReportService());
+      },
+    },
+    {
+      name: "TOWER_IMPORT",
+      loader: async () => {
+        const { TowerImportHandler } = await import(
+          "@/modules/tower/infrastructure/worker/handlers/tower-import.handler"
+        );
+        const { TowerImportService } = await import(
+          "@/modules/tower/application/tower-import.service"
+        );
+        const { PrismaMapElementRepository } = await import(
+          "@/modules/map-elements/infrastructure/prisma-map-element.repository"
+        );
+        return new TowerImportHandler(new TowerImportService(new PrismaMapElementRepository()));
       },
     },
   ];

@@ -12,6 +12,7 @@ export interface JobFunction {
   description: string | null;
   canLeadTeam: boolean;
   hierarchyLevel: number;
+  laborType: string | null;
   createdAt: Date;
   company?: { id: string; name: string } | null;
 }
@@ -44,6 +45,7 @@ export function useJobFunctions() {
           description: f.description,
           canLeadTeam: f.canLeadTeam || f.can_lead_team || false,
           hierarchyLevel: f.hierarchyLevel || f.level || f.hierarchy_level || 0,
+          laborType: f.laborType || f.labor_type || 'MOD',
           createdAt: new Date(f.created_at || f.createdAt || Date.now()),
           company: f.company,
         }));
@@ -67,7 +69,7 @@ export function useJobFunctions() {
     loadFunctions();
   }, [loadFunctions]);
 
-  const createFunction = async (data: { name: string; description: string; canLeadTeam: boolean; hierarchyLevel?: number; companyId?: string | null }) => {
+  const createFunction = async (data: { name: string; description: string; canLeadTeam: boolean; hierarchyLevel?: number; laborType: string;  companyId?: string | null }) => {
     const localId = generateId();
     const newFunc: JobFunction = {
       id: localId,
@@ -76,6 +78,7 @@ export function useJobFunctions() {
       description: data.description || null,
       canLeadTeam: data.canLeadTeam,
       hierarchyLevel: data.hierarchyLevel || 0,
+      laborType: data.laborType,
       createdAt: new Date(),
     };
 
@@ -92,6 +95,7 @@ export function useJobFunctions() {
             description: data.description || null,
             canLeadTeam: data.canLeadTeam,
             hierarchyLevel: data.hierarchyLevel || 0,
+            laborType: data.laborType,
             companyId: (data as any).companyId || null,
           })
           .select()
@@ -129,11 +133,11 @@ export function useJobFunctions() {
     }
   };
 
-  const updateFunction = async (id: string, data: { name: string; description: string; canLeadTeam: boolean; hierarchyLevel?: number; companyId?: string | null }) => {
+  const updateFunction = async (id: string, data: { name: string; description: string; canLeadTeam: boolean; hierarchyLevel?: number; laborType?: string; companyId?: string | null }) => {
     const oldFunctions = [...functions];
 
     setFunctions(prev => prev.map(f =>
-      f.id === id ? { ...f, name: data.name, description: data.description, canLeadTeam: data.canLeadTeam, hierarchyLevel: data.hierarchyLevel ?? f.hierarchyLevel } : f
+      f.id === id ? { ...f, name: data.name, description: data.description, canLeadTeam: data.canLeadTeam, hierarchyLevel: data.hierarchyLevel ?? f.hierarchyLevel, laborType: data.laborType ?? f.laborType } : f
     ));
 
     if (navigator.onLine) {
@@ -143,8 +147,9 @@ export function useJobFunctions() {
           .update({
             name: data.name,
             description: data.description || null,
-            can_lead_team: data.canLeadTeam,
+            canLeadTeam: data.canLeadTeam,
             hierarchyLevel: data.hierarchyLevel ?? 0,
+            laborType: data.laborType,
           })
           .eq('id', id);
 

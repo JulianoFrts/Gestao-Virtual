@@ -189,9 +189,9 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="space-y-4">
-                {records.slice(0, 5).map((record) => (
+                {records.slice(0, 5).map((record, idx) => (
                   <div
-                    key={record.id}
+                    key={`${record.id}-${idx}`}
                     className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
                   >
                     <div

@@ -19,7 +19,10 @@ export class WorkStageSyncService {
         const stages = await prisma.workStage.findMany({
             where: {
                 projectId,
-                siteId: siteId || null
+                OR: [
+                    { siteId: siteId || null },
+                    { siteId: null }
+                ]
             },
             include: {
                 stageProgress: {

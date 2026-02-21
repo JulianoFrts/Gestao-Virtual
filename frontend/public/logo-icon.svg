@@ -1,0 +1,29 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background (Optional, can be removed for transparency) -->
+  <rect width="512" height="512" rx="100" fill="#0B1120"/>
+  
+  <!-- Outer Border (Golden/Orange) -->
+  <rect x="20" y="20" width="472" height="472" rx="80" stroke="#F59E0B" stroke-width="8" opacity="0.3"/>
+
+  <!-- Transmission Tower -->
+  <g transform="translate(156, 120) scale(0.8)">
+    <!-- Base structure -->
+    <path d="M100 350L125 0M150 350L125 0" stroke="#94A3B8" stroke-width="12" stroke-linecap="round"/>
+    <!-- Cross beams -->
+    <path d="M110 300L140 300" stroke="#94A3B8" stroke-width="10" stroke-linecap="round"/>
+    <path d="M118 200L132 200" stroke="#94A3B8" stroke-width="10" stroke-linecap="round"/>
+    <path d="M122 100L128 100" stroke="#94A3B8" stroke-width="10" stroke-linecap="round"/>
+    
+    <!-- Red Light at the top -->
+    <circle cx="125" cy="-10" r="15" fill="#EF4444">
+        <animate attributeName="opacity" values="1;0.4;1" dur="2s" repeatCount="indefinite" />
+    </circle>
+  </g>
+
+  <!-- Connection Cable (Curved line) -->
+  <path d="M100 250C150 280 362 280 412 250" stroke="#F59E0B" stroke-width="12" stroke-linecap="round"/>
+  
+  <!-- Decorative dots (as seen in the logo) -->
+  <circle cx="450" cy="450" r="10" fill="#F59E0B"/>
+  <circle cx="480" cy="450" r="10" fill="#0EA5E9"/>
+</svg>

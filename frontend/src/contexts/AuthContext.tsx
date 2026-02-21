@@ -15,7 +15,8 @@ import {
   isAuthLoadingSignal,
   simulationRoleSignal,
   realPermissionsSignal,
-  realUiSignal
+  realUiSignal,
+  selectedContextSignal
 } from "@/signals/authSignals";
 import { useSignals } from "@preact/signals-react/runtime";
 
@@ -92,6 +93,8 @@ interface AuthContextType {
   isMfaVerified: boolean;
   setMfaVerified: (verified: boolean) => void;
   refreshProfile: () => Promise<void>;
+  selectedContext: { companyId?: string; projectId?: string; siteId?: string } | null;
+  selectContext: (context: { companyId?: string; projectId?: string; siteId?: string }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -111,6 +114,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const setMfaVerified = (verified: boolean) => {
     setIsMfaVerified(verified);
     sessionStorage.setItem("mfa_verified", verified ? "true" : "false");
+  };
+
+  const selectContext = async (context: { companyId?: string; projectId?: string; siteId?: string }) => {
+    try {
+      const response = await localApi.post("/auth/context/validate", context);
+      const data = response.data as any;
+      if (data?.success) {
+        selectedContextSignal.value = context;
+        await storageService.setItem("selected_context", context);
+      } else {
+        throw new Error(data?.error || "Falha ao validar contexto");
+      }
+    } catch (err: any) {
+        console.error("[AuthContext] Context validation failed:", err);
+        throw err;
+    }
   };
 
   const fetchProfile = React.useCallback(
@@ -277,6 +296,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           uiSignal.value = cachedProfile.ui || {};
         }
 
+        // Recuperar contexto salvo
+        const savedContext = await storageService.getItem<{ companyId?: string; projectId?: string; siteId?: string }>("selected_context");
+        if (savedContext) {
+            selectedContextSignal.value = savedContext;
+        }
+
         await fetchProfile(currentSession.user.id);
       } else {
         console.log("[AuthContext] No active session found.");
@@ -285,6 +310,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         permissionsSignal.value = {};
         uiSignal.value = {};
         currentUserSignal.value = null;
+        selectedContextSignal.value = null;
       }
       setIsLoading(false);
       isAuthLoadingSignal.value = false;
@@ -581,6 +607,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshProfile: async () => {
         if (user?.id) await fetchProfile(user.id);
       },
+      selectedContext: selectedContextSignal.value,
+      selectContext,
     }),
     [
       user,
@@ -599,6 +627,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       enableMfa,
       isMfaVerified,
       fetchProfile,
+      selectedContextSignal.value,
+      selectContext,
     ],
   );
 

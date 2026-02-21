@@ -1,0 +1,19 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Professional Transmission Tower Icon - GESTÃO VIRTUAL -->
+  <!-- Tower Structure -->
+  <path d="M256 80L160 440M256 80L352 440" stroke="#64748B" stroke-width="20" stroke-linecap="round"/>
+  <path d="M210 260H302" stroke="#64748B" stroke-width="16" stroke-linecap="round"/>
+  <path d="M185 350H327" stroke="#64748B" stroke-width="16" stroke-linecap="round"/>
+  <path d="M230 170H282" stroke="#64748B" stroke-width="16" stroke-linecap="round"/>
+  
+  <!-- Curved Cable -->
+  <path d="M120 280C180 320 332 320 392 280" stroke="#F59E0B" stroke-width="24" stroke-linecap="round"/>
+  
+  <!-- Red Beacon at the top -->
+  <circle cx="256" cy="80" r="16" fill="#EF4444">
+    <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite" />
+  </circle>
+  <circle cx="256" cy="80" r="30" fill="#EF4444" opacity="0.2">
+    <animate attributeName="r" values="20;40;20" dur="2s" repeatCount="indefinite" />
+  </circle>
+</svg>

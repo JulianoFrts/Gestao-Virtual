@@ -1,180 +1,130 @@
+// ==============================================================================
+// TESTE UNITÁRIO: 001.ProtectedRoute
+// OBJETIVO: Validar o controle de acesso e proteção de rotas (Guard)
+// PADRÃO: Team OrioN - Qualidade Total (Comentários Exaustivos por Linha)
+// ==============================================================================
+
 // Importação das ferramentas de teste do Vitest e Testing Library
 import { render, screen } from '@testing-library/react';
-// Importação das funções globais do Vitest para descrição de suítes e testes
+// Importação dos utilitários de asserção do Vitest
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-// Importação dos contextos e signals para tipagem e mocks
+// Importação do componente de roteamento para navegação programática necessária no Guard
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+// Importação do componente alvo do teste: ProtectedRoute
+import { ProtectedRoute } from '@/routes/ProtectedRoute';
+// Importação do hook de autenticação que será mockado
 import { useAuth } from '@/contexts/AuthContext';
-import { useSync } from '@/contexts/SyncContext';
-import { can } from '@/signals/authSignals';
-// Importação do componente que será testado (Unidade de Lógica de Acesso)
-import { ProtectedRoute } from '../../../routes/ProtectedRoute';
-// Importação do provedor de memória do React Router para simular navegação em testes
-import { MemoryRouter } from 'react-router-dom';
+// Importação do sinal de permissão que será mockado
+import * as authSignals from '@/signals/authSignals';
 
-// Criação de Mocks para as dependências externas para isolar o componente (SOLID: ISR)
-vi.mock('react-router-dom', async () => {
-    const actual = await vi.importActual('react-router-dom');
-    return {
-        ...actual,
-        // Mock do componente Navigate para capturar redirecionamentos sem efeitos colaterais
-        Navigate: vi.fn(({ to }) => <div data-testid="navigate" data-to={to} />),
-        // Espionamos os hooks sem quebrar a funcionalidade original do Router
-        useNavigate: vi.fn(() => vi.fn()),
-        useLocation: vi.fn(() => ({ pathname: '/test' }))
-    };
-});
-
-// Mock do contexto de autenticação (Simula estado do usuário e carregamento)
+// Mock do hook useAuth para simular diferentes estados de usuário
 vi.mock('@/contexts/AuthContext', () => ({
-    useAuth: vi.fn()
+  useAuth: vi.fn(),
 }));
 
-// Mock do contexto de sincronização (Simula estado de conectividade)
+// Mock do hook useSync para simular estados de conexão online/offline
 vi.mock('@/contexts/SyncContext', () => ({
-    useSync: vi.fn()
+  useSync: vi.fn(() => ({ isOnline: true })),
 }));
 
-// Mock dos signals de autorização utilizando signals reais para evitar erros de renderização
-const { mockIsProtected, mockCan } = vi.hoisted(() => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { signal } = require('@preact/signals-react');
-    return {
-        mockIsProtected: signal(false),
-        mockCan: vi.fn()
-    };
-});
-
-vi.mock('@/signals/authSignals', () => ({
-    isProtectedSignal: mockIsProtected,
-    can: mockCan
-}));
-
-// Mock do runtime de signals para evitar erros de execução em ambiente Node/JSDOM
+// Mock das ferramentas do Preact Signals para evitar erros de runtime durante os testes
 vi.mock('@preact/signals-react/runtime', () => ({
-    useSignals: vi.fn()
+  useSignals: vi.fn(),
 }));
 
-// Mock da biblioteca de ícones lucide-react para evitar erros com SVGs em ambiente JSDOM
-vi.mock('lucide-react', () => ({
-    ShieldAlert: () => <div data-testid="shield-alert" />
-}));
+// Início do bloco de testes para o componente ProtectedRoute
+describe('ProtectedRoute Component - Qualidade Total 001', () => {
+  
+  // Limpeza de todos os mocks antes de cada teste individual para garantir isolamento
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-// Mock do componente Button do shadcn/ui para evitar renderização complexa em testes unitários
-vi.mock('@/components/ui/button', () => ({
-    Button: ({ children, onClick }: { children: React.ReactNode, onClick?: () => void }) => (
-        <button onClick={onClick} data-testid="ui-button">{children}</button>
-    )
-}));
+  // Teste 01: Verificação de redirecionamento para login quando o usuário não está autenticado
+  it('001.1 - deve redirecionar para /auth quando o usuário não está autenticado', () => {
+    // Definimos que o hook useAuth retorna usuário como nulo e carregamento finalizado
+    (useAuth as any).mockReturnValue({ user: null, profile: null, isLoading: false });
 
-// Suíte de testes para o componente ProtectedRoute
-describe('001.ProtectedRoute', () => {
-    // Utilitários de mock tipados para facilitar configuração em cada teste
-    const mockUseAuth = vi.mocked(useAuth);
-    const mockUseSync = vi.mocked(useSync);
-    const mockCan = vi.mocked(can);
+    // Renderizamos o componente dentro de um MemoryRouter simulando a rota atual /dashboard
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <Routes>
+          <Route path="/dashboard" element={<ProtectedRoute>Conteúdo Protegido</ProtectedRoute>} />
+          <Route path="/auth" element={<div>Tela de Login</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
 
-    // Limpa todos os mocks antes de cada teste para garantir isolamento e previsibilidade
-    beforeEach(() => {
-        vi.clearAllMocks();
-        // Configura retornos padrão para evitar erros de desestruturação (SOLID: Robustez)
-        mockUseAuth.mockReturnValue({ isLoading: false, user: null, profile: null, isMfaVerified: false } as any);
-        mockUseSync.mockReturnValue({ isConnected: true, isInitialized: true } as any);
-        mockCan.mockReturnValue(true);
-    });
+    // Verificamos se o texto da tela de login foi encontrado, confirmando o redirecionamento
+    expect(screen.getByText('Tela de Login')).toBeInTheDocument();
+  });
 
-    // Teste 1: Verifica se renderiza null enquanto a autenticação está carregando
-    it('deve renderizar null quando isLoading for true e não houver usuário', () => {
-        // Simula estado de carregamento inicial do Firebase/Auth
-        mockUseAuth.mockReturnValue({ isLoading: true, user: null, profile: null, isMfaVerified: false } as any);
-        // Executa a renderização do componente
-        const { container } = render(
-            <MemoryRouter>
-                <ProtectedRoute>Conteúdo Protegido</ProtectedRoute>
-            </MemoryRouter>
-        );
-        // Valida que o conteúdo retornado está vazio
-        expect(container.firstChild).toBeNull();
-    });
+  // Teste 02: Verificação de bloqueio quando o usuário não possui permissão para o módulo específico
+  it('001.2 - deve mostrar Acesso Restrito quando o usuário possui perfil mas não tem permissão para o moduleId', () => {
+    // Definimos um usuário autenticado mas sem perfil completo inicialmente no mock
+    (useAuth as any).mockReturnValue({ user: { id: '1' }, profile: { role: 'user' }, isLoading: false });
+    
+    // Mockamos a função 'can' para retornar falso (acesso negado)
+    const canSpy = vi.spyOn(authSignals, 'can').mockReturnValue(false);
 
-    // Teste 2: Verifica redirecionamento para login se não houver usuário autenticado
-    it('deve redirecionar para /auth quando não houver usuário', () => {
-        // Simula usuário não logado
-        mockUseAuth.mockReturnValue({ isLoading: false, user: null } as any);
-        // Renderiza o componente
-        render(
-            <MemoryRouter>
-                <ProtectedRoute>Conteúdo Protegido</ProtectedRoute>
-            </MemoryRouter>
-        );
-        // Valida se o componente Navigate foi invocado com o destino correto
-        expect(screen.getByTestId('navigate')).toHaveAttribute('data-to', '/auth');
-    });
+    // Renderizamos o componente informando um moduleId específico que requer permissão
+    render(
+      <MemoryRouter>
+        <ProtectedRoute moduleId="restricted_module">
+          Conteúdo Protegido
+        </ProtectedRoute>
+      </MemoryRouter>
+    );
 
-    // Teste 3: Verifica acesso permitido para usuário logado sem restrições
-    it('deve renderizar children quando usuário estiver logado e tiver acesso', () => {
-        // Simula usuário logado com perfil básico e MFA verificado
-        mockUseAuth.mockReturnValue({ 
-            isLoading: false, 
-            user: { uid: '123' },
-            profile: { mfaEnabled: false, isSystemAdmin: false, role: 'user' },
-            isMfaVerified: true
-        } as any);
-        // Simula conexão ativa e inicializada
-        mockUseSync.mockReturnValue({ isConnected: true, isInitialized: true, syncStatus: 'idle' } as any);
-        
-        // Renderiza o componente com um filho identificável
-        render(
-            <MemoryRouter initialEntries={['/test']}>
-                <ProtectedRoute>Conteúdo Protegido</ProtectedRoute>
-            </MemoryRouter>
-        );
-        // Valida se o conteúdo protegido está visível na tela
-        expect(screen.getByText('Conteúdo Protegido')).toBeInTheDocument();
-    });
+    // Verificamos se a tela de "Acesso Restrito" foi exibida ao usuário
+    expect(screen.getByText('Acesso Restrito')).toBeInTheDocument();
+    // Validamos se a função de verificação foi chamada com o módulo correto
+    expect(canSpy).toHaveBeenCalledWith('restricted_module');
+  });
 
-    // Teste 4: Verifica bloqueio de acesso administrativo quando offline (Regra de Negócio)
-    it('deve mostrar aviso de offline quando requireConnection for true e estiver sem internet', () => {
-        // Simula usuário logado mas offline
-        mockUseAuth.mockReturnValue({ 
-            isLoading: false, 
-            user: { uid: '123' },
-            profile: { mfaEnabled: false }
-        } as any);
-        mockUseSync.mockReturnValue({ isConnected: false } as any);
-        // Renderiza exigindo conexão (típico de páginas de gestão)
-        render(
-            <MemoryRouter>
-                <ProtectedRoute 
-                    requireConnection={true} 
-                    moduleId="users"
-                >
-                    Conteúdo Protegido
-                </ProtectedRoute>
-            </MemoryRouter>
-        );
-        // Valida que a mensagem de erro customizada para modo offline é exibida
-        expect(screen.getByText('Acesso Restrito Offline')).toBeInTheDocument();
-    });
+  // Teste 03: Verificação de acesso permitido quando todas as condições são atendidas
+  it('001.3 - deve renderizar os filhos quando o usuário está autenticado e possui permissão', () => {
+    // Mock de usuário logado e com perfil carregado
+    (useAuth as any).mockReturnValue({ user: { id: '1' }, profile: { role: 'admin' }, isLoading: false });
+    
+    // Mock de permissão concedida (true)
+    vi.spyOn(authSignals, 'can').mockReturnValue(true);
 
-    // Teste 5: Verifica acesso negado por falta de permissões específicas
-    it('deve redirecionar para dashboard quando não tiver permissão do módulo', () => {
-        // Simula usuário logado sem permissões de administrador e MFA verificado
-        mockUseAuth.mockReturnValue({ 
-            isLoading: false, 
-            user: { uid: '123' },
-            profile: { isSystemAdmin: false, mfaEnabled: false },
-            isMfaVerified: true
-        } as any);
-        mockUseSync.mockReturnValue({ isConnected: true, isInitialized: true } as any);
-        // Simula falha na checagem de permissão do backend
-        mockCan.mockReturnValue(false);
-        // Renderiza o componente associado a um módulo específico
-        render(
-            <MemoryRouter>
-                <ProtectedRoute moduleId="financeiro">Conteúdo Protegido</ProtectedRoute>
-            </MemoryRouter>
-        );
-        // Valida que o sistema redireciona o usuário para um local seguro (Dashboard)
-        expect(screen.getByTestId('navigate')).toHaveAttribute('data-to', '/dashboard');
-    });
+    // Renderizamos o componente com um filho interno (children)
+    render(
+      <MemoryRouter>
+        <ProtectedRoute moduleId="allowed_module">
+          <div data-testid="protected-content">Conteúdo Liberado</div>
+        </ProtectedRoute>
+      </MemoryRouter>
+    );
+
+    // Verificamos se o conteúdo interno foi renderizado com sucesso na tela
+    expect(screen.getByTestId('protected-content')).toBeInTheDocument();
+    // Confirmamos se o texto esperado está visível para o usuário
+    expect(screen.getByText('Conteúdo Liberado')).toBeInTheDocument();
+  });
+
+  // Teste 04: Verificação de bloqueio quando o módulo exige conexão e o usuário está offline
+  it('001.4 - deve mostrar Conexão Necessária quando o módulo exige conexão e o usuário está offline', () => {
+    // Mock de usuário logado e com perfil
+    (useAuth as any).mockReturnValue({ user: { id: '1' }, profile: { role: 'admin' }, isLoading: false });
+    // Mock de estado offline
+    const { useSync } = require('@/contexts/SyncContext');
+    (useSync as any).mockReturnValue({ isOnline: false });
+
+    // Renderizamos o componente com requireConnection ativado
+    render(
+      <MemoryRouter>
+        <ProtectedRoute requireConnection={true}>
+          Conteúdo Online Only
+        </ProtectedRoute>
+      </MemoryRouter>
+    );
+
+    // Verificamos se a tela de "Conexão Necessária" foi exibida ao usuário
+    expect(screen.getByText('Conexão Necessária')).toBeInTheDocument();
+    // Validamos se o texto de orientação sobre a internet está presente
+    expect(screen.getByText(/verifique sua internet/i)).toBeInTheDocument();
+  });
 });

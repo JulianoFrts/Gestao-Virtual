@@ -22,6 +22,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { ContextSelectorModal } from '@/components/auth/ContextSelectorModal';
 
 type AuthMode = 'login' | 'qr';
 
@@ -45,6 +46,7 @@ export default function Auth() {
   const [pendingProfile, setPendingProfile] = useState<{ mfaSecret: string } | null>(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [offlineAccount, setOfflineAccount] = useState<OfflineAccountInfo | null>(null);
+  const [showContextSelector, setShowContextSelector] = useState(false);
 
   const { login, loginOffline, getLastOfflineAccount, setMfaVerified } = useAuth();
   const navigate = useNavigate();
@@ -104,9 +106,9 @@ export default function Auth() {
         // If no MFA required, consider it verified immediately
         toast({
           title: 'Login realizado!',
-          description: 'Bem-vindo ao GESTÃO VIRTUAL',
+          description: 'Defina seu contexto de acesso.',
         });
-        navigate('/dashboard');
+        setShowContextSelector(true);
         setMfaVerified(true);
 
       } else {
@@ -165,7 +167,7 @@ export default function Auth() {
           title: 'Segurança validada!',
           description: 'Acesso concedido.',
         });
-        navigate('/dashboard');
+        setShowContextSelector(true);
       } else {
         toast({
           title: 'Código incorreto',
@@ -441,6 +443,11 @@ export default function Auth() {
             </p>
         </div>
       </div>
+
+      <ContextSelectorModal 
+        open={showContextSelector} 
+        onSuccess={() => navigate('/dashboard')} 
+      />
     </div >
   );
 }

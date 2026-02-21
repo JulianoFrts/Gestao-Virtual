@@ -52,7 +52,6 @@ function isOriginAllowed(origin: string): boolean {
     (process.env.NODE_ENV as string) === "development" &&
     (origin.includes("localhost") || origin.includes("127.0.0.1"))
   ) {
-    console.log(`[Middleware] Dev Mode: Allowing origin ${origin}`);
     return true;
   }
 
@@ -122,7 +121,7 @@ function handleCors(
 function handleSecurityCheck(
   request: NextRequest
 ): NextResponse | null {
-  if ((process.env.NODE_ENV as string) !== "production" && process.env.NODE_ENV !== "remote") return null;
+  if (process.env.NODE_ENV !== "production" && (process.env.NODE_ENV as string) !== "remote") return null;
 
   const cfRay = request.headers.get("cf-ray");
   const proxyKey = request.headers.get("x-internal-proxy-key");
@@ -208,7 +207,7 @@ async function handleApiAuth(
 
   if (!secret) {
     return NextResponse.json(
-      { success: false, message: "Erro configuração auth" },
+      { success: false, message: "Erro na configuração de autenticação" },
       { status: HTTP_STATUS.INTERNAL_ERROR }
     );
   }

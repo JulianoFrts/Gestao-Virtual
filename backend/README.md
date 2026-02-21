@@ -15,8 +15,11 @@ cp .env.example .env.local
 # Aplicar schema ao banco
 npm run prisma:push
 
-# Criar usuário admin
-npx ts-node prisma/seed-admin.ts
+# Sincronizar permissões (Obrigatório)
+npm run sync:permissions
+
+# Popular dados iniciais
+npm run seed
 
 # Iniciar servidor de desenvolvimento
 npm run dev

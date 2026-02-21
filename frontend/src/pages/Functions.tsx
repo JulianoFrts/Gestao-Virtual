@@ -18,6 +18,8 @@ import { orionApi } from '@/integrations/orion/client';
 import { monitorJob, updateJobState } from '@/signals/jobSignals';
 import { isProtectedSignal, can } from '@/signals/authSignals';
 import { useSignals } from "@preact/signals-react/runtime";
+import { ImportJobFunctionsModal } from '@/components/functions/ImportJobFunctionsModal';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface JobFunction {
     id: string;
@@ -25,7 +27,7 @@ interface JobFunction {
     description?: string;
     canLeadTeam: boolean;
     hierarchyLevel?: number;
-    level?: number;
+    laborType?: string;
     companyId?: string | null;
     isTemplate?: boolean;
 }
@@ -38,12 +40,14 @@ export default function Functions() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingFunction, setEditingFunction] = useState<JobFunction | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [formData, setFormData] = useState({
         name: '',
         description: '',
         canLeadTeam: false,
         hierarchyLevel: 0,
+        laborType: '',
         isTemplate: false,
     });
     const [confirmModal, setConfirmModal] = useState<{
@@ -72,93 +76,11 @@ export default function Functions() {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        // Validate file size
-        if (file.size > MAX_FILE_SIZE) {
-            toast({
-                title: 'Arquivo muito grande',
-                description: 'O arquivo deve ter no máximo 5MB',
-                variant: 'destructive',
-            });
-            e.target.value = '';
-            return;
-        }
-
-        // Validate file type
-        if (!file.name.toLowerCase().endsWith('.csv') && file.type !== 'text/csv') {
-            toast({
-                title: 'Formato inválido',
-                description: 'Apenas arquivos CSV são permitidos',
-                variant: 'destructive',
-            });
-            e.target.value = '';
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-            const content = event.target?.result as string;
-            if (!content) return;
-
-            const lines = content.split('\n').filter(l => l.trim());
-            const startLine = lines[0].toLowerCase().includes('nome') ? 1 : 0;
-            const importData: Partial<JobFunction>[] = [];
-
-            for (let i = startLine; i < lines.length; i++) {
-                const line = lines[i].trim();
-                const separator = line.includes(';') ? ';' : ',';
-                const parts = line.split(separator).map(s => sanitizeCSVValue(s.replace(/^["']|["']$/g, '')));
-                const [name, description, lead, level] = parts;
-
-                if (!name || name.length < 2) continue;
-
-                const canLeadValue = lead?.toLowerCase();
-                const canLeadTeam = canLeadValue === 'sim' || canLeadValue === 'true' || canLeadValue === '1' || canLeadValue === 's';
-                const levelValue = parseInt(level || '0') || 0;
-
-                importData.push({
-                    name: name.trim(),
-                    description: description || '',
-                    canLeadTeam,
-                    hierarchyLevel: levelValue,
-                    companyId: profile?.companyId || null
-                });
-            }
-
-            if (importData.length === 0) {
-                toast({ title: 'Nenhum dado válido encontrado', variant: 'destructive' });
-                return;
-            }
-
-            setIsEnqueuing(true);
-            try {
-                const { data: job, error } = await orionApi.post<{ id: string }>('jobs', {
-                    type: 'JOB_FUNCTION_IMPORT',
-                    payload: { data: importData }
-                });
-
-                if (error) throw new Error(error.message);
-                if (!job) throw new Error('Falha ao enfileirar job');
-
-                updateJobState(job.id, job as any);
-                monitorJob(job.id);
-
-                toast({
-                    title: 'Importação iniciada',
-                    description: `${importData.length} funções estão sendo processadas em segundo plano.`
-                });
-            } catch (err: any) {
-                toast({
-                    title: 'Erro na importação',
-                    description: err.message,
-                    variant: 'destructive',
-                });
-            } finally {
-                setIsEnqueuing(false);
-            }
-        };
-
-        reader.readAsText(file, 'UTF-8');
+        // Limpa o valor para permitir re-upload do mesmo arquivo
         e.target.value = '';
+        
+        // Simplesmente abrimos o modal, o processamento ocorre lá agora
+        setIsImportModalOpen(true);
     };
 
     const downloadTemplate = () => {
@@ -266,7 +188,8 @@ export default function Functions() {
             name: `${func.name} (Cópia)`,
             description: func.description || '',
             canLeadTeam: func.canLeadTeam,
-            hierarchyLevel: func.hierarchyLevel || func.level || 0,
+            hierarchyLevel: func.hierarchyLevel || 0,
+            laborType: func.laborType || '',
             isTemplate: false,
         });
         setIsDialogOpen(true);
@@ -277,7 +200,7 @@ export default function Functions() {
     };
 
     const resetForm = () => {
-        setFormData({ name: '', description: '', canLeadTeam: false, hierarchyLevel: 0, isTemplate: false });
+        setFormData({ name: '', description: '', canLeadTeam: false, hierarchyLevel: 0, laborType: '', isTemplate: false });
         setEditingFunction(null);
         setIsDialogOpen(false);
     };
@@ -306,7 +229,7 @@ export default function Functions() {
                         <>
                             <Button 
                                 variant="outline" 
-                                onClick={() => fileInputRef.current?.click()}
+                                onClick={() => setIsImportModalOpen(true)}
                                 className="border-primary/20 hover:bg-primary/5 text-primary-foreground/80"
                             >
                                 <FileUpIcon className="w-4 h-4 mr-2" />
@@ -444,6 +367,25 @@ export default function Functions() {
                                                 className="industrial-input h-10"
                                             />
                                         </div>
+                                        
+                                        <div className="space-y-2">
+                                            <Label htmlFor="labor_type" className="text-xs uppercase text-muted-foreground font-bold flex items-center gap-2">
+                                               Mão de Obra (MOI/MOD)
+                                            </Label>
+                                            <Select 
+                                                value={formData.laborType || ''} 
+                                                onValueChange={(val) => setFormData(prev => ({ ...prev, laborType: val }))}
+                                            >
+                                                <SelectTrigger className="industrial-input h-10 border-white/10 bg-white/5">
+                                                    <SelectValue placeholder="Selecione o tipo..." />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-[#1a1a1c] border-white/10 text-white">
+                                                    <SelectItem value="MOD">MOD - Mão de Obra Direta</SelectItem>
+                                                    <SelectItem value="MOI">MOI - Mão de Obra Indireta</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
                                     </div>
 
                                     <div className="pt-4 flex gap-3">
@@ -510,22 +452,24 @@ export default function Functions() {
                                                 "group border-white/5 transition-colors duration-200",
                                                 canEdit ? "cursor-pointer hover:bg-white/5" : "cursor-default"
                                             )}
-                                            onClick={() => {
-                                                if (!canEdit) return;
-                                                setEditingFunction(func);
-                                                setFormData({
+                                                onClick={() => {
+                                                    if (!canEdit) return;
+                                                    setEditingFunction(func);
+                                                    setFormData({
                                                     name: func.name,
                                                     description: func.description || '',
                                                     canLeadTeam: func.canLeadTeam,
-                                                    hierarchyLevel: func.hierarchyLevel || func.level || 0,
+                                                    hierarchyLevel: func.hierarchyLevel || 0,
+                                                    laborType: func.laborType || '',
                                                     isTemplate: !func.companyId,
                                                 });
-                                                setIsDialogOpen(true);
-                                            }}
+                                                
+                                                    setIsDialogOpen(true);
+                                                }}
                                         >
                                             <TableCell className="py-4 px-6 font-mono text-[10px] whitespace-nowrap">
                                                 <Badge variant="outline" className="bg-primary/5 border-primary/20 text-primary font-bold">
-                                                    LV {func.hierarchyLevel || func.level || 0}
+                                                    LV {func.hierarchyLevel || 0}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="py-4 px-6">
@@ -583,7 +527,8 @@ export default function Functions() {
                                                                             name: func.name,
                                                                             description: func.description || '',
                                                                             canLeadTeam: func.canLeadTeam,
-                                                                            hierarchyLevel: func.hierarchyLevel || func.level || 0,
+                                                                            hierarchyLevel: func.hierarchyLevel || 0,
+                                                                            laborType: func.laborType || '',
                                                                             isTemplate: !func.companyId,
                                                                         });
                                                                         setIsDialogOpen(true);
@@ -626,6 +571,13 @@ export default function Functions() {
                 onConfirm={confirmModal.onConfirm}
                 variant={confirmModal.variant}
             />
+
+            <ImportJobFunctionsModal 
+                open={isImportModalOpen}
+                onOpenChange={setIsImportModalOpen}
+                companyId={profile?.companyId || null}
+            />
         </div>
     );
 }
+

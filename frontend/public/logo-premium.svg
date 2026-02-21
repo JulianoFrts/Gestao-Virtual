@@ -1,0 +1,37 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Professional Premium Icon for Gestão Virtual -->
+  
+  <!-- Outer Rounded Border (Double Line Gold/Bronze) -->
+  <rect x="200" y="200" width="624" height="624" rx="140" stroke="#D97706" stroke-width="12"/>
+  <rect x="215" y="215" width="594" height="594" rx="125" stroke="#F59E0B" stroke-width="4" opacity="0.6"/>
+
+  <!-- Transmission Tower (Refined Details) -->
+  <g transform="translate(412, 300)">
+    <!-- Vertical Legs with Gradient Look -->
+    <path d="M100 450L60 0M100 450L140 0" stroke="#94A3B8" stroke-width="14" stroke-linecap="round"/>
+    
+    <!-- Cross Bracing (X-Pattern) -->
+    <path d="M78 100L122 180" stroke="#64748B" stroke-width="6"/>
+    <path d="M122 100L78 180" stroke="#64748B" stroke-width="6"/>
+    <path d="M70 200L130 300" stroke="#64748B" stroke-width="6"/>
+    <path d="M130 200L70 300" stroke="#64748B" stroke-width="6"/>
+    
+    <!-- Horizontal Supports -->
+    <path d="M85 100H115" stroke="#94A3B8" stroke-width="10" stroke-linecap="round"/>
+    <path d="M75 200H125" stroke="#94A3B8" stroke-width="10" stroke-linecap="round"/>
+    <path d="M65 300H135" stroke="#94A3B8" stroke-width="10" stroke-linecap="round"/>
+    
+    <!-- Beacon at top -->
+    <path d="M90 0C90 -10 110 -10 110 0V10H90V0Z" fill="#FEE2E2" stroke="#EF4444" stroke-width="4"/>
+    <circle cx="100" cy="0" r="12" fill="#EF4444">
+        <animate attributeName="opacity" values="1;0.4;1" dur="2s" repeatCount="indefinite" />
+    </circle>
+  </g>
+
+  <!-- Connection Cables (Organic Curves as in the reference) -->
+  <path d="M230 400C300 480 430 480 500 400" stroke="#D97706" stroke-width="10" stroke-linecap="round" opacity="0.8"/>
+  <path d="M500 400C570 480 700 480 770 400" stroke="#D97706" stroke-width="10" stroke-linecap="round" opacity="0.8"/>
+  
+  <path d="M250 450C320 520 450 520 512 450" stroke="#92400E" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
+  <path d="M512 450C582 520 712 520 774 450" stroke="#92400E" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
+</svg>

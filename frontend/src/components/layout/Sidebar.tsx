@@ -185,13 +185,13 @@ const menuGroups: SidebarGroup[] = [
         path: "/functions",
       },
       {
-        id: "team_composition",
+        id: "team_composition.view",
         icon: PieChart,
         label: "Composição",
         path: "/team-composition",
       },
       {
-        id: "team_composition",
+        id: "team_composition.table",
         icon: FileSpreadsheet,
         label: "Tabela Detalhada",
         path: "/team-composition-table",
@@ -227,6 +227,12 @@ const menuGroups: SidebarGroup[] = [
         icon: ShieldCheck,
         label: "Central de Segurança",
         path: "/audit-logs",
+      },
+      {
+        id: "permissions.manage",
+        icon: Settings,
+        label: "Permissões & Cargos",
+        path: "/permissions",
       },
     ],
   },
