@@ -49,7 +49,7 @@ const globalForPrisma = global as unknown as { prisma: ExtendedPrismaClient };
 
 export const prisma = globalForPrisma.prisma || createPrismaClient();
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+if ((process.env.NODE_ENV as string) !== "production" && process.env.NODE_ENV !== "remote") globalForPrisma.prisma = prisma;
 
 export default prisma;
 

@@ -10,6 +10,8 @@ import { isProtectedUser } from "@/utils/permissionHelpers";
 import { getRoleStyle, getRoleLabel } from "@/utils/roleUtils";
 import { cn } from "@/lib/utils";
 import { isProtectedSignal, can } from "@/signals/authSignals";
+import { appNameSignal } from "@/signals/settingsSignals";
+import { useSignals } from "@preact/signals-react/runtime";
 import {
   Popover,
   PopoverContent,
@@ -86,8 +88,10 @@ export function Header({ onMenuClick, title: propTitle }: HeaderProps) {
 
   const title = useMemo(() => {
     if (propTitle) return propTitle;
-    return PAGE_TITLES[location.pathname] || "ORION - SYSTEM";
-  }, [location.pathname, propTitle, PAGE_TITLES]);
+    return PAGE_TITLES[location.pathname] || appNameSignal.value;
+  }, [location.pathname, propTitle, PAGE_TITLES, appNameSignal.value]);
+
+  useSignals();
 
   const displayName =
     profile?.fullName || user?.email?.split("@")[0] || "Usuário";

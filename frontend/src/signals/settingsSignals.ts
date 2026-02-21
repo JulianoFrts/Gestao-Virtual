@@ -5,11 +5,15 @@ import { useAuth } from "@/contexts/AuthContext";
 
 // Constants
 const DEFAULT_LOGO_WIDTH = 150;
+const DEFAULT_APP_NAME = "Gestão Virtual";
 const STORAGE_KEY_LOGO_WIDTH = "app_logo_width";
+const STORAGE_KEY_APP_NAME = "app_name";
 
 // State
 export const logoUrlSignal = signal<string | null>(null);
 export const logoWidthSignal = signal<number>(DEFAULT_LOGO_WIDTH);
+export const appNameSignal = signal<string>(DEFAULT_APP_NAME);
+export const appIconUrlSignal = signal<string | null>(null);
 export const isLoadingSettingsSignal = signal<boolean>(false);
 
 // Actions
@@ -18,6 +22,11 @@ export const initSettings = async (companyId?: string) => {
   const savedWidth = localStorage.getItem(STORAGE_KEY_LOGO_WIDTH);
   if (savedWidth) {
     logoWidthSignal.value = parseInt(savedWidth, 10);
+  }
+  const savedAppName = localStorage.getItem(STORAGE_KEY_APP_NAME);
+  if (savedAppName) {
+    appNameSignal.value = savedAppName;
+    document.title = savedAppName;
   }
 
   // 2. Fetch Company Data if we have an ID
@@ -36,8 +45,20 @@ export const initSettings = async (companyId?: string) => {
         // Sync Metadata Settings (if exists)
         if (data.metadata?.theme?.logoWidth) {
           logoWidthSignal.value = data.metadata.theme.logoWidth;
-          // Update local cache
           localStorage.setItem(STORAGE_KEY_LOGO_WIDTH, String(data.metadata.theme.logoWidth));
+        }
+
+        if (data.metadata?.system?.appName) {
+          appNameSignal.value = data.metadata.system.appName;
+          localStorage.setItem(STORAGE_KEY_APP_NAME, data.metadata.system.appName);
+          document.title = data.metadata.system.appName;
+        }
+
+        if (data.metadata?.system?.appIconUrl) {
+          appIconUrlSignal.value = data.metadata.system.appIconUrl;
+          // Update favicon
+          const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
+          if (link) link.href = data.metadata.system.appIconUrl;
         }
       }
     } catch (err) {
@@ -48,28 +69,26 @@ export const initSettings = async (companyId?: string) => {
   }
 };
 
-export const saveSettings = async (companyId: string, newLogoFile?: File | null, newWidth?: number) => {
+export const saveSettings = async (
+  companyId: string, 
+  newLogoFile?: File | null, 
+  newWidth?: number,
+  newAppName?: string,
+  newIconFile?: File | null
+) => {
   if (!companyId) return { success: false, error: "No company ID provided" };
   
   isLoadingSettingsSignal.value = true;
   try {
     const updates: any = {};
-    const metadataUpdates: any = { theme: {} };
+    const metadataUpdates: any = { theme: {}, system: {} };
 
-    // 1. Handle Logo Upload if provided
+    // 1. Handle Logo Upload
     if (newLogoFile) {
-        // Just upload generic "logo" path to reuse or timestamp it
         const path = `logos/${companyId}/${Date.now()}_${newLogoFile.name}`;
         const { data: uploadData, error: uploadError } = await orionApi.storage.from("public").upload(path, newLogoFile);
         
         if (uploadError) {
-             // Fallback: Convert to Base64 if storage fails (or for simple implementations)
-             // For now, let's try to assume we can set a URL. 
-             // If upload fails, we might try to use a data URI or just fail.
-             // Let's use a Data URI generator for redundancy if needed, but for now we throw.
-             console.error("Upload failed", uploadError);
-             
-             // Fallback to Base64
              const base64 = await new Promise<string>((resolve) => {
                 const reader = new FileReader();
                 reader.onloadend = () => resolve(reader.result as string);
@@ -77,27 +96,51 @@ export const saveSettings = async (companyId: string, newLogoFile?: File | null,
              });
              updates.logoUrl = base64;
         } else {
-             // Construct public URL
              const { data: urlData } = orionApi.storage.from("public").getPublicUrl(path);
              updates.logoUrl = urlData.publicUrl;
         }
     } 
-    // If explicitly null passed? (Remove logo) - Not implemented yet in UI 
-
-    // Update signal update immediately for UI responsiveness
     if (updates.logoUrl) logoUrlSignal.value = updates.logoUrl;
 
-    // 2. Handle Width
+    // 2. Handle Icon Upload
+    if (newIconFile) {
+      const path = `icons/${companyId}/${Date.now()}_${newIconFile.name}`;
+      const { data: uploadData, error: uploadError } = await orionApi.storage.from("public").upload(path, newIconFile);
+      
+      let iconUrl = "";
+      if (uploadError) {
+           iconUrl = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.readAsDataURL(newIconFile);
+           });
+      } else {
+           const { data: urlData } = orionApi.storage.from("public").getPublicUrl(path);
+           iconUrl = urlData.publicUrl;
+      }
+      metadataUpdates.system.appIconUrl = iconUrl;
+      appIconUrlSignal.value = iconUrl;
+      const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
+      if (link) link.href = iconUrl;
+  }
+
+    // 3. Handle Width
     if (newWidth !== undefined) {
         logoWidthSignal.value = newWidth;
         localStorage.setItem(STORAGE_KEY_LOGO_WIDTH, String(newWidth));
         metadataUpdates.theme.logoWidth = newWidth;
     }
 
-    // 3. Persist to Database
-    // We need to merge metadata, not overwrite blindly, but for now we assume simple structure
-    // First get current metadata
-    const { data: current, error: fetchError } = await orionApi.from("companies").select("metadata").eq("id", companyId).single();
+    // 4. Handle App Name
+    if (newAppName !== undefined) {
+      appNameSignal.value = newAppName;
+      localStorage.setItem(STORAGE_KEY_APP_NAME, newAppName);
+      document.title = newAppName;
+      metadataUpdates.system.appName = newAppName;
+    }
+
+    // 5. Persist to Database
+    const { data: current } = await orionApi.from("companies").select("metadata").eq("id", companyId).single();
     
     const existingMetadata = current?.metadata || {};
     const finalMetadata = {
@@ -105,6 +148,10 @@ export const saveSettings = async (companyId: string, newLogoFile?: File | null,
         theme: {
             ...existingMetadata.theme,
             ...metadataUpdates.theme
+        },
+        system: {
+            ...existingMetadata.system,
+            ...metadataUpdates.system
         }
     };
 

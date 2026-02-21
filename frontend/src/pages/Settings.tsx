@@ -54,7 +54,9 @@ import {
     logoWidthSignal, 
     initSettings, 
     saveSettings, 
-    isLoadingSettingsSignal 
+    isLoadingSettingsSignal,
+    appNameSignal,
+    appIconUrlSignal
 } from "@/signals/settingsSignals";
 import { loaderConcurrencySignal } from "@/signals/loaderSignals";
 import { getRoleStyle, getRoleLabel, STANDARD_ROLES } from "@/utils/roleUtils";
@@ -798,49 +800,118 @@ export default function Settings() {
                 </CardHeader>
                 <CardContent className="space-y-6">
                     <div className="space-y-4">
-                        <div className="flex items-center gap-4">
-                            <div className="w-24 h-24 bg-black/40 rounded-xl border border-white/10 flex items-center justify-center overflow-hidden relative group">
-                                {logoUrlSignal.value ? (
-                                    <img 
-                                        src={logoUrlSignal.value} 
-                                        className="object-contain w-full h-full p-2" 
-                                        alt="Logo Atual"
-                                    />
-                                ) : (
-                                    <span className="text-[10px] text-muted-foreground uppercase font-bold text-center p-2">Sem Logo</span>
-                                )}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <Label>Nome do Sistema</Label>
+                                <Input 
+                                    value={appNameSignal.value}
+                                    onChange={(e) => {
+                                        appNameSignal.value = e.target.value;
+                                    }}
+                                    onBlur={async (e) => {
+                                        if (profile?.companyId) {
+                                            await saveSettings(profile.companyId, null, undefined, e.target.value);
+                                            toast({ title: "Nome do sistema atualizado!" });
+                                        }
+                                    }}
+                                    className="industrial-input"
+                                    placeholder="Ex: Gestão Virtual"
+                                />
+                                <p className="text-[10px] text-muted-foreground">Este nome aparecerá na aba do navegador e no título do sistema.</p>
                             </div>
-                            <div className="flex-1 space-y-2">
-                                <Label>Logo do Sistema (NavBar)</Label>
-                                <div className="flex items-center gap-2">
-                                    <Button 
-                                        variant="outline" 
-                                        className="h-9 text-xs"
-                                        onClick={() => document.getElementById('org-logo-upload')?.click()}
-                                        disabled={isLoadingSettingsSignal.value}
-                                    >
-                                        <UploadCloud className="w-3.5 h-3.5 mr-2" />
-                                        {isLoadingSettingsSignal.value ? "Enviando..." : "Subir Nova Logo"}
-                                    </Button>
-                                    <input 
-                                        type="file" 
-                                        id="org-logo-upload" 
-                                        className="hidden" 
-                                        accept="image/png,image/jpeg,image/svg+xml"
-                                        onChange={async (e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file && profile?.companyId) {
-                                                const res = await saveSettings(profile.companyId, file);
-                                                if (res.success) {
-                                                    toast({ title: "Logo atualizada com sucesso!" });
-                                                } else {
-                                                    toast({ title: "Erro ao atualizar logo", description: res.error, variant: "destructive" });
-                                                }
-                                            }
-                                        }}
-                                    />
+
+                            <div className="flex items-center gap-4">
+                                <div className="w-16 h-16 bg-black/40 rounded-xl border border-white/10 flex items-center justify-center overflow-hidden relative group">
+                                    {appIconUrlSignal.value ? (
+                                        <img 
+                                            src={appIconUrlSignal.value} 
+                                            className="object-contain w-full h-full p-2" 
+                                            alt="Favicon Atual"
+                                        />
+                                    ) : (
+                                        <ImageIcon className="w-6 h-6 text-muted-foreground" />
+                                    )}
                                 </div>
-                                <p className="text-[10px] text-muted-foreground">Recomendado: PNG ou SVG com fundo transparente.</p>
+                                <div className="flex-1 space-y-2">
+                                    <Label>Ícone do App (Favicon)</Label>
+                                    <div className="flex items-center gap-2">
+                                        <Button 
+                                            variant="outline" 
+                                            className="h-9 text-xs"
+                                            onClick={() => document.getElementById('app-icon-upload')?.click()}
+                                            disabled={isLoadingSettingsSignal.value}
+                                        >
+                                            <UploadCloud className="w-3.5 h-3.5 mr-2" />
+                                            {isLoadingSettingsSignal.value ? "Enviando..." : "Subir Ícone"}
+                                        </Button>
+                                        <input 
+                                            type="file" 
+                                            id="app-icon-upload" 
+                                            className="hidden" 
+                                            accept="image/x-icon,image/png,image/svg+xml"
+                                            onChange={async (e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file && profile?.companyId) {
+                                                    const res = await saveSettings(profile.companyId, null, undefined, undefined, file);
+                                                    if (res.success) {
+                                                        toast({ title: "Ícone atualizado com sucesso!" });
+                                                    } else {
+                                                        toast({ title: "Erro ao atualizar ícone", description: res.error, variant: "destructive" });
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground">ICO, PNG ou SVG (quadrado).</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4 pt-6 border-t border-white/5">
+                            <Label>Logo do Sistema (NavBar)</Label>
+                            <div className="flex items-center gap-4">
+                                <div className="w-24 h-24 bg-black/40 rounded-xl border border-white/10 flex items-center justify-center overflow-hidden relative group">
+                                    {logoUrlSignal.value ? (
+                                        <img 
+                                            src={logoUrlSignal.value} 
+                                            className="object-contain w-full h-full p-2" 
+                                            alt="Logo Atual"
+                                        />
+                                    ) : (
+                                        <span className="text-[10px] text-muted-foreground uppercase font-bold text-center p-2">Sem Logo</span>
+                                    )}
+                                </div>
+                                <div className="flex-1 space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <Button 
+                                            variant="outline" 
+                                            className="h-9 text-xs"
+                                            onClick={() => document.getElementById('org-logo-upload')?.click()}
+                                            disabled={isLoadingSettingsSignal.value}
+                                        >
+                                            <UploadCloud className="w-3.5 h-3.5 mr-2" />
+                                            {isLoadingSettingsSignal.value ? "Enviando..." : "Subir Nova Logo"}
+                                        </Button>
+                                        <input 
+                                            type="file" 
+                                            id="org-logo-upload" 
+                                            className="hidden" 
+                                            accept="image/png,image/jpeg,image/svg+xml"
+                                            onChange={async (e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file && profile?.companyId) {
+                                                    const res = await saveSettings(profile.companyId, file);
+                                                    if (res.success) {
+                                                        toast({ title: "Logo atualizada com sucesso!" });
+                                                    } else {
+                                                        toast({ title: "Erro ao atualizar logo", description: res.error, variant: "destructive" });
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground">Recomendado: PNG ou SVG com fundo transparente.</p>
+                                </div>
                             </div>
                         </div>
 

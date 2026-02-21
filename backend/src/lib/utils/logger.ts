@@ -35,7 +35,7 @@ const CURRENT_LEVEL: LogLevel =
   (process.env.LOG_LEVEL as LogLevel) ||
   (process.env.NODE_ENV === "development" ? "debug" : "info");
 
-const IS_PRODUCTION = process.env.NODE_ENV === "production";
+const IS_PRODUCTION = (process.env.NODE_ENV as string) === "production" || process.env.NODE_ENV === "remote";
 
 // =============================================
 // FORMATADORES

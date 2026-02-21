@@ -203,7 +203,7 @@ export function PasswordGenerator({ onSave, isSaving = false }: PasswordGenerato
                             </div>
                             <div className="flex gap-2">
                                 <span className="text-yellow-500/70 font-bold">•</span>
-                                <p><strong>Transit:</strong> Transferência protegida por criptografia de ponta Orion (TLS).</p>
+                                <p><strong>Transit:</strong> Transferência protegida por criptografia de ponta (TLS).</p>
                             </div>
                             <div className="flex gap-2">
                                 <span className="text-yellow-500/70 font-bold">•</span>

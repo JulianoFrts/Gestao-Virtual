@@ -1,76 +1,23 @@
 services:
-  # Banco de Dados com PostGIS
+  # Banco de Dados com POSTGRES
   db:
-    image: postgis/postgis:15-3.3-alpine
-    container_name: orion-db
+    image: postgres:16-alpine
+    container_name: gestao
     environment:
-      - POSTGRES_DB=orion_db
-      - POSTGRES_USER=orion
-      - POSTGRES_PASSWORD=OrionPass123
+      - POSTGRES_DB=gestao
+      - POSTGRES_USER=docker
+      - POSTGRES_PASSWORD=docker
     networks:
       - internal_net
-
-  # Back-End (Next.js API)
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: orion-backend
-    environment:
-      - DATABASE_URL=postgresql://orion:OrionPass123@db:5432/orion_db
-      - NEXTAUTH_URL=http://localhost:3000
-      - NEXTAUTH_SECRET=f91fa2206d3eaecb7aa24c5faba41685
-      - JWT_SECRET=619b194d9f38c51722a153b7d4605a89
-      - NODE_ENV=production
-      - AUTH_TRUST_HOST=true
-    # PORTAS REMOVIDAS: Acesso externo bloqueado. Apenas Frontend acessa via rede interna.
-    # ports:
-    #   - "3000:3000"
-    volumes:
-      - ./backend/src:/app/src
-      - ./backend/prisma:/app/prisma
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - internal_net
-
-  # Worker (Processamento em Segundo Plano)
-  worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: orion-worker
-    environment:
-      - DATABASE_URL=postgresql://orion:OrionPass123@db:5432/orion_db
-      - NEXTAUTH_URL=http://localhost:3000
-      - NEXTAUTH_SECRET=f91fa2206d3eaecb7aa24c5faba41685
-      - JWT_SECRET=619b194d9f38c51722a153b7d4605a89
-      - NODE_ENV=production
-    depends_on:
-      - db
-      - backend
-    command: ["npx", "tsx", "worker.ts"]
-    networks:
-      - internal_net
-
-  # Front-End (Vite/Nginx)
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: orion-frontend
     ports:
-      - "5173:80"
-    depends_on:
-      - backend
-    networks:
-      - internal_net
+      - "5432:5432"
+    volumes:
+      - gestao_data:/var/lib/postgresql/data
 
-volumes:
-  postgres_data:
 
 networks:
   internal_net:
     driver: bridge
 
+volumes:
+  gestao_data:

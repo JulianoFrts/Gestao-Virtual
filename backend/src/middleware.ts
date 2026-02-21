@@ -49,7 +49,7 @@ const SECURITY_HEADERS: Record<string, string> = {
 
 function isOriginAllowed(origin: string): boolean {
   if (
-    process.env.NODE_ENV === "development" &&
+    (process.env.NODE_ENV as string) === "development" &&
     (origin.includes("localhost") || origin.includes("127.0.0.1"))
   ) {
     console.log(`[Middleware] Dev Mode: Allowing origin ${origin}`);
@@ -122,7 +122,7 @@ function handleCors(
 function handleSecurityCheck(
   request: NextRequest
 ): NextResponse | null {
-  if (process.env.NODE_ENV !== "production") return null;
+  if ((process.env.NODE_ENV as string) !== "production" && process.env.NODE_ENV !== "remote") return null;
 
   const cfRay = request.headers.get("cf-ray");
   const proxyKey = request.headers.get("x-internal-proxy-key");
@@ -242,6 +242,7 @@ function isPublicRoute(pathname: string): boolean {
     "/api/v1/auth/register",
     "/api/v1/health",
     "/api/v1/docs",
+    "/api/v1/storage",
   ];
 
   return publicRoutes.some((route) =>

@@ -647,15 +647,16 @@ export default function RDOAudit() {
         </CardContent>
       </Card>
 
-      {/* DETALHES DO RDO PARA AUDITORIA - FULL PAGE */}
-      <Dialog open={!!selectedReport} onOpenChange={(open) => !open && !isProcessing && setSelectedReport(null)}>
+      {/* DETALHES DO RDO PARA AUDITORIA - FULL PAGE  - botao close desabilitado*/}
+      <Dialog open={!!selectedReport} onOpenChange={(open) => !open }>
+        
         <DialogContent className="max-w-none w-screen h-screen m-0 rounded-none bg-[#0a0a0b] border-none p-0 flex flex-col overflow-hidden">
           <DialogTitle className="sr-only">Detalhes do Relatório</DialogTitle>
           <DialogDescription className="sr-only">Visualização detalhada do relatório para auditoria</DialogDescription>
           {selectedReport && (
             <div className="flex flex-col h-full">
               {/* Header Fixo */}
-              <div className="p-6 bg-linear-to-br from-primary/10 to-transparent border-b border-white/5 relative shrink-0">
+              <div className="bg-linear-to-br from-primary/10 to-transparent border-b border-white/5 relative shrink-0">
                 <div className="flex flex-col items-center justify-center relative z-10 max-w-7xl mx-auto w-full text-center py-4">
                   <div className="flex flex-wrap items-center justify-center gap-4 mb-6">
                     <h2 className="text-4xl font-black tracking-tighter text-white uppercase">Relatório Diário de Obra</h2>
@@ -731,8 +732,8 @@ export default function RDOAudit() {
                 </div>
 
               {/* Conteúdo Scrollável */}
-              <ScrollArea className="flex-1">
-                <div className="p-6 max-w-7xl mx-auto w-full space-y-8 pb-32">
+              <ScrollArea className="flex-4">
+                <div className="p-0 max-w-9/10 mx-auto w-full space-y-8 pb-32">
 
                   {/* SEÇÃO: CONDIÇÕES CLIMÁTICAS */}
                   {selectedReport.weather && (
@@ -748,7 +749,7 @@ export default function RDOAudit() {
                             <div key={period} className="bg-white/5 p-4 rounded-3xl border border-white/5 flex items-center justify-between">
                               <span className="text-xs font-bold uppercase text-muted-foreground">{label}</span>
                               <Badge className={cn(
-                                "font-black text-[10px] px-3 py-1 rounded-lg uppercase",
+                                "font-black text-[10px] text-shadow-primary-foreground px-3 py-1 rounded-lg uppercase",
                                 status === 'GOOD' ? 'bg-green-600' : status === 'RAIN' ? 'bg-blue-600' : 'bg-red-600'
                               )}>
                                 {status === 'GOOD' ? 'BOM' : status === 'RAIN' ? 'CHUVA' : 'IMPRATICÁVEL'}
@@ -1057,10 +1058,10 @@ export default function RDOAudit() {
               </ScrollArea>
 
               {/* Botões de Ação Fixos no Rodapé */}
-              <div className="p-6 bg-[#0a0a0b]/80 border-t border-white/10 flex flex-col sm:flex-row gap-4 justify-between backdrop-blur-2xl shrink-0">
+              <div className="p-4 bg-[#0a0a0b]/80 border-t border-white/10 flex flex-col sm:flex-row gap-4 justify-between backdrop-blur-2xl shrink-0">
                  <Button
                     variant="ghost"
-                    className="h-16 px-10 rounded-2xl border border-white/10 font-black uppercase transition-all hover:bg-white/10 text-white/50 hover:text-white"
+                    className="h-10 px-10 rounded-2xl border border-white/10 font-black uppercase transition-all hover:bg-white/10 text-white/50 hover:text-white"
                     onClick={() => setSelectedReport(null)}
                     disabled={isProcessing}
                  >
@@ -1070,22 +1071,22 @@ export default function RDOAudit() {
                  <div className="flex gap-4">
                      <Button
                         variant="outline"
-                        className="h-16 px-8 rounded-2xl font-black uppercase tracking-widest text-xs border-primary/20 text-primary hover:bg-primary/10 transition-all"
+                        className="h-10 px-8 rounded-2xl font-black uppercase tracking-widest text-xs border-primary/20 text-primary hover:bg-primary/10 transition-all"
                         onClick={() => window.print()}
                         disabled={isProcessing}
                      >
-                        <Printer className="w-4 h-4 mr-2" /> Imprimir A4
+                        <Printer className="w-4 h-4 mr-2" /> Imprimir
                      </Button>
                      <Button
                         variant="destructive"
-                        className="h-16 px-12 rounded-2xl font-black uppercase tracking-widest text-xs shadow-[0_10px_40px_rgba(239,68,68,0.2)] hover:scale-[1.02] active:scale-[0.98] transition-all bg-red-600 hover:bg-red-500 border-none"
+                        className="h-10 px-5 rounded-2xl font-black uppercase tracking-widest text-xs shadow-[0_10px_40px_rgba(239,68,68,0.2)] hover:scale-[1.02] active:scale-[0.98] transition-all bg-red-600 hover:bg-red-500 border-none"
                         onClick={() => setIsRejectDialogOpen(true)}
                         disabled={isProcessing}
                     >
                       <X className="w-4 h-4 mr-2" /> Devolver / Rejeitar
                     </Button>
                     <Button
-                        className="h-16 px-12 rounded-2xl font-black uppercase tracking-widest text-xs bg-linear-to-br from-primary to-primary/80 text-white shadow-[0_10px_40px_rgba(var(--primary-rgb),0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all border-none"
+                        className="h-10 px-12 rounded-2xl font-black uppercase tracking-widest text-xs bg-linear-to-br from-primary to-primary/80 text-white shadow-[0_10px_40px_rgba(var(--primary-rgb),0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all border-none"
                         onClick={handleApprove}
                         disabled={isProcessing}
                     >

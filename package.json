@@ -33,7 +33,8 @@
         "dev:stop": "node tools/setup/Stop_Local.js",
         "lint": "npm run lint -w backend && npm run lint -w frontend",
         "lint:backend": "npm run lint -w backend",
-        "lint:frontend": "npm run lint -w frontend"
+        "lint:frontend": "npm run lint -w frontend",
+        "agents": "node skill-workspace/skill-runner.js"
     },
     "devDependencies": {
         "@types/d3-scale": "^4.0.9",

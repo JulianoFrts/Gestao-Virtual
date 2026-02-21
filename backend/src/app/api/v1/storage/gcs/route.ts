@@ -22,13 +22,28 @@ export async function GET(request: NextRequest) {
     const [metadata] = await file.getMetadata();
     const [buffer] = await file.download();
 
-    // Verify origin for security
-    const origin = request.headers.get("origin") || "";
-    const isAllowedOrigin = process.env.NODE_ENV === "development" || 
-                           origin.includes(process.env.FRONTEND_URL || "localhost");
+    // SECURITY CHECK: Prevent direct access via URL bar
+    const referer = request.headers.get("referer") || "";
+    const secFetchDest = request.headers.get("sec-fetch-dest") || "";
 
-    if (!isAllowedOrigin && process.env.NODE_ENV === "production") {
-      return new NextResponse("Forbidden", { status: 403 });
+    // 1. Block direct navigation (referer is empty AND sec-fetch-dest is document)
+    // When a user types the URL in the browser, sec-fetch-dest is usually "document" and referer is empty
+    if (!referer && secFetchDest === "document") {
+      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+      return NextResponse.redirect(`${frontendUrl.replace(/\/$/, '')}/dashboard`, 302);
+    }
+
+    // 2. Allow if it's explicitly loaded as an image/media from the frontend
+    const isImageRequest = secFetchDest === "image" || secFetchDest === "video" || secFetchDest === "audio";
+    
+    // 3. Validate origin/referer belongs to our app
+    const allowedOriginDomain = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).hostname : "localhost";
+    const isAllowedReferer = referer.includes(allowedOriginDomain) || (process.env.NODE_ENV === "development" && referer.includes("localhost"));
+
+    if (!isImageRequest && !isAllowedReferer) {
+      if (process.env.NODE_ENV === "production") {
+         return new NextResponse("Forbidden: Invalid request origin", { status: 403 });
+      }
     }
 
     return new NextResponse(buffer as any, {

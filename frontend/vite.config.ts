@@ -15,10 +15,10 @@ export default defineConfig(({ mode: _mode }) => ({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: process.env.VITE_API_URL || 'http://localhost:3000',
         changeOrigin: true,
-        secure: false
-      }
+        secure: false,
+      },
     },
     watch: {
       usePolling: false
@@ -64,9 +64,9 @@ export default defineConfig(({ mode: _mode }) => ({
         ]
       },
       manifest: {
-        name: 'Orion System',
-        short_name: 'Orion',
-        description: 'Sistema de Gestão de Obras Orion',
+        name: 'Gestão Virtual',
+        short_name: 'Gestão Virtual',
+        description: 'Sistema de Gestão de Obras - Gestão Virtual',
         theme_color: '#0a0a0b',
         icons: [
           {
@@ -82,7 +82,7 @@ export default defineConfig(({ mode: _mode }) => ({
         ]
       }
     })
-  ],
+  ] as any,
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
