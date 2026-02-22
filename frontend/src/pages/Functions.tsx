@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { Access } from '@/components/auth/Access';
 import { useJobFunctions } from '@/hooks/useJobFunctions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -219,18 +220,18 @@ export default function Functions() {
 
     return (
         <div className="space-y-6 animate-fade-in pr-2">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 w-full">
+                <div className="w-full xl:w-auto">
                     <h1 className="text-3xl font-display font-bold gradient-text">Gestão de Funções</h1>
                     <p className="text-muted-foreground">Gerencie cargos, hierarquia e permissões de liderança</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                    {(isProtectedSignal.value || can('functions.update')) && (
+                <div className="flex flex-wrap gap-2 w-full xl:w-auto">
+                    <Access auth="functions.update" mode="hide">
                         <>
                             <Button 
                                 variant="outline" 
                                 onClick={() => setIsImportModalOpen(true)}
-                                className="border-primary/20 hover:bg-primary/5 text-primary-foreground/80"
+                                className="flex-1 md:flex-auto border-primary/20 hover:bg-primary/5 text-primary-foreground/80 min-w-[140px]"
                             >
                                 <FileUpIcon className="w-4 h-4 mr-2" />
                                 Importar CSV
@@ -238,7 +239,7 @@ export default function Functions() {
                             <Button 
                                 variant="outline" 
                                 onClick={downloadTemplate}
-                                className="border-white/10 hover:bg-white/5"
+                                className="flex-1 md:flex-auto border-white/10 hover:bg-white/5 min-w-[140px]"
                             >
                                 <FileDown className="w-4 h-4 mr-2" />
                                 Template
@@ -251,9 +252,9 @@ export default function Functions() {
                                 onChange={handleFileUpload}
                             />
                         </>
-                    )}
+                    </Access>
 
-                    {(isProtectedSignal.value || can('functions.create')) && (
+                    <Access auth="functions.create" mode="hide">
                         <Dialog open={isDialogOpen} onOpenChange={(open) => {
                             if (!open) resetForm();
                             setIsDialogOpen(open);
@@ -264,7 +265,7 @@ export default function Functions() {
                                     Nova Função
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-md">
+                            <DialogContent className="w-[95%] max-w-md mx-auto h-auto max-h-[90vh] overflow-y-auto">
                                 <DialogHeader>
                                     <DialogTitle className="flex items-center gap-2 text-2xl font-bold">
                                         <div className="w-10 h-10 rounded-lg gradient-primary flex items-center justify-center shadow-glow">
@@ -304,7 +305,7 @@ export default function Functions() {
                                                 value={formData.description}
                                                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                                                 placeholder="Breve descrição das responsabilidades"
-                                                className="industrial-input h-10"
+                                                className="industrial-input h-10 w-full"
                                             />
                                         </div>
                                     </div>
@@ -389,10 +390,10 @@ export default function Functions() {
                                     </div>
 
                                     <div className="pt-4 flex gap-3">
-                                        <Button type="button" variant="outline" onClick={resetForm} className="flex-1 h-11">
+                                        <Button type="button" variant="outline" onClick={resetForm} className="w-[48%] flex-1 h-11">
                                             Cancelar
                                         </Button>
-                                        <Button type="submit" className="flex-1 h-11 gradient-primary shadow-glow" disabled={isSaving}>
+                                        <Button type="submit" className="w-[48%] flex-1 h-11 gradient-primary shadow-glow" disabled={isSaving}>
                                             {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                                             {editingFunction ? 'Salvar Alterações' : formData.isTemplate ? 'Criar Modelo Global' : 'Criar Função'}
                                         </Button>
@@ -400,18 +401,18 @@ export default function Functions() {
                                 </form>
                             </DialogContent>
                         </Dialog>
-                    )}
+                    </Access>
                 </div>
             </div>
 
             {/* Search */}
-            <div className="relative max-w-md">
+            <div className="relative w-full md:w-1/2 lg:w-[40%] xl:max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                     placeholder="Buscar funções..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 industrial-input"
+                    className="pl-10 industrial-input w-full"
                 />
             </div>
 
@@ -442,18 +443,18 @@ export default function Functions() {
                             <TableBody>
                                 {filteredFunctions.map((func) => {
                                     const isTemplate = !func.companyId;
-                                    const canEdit = isProtectedSignal.value || can('functions.update') || (isTemplate && isGlobalManager);
-                                    const canDelete = isProtectedSignal.value || can('functions.delete') || (isTemplate && isGlobalManager);
+                                    const canEditFunc = can('functions.update') || (isTemplate && isGlobalManager);
+                                    const canDeleteFunc = can('functions.delete') || (isTemplate && isGlobalManager);
                                     
                                     return (
                                         <TableRow 
                                             key={func.id} 
                                             className={cn(
                                                 "group border-white/5 transition-colors duration-200",
-                                                canEdit ? "cursor-pointer hover:bg-white/5" : "cursor-default"
+                                                canEditFunc ? "cursor-pointer hover:bg-white/5" : "cursor-default"
                                             )}
                                                 onClick={() => {
-                                                    if (!canEdit) return;
+                                                    if (!canEditFunc) return;
                                                     setEditingFunction(func);
                                                     setFormData({
                                                     name: func.name,
@@ -499,7 +500,7 @@ export default function Functions() {
                                                 )}
                                             </TableCell>
                                             <TableCell className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
-                                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                                <div className="flex items-center justify-end gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
                                                     {isTemplate && !isGlobalManager ? (
                                                         <Button
                                                             variant="outline"
@@ -515,7 +516,7 @@ export default function Functions() {
                                                         </Button>
                                                     ) : (
                                                         <>
-                                                            {canEdit && (
+                                                            {canEditFunc && (
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="icon"
@@ -537,7 +538,7 @@ export default function Functions() {
                                                                     <Pencil className="w-3.5 h-3.5" />
                                                                 </Button>
                                                             )}
-                                                            {canDelete && (
+                                                            {canDeleteFunc && (
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="icon"

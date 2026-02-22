@@ -556,8 +556,8 @@ export default function RDOAudit() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredReports.map((report) => (
-                  <TableRow key={report.id} className={cn("border-primary/5 hover:bg-primary/5 transition-colors group", selectedIds.has(report.id) && "bg-primary/5")}>
+                filteredReports.map((report, idx) => (
+                  <TableRow key={report.id || `rdo-${idx}`} className={cn("border-primary/5 hover:bg-primary/5 transition-colors group", report.id && selectedIds.has(report.id) && "bg-primary/5")}>
                     <TableCell className="pl-8 py-5 sticky left-0 z-10 bg-[#0c0c0e]/80 backdrop-blur-sm border-r border-primary/10">
                        <div
                         className={cn(
@@ -818,7 +818,7 @@ export default function RDOAudit() {
                     <div className="flex items-center gap-2 print:gap-1">
                       <div className="flex flex-col items-start">
                         <span className="text-[8px] uppercase text-muted-foreground/50 font-black tracking-widest print:text-black/40">RDO Numero</span>
-                        <span className="text-sm font-black text-white tracking-tight print:text-black print:text-xs">{selectedReport.rdoNumber || `RDO-${selectedReport.id.slice(-5).toUpperCase()}`}</span>
+                        <span className="text-sm font-black text-white tracking-tight print:text-black print:text-xs">{selectedReport.rdoNumber || `RDO-${(selectedReport.id || '00000').slice(-5).toUpperCase()}`}</span>
                       </div>
                     </div>
 

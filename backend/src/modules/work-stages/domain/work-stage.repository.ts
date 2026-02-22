@@ -1,16 +1,15 @@
 import { prisma } from "@/lib/prisma/client";
 import { cacheService } from "@/services/cacheService";
+import {
+  WorkStageProgressRepository,
+  PrismaWorkStageProgressRepository,
+  WorkStageProgress,
+} from "./work-stage-progress.repository";
 
 const WORK_STAGES_CACHE_TTL = 300; // 5 minutos de cache para etapas (geralmente estáveis)
-const PROGRESS_CACHE_TTL = 60;    // 1 minuto para progresso em listagens gerais
+const PROGRESS_CACHE_TTL = 60; // 1 minuto para progresso em listagens gerais
 
-export interface WorkStageProgress {
-  id: string;
-  stageId: string;
-  actualPercentage: number;
-  recordedDate: Date;
-  notes?: string | null;
-}
+export type { WorkStageProgress };
 
 export interface WorkStage {
   id: string;
@@ -103,6 +102,11 @@ export interface WorkStageRepository {
 }
 
 export class PrismaWorkStageRepository implements WorkStageRepository {
+  private readonly progressRepo: WorkStageProgressRepository;
+
+  constructor(progressRepo?: WorkStageProgressRepository) {
+    this.progressRepo = progressRepo || new PrismaWorkStageProgressRepository();
+  }
   async findLinkedStagesBySite(
     siteId: string,
     companyId?: string,
@@ -117,7 +121,7 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
       },
       include: { site: { include: { project: true } } },
     });
-    return stages.map(s => this.mapToWorkStage(s));
+    return stages.map((s) => this.mapToWorkStage(s));
   }
 
   async findLinkedStagesByProjectId(
@@ -134,68 +138,20 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
       },
       include: { site: { include: { project: true } } },
     });
-    return stages.map(s => this.mapToWorkStage(s));
+    return stages.map((s) => this.mapToWorkStage(s));
   }
 
   async saveProgress(
     progress: Partial<WorkStageProgress>,
   ): Promise<WorkStageProgress> {
-    if (progress.id) {
-      const updateData: any = {};
-      if (
-        progress.actualPercentage !== undefined &&
-        progress.actualPercentage !== null
-      ) {
-        updateData.actualPercentage = progress.actualPercentage;
-      }
-      if (progress.notes !== undefined) {
-        updateData.notes = progress.notes;
-      }
-      if (progress.recordedDate) {
-        updateData.recordedDate = progress.recordedDate;
-      }
-
-      const result = await prisma.stageProgress.update({
-        where: { id: progress.id },
-        data: updateData,
-      });
-      return {
-        ...result,
-        actualPercentage: Number(result.actualPercentage),
-      } as WorkStageProgress;
-    } else {
-      const result = await prisma.stageProgress.create({
-        data: {
-          stageId: progress.stageId!,
-          actualPercentage: progress.actualPercentage ?? 0,
-          recordedDate: progress.recordedDate || new Date(),
-          notes: progress.notes,
-        },
-      });
-
-      // Invalidar cache de listagem ao salvar progresso
-      await this.invalidateCache();
-      
-      return {
-        ...result,
-        actualPercentage: Number(result.actualPercentage),
-      } as WorkStageProgress;
-    }
+    return this.progressRepo.save(progress);
   }
-
 
   async findProgressByDate(
     stageId: string,
     date: Date,
   ): Promise<WorkStageProgress | null> {
-    const result = await prisma.stageProgress.findFirst({
-      where: { stageId, recordedDate: date },
-    });
-    if (!result) return null;
-    return {
-      ...result,
-      actualPercentage: Number(result.actualPercentage),
-    } as WorkStageProgress;
+    return this.progressRepo.findByDate(stageId, date);
   }
 
   async findAll(params: {
@@ -207,7 +163,7 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
     const { siteId, projectId, companyId, linkedOnly } = params;
 
     // Tentar obter do cache primeiro
-    const cacheKey = `work_stages:list:${projectId || 'all'}:${siteId || 'all'}:${linkedOnly || 'false'}:${companyId || 'all'}`;
+    const cacheKey = `work_stages:list:${projectId || "all"}:${siteId || "all"}:${linkedOnly || "false"}:${companyId || "all"}`;
     const cached = await cacheService.get<WorkStage[]>(cacheKey);
     if (cached) {
       return cached;
@@ -223,20 +179,14 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
       // Atividades do canteiro OU atividades globais do projeto
       where.OR = [
         { siteId: siteId },
-        { 
-          AND: [
-            { projectId: projectId },
-            { siteId: null }
-          ]
-        }
+        {
+          AND: [{ projectId: projectId }, { siteId: null }],
+        },
       ];
     } else if (siteId) {
       where.siteId = siteId;
     } else if (projectId) {
-      where.OR = [
-        { projectId: projectId },
-        { site: { projectId: projectId } }
-      ];
+      where.OR = [{ projectId: projectId }, { site: { projectId: projectId } }];
     }
 
     if (companyId) {
@@ -252,17 +202,21 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
         },
         site: {
           include: {
-            project: true
-          }
-        }
+            project: true,
+          },
+        },
       },
       orderBy: { displayOrder: "asc" },
     });
 
     const result = stages.map(this.mapToWorkStage);
-    
+
     // Salvar no cache (TTL curto se tiver progresso, longo se for apenas estrutura)
-    await cacheService.set(cacheKey, result, linkedOnly ? PROGRESS_CACHE_TTL : WORK_STAGES_CACHE_TTL);
+    await cacheService.set(
+      cacheKey,
+      result,
+      linkedOnly ? PROGRESS_CACHE_TTL : WORK_STAGES_CACHE_TTL,
+    );
 
     return result;
   }
@@ -320,7 +274,10 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
     return this.mapToWorkStage(result);
   }
 
-  async update(id: string, data: Partial<CreateWorkStageDTO>): Promise<WorkStage> {
+  async update(
+    id: string,
+    data: Partial<CreateWorkStageDTO>,
+  ): Promise<WorkStage> {
     const result = await prisma.workStage.update({
       where: { id },
       data,
@@ -330,14 +287,7 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
   }
 
   async listProgress(stageId?: string): Promise<WorkStageProgress[]> {
-    const results = await prisma.stageProgress.findMany({
-      where: stageId ? { stageId } : {},
-      orderBy: { recordedDate: "desc" },
-    });
-    return results.map((r) => ({
-      ...r,
-      actualPercentage: Number(r.actualPercentage),
-    })) as WorkStageProgress[];
+    return this.progressRepo.listProgress(stageId);
   }
 
   async findProductionElements(
@@ -380,7 +330,10 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
       _sum: { progressPercent: true },
     });
 
-    return [targetElementIds.length, Number(progressStats?._sum?.progressPercent || 0)];
+    return [
+      targetElementIds.length,
+      Number(progressStats?._sum?.progressPercent || 0),
+    ];
   }
 
   async findProductionElementsWeighted(
@@ -411,7 +364,8 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
       }
     }
 
-    if (targetElements.length === 0) return { totalWeight: 0, weightedProgress: 0 };
+    if (targetElements.length === 0)
+      return { totalWeight: 0, weightedProgress: 0 };
 
     const targetElementIds = targetElements.map((e: any) => e.id);
     const progressRecords = await prisma.mapElementProductionProgress.findMany({
@@ -432,7 +386,9 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
 
     for (const elem of targetElements) {
       const meta = elem.metadata as any;
-      const weight = Number(meta?.pesoEstrutura || meta?.peso || meta?.weight || 1.0);
+      const weight = Number(
+        meta?.pesoEstrutura || meta?.peso || meta?.weight || 1.0,
+      );
       const progress = progressMap.get(elem.id) || 0;
 
       totalWeight += weight;
@@ -445,19 +401,21 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
   async verifyActivityExists(activityId: string): Promise<boolean> {
     const exists = await prisma.productionActivity.findUnique({
       where: { id: activityId },
-      select: { id: true }
+      select: { id: true },
     });
     return !!exists;
   }
 
   async delete(id: string): Promise<void> {
     await prisma.workStage.delete({
-      where: { id }
+      where: { id },
     });
     await this.invalidateCache();
   }
 
-  async reorder(updates: { id: string; displayOrder: number }[]): Promise<void> {
+  async reorder(
+    updates: { id: string; displayOrder: number }[],
+  ): Promise<void> {
     // Usando transação para garantir que todos os updates ocorram ou nenhum
     await prisma.$transaction(
       updates.map((update) =>

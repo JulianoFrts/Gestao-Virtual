@@ -46,7 +46,7 @@ export const publicUserSelect = {
       localidade: true,
       uf: true,
       estado: true,
-    }
+    },
   },
   createdAt: true,
   updatedAt: true,
@@ -114,112 +114,107 @@ export function buildUserWhereClause(
 ): Prisma.UserWhereInput {
   const where: Prisma.UserWhereInput = {};
 
-  if (filters.id) {
-    where.id = filters.id;
-  }
+  if (filters.id) where.id = filters.id;
 
-  if (
-    filters.search &&
-    typeof filters.search === "string" &&
-    filters.search.trim() !== ""
-  ) {
-    where.OR = [
-      {
-        authCredential: {
-          email: { contains: filters.search, mode: "insensitive" },
-        },
-      },
-      { name: { contains: filters.search, mode: "insensitive" } },
-      { registrationNumber: { contains: filters.search, mode: "insensitive" } },
-      { cpf: { contains: filters.search, mode: "insensitive" } },
-    ];
-  }
+  // 1. Filtro de Busca (Texto Global)
+  Object.assign(where, buildSearchFilter(filters.search));
+
+  // 2. Filtros de Conta (Role, Status, Verificação)
+  Object.assign(where, buildAccountFilters(filters));
+
+  // 3. Filtros Temporais
+  Object.assign(
+    where,
+    buildDateFilter(filters.createdAfter, filters.createdBefore),
+  );
+
+  // 4. Filtros de Afiliação (Empresa, Projeto, Canteiro)
+  Object.assign(where, buildAffiliationFilter(filters));
+
+  return where;
+}
+
+/**
+ * Auxiliares de Construção de Filtros
+ */
+
+function buildSearchFilter(search?: string | null): Prisma.UserWhereInput {
+  if (!search || search.trim() === "") return {};
+
+  return {
+    OR: [
+      { authCredential: { email: { contains: search, mode: "insensitive" } } },
+      { name: { contains: search, mode: "insensitive" } },
+      { registrationNumber: { contains: search, mode: "insensitive" } },
+      { cpf: { contains: search, mode: "insensitive" } },
+    ],
+  };
+}
+
+function buildAccountFilters(filters: UserFilters): Prisma.UserWhereInput {
+  const where: Prisma.UserWhereInput = {};
+  const authWhere: any = {};
 
   if (filters.role && (filters.role as string) !== "") {
-    const roles = (filters.role as string).split(',').map(r => r.trim());
-    where.authCredential = {
-      ...(where.authCredential as any),
-      ...(roles.length > 1 ? { role: { in: roles as Role[] } } : { role: roles[0] as Role }),
-    };
+    const roles = (filters.role as string).split(",").map((r) => r.trim());
+    authWhere.role =
+      roles.length > 1 ? { in: roles as Role[] } : (roles[0] as Role);
   }
 
   if (filters.status && (filters.status as string) !== "") {
-    where.authCredential = {
-      ...(where.authCredential as any),
-      status: filters.status as AccountStatus,
-    };
+    authWhere.status = filters.status as AccountStatus;
   }
 
   if (filters.emailVerified !== undefined && filters.emailVerified !== null) {
-    where.authCredential = {
-      ...(where.authCredential as any),
-      emailVerified: filters.emailVerified ? { not: null } : null,
-    };
+    authWhere.emailVerified = filters.emailVerified ? { not: null } : null;
   }
 
-  const corporateRoles: Role[] = [
-    "SUPER_ADMIN_GOD",
-    "SOCIO_DIRETOR",
-    "ADMIN",
-    "TI_SOFTWARE",
-    "HELPER_SYSTEM",
-  ];
-
-  // Only apply role restrictions if NOT searching (Search is global)
+  // Regras de Corporate (apenas se não houver busca ativa)
   if (!filters.search || filters.search.trim() === "") {
+    const corporateRoles: Role[] = [
+      "SUPER_ADMIN_GOD",
+      "SOCIO_DIRETOR",
+      "ADMIN",
+      "TI_SOFTWARE",
+      "HELPER_SYSTEM",
+    ];
     if (filters.onlyCorporate) {
-      where.authCredential = {
-        ...(where.authCredential as any),
-        role: { in: corporateRoles as Role[] },
-      };
+      authWhere.role = { in: corporateRoles };
     } else if (filters.excludeCorporate) {
-      where.authCredential = {
-        ...(where.authCredential as any),
-        role: { notIn: corporateRoles as Role[] },
-      };
+      authWhere.role = { notIn: corporateRoles };
     }
   }
 
-  if (filters.createdAfter || filters.createdBefore) {
-    const createdAt: Prisma.DateTimeFilter = {};
-    let hasFilter = false;
-
-    if (filters.createdAfter) {
-      createdAt.gte = filters.createdAfter;
-      hasFilter = true;
-    }
-    if (filters.createdBefore) {
-      createdAt.lte = filters.createdBefore;
-      hasFilter = true;
-    }
-
-    if (hasFilter) {
-      where.createdAt = createdAt;
-    }
-  }
-
-  if (filters.projectId) {
-    where.affiliation = {
-      ...(where.affiliation as any),
-      projectId: filters.projectId,
-    };
-  }
-
-  if (filters.siteId) {
-    where.affiliation = {
-      ...(where.affiliation as any),
-      siteId: filters.siteId,
-    };
-  }
-
-  if (filters.companyId) {
-    where.affiliation = {
-      ...(where.affiliation as any),
-      companyId: filters.companyId,
-    };
+  if (Object.keys(authWhere).length > 0) {
+    where.authCredential = authWhere;
   }
 
   return where;
+}
+
+function buildDateFilter(
+  after?: Date | null,
+  before?: Date | null,
+): Prisma.UserWhereInput {
+  if (!after && !before) return {};
+
+  const createdAt: Prisma.DateTimeFilter = {};
+  if (after) createdAt.gte = after;
+  if (before) createdAt.lte = before;
+
+  return { createdAt };
+}
+
+function buildAffiliationFilter(filters: UserFilters): Prisma.UserWhereInput {
+  const affWhere: any = {};
+  if (filters.projectId) affWhere.projectId = filters.projectId;
+  if (filters.siteId) affWhere.siteId = filters.siteId;
+  if (filters.companyId) affWhere.companyId = filters.companyId;
+
+  if (Object.keys(affWhere).length > 0) {
+    return { affiliation: affWhere };
+  }
+  return {};
 }
 
 // =============================================

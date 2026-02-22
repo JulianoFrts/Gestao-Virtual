@@ -10,6 +10,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import {
+    permissionsSignal,
+    selectedContextSignal
+} from "@/signals/authSignals";
+import { useSignals } from "@preact/signals-react/runtime";
+import {
     Table,
     TableBody,
     TableCell,
@@ -28,7 +33,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/contexts/AuthContext";
 import ActivityStatusModal from "../components/ActivityStatusModal";
 import TowerFormModal from "../components/TowerFormModal";
-import ExcelImportModal from "../components/ExcelImportModal";
+import TowerImportModal from "../components/TowerImportModal";
+import ActivityImportModal from "../components/ActivityImportModal";
 import ExecutionDetailsModal from "../components/ExecutionDetailsModal";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -41,6 +47,8 @@ import GAPOAnalyticsPanel from "@/components/gapo/GAPOAnalyticsPanel";
 import StageFormModal from "@/components/gapo/StageFormModal";
 import { StageHeaderSelector } from "../components/StageHeaderSelector";
 import GAPOProgressTracker from "@/components/gapo/GAPOProgressTracker";
+import { TowerActivityTree } from "../components/TowerActivityTree";
+import TowerActivityGoalModal from "../components/TowerActivityGoalModal";
 import { useCompanies } from "@/hooks/useCompanies";
 import { Building2 } from "lucide-react";
 import { useProjects } from "@/hooks/useProjects"; // Necessary for auto-selection logic
@@ -61,7 +69,6 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-
 // Memoized Row Component for extreme performance
 const ProductionTableRow = React.memo(({
     tower,
@@ -280,6 +287,12 @@ const ProductionPage = () => {
     const { profile } = useAuth();
     const queryClient = useQueryClient();
     const navigate = useNavigate();
+    useSignals();
+    const selectedContext = selectedContextSignal.value;
+    const selectedCompanyId = selectedContext?.companyId || 'all';
+    const selectedProjectId = selectedContext?.projectId || 'all';
+    const selectedSiteId = selectedContext?.siteId || 'all';
+
     const [activeTab, setActiveTab] = useState("grid");
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedCell, setSelectedCell] = useState<{
@@ -293,6 +306,23 @@ const ProductionPage = () => {
 
     const [isTowerModalOpen, setIsTowerModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isActivityImportModalOpen, setIsActivityImportModalOpen] = useState(false);
+    const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+    const [editingGoal, setEditingGoal] = useState<any>(null);
+    const [parentGoalId, setParentGoalId] = useState<string | null>(null);
+
+    // Modular Data: Activities/Goals Hierarchy
+    const { data: activitiesHierarchy, isLoading: isLoadingActivities } = useQuery<any[]>({
+        queryKey: ['tower-activity-goals', selectedProjectId],
+        queryFn: async () => {
+            if (selectedProjectId === 'all') return [];
+            const response = await orionApi.get<any>(`/tower-activity-goals?projectId=${selectedProjectId}`);
+            // Garantir que retornamos um array (res.data.data ou res.data)
+            const result = response.data?.data || response.data || [];
+            return Array.isArray(result) ? result : [];
+        },
+        enabled: selectedProjectId !== 'all'
+    });
     const [isStageModalOpen, setIsStageModalOpen] = useState(false);
     const [editingTower, setEditingTower] = useState<TowerProductionData | null>(null);
     const [editingStage, setEditingStage] = useState<WorkStage | null>(null);
@@ -305,10 +335,6 @@ const ProductionPage = () => {
         status?: TowerActivityStatus;
         towerType?: string | null;
     } | null>(null);
-
-    // State for Company and Project Selection
-    const [selectedCompanyId, setSelectedCompanyId] = useState<string>(profile?.companyId || 'all');
-    const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
     
     // Derived state for queries
     const projectId = selectedProjectId;
@@ -318,73 +344,10 @@ const ProductionPage = () => {
 
     // Hooks
     const { companies, isLoading: isLoadingCompanies } = useCompanies();
-    const { projects, isLoading: isLoadingProjects } = useProjects(); // Fetch all projects to filter locally for auto-selection logic
-
-    // Effect: Initialize Company ID based on profile
-    useEffect(() => {
-        if (profile?.companyId && selectedCompanyId === 'all') {
-            setSelectedCompanyId(profile.companyId);
-        }
-    }, [profile?.companyId, selectedCompanyId]);
-
-    // Effect: Smart Project Auto-Selection
-    useEffect(() => {
-        // If "ALL COMPANIES" is selected, auto-select "ALL PROJECTS"
-        if (selectedCompanyId === 'all') {
-            if (selectedProjectId !== 'all') {
-                setSelectedProjectId('all');
-            }
-            return;
-        }
-
-        // Only run auto-selection if we have projects loaded and a company selected
-        if (projects.length === 0) return;
-
-        // Filter projects by the selected company
-        const availableProjects = projects.filter(p => p.companyId === selectedCompanyId);
-
-        if (availableProjects.length === 0) {
-            // No projects available for this company
-            if (selectedProjectId !== 'all') setSelectedProjectId('all');
-            return;
-        }
-
-        // Check if current selected project is still valid
-        const isCurrentValid = availableProjects.some(p => p.id === selectedProjectId);
-        
-        if (!isCurrentValid || selectedProjectId === 'all') {
-            // Try to match user's affiliated project
-            const userProject = availableProjects.find(p => p.id === profile?.projectId);
-            
-            if (userProject) {
-                setSelectedProjectId(userProject.id);
-            } else {
-                // Fallback: Select the first available project
-                setSelectedProjectId(availableProjects[0].id);
-            }
-        }
-    }, [selectedCompanyId, projects, profile?.projectId, selectedProjectId]);
-
+    const { projects, isLoading: isLoadingProjects } = useProjects();
 
     // Hooks for Analytics Tabs
     const { sites, isLoading: isLoadingSites } = useSites(projectId !== 'all' ? projectId : undefined);
-
-    // Auto-select first site when project changes, or keep current if still valid
-    const [localSiteId, setLocalSiteId] = useState<string>('all');
-
-    useEffect(() => {
-        // Se mudarmos de projeto, podemos querer resetar para 'all' 
-        // ou validar se o canteiro atual ainda existe
-        if (selectedProjectId && selectedProjectId !== 'all') {
-            if (localSiteId !== 'all' && !sites.find(s => s.id === localSiteId)) {
-                setLocalSiteId('all');
-            }
-        } else {
-            setLocalSiteId('all');
-        }
-    }, [sites, selectedProjectId, localSiteId]);
-
-    const selectedSiteId = localSiteId;
 
     const { data: towers, isLoading: loadingTowers } = useQuery({
         queryKey: ["production-towers", projectId, companyId, selectedSiteId],
@@ -445,15 +408,12 @@ const ProductionPage = () => {
         if (selectedTowers.length === 0) return;
         setIsBulkDeleting(true);
         try {
-            for (const id of selectedTowers) {
-                await orionApi.delete(`/map_elements?id=${id}`);
-                await new Promise(resolve => setTimeout(resolve, 300)); // Throttling (Aumentado para 300ms)
-            }
+            await orionApi.delete(`/map_elements?ids=${selectedTowers.join(",")}`);
             toast.success(`${selectedTowers.length} torres removidas com sucesso`);
             setSelectedTowers([]);
             queryClient.invalidateQueries({ queryKey: ["production-towers"] });
         } catch {
-           toast.error("Erro ao remover torres"); 
+            toast.error("Erro ao remover torres");
         } finally {
             setIsBulkDeleting(false);
         }
@@ -461,20 +421,17 @@ const ProductionPage = () => {
 
     const handleDeleteAll = async () => {
         if (!towers || towers.length === 0) return;
-         setIsBulkDeleting(true);
-         try {
-             for (const t of towers) {
-                await orionApi.delete(`/map_elements?id=${t.id}`);
-                await new Promise(resolve => setTimeout(resolve, 150)); // Throttling
-             }
+        setIsBulkDeleting(true);
+        try {
+            await orionApi.delete(`/map_elements?projectId=${selectedProjectId}`);
             toast.success("Todas as torres foram removidas com sucesso");
             setSelectedTowers([]);
             queryClient.invalidateQueries({ queryKey: ["production-towers"] });
-         } catch {
-             toast.error("Erro ao remover todas as torres");
-         } finally {
-             setIsBulkDeleting(false);
-         }
+        } catch {
+            toast.error("Erro ao remover todas as torres");
+        } finally {
+            setIsBulkDeleting(false);
+        }
     };
 
     const handleBulkUnlink = async () => {
@@ -774,37 +731,6 @@ const ProductionPage = () => {
 
 
                 <div className="flex items-center gap-4">
-                    {/* Company Selector (Visible for Admins/Multi-company users) */}
-                    {(['SUPER_ADMIN', 'SUPER_ADMIN_GOD', 'ADMIN'].includes(profile?.role || '') || companies.length > 1) && (
-                        <div className="w-[200px]">
-                            <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
-                                <SelectTrigger className="bg-slate-900/50 border-white/10 h-10 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all hover:bg-slate-800/50 hover:border-primary/30 focus:ring-primary/20">
-                                   <div className="flex items-center gap-2 truncate">
-                                        <Building2 className="w-3.5 h-3.5 text-primary" />
-                                        <SelectValue placeholder="Selecione a Empresa" />
-                                   </div>
-                                </SelectTrigger>
-                                <SelectContent className="bg-slate-950 border-white/10 backdrop-blur-xl max-h-[300px]">
-                                    <SelectItem value="all">TODAS AS EMPRESAS</SelectItem>
-                                    {companies.map(company => (
-                                        <SelectItem key={company.id} value={company.id} className="text-[11px] font-bold uppercase tracking-wider">{company.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    )}
-
-                    <ProjectSelector
-                        value={selectedProjectId}
-                        onValueChange={setSelectedProjectId}
-                        className="w-[200px]"
-                        companyId={selectedCompanyId} // Pass companyId for filtering
-                    />
-
-                    {/* Site Selector Hidden - Using Project Level Only */}
-
-                    <div className="h-8 w-px bg-white/10 mx-1" />
-
                     <div className="flex items-center gap-3">
                         <Card className="glass-card bg-primary/5 hover:bg-primary/10 group relative overflow-hidden h-14 flex items-center px-5 gap-4 border-primary/20">
                             <div className="p-2.5 rounded-2xl bg-primary/10 group-hover:bg-primary/20 group-hover:scale-110 transition-all duration-500">
@@ -840,13 +766,10 @@ const ProductionPage = () => {
                     <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-4">
                         <TabsList className="glass-card p-1 flex justify-start w-fit bg-secondary/20">
                             <TabsTrigger value="grid" className="gap-2 px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                                <LayoutGrid className="w-4 h-4" /> Grelha de Produção
+                                <LayoutGrid className="w-4 h-4" /> Torres (Produção)
                             </TabsTrigger>
-                            <TabsTrigger value="progress" className="gap-2 px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                                <Activity className="w-4 h-4" /> Avanço Físico
-                            </TabsTrigger>
-                            <TabsTrigger value="performance" className="gap-2 px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                                <BarChart3 className="w-4 h-4" /> Performance (KPIs)
+                            <TabsTrigger value="activities" className="gap-2 px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                                <Activity className="w-4 h-4" /> Atividades/Metas
                             </TabsTrigger>
                         </TabsList>
 
@@ -900,10 +823,13 @@ const ProductionPage = () => {
                                             variant="outline"
                                             size="sm"
                                             className="gap-2 border-primary/20 hover:bg-primary/10 glass text-foreground font-bold h-9 px-4 rounded-lg flex-1 sm:flex-none uppercase text-[10px] tracking-wider"
-                                            onClick={() => setIsImportModalOpen(true)}
+                                            onClick={() => {
+                                                if (activeTab === 'grid') setIsImportModalOpen(true);
+                                                else setIsActivityImportModalOpen(true);
+                                            }}
                                         >
                                             <Upload className="h-3.5 w-3.5 text-primary" />
-                                            Importar
+                                            Importar {activeTab === 'grid' ? 'Torres' : 'Atividades'}
                                         </Button>
 
                                         {/* BULK ACTIONS */}
@@ -1266,56 +1192,29 @@ const ProductionPage = () => {
                         )}
                     </TabsContent>
 
-                    <TabsContent value="progress" className="h-full overflow-auto p-6">
-                        {(!towers || towers.length === 0) ? (
-                            <div className="flex-1 flex items-center justify-center h-[60vh]">
-                            <div className="flex-1 flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
-                                <div className="text-xl font-bold text-muted-foreground">Sem Torres para Acompanhar</div>
-                                <p className="text-sm text-muted-foreground/60 max-w-md">Para visualizar o progresso físico, é necessário primeiro cadastrar as torres da obra.</p>
-                                <Button onClick={() => setIsTowerModalOpen(true)}>Nova Torre</Button>
-                            </div>
-                            </div>
-                        ) : (!sites || sites.length === 0) ? (
-                            <div className="flex-1 flex items-center justify-center h-[60vh]">
-                            <div className="flex-1 flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
-                                <div className="text-xl font-bold text-muted-foreground">Nenhum Canteiro Encontrado</div>
-                                <p className="text-sm text-muted-foreground/60 max-w-md">Para acompanhar o avanço físico, você precisa primeiro cadastrar os canteiros e trechos desta obra.</p>
-                                <Button onClick={() => navigate('/canteiros')}>Configurar Canteiros</Button>
-                            </div>
-                            </div>
-                        ) : (!stages || stages.length === 0) ? (
-                            <div className="flex-1 flex items-center justify-center h-[60vh]">
-                            <div className="flex-1 flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
-                                <div className="text-xl font-bold text-muted-foreground">Etapas Não Configuradas</div>
-                                <p className="text-sm text-muted-foreground/60 max-w-md">Não foram encontradas etapas de trabalho (Atividades) para este canteiro. Verifique as configurações de cronograma.</p>
-                                <Button onClick={() => setIsStageModalOpen(true)}>Configurar Etapas</Button>
-                            </div>
-                            </div>
-                        ) : (
-                            <GAPOProgressTracker siteId={selectedSiteId} projectId={selectedProjectId} />
-                        )}
-                    </TabsContent>
-
-                    <TabsContent value="performance" className="h-full overflow-auto p-6">
-                        {(!towers || towers.length === 0) ? (
-                            <div className="flex-1 flex items-center justify-center h-[60vh]">
-                            <div className="flex-1 flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
-                                <div className="text-xl font-bold text-muted-foreground">Sem Dados de Performance</div>
-                                <p className="text-sm text-muted-foreground/60 max-w-md">A análise de performance requer que existam torres e atividades cadastradas na obra.</p>
-                                <Button onClick={() => setIsTowerModalOpen(true)}>Nova Torre</Button>
-                            </div>
-                            </div>
-                        ) : (!users || users.length === 0) ? (
-                            <div className="flex-1 flex items-center justify-center h-[60vh]">
-                            <div className="flex-1 flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
-                                <div className="text-xl font-bold text-muted-foreground">Nenhum Funcionário Alocado</div>
-                                <p className="text-sm text-muted-foreground/60 max-w-md">Não há dados de performance pois ainda não foram cadastrados funcionários ou equipes para esta obra.</p>
-                                <Button onClick={() => navigate('/usuarios')}>Cadastrar Equipe</Button>
-                            </div>
-                            </div>
-                        ) : (
-                            <GAPOAnalyticsPanel stages={stages} records={records} projectId={selectedProjectId !== 'all' ? selectedProjectId : undefined} />
-                        )}
+                    <TabsContent value="activities" className="h-full overflow-auto bg-[#0a0806]/50">
+                        <TowerActivityTree 
+                            data={(activitiesHierarchy || []) as any[]} 
+                            onMove={async (id, parentId, order) => {
+                                await orionApi.patch('/tower-activity-goals', { id, parentId, order });
+                                queryClient.invalidateQueries({ queryKey: ['tower-activity-goals'] });
+                            }}
+                            onEdit={(node) => {
+                                setEditingGoal(node);
+                                setIsActivityModalOpen(true);
+                            }}
+                            onDelete={async (id) => {
+                                if (window.confirm("Excluir esta atividade e todas as suas sub-atividades?")) {
+                                    await orionApi.delete(`/tower-activity-goals?id=${id}`);
+                                    queryClient.invalidateQueries({ queryKey: ['tower-activity-goals'] });
+                                }
+                            }}
+                            onCreate={(parentId) => {
+                                setEditingGoal(null);
+                                setParentGoalId(parentId);
+                                setIsActivityModalOpen(true);
+                            }}
+                        />
                     </TabsContent>
                 </main>
             </Tabs>
@@ -1354,9 +1253,28 @@ const ProductionPage = () => {
                 tower={editingTower}
             />
 
-            <ExcelImportModal
+            <TowerImportModal
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}
+                projectId={projectId!}
+                companyId={selectedCompanyId}
+            />
+
+            <TowerActivityGoalModal
+                isOpen={isActivityModalOpen}
+                onClose={() => setIsActivityModalOpen(false)}
+                projectId={selectedProjectId}
+                companyId={selectedCompanyId}
+                editingGoal={editingGoal}
+                parentId={parentGoalId}
+            />
+
+            <ActivityImportModal 
+                isOpen={isActivityImportModalOpen}
+                onClose={() => {
+                    setIsActivityImportModalOpen(false);
+                    queryClient.invalidateQueries({ queryKey: ["tower-activity-goals"] });
+                }}
                 projectId={projectId!}
             />
 

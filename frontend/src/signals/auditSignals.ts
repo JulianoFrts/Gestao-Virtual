@@ -16,6 +16,7 @@ export interface AuditLog {
   ipAddress?: string;
   userAgent?: string;
   route?: string;
+  metadata?: any;
 }
 
 export const auditLogs = signal<AuditLog[]>([]);
@@ -55,25 +56,24 @@ export const fetchAuditLogs = async () => {
       ? envUrl
       : `${window.location.origin}${envUrl.startsWith("/") ? "" : "/"}${envUrl}`;
 
-    // Conexão SSE segura. Passamos o token na URL como fallback para o middleware/EventSource
-    const sseUrl = `${backendUrl}/audit_logs?token=${token}`;
+    // Conexão Segura via POST (evita token na URL)
+    const url = `${backendUrl}/audit_logs`;
     
-    console.log("[AuditSignals] Conectando ao SSE:", sseUrl);
-    const eventSource = new EventSource(sseUrl, { withCredentials: true });
+    console.log("[AuditSignals] Conectando via StreamService (POST):", url);
+    
+    const { StreamService } = await import("@/services/security/StreamService");
 
-
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.debug("[AuditSignals] SSE Message:", data.type, data);
+    await StreamService.connect({
+      url,
+      token,
+      onMessage: (data) => {
+        console.debug("[AuditSignals] Stream Message:", data.type, data);
 
         if (data.type === "start") {
           totalAuditLogs.value = data.total;
         }
 
         if (data.type === "batch") {
-          // Adicionar novos logs (evitar duplicatas se necessário, mas aqui confiamos no stream)
-          // Usando atribuição de novo array para garantir reatividade
           auditLogs.value = [...auditLogs.value, ...data.items];
           auditProgress.value = data.progress;
         }
@@ -81,25 +81,18 @@ export const fetchAuditLogs = async () => {
         if (data.type === "complete") {
           auditProgress.value = 100;
           isLoadingAudit.value = false;
-          eventSource.close();
         }
 
         if (data.type === "error") {
-          console.error("[SSE Error]", data.message);
-          eventSource.close();
+          console.error("[Stream Error]", data.message);
           isLoadingAudit.value = false;
         }
-
-      } catch (e) {
-        console.error("Erro ao processar mensagem SSE", e);
+      },
+      onError: (err) => {
+        console.error("[AuditSignals] Erro na conexão Stream de Auditoria:", err);
+        isLoadingAudit.value = false;
       }
-    };
-
-    eventSource.onerror = (err) => {
-      console.error("[AuditSignals] Erro na conexão SSE de Auditoria:", err);
-      eventSource.close();
-      isLoadingAudit.value = false;
-    };
+    });
 
   } catch (err) {
     console.error("[AuditSignals] Error:", err);

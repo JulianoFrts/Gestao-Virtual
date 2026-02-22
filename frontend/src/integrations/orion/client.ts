@@ -44,6 +44,8 @@ export class OrionApiClient {
   private authListeners: Array<(event: string, session: any) => void> = [];
   private last401Time: number = 0;
   private readonly AUTH_THROTTLE_MS = 5000;
+  private readonly RENDER_CACHE_TTL = 3000; // Cache de 3s para renderização
+  private renderCache = new Map<string, { data: any; timestamp: number }>();
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
@@ -135,6 +137,17 @@ export class OrionApiClient {
     body?: any,
     params?: Record<string, string>,
   ): Promise<ApiResponse<T>> {
+    const cacheKey = `${method}:${endpoint}:${JSON.stringify(params || {})}`;
+
+    // 0. Global Render Cache (Somente para GET)
+    if (method === "GET") {
+      const cached = this.renderCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp) < this.RENDER_CACHE_TTL) {
+        // console.log(`[ORION CACHE] Hit: ${endpoint}`);
+        return { data: cached.data, error: null };
+      }
+    }
+
     try {
       const isAuthEndpoint = endpoint.includes("/auth/") || endpoint.includes("/health");
       const publicEndpoints = ["/auth/login", "/auth/register", "/health", "/api/health"];
@@ -252,6 +265,12 @@ export class OrionApiClient {
       }
 
       const data = json.data !== undefined ? json.data : json;
+      
+      // Salvar no Render Cache se for GET bem sucedido
+      if (method === "GET" && !response.status.toString().startsWith('4')) {
+          this.renderCache.set(cacheKey, { data, timestamp: Date.now() });
+      }
+
       if (data && typeof data === "object" && !Array.isArray(data) && Array.isArray(data.items)) {
         return { data: data.items, error: null, count: data.pagination?.total || data.items.length };
       }

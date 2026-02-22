@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Access } from '@/components/auth/Access';
 import { useNavigate } from "react-router-dom";
 import { useSites, Site } from "@/hooks/useSites";
 import { useProjects } from "@/hooks/useProjects";
@@ -51,7 +52,7 @@ import {
   Edit2
 } from "lucide-react";
 import { ProjectSelector } from "@/components/shared/ProjectSelector";
-import { isProtectedSignal, can } from "@/signals/authSignals";
+import { isProtectedSignal, can, selectedContextSignal } from "@/signals/authSignals";
 import { ConfirmationDialog } from "@/components/shared/ConfirmationDialog";
 import { useSignals } from "@preact/signals-react/runtime";
 import {
@@ -118,7 +119,11 @@ export default function Sites() {
     onConfirm: () => {},
     variant: "default",
   });
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
+
+  // Context from Global Signal
+  const selectedContext = selectedContextSignal.value;
+  const selectedProjectId = selectedContext?.projectId || "all";
+  
   const { toast } = useToast();
 
   const canCreateSites = isProtectedSignal.value || can("sites.create");
@@ -243,7 +248,7 @@ export default function Sites() {
   }, [sites, searchTerm, projects, selectedProjectId]);
 
   return (
-    <div className="space-y-6 animate-fade-in h-full flex flex-col p-6 overflow-hidden">
+    <div className="space-y-6 animate-fade-in view-adaptive-container h-full flex flex-col py-6 overflow-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shrink-0">
         <div>
           <h1 className="text-3xl font-display font-bold gradient-text uppercase italic tracking-tighter">
@@ -254,10 +259,12 @@ export default function Sites() {
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <Button onClick={() => setIsDialogOpen(true)} className="gradient-primary text-white shadow-glow px-6 font-bold uppercase tracking-widest text-[10px]">
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Canteiro
-          </Button>
+          <Access auth="sites.create" mode="hide">
+            <Button onClick={() => setIsDialogOpen(true)} className="gradient-primary text-white shadow-glow px-6 font-bold uppercase tracking-widest text-[10px]">
+              <Plus className="mr-2 h-4 w-4" />
+              Novo Canteiro
+            </Button>
+          </Access>
         </div>
       </div>
 
@@ -277,13 +284,6 @@ export default function Sites() {
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10 industrial-input h-10"
                 />
-            </div>
-            <div className="w-[250px]">
-              <ProjectSelector
-                value={selectedProjectId || ""}
-                onValueChange={setSelectedProjectId}
-                showAll={true}
-              />
             </div>
           </div>
 
@@ -343,23 +343,27 @@ export default function Sites() {
                                 </div>
                               </div>
                               
-                              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 bg-black/20 backdrop-blur-sm"
-                                  onClick={() => handleEdit(site)}
-                                >
-                                  <Pencil className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 bg-black/20 backdrop-blur-sm"
-                                  onClick={() => handleDelete(site)}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
+                              <div className="flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all duration-300">
+                                <Access auth="sites.edit" mode="hide">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 bg-black/20 backdrop-blur-sm"
+                                    onClick={() => handleEdit(site)}
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </Button>
+                                </Access>
+                                <Access auth="sites.delete" mode="hide">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 bg-black/20 backdrop-blur-sm"
+                                    onClick={() => handleDelete(site)}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </Access>
                               </div>
                             </div>
 
@@ -444,7 +448,7 @@ export default function Sites() {
               <div className="absolute top-0 inset-x-0 h-1 gradient-primary shadow-[0_0_15px_rgba(var(--primary),0.5)]" />
               
               <DialogHeader className="p-6 pb-0">
-                <DialogTitle className="flex items-center gap-3 text-2xl font-black italic tracking-tighter uppercase italic">
+                <DialogTitle className="flex items-center gap-3 text-2xl font-black italic tracking-tighter uppercase">
                   <div className="w-12 h-12 rounded-2xl gradient-primary flex items-center justify-center shadow-glow">
                     <Truck className="text-white w-7 h-7" />
                   </div>
@@ -534,6 +538,7 @@ export default function Sites() {
                     <Label className="text-[10px] uppercase font-black tracking-widest text-sky-400 pl-1">Endereço / Geoposicionamento</Label>
                     <TooltipProvider>
                       <AddressAutocomplete
+                        value={formData.locationDetails}
                         latitude={formData.xLat}
                         longitude={formData.yLa}
                         onAddressChange={(data: AddressData) => {

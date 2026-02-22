@@ -9,6 +9,7 @@ import {
   MapPin
 } from "lucide-react";
 import { RouteConfig } from "../config";
+import { ADMIN_ROLES, MANAGEMENT_ROLES, VIEWER_ROLES } from "@/lib/constants/roles";
 
 const Dashboard = lazy(() => import("../../pages/Dashboard"));
 const Functions = lazy(() => import("../../pages/Functions"));
@@ -23,6 +24,7 @@ export const coreRoutes: RouteConfig[] = [
     path: "/dashboard",
     element: Dashboard,
     moduleId: "dashboard",
+    roles: VIEWER_ROLES,
     layout: "app",
     label: "Dashboard",
     icon: LayoutDashboard,
@@ -31,6 +33,7 @@ export const coreRoutes: RouteConfig[] = [
     path: "/functions",
     element: Functions,
     moduleId: "functions.manage",
+    roles: ADMIN_ROLES,
     requireConnection: true,
     layout: "app",
     label: "Funções",
@@ -40,6 +43,7 @@ export const coreRoutes: RouteConfig[] = [
     path: "/settings",
     element: SettingsPage,
     moduleId: "settings.profile",
+    roles: VIEWER_ROLES,
     layout: "app",
     label: "Configurações",
     icon: Settings,
@@ -48,6 +52,7 @@ export const coreRoutes: RouteConfig[] = [
     path: "/messages",
     element: Messages,
     moduleId: "messages.view",
+    roles: VIEWER_ROLES,
     layout: "app",
     label: "Mensagens",
     icon: MessageSquare,
@@ -56,6 +61,7 @@ export const coreRoutes: RouteConfig[] = [
     path: "/companies",
     element: Companies,
     moduleId: "companies.view",
+    roles: ADMIN_ROLES,
     layout: "app",
     label: "Empresas",
     icon: Building2,
@@ -64,6 +70,7 @@ export const coreRoutes: RouteConfig[] = [
     path: "/projects",
     element: Projects,
     moduleId: "projects.view",
+    roles: MANAGEMENT_ROLES,
     layout: "app",
     label: "Projetos",
     icon: Layers,
@@ -72,6 +79,7 @@ export const coreRoutes: RouteConfig[] = [
     path: "/sites",
     element: Sites,
     moduleId: "sites.view",
+    roles: MANAGEMENT_ROLES,
     layout: "app",
     label: "Canteiros",
     icon: MapPin,

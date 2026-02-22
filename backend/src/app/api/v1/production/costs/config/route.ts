@@ -27,21 +27,37 @@ export async function GET(req: NextRequest) {
 
     // Multitenancy Check
     const { isUserAdmin } = await import("@/lib/auth/session");
-    if (!isUserAdmin(session.user.role)) {
+    const userRole = session.user.role;
+    const userHierarchy = (session.user as any).hierarchyLevel;
+    const userCompanyId = (session.user as any).companyId;
+
+    if (!isUserAdmin(userRole, userHierarchy)) {
       const { prisma } = await import("@/lib");
+
+      const whereClause: any = { companyId: userCompanyId };
+      if (projectId !== "all") {
+        whereClause.id = projectId;
+      }
+
       const project = await (prisma as any).project.findFirst({
-        where: { id: projectId, companyId: (session.user as any).companyId },
+        where: whereClause,
       });
+
       if (!project) {
         return ApiResponse.forbidden();
       }
     }
 
+    // If projectId is "all", we might need to adjust configService.listUnitCosts
+    // But usually for multitenancy we just need to confirm they OWN the right to see it.
     const costs = await configService.listUnitCosts(projectId);
 
     return ApiResponse.json(costs);
   } catch (error) {
-    return handleApiError(error, "src/app/api/v1/production/costs/config/route.ts#GET");
+    return handleApiError(
+      error,
+      "src/app/api/v1/production/costs/config/route.ts#GET",
+    );
   }
 }
 
@@ -76,6 +92,9 @@ export async function POST(req: NextRequest) {
 
     return ApiResponse.json(result);
   } catch (error) {
-    return handleApiError(error, "src/app/api/v1/production/costs/config/route.ts#POST");
+    return handleApiError(
+      error,
+      "src/app/api/v1/production/costs/config/route.ts#POST",
+    );
   }
 }

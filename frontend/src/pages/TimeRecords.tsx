@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Access } from '@/components/auth/Access';
 import { useTimeRecords, TimeRecord } from '@/hooks/useTimeRecords';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSync } from "@/contexts/SyncContext";
@@ -333,7 +334,7 @@ export default function TimeRecords() {
     };
 
     return (
-        <div className="space-y-6 animate-fade-in pb-10">
+        <div className="space-y-6 animate-fade-in view-adaptive-container pb-10">
             {/* Ações em Massa (Aparece apenas quando há seleção) */}
             {isAdmin && selectedIds.length > 0 && (
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4 animate-in slide-in-from-top-2 duration-300 shadow-lg">
@@ -453,7 +454,7 @@ export default function TimeRecords() {
                             <CardDescription>Total de {filteredRecords.length} ponto(s)</CardDescription>
                         </div>
                         <div className="flex items-center gap-2">
-                            {isAdmin && (
+                            <Access auth="time_records.manage" mode="hide">
                                 <Button
                                     onClick={handleOpenManualModal}
                                     className="gradient-primary shadow-glow font-bold gap-2 h-10 px-4"
@@ -462,7 +463,7 @@ export default function TimeRecords() {
                                     <Plus className="w-4 h-4" />
                                     Adicionar Manual
                                 </Button>
-                            )}
+                            </Access>
                         </div>
                     </div>
                 </CardHeader>
@@ -601,7 +602,7 @@ export default function TimeRecords() {
                                                             </span>
                                                         )}
 
-                                                        {isAdmin && (
+                                                        <Access auth="time_records.manage" mode="hide">
                                                             <>
                                                                 <Button
                                                                     variant="ghost"
@@ -622,7 +623,7 @@ export default function TimeRecords() {
                                                                     <Trash2 className="w-4 h-4" />
                                                                 </Button>
                                                             </>
-                                                        )}
+                                                        </Access>
                                                     </div>
                                                 </TableCell>
                                             </TableRow>

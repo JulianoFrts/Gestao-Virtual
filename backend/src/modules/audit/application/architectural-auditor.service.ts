@@ -37,14 +37,18 @@ export class ArchitecturalAuditor {
 
   constructor(
     private readonly governanceService: GovernanceService,
-    basePath?: string
+    basePath?: string,
   ) {
     this.srcPath = this.resolveSafePath(basePath);
 
     this.configService = new AuditConfigService();
     this.gitService = new GitDiffService();
     this.cacheService = new HashCacheService();
-    this.scanner = new AuditScanner(this.srcPath, this.configService, this.gitService);
+    this.scanner = new AuditScanner(
+      this.srcPath,
+      this.configService,
+      this.gitService,
+    );
     this.reportService = new AuditReportService();
 
     this.registerRules();
@@ -60,7 +64,7 @@ export class ArchitecturalAuditor {
       new DDDViolationRule(),
       new HardcodedEnvironmentRule(),
       new PrimitiveObsessionRule(),
-      new VisualConsistencyRule()
+      new VisualConsistencyRule(),
     ];
 
     this.rules = availableRules;
@@ -86,20 +90,32 @@ export class ArchitecturalAuditor {
    */
   public async runFullAudit(
     userId?: string,
+    companyId?: string,
     incremental: boolean = false,
-    onProgress?: (result: AuditResult | null, fileIndex: number, totalFiles: number) => void
+    onProgress?: (
+      result: AuditResult | null,
+      fileIndex: number,
+      totalFiles: number,
+    ) => void,
   ): Promise<{ results: AuditResult[]; summary: AuditSummary }> {
-    logger.info(`Iniciando Auditoria Arquitetural de Sistema (v3.1) [Incremental: ${incremental}]`, {
-      source: "Auditoria/AuditorArquitetural",
-      userId,
-    });
+    logger.info(
+      `Iniciando Auditoria Arquitetural de Sistema (v3.1) [Incremental: ${incremental}]`,
+      {
+        source: "Auditoria/AuditorArquitetural",
+        userId,
+        companyId,
+      },
+    );
 
     const results: AuditResult[] = [];
     const files = await this.scanner.getFilesToAudit(incremental);
 
     if (files.length === 0 && incremental) {
       logger.info("Nenhuma alteração detectada via Git. Auditoria Completa.");
-      return { results: [], summary: this.reportService.generateEmptyReport(0) };
+      return {
+        results: [],
+        summary: this.reportService.generateEmptyReport(0),
+      };
     }
 
     // Processamento Principal
@@ -107,7 +123,8 @@ export class ArchitecturalAuditor {
       files,
       results,
       userId,
-      onProgress
+      companyId,
+      onProgress,
     );
 
     // Reconciliação
@@ -117,7 +134,10 @@ export class ArchitecturalAuditor {
 
     this.reportResults(results);
 
-    const summary = this.reportService.calculateHealthScore(results, files.length);
+    const summary = this.reportService.calculateHealthScore(
+      results,
+      files.length,
+    );
 
     return { results, summary };
   }
@@ -126,7 +146,12 @@ export class ArchitecturalAuditor {
     files: string[],
     results: AuditResult[],
     userId?: string,
-    onProgress?: (result: AuditResult | null, fileIndex: number, totalFiles: number) => void
+    companyId?: string,
+    onProgress?: (
+      result: AuditResult | null,
+      fileIndex: number,
+      totalFiles: number,
+    ) => void,
   ): Promise<Set<string>> {
     const activeViolations = new Set<string>();
     const CONCURRENCY_LIMIT = 10;
@@ -138,9 +163,9 @@ export class ArchitecturalAuditor {
         try {
           const fileResults = await this.withTimeout(
             this.processFile(file),
-            CONSTANTS.API.TIMEOUTS.DEFAULT / 10 // 3 segundos per file as before
+            CONSTANTS.API.TIMEOUTS.DEFAULT / 10, // 3 segundos per file as before
           );
-          
+
           processedFiles++;
 
           if (onProgress) {
@@ -153,7 +178,7 @@ export class ArchitecturalAuditor {
             for (const res of fileResults) {
               const violationKey = `${res.file}:${res.violation}`;
               activeViolations.add(violationKey);
-              await this.persistViolation(res, userId);
+              await this.persistViolation(res, userId, companyId);
 
               if (onProgress) {
                 onProgress(res, processedFiles, files.length);
@@ -162,7 +187,9 @@ export class ArchitecturalAuditor {
           }
         } catch (error: any) {
           const errMsg = error instanceof Error ? error.message : String(error);
-          logger.warn(`Erro/Timeout ao processar arquivo: ${file}`, { error: errMsg });
+          logger.warn(`Erro/Timeout ao processar arquivo: ${file}`, {
+            error: errMsg,
+          });
         }
       });
       await Promise.all(promises);
@@ -178,17 +205,24 @@ export class ArchitecturalAuditor {
 
   private async withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
     const timeout = new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error("Tempo limite de processamento excedido")), ms)
+      setTimeout(
+        () => reject(new Error("Tempo limite de processamento excedido")),
+        ms,
+      ),
     );
     return Promise.race([promise, timeout]);
   }
 
-  private async persistViolation(res: AuditResult, userId?: string) {
+  private async persistViolation(
+    res: AuditResult,
+    userId?: string,
+    companyId?: string,
+  ) {
     try {
       const sanitizedMessage = this.sanitize(res.message);
       const existing = await this.governanceService.findOpenViolation(
         res.file,
-        res.violation || "Desconhecida"
+        res.violation || "Desconhecida",
       );
 
       if (existing) {
@@ -196,6 +230,7 @@ export class ArchitecturalAuditor {
           lastDetectedAt: new Date(),
           performerId: userId || existing.performerId,
           message: sanitizedMessage,
+          companyId,
         });
       } else {
         await this.governanceService.createViolation({
@@ -206,6 +241,7 @@ export class ArchitecturalAuditor {
           suggestion: res.suggestion,
           status: "OPEN",
           performerId: userId,
+          companyId,
         });
       }
     } catch (error) {
@@ -233,7 +269,7 @@ export class ArchitecturalAuditor {
             resolvedAt: new Date(),
           });
           logger.info(
-            `Violação resolvida detectada: ${violation.file} [${violation.violation}]`
+            `Violação resolvida detectada: ${violation.file} [${violation.violation}]`,
           );
         }
       }
@@ -262,14 +298,14 @@ export class ArchitecturalAuditor {
   private analyzeWithAST(
     file: string,
     content: string,
-    results: AuditResult[]
+    results: AuditResult[],
   ) {
     try {
       const sourceFile = ts.createSourceFile(
         file,
         content,
         ts.ScriptTarget.Latest,
-        true
+        true,
       );
 
       for (const rule of this.rules) {
@@ -281,7 +317,6 @@ export class ArchitecturalAuditor {
     }
   }
 
-
   private reportResults(results: AuditResult[]) {
     const fails = results.filter((r) => r.status === "FAIL").length;
     const warns = results.filter((r) => r.status === "WARN").length;
@@ -289,7 +324,7 @@ export class ArchitecturalAuditor {
     if (fails > 0 || warns > 0) {
       logger.warn(
         `Auditoria (v3.1): ${fails} Falhas, ${warns} Alertas, ${results.length} Total.`,
-        { source: "Audit/ArchitecturalAuditor" }
+        { source: "Audit/ArchitecturalAuditor" },
       );
     } else {
       logger.success("Auditoria (v3.1): 100% de conformidade.", {

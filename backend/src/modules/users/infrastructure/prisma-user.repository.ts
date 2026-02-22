@@ -102,6 +102,7 @@ export class PrismaUserRepository implements UserRepository {
           localidade: city || "",
           uf: state || "",
           estado: "",
+          number: number || null,
         },
       };
     }
@@ -139,6 +140,9 @@ export class PrismaUserRepository implements UserRepository {
     } = data;
 
     const updateData: any = { ...userData };
+    if (fullName && !updateData.name) {
+      updateData.name = fullName;
+    }
 
     if (
       email ||
@@ -198,6 +202,7 @@ export class PrismaUserRepository implements UserRepository {
             localidade: city || "",
             uf: state || "",
             estado: "",
+            number: number || null,
           },
           update: {
             ...(zipCode !== null && { cep: zipCode }),
@@ -205,6 +210,7 @@ export class PrismaUserRepository implements UserRepository {
             ...(neighborhood !== null && { bairro: neighborhood }),
             ...(city !== null && { localidade: city }),
             ...(state !== null && { uf: state }),
+            ...(number !== undefined && { number: number || null }),
           },
         },
       };
@@ -214,6 +220,65 @@ export class PrismaUserRepository implements UserRepository {
       where: { id },
       data: updateData,
       select,
+    });
+  }
+
+  async updateMany(ids: string[], data: any): Promise<{ count: number }> {
+    // Nota: updateMany do Prisma não suporta relações aninhadas (upsert de logs/endereços)
+    // Então para manter a integridade total do nosso DDD (que inclui endereços),
+    // usaremos uma transação com updates individuais se houver dados complexos,
+    // ou updateMany direto se forem dados simples.
+
+    const hasComplexData =
+      data.zipCode ||
+      data.street ||
+      data.number ||
+      data.neighborhood ||
+      data.city ||
+      data.state ||
+      data.email ||
+      data.password;
+
+    if (!hasComplexData) {
+      // Otimização: Update direto se forem apenas campos da tabela User (ex: siteId, status, role)
+      const { companyId, projectId, siteId, fullName, isActive, ...userData } =
+        data;
+
+      const flatData: any = { ...userData };
+      if (fullName) flatData.name = fullName;
+      if (isActive !== undefined)
+        flatData.status = isActive ? "ACTIVE" : "INACTIVE";
+      if (
+        companyId !== undefined ||
+        projectId !== undefined ||
+        siteId !== undefined
+      ) {
+        // Prisma updateMany não aceita Relations.
+        // Se precisar mudar canteiro em massa, temos que usar transação ou raw SQL
+        // Para garantir consistência com a estrutura atual, usamos transação.
+        return this.prisma.$transaction(async (tx: any) => {
+          for (const id of ids) {
+            await this.update(id, data);
+          }
+          return { count: ids.length };
+        });
+      }
+
+      return this.prisma.user.updateMany({
+        where: { id: { in: ids } },
+        data: flatData,
+      });
+    }
+
+    // Fallback: Transação para dados complexos (Relações)
+    return this.prisma.$transaction(async (tx: any) => {
+      let count = 0;
+      const repoWithTx = new PrismaUserRepository(tx);
+      for (const id of ids) {
+        await repoWithTx.update(id, data);
+        count++;
+      }
+      return { count };
     });
   }
 
@@ -287,7 +352,9 @@ export class PrismaUserRepository implements UserRepository {
     let fixCount = 0;
 
     if (toNullify.length > 0) {
-      console.log(`[Maintenance] Anulando ${toNullify.length} CPFs conflitantes...`);
+      console.log(
+        `[Maintenance] Anulando ${toNullify.length} CPFs conflitantes...`,
+      );
       await this.prisma.user.updateMany({
         where: { id: { in: toNullify } },
         data: { cpf: null },

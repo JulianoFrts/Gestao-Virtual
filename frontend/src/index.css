@@ -798,10 +798,68 @@ background: radial-gradient(circle,
   }
 
     to {
-      opacity: 1;
-      transform: translateX(0);
+        opacity: 1;
+        transform: translateX(0);
     }
+}
+
+.animate-fade-in-right {
+    animation: fadeInRight 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* =========================================
+   4 TIPOS DE VISUALIZAÇÕES DIFERENTES (RESPONSIVIDADE)
+   Trabalhando larguras com %, margin auto e adaptação por Device
+   ========================================= */
+
+@layer components {
+  /* 3 - Mobile Mode (Padrão inicial - Mobile First) */
+  .view-adaptive-container {
+    width: 100%;
+    margin: 0 auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  /* 4 - Tablet Mode */
+  @media (min-width: 768px) {
+    .view-adaptive-container {
+      width: 95%;
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
     }
+  }
+
+  /* 2 - Desktop Mode */
+  @media (min-width: 1024px) {
+    .view-adaptive-container {
+      width: 90%;
+      max-width: 1400px;
+    }
+  }
+
+  /* 1 - FullScreen / UltraWide Mode */
+  @media (min-width: 1536px) {
+    .view-adaptive-container {
+      width: 98%;
+      max-width: 1920px;
+    }
+  }
+
+  /* Helper Utility para Form Groups Responsivos */
+  .responsive-form-group {
+    width: 100%;
+    @apply flex flex-col md:flex-row gap-4;
+  }
+
+  .responsive-form-col {
+    width: 100%;
+    @apply md:w-auto md:flex-1;
+  }
+}
 
 /* Premium Progress Bar (Pagbar) */
 .progress-premium {

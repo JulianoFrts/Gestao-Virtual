@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Access } from '@/components/auth/Access';
 import { Plus, X, Save, Edit2, Loader2, Shield, Info, Trash2, CheckCircle2, FileText, RefreshCw } from 'lucide-react';
 import { getRoleStyle, getRoleLabel, STANDARD_ROLES, STANDARD_MODULES } from '@/utils/roleUtils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -302,47 +303,49 @@ export default function CustomSU() {
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 w-full">
+                <div className="w-full xl:w-auto">
                     <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
                         <Shield className="w-8 h-8 text-primary" />
                         Custom SU <Badge variant="secondary" className="ml-2">Matriz de Abas</Badge>
                     </h1>
                     <p className="text-muted-foreground mt-1 text-sm">Mapeamento de permissões por Abas do Site e Níveis Hierárquicos.</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    {isSuperAdmin && (
+                <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto pb-2 xl:pb-0">
+                    <Access auth="custom_su.manage" mode="hide">
                         <>
-                            <Button variant="outline" size="sm" onClick={syncModulesAndLevels}>
+                            <Button variant="outline" size="sm" onClick={syncModulesAndLevels} className="flex-1 min-w-[140px]">
                                 <RefreshCw className="w-4 h-4 mr-2" /> Sincronizar Sistema
                             </Button>
-                            <Button variant="outline" size="sm" onClick={() => setIsAddingLevel(true)}>
+                            <Button variant="outline" size="sm" onClick={() => setIsAddingLevel(true)} className="flex-1 min-w-[120px]">
                                 <Plus className="w-4 h-4 mr-2" /> Nível
                             </Button>
-                            <Button variant="outline" size="sm" onClick={() => setIsAddingModule(true)}>
+                            <Button variant="outline" size="sm" onClick={() => setIsAddingModule(true)} className="flex-1 min-w-[120px]">
                                 <Plus className="w-4 h-4 mr-2" /> Módulo
                             </Button>
                         </>
-                    )}
+                    </Access>
                     {selectedModuleIds.length > 0 && isSuperAdmin && (
-                        <Button variant="destructive" size="sm" onClick={() => handleDeleteModules(selectedModuleIds)} disabled={isDeleting}>
+                        <Button variant="destructive" size="sm" onClick={() => handleDeleteModules(selectedModuleIds)} disabled={isDeleting} className="flex-1 min-w-[120px]">
                             {isDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <X className="w-4 h-4 mr-2" />}
                             Excluir ({selectedModuleIds.length})
                         </Button>
                     )}
-                    <Button className="gradient-primary" size="sm" onClick={handleSaveMatrix} disabled={isSaving}>
-                        {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                        Salvar Matriz
-                    </Button>
+                    <Access auth="custom_su.manage" mode="hide">
+                        <Button className="gradient-primary flex-1 min-w-[140px]" size="sm" onClick={handleSaveMatrix} disabled={isSaving}>
+                            {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                            Salvar Matriz
+                        </Button>
+                    </Access>
                 </div>
             </div>
 
             <Tabs defaultValue="matrix" className="w-full">
-                <TabsList className="glass-card mb-6 p-1 border-white/5">
-                    <TabsTrigger value="matrix" className="gap-2 px-8">
+                <TabsList className="glass-card mb-6 p-1 border-white/5 w-full flex-wrap h-auto justify-start gap-2">
+                    <TabsTrigger value="matrix" className="flex-1 min-w-[200px] gap-2 px-8">
                         <Save className="w-4 h-4" /> Matriz de Permissões
                     </TabsTrigger>
-                    <TabsTrigger value="documents" className="gap-2 px-8">
+                    <TabsTrigger value="documents" className="flex-1 min-w-[200px] gap-2 px-8">
                         <FileText className="w-4 h-4" /> Repositório por Nível
                     </TabsTrigger>
                 </TabsList>
@@ -495,7 +498,7 @@ export default function CustomSU() {
 
             {/* Add Level Dialog */}
             <Dialog open={isAddingLevel} onOpenChange={setIsAddingLevel}>
-                <DialogContent>
+                <DialogContent className="w-[95%] max-w-md mx-auto h-auto max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Novo Nível Hierárquico</DialogTitle>
                         <DialogDescription>Escolha um nível padrão ou crie um personalizado.</DialogDescription>
@@ -544,7 +547,7 @@ export default function CustomSU() {
 
             {/* Add Module Dialog */}
             <Dialog open={isAddingModule} onOpenChange={setIsAddingModule}>
-                <DialogContent className="max-w-md">
+                <DialogContent className="w-[95%] max-w-md mx-auto h-auto max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Nova Aba / Módulo</DialogTitle>
                         <DialogDescription>Selecione uma funcionalidade padrão ou adicione manualmente.</DialogDescription>

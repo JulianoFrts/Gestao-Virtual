@@ -26,7 +26,17 @@ export const stripOperator = (val: unknown) => {
   if (typeof val === "string" && val.includes(".")) {
     const parts = val.split(".");
     // Se começar com eq, gte, lte, cs, etc, removemos o prefixo
-    const operators = ["eq", "neq", "gt", "gte", "lt", "lte", "like", "in", "cs"];
+    const operators = [
+      "eq",
+      "neq",
+      "gt",
+      "gte",
+      "lt",
+      "lte",
+      "like",
+      "in",
+      "cs",
+    ];
     if (operators.includes(parts[0])) {
       return parts.slice(1).join(".");
     }
@@ -44,7 +54,10 @@ export const stripOperator = (val: unknown) => {
 export const emailSchema = z
   .string()
   .email("Email inválido")
-  .min(CONSTANTS.VALIDATION.STRING.MIN_EMAIL, `Email deve ter no mínimo ${CONSTANTS.VALIDATION.STRING.MIN_EMAIL} caracteres`)
+  .min(
+    CONSTANTS.VALIDATION.STRING.MIN_EMAIL,
+    `Email deve ter no mínimo ${CONSTANTS.VALIDATION.STRING.MIN_EMAIL} caracteres`,
+  )
   .max(CONSTANTS.VALIDATION.STRING.MAX_NAME)
   .transform((v) => v.toLowerCase().trim());
 
@@ -53,7 +66,10 @@ export const emailSchema = z
  */
 export const passwordSchema = z
   .string()
-  .min(CONSTANTS.AUTH.PASSWORD.MIN_LENGTH, `Senha deve ter no mínimo ${CONSTANTS.AUTH.PASSWORD.MIN_LENGTH} caracteres`)
+  .min(
+    CONSTANTS.AUTH.PASSWORD.MIN_LENGTH,
+    `Senha deve ter no mínimo ${CONSTANTS.AUTH.PASSWORD.MIN_LENGTH} caracteres`,
+  )
   .max(CONSTANTS.AUTH.PASSWORD.MAX_LENGTH);
 
 /**
@@ -66,8 +82,14 @@ export const simplePasswordSchema = z.string().min(1);
  */
 export const nameSchema = z
   .string()
-  .min(CONSTANTS.VALIDATION.STRING.MIN_NAME, `Nome deve ter no mínimo ${CONSTANTS.VALIDATION.STRING.MIN_NAME} caracteres`)
-  .max(CONSTANTS.VALIDATION.STRING.MAX_NAME, `Nome deve ter no máximo ${CONSTANTS.VALIDATION.STRING.MAX_NAME} caracteres`)
+  .min(
+    CONSTANTS.VALIDATION.STRING.MIN_NAME,
+    `Nome deve ter no mínimo ${CONSTANTS.VALIDATION.STRING.MIN_NAME} caracteres`,
+  )
+  .max(
+    CONSTANTS.VALIDATION.STRING.MAX_NAME,
+    `Nome deve ter no máximo ${CONSTANTS.VALIDATION.STRING.MAX_NAME} caracteres`,
+  )
   .transform((v) => v.trim());
 
 /**
@@ -97,21 +119,11 @@ function validateCPFDigits(cpf: string): boolean {
 export const cpfSchema = z
   .string()
   .transform((v) => v.replace(/\D/g, ""))
-  .refine((v) => v.length === CONSTANTS.VALIDATION.DOCUMENTS.CPF_LENGTH, `CPF deve ter ${CONSTANTS.VALIDATION.DOCUMENTS.CPF_LENGTH} dígitos`)
-  // Suavizado: Se falhar na validação de dígitos, permitimos se for ambiente de desenvolvimento ou se houver um padrão de teste comum
-  // Para evitar travar o sistema com dados legados inválidos (ex: Alessandro Braga), vamos apenas validar se tem 11 dígitos.
-  // Se quiser manter rigoroso, deve-se usar um schema diferente para criação e atualização.
-  .refine((v) => {
-    // Validação real
-    const isValid = validateCPFDigits(v);
-    if (isValid) return true;
-
-    // Fallback para dados legados: Se tiver 11 dígitos e não for uma criação estrita, permitimos.
-    // Como o schema é compartilhado, vamos permitir mas logar (se tivéssemos acesso ao logger aqui).
-    console.warn(`[VALIDATION] CPF numericamente inválido detectado, mas permitido por compatibilidade: ${v}`);
-    return true;
-  }, "CPF inválido");
-
+  .refine(
+    (v) => v.length === CONSTANTS.VALIDATION.DOCUMENTS.CPF_LENGTH,
+    `CPF deve ter ${CONSTANTS.VALIDATION.DOCUMENTS.CPF_LENGTH} dígitos`,
+  )
+  .refine(validateCPFDigits, "CPF inválido");
 
 /**
  * CNPJ
@@ -132,7 +144,10 @@ function validateCNPJDigits(cnpj: string): boolean {
 export const cnpjSchema = z
   .string()
   .transform((v) => v.replace(/\D/g, ""))
-  .refine((v) => v.length === CONSTANTS.VALIDATION.DOCUMENTS.CNPJ_LENGTH, `CNPJ deve ter ${CONSTANTS.VALIDATION.DOCUMENTS.CNPJ_LENGTH} dígitos`)
+  .refine(
+    (v) => v.length === CONSTANTS.VALIDATION.DOCUMENTS.CNPJ_LENGTH,
+    `CNPJ deve ter ${CONSTANTS.VALIDATION.DOCUMENTS.CNPJ_LENGTH} dígitos`,
+  )
   .refine(validateCNPJDigits, "CNPJ inválido");
 
 /**
@@ -141,7 +156,11 @@ export const cnpjSchema = z
 export const phoneSchema = z
   .string()
   .transform((v) => v.replace(/\D/g, ""))
-  .refine((v) => v.length === 10 || v.length === CONSTANTS.VALIDATION.CONTACT.PHONE_LENGTH, "Telefone inválido");
+  .refine(
+    (v) =>
+      v.length === 10 || v.length === CONSTANTS.VALIDATION.CONTACT.PHONE_LENGTH,
+    "Telefone inválido",
+  );
 
 // ======================================================
 // ENUMS
@@ -158,14 +177,26 @@ export const roleSchema = z
 export const roleFilterSchema = z
   .string()
   .transform((v) => v.trim())
-  .refine((v) => {
-    if (!v) return true;
-    const roles = v.split(',');
-    return roles.every(r => Object.keys(ROLE_LEVELS).includes(r.trim().toLowerCase()));
-  }, {
-    message: "Uma ou mais roles são inválidas",
-  })
-  .transform((v) => v ? v.split(',').map(r => r.trim().toUpperCase()).join(',') : v);
+  .refine(
+    (v) => {
+      if (!v) return true;
+      const roles = v.split(",");
+      return roles.every((r) =>
+        Object.keys(ROLE_LEVELS).includes(r.trim().toLowerCase()),
+      );
+    },
+    {
+      message: "Uma ou mais roles são inválidas",
+    },
+  )
+  .transform((v) =>
+    v
+      ? v
+          .split(",")
+          .map((r) => r.trim().toUpperCase())
+          .join(",")
+      : v,
+  );
 
 export const accountStatusSchema = z.nativeEnum(ACCOUNT_STATUS);
 
@@ -268,6 +299,7 @@ export const updateUserSchema = z
     iapName: z.string().optional().nullable(),
     gender: z.string().optional().nullable(),
     birthDate: z.string().optional().nullable(),
+    isSystemAdmin: z.boolean().optional(),
     // Endereço
     zipCode: z.string().optional().nullable(),
     street: z.string().optional().nullable(),
@@ -293,11 +325,20 @@ export const updateProfileSchema = z.object({
 export const paginationSchema = z.object({
   page: z.preprocess(
     emptyToUndefined,
-    z.coerce.number().int().min(1).default(CONSTANTS.API.PAGINATION.DEFAULT_PAGE),
+    z.coerce
+      .number()
+      .int()
+      .min(1)
+      .default(CONSTANTS.API.PAGINATION.DEFAULT_PAGE),
   ),
   limit: z.preprocess(
     emptyToUndefined,
-    z.coerce.number().int().min(1).max(CONSTANTS.API.BATCH.EXTREME).default(CONSTANTS.API.PAGINATION.DEFAULT_LIMIT),
+    z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(CONSTANTS.API.BATCH.EXTREME)
+      .default(CONSTANTS.API.PAGINATION.DEFAULT_LIMIT),
   ),
   sortBy: z.preprocess(emptyToUndefined, z.string().optional()),
   sortOrder: z.preprocess(

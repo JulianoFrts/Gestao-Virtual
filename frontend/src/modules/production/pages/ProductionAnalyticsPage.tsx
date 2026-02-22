@@ -23,6 +23,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useProjects } from "@/hooks/useProjects";
 import { ProjectSelector } from "@/components/shared/ProjectSelector";
 import { CompanySelector } from "@/components/shared/CompanySelector";
+import { selectedContextSignal } from "@/signals/authSignals";
+import { useSignals } from "@preact/signals-react/runtime";
 import { ProjectEmptyState } from "@/components/shared/ProjectEmptyState";
 import { useUsers } from "@/hooks/useUsers";
 import { Loader2, HardHat } from "lucide-react";
@@ -30,35 +32,29 @@ import { useSites } from "@/hooks/useSites";
 import { Card } from "@/components/ui/card";
 
 const ProductionAnalyticsPage = () => {
+    useSignals();
     const { profile } = useAuth();
     const navigate = useNavigate();
     const { projects } = useProjects();
-    const [selectedProjectId, setSelectedProjectId] = useState<string>(profile?.projectId || 'all');
-    // New Filters
-    const [selectedCompanyId, setSelectedCompanyId] = useState<string>(profile?.companyId || 'all');
     
+    // Context from Global Signal
+    const selectedContext = selectedContextSignal.value;
+    const selectedProjectId = selectedContext?.projectId || 'all';
+    const selectedCompanyId = selectedContext?.companyId || 'all';
+    const selectedSiteId = selectedContext?.siteId === 'all' ? '' : (selectedContext?.siteId || '');
+
     // Hooks for Site Selection (Matching ProductionPage)
     const { sites } = useSites(selectedProjectId !== 'all' ? selectedProjectId : undefined);
-    // Auto-select first site when project changes, or keep current if still valid
-    const [localSiteId, setLocalSiteId] = useState<string>('all');
 
-    useEffect(() => {
-        if (selectedProjectId && selectedProjectId !== 'all') {
-            if (localSiteId !== 'all' && !sites.find(s => s.id === localSiteId)) {
-                setLocalSiteId('all');
-            }
-        } else {
-            setLocalSiteId('all');
-        }
-    }, [sites, selectedProjectId, localSiteId]);
-
-    const selectedSiteId = localSiteId;
-
-    const [timeRange, setTimeRange] = useState<string>('month');
+    // Simplified site management
+    const projectId = selectedProjectId;
+    const companyId = selectedCompanyId;
     const [activeTab, setActiveTab] = useState("overview");
     const [isConfigOpen, setIsConfigOpen] = useState(false);
     const [isTowerModalOpen, setIsTowerModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [timeRange, setTimeRange] = useState("month");
+    
     const [selectedCell, setSelectedCell] = useState<{
         towerId: string;
         towerName: string;
@@ -80,8 +76,6 @@ const ProductionAnalyticsPage = () => {
     const [selectedBulkWeek, setSelectedBulkWeek] = useState<Date | null>(null);
     const isGod = (profile?.role as string) === 'SUPER_ADMIN' || (profile?.role as string) === 'SUPER_ADMIN_GOD' || (profile?.role as string) === 'ADMIN' || !!profile?.isSystemAdmin;
 
-    const projectId = selectedProjectId;
-    const companyId = selectedCompanyId; // Helper
     const { users } = useUsers();
 
     // --- Queries ---
@@ -205,25 +199,6 @@ const ProductionAnalyticsPage = () => {
                                 <SelectItem value="year">Ano</SelectItem>
                             </SelectContent>
                         </Select>
-
-                        <CompanySelector 
-                            value={selectedCompanyId}
-                            onValueChange={(val) => {
-                                setSelectedCompanyId(val);
-                                // Reset project when company changes if needed, or keep 'all'
-                                if(val !== selectedCompanyId) setSelectedProjectId('all');
-                            }}
-                            className="w-[200px]"
-                        />
-
-                        <ProjectSelector
-                            value={selectedProjectId}
-                            onValueChange={setSelectedProjectId}
-                            companyId={selectedCompanyId}
-                            className="w-[200px]"
-                        />
-
-                        {/* Site Selector - Currently disabled, using Project Level Only */}
                     </div>
                 </div>
             </header>

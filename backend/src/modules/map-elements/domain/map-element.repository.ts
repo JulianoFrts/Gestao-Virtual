@@ -8,7 +8,7 @@ export type MapElementType =
 export interface MapElementTechnicalData {
   id?: string;
   companyId: string;
-  siteId: string;
+  siteId: string | null;
   projectId: string;
   documentId?: string | null;
   elementType: MapElementType;

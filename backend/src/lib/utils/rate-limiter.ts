@@ -4,7 +4,7 @@
  * Implementação in-memory.
  * Redis removido para simplificação de infraestrutura.
  */
- 
+
 import { CONSTANTS } from "@/lib/constants";
 
 // =============================================
@@ -43,11 +43,11 @@ interface RateLimitResult {
 // =============================================
 
 const DEFAULT_CONFIG: RateLimitConfig = {
-  maxRequests: parseInt(process.env.API_RATE_LIMIT || "100", 10),
+  maxRequests: parseInt(process.env.API_RATE_LIMIT || "500", 10),
   windowMs: parseInt(process.env.API_RATE_LIMIT_WINDOW_MS || "60000", 10),
   blockDurationMs:
-    process.env.NODE_ENV === "development" 
-      ? 10 * CONSTANTS.TIME.MS_IN_SECOND 
+    process.env.NODE_ENV === "development"
+      ? 10 * CONSTANTS.TIME.MS_IN_SECOND
       : 5 * CONSTANTS.TIME.SECONDS_IN_MINUTE * CONSTANTS.TIME.MS_IN_SECOND, // 10s em dev, 5min em prod
 };
 
@@ -152,7 +152,9 @@ function handleBlockedEntry(
   normalizedId: string,
 ): RateLimitResult | null {
   if (now < entry.blockedUntil!) {
-    const retryAfter = Math.ceil((entry.blockedUntil! - now) / CONSTANTS.TIME.MS_IN_SECOND);
+    const retryAfter = Math.ceil(
+      (entry.blockedUntil! - now) / CONSTANTS.TIME.MS_IN_SECOND,
+    );
     return {
       blocked: true,
       remaining: 0,
@@ -195,7 +197,8 @@ interface IncrementParams {
 }
 
 function incrementEntry(params: IncrementParams): RateLimitResult {
-  const { entry, normalizedId, maxRequests, blockDurationMs, windowMs, now } = params;
+  const { entry, normalizedId, maxRequests, blockDurationMs, windowMs, now } =
+    params;
   entry.count++;
 
   // Verificar se excedeu limite

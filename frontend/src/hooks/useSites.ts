@@ -81,8 +81,10 @@ export function useSites(projectId?: string, companyId?: string) {
     }, [projectId, companyId, profileId, profileRole, profileCompanyId]);
 
     useEffect(() => {
-        loadSites();
-    }, [loadSites]);
+        if (profileId) {
+            loadSites();
+        }
+    }, [loadSites, profileId]);
 
     const createSite = async (data: Partial<Site>) => {
         try {

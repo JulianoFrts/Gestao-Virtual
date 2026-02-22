@@ -111,7 +111,7 @@ export function useDailyReports() {
               approvedById: r.approvedById || r.approved_by_id,
               rejectionReason: r.rejectionReason || r.rejection_reason,
               createdBy: r.createdBy || r.created_by,
-              syncedAt: safeDate(r.syncedAt || r.synced_at),
+              syncedAt: safeDate(r.syncedAt || r.synced_at) || new Date(),
               weather: r.weather || (r.metadata as any)?.weather,
               manpower: r.manpower || (r.metadata as any)?.manpower,
               equipment: r.equipment || (r.metadata as any)?.equipment,

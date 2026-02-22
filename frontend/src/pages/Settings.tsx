@@ -10,6 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { localApi } from '@/integrations/orion/client';
 import { Input } from '@/components/ui/input';
+import { ProjectSelector } from '@/components/shared/ProjectSelector';
+import { useCompanies } from '@/hooks/useCompanies';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -37,6 +40,9 @@ import {
   Palette,
   LayoutTemplate,
   Settings2,
+  Building2,
+  HardHat,
+  Briefcase,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
@@ -46,6 +52,7 @@ import {
     uiSignal,
     realPermissionsSignal,
     realUiSignal,
+    selectedContextSignal
 } from "@/signals/authSignals";
 import { useSignals } from "@preact/signals-react/runtime";
 
@@ -82,9 +89,10 @@ import { MoreVertical } from "lucide-react";
 
 export default function Settings() {
   useSignals();
-  const { user, profile, logout, disableMfa, refreshProfile } = useAuth();
+  const { user, profile, logout, disableMfa, refreshProfile, selectContext } = useAuth();
   const queryClient = useQueryClient();
   const { isOnline, pendingChanges, syncNow } = useSync();
+  const { companies } = useCompanies();
   const { updateUser } = useUsers();
   const { toast } = useToast();
   const [localConcurrency, setLocalConcurrency] = React.useState(loaderConcurrencySignal.value);
@@ -500,7 +508,7 @@ export default function Settings() {
         description: "Os dados temporários foram removidos com sucesso.",
       });
       // Opcional: recarregar após um pequeno delay para garantir novo fetch
-      setTimeout(() => window.location.reload(), 1000);
+      window.location.reload();
     } catch {
       toast({
         title: "Erro ao limpar cache",
@@ -530,6 +538,57 @@ export default function Settings() {
 
   const GeneralSettingsContent = (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* [NOVO] Contexto de Trabalho para Gestão Global */}
+      {(profile?.role === 'SUPER_ADMIN_GOD' || profile?.role === 'HELPER_SYSTEM' || profile?.role === 'SUPER_ADMIN' || profile?.role === 'ADMIN' || profile?.role === 'TI_SOFTWARE') && (
+        <Card className="glass-card border-primary/20 bg-primary/5 col-span-1 md:col-span-2">
+            <CardHeader className="pb-3 text-primary">
+                <CardTitle className="flex items-center gap-2 text-sm uppercase font-black tracking-widest">
+                    <Briefcase className="w-4 h-4" />
+                    Contexto de Trabalho (Gestão Global)
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest flex items-center gap-1.5">
+                        <Building2 className="w-3 h-3" /> Empresa Selecionada
+                    </Label>
+                    <Select 
+                        value={selectedContextSignal.value?.companyId || 'all'} 
+                        onValueChange={(val) => {
+                            const current = selectedContextSignal.value || {};
+                            selectContext({ ...current, companyId: val, projectId: 'all' });
+                        }}
+                    >
+                        <SelectTrigger className="bg-slate-900/50 border-white/10 h-10 text-[11px] font-bold uppercase tracking-wider rounded-xl">
+                            <SelectValue placeholder="Todas as Empresas" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-950 border-white/10 backdrop-blur-xl">
+                            <SelectItem value="all">TODAS AS EMPRESAS</SelectItem>
+                            {companies.map(c => (
+                                <SelectItem key={c.id} value={c.id} className="text-[11px] font-bold uppercase tracking-wider">{c.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="space-y-2">
+                    <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest flex items-center gap-1.5">
+                        <HardHat className="w-3 h-3" /> Obra Selecionada
+                    </Label>
+                    <ProjectSelector 
+                        value={selectedContextSignal.value?.projectId || 'all'}
+                        onValueChange={(val) => {
+                            const current = selectedContextSignal.value || {};
+                            selectContext({ ...current, projectId: val });
+                        }}
+                        companyId={selectedContextSignal.value?.companyId}
+                        className="w-full"
+                    />
+                </div>
+            </CardContent>
+        </Card>
+      )}
+
       <Card className="glass-card">
         <CardHeader>
           <div className="flex items-center justify-between w-full">

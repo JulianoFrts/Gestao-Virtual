@@ -221,8 +221,8 @@ export function useUsers(filters?: UserFilters) {
       }
     },
     [
-      toast,
       profileId,
+      toast,
       companyIdFilter,
       projectIdFilter,
       siteIdFilter,

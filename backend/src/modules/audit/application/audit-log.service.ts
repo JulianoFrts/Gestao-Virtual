@@ -1,7 +1,7 @@
 import { AuditLogRepository } from "../domain/audit-log.repository";
 
 export class AuditLogService {
-  constructor(private readonly repository: AuditLogRepository) { }
+  constructor(private readonly repository: AuditLogRepository) {}
 
   async listLogs(params: {
     limit: number;
@@ -13,7 +13,7 @@ export class AuditLogService {
 
     const where: any = {};
     if (!isAdmin && companyId) {
-      where.user = { companyId };
+      where.user = { affiliation: { companyId } };
     }
 
     const logs = await this.repository.findMany(where, limit, skip, {
@@ -33,6 +33,7 @@ export class AuditLogService {
       ipAddress: log.ipAddress,
       userAgent: log.userAgent,
       route: log.route,
+      metadata: log.metadata,
     }));
   }
 
@@ -40,7 +41,7 @@ export class AuditLogService {
     const { isAdmin, companyId } = params;
     const where: any = {};
     if (!isAdmin && companyId) {
-      where.user = { companyId };
+      where.user = { affiliation: { companyId } };
     }
     return this.repository.count(where);
   }

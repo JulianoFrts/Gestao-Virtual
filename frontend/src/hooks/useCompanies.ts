@@ -78,8 +78,10 @@ export function useCompanies() {
 
     useEffect(() => {
         // Dispara apenas na montagem ou se as dependências fundamentais mudarem
-        loadCompanies();
-    }, [loadCompanies]);
+        if (profileId) {
+            loadCompanies();
+        }
+    }, [loadCompanies, profileId]);
 
     const createCompany = async (data: Partial<Company>) => {
         console.log('[useCompanies] Criando empresa com dados:', data);

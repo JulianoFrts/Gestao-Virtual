@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { employees as employeesSignal, isLoadingEmployees, fetchEmployees, Employee, employeeFilters, updateEmployeeFilters } from '@/signals/employeeSignals';
 import { currentUserSignal } from '@/signals/authSignals';
 import { db } from '@/integrations/database';
+import { orionApi } from '@/integrations/orion/client';
 import { storageService } from '@/services/storageService';
 import { useToast } from '@/hooks/use-toast';
 import { generateId } from '@/lib/utils';
@@ -361,15 +362,13 @@ export function useEmployees(options?: EmployeeFilters) {
     }
 
     try {
-      // Usar a lógica já existente no updateEmployee para cada funcionário
-      // para garantir a atualização nas tabelas corretas (users e user_addresses)
-      const updatePromises = ids.map(id => updateEmployee(id, data));
-      const results = await Promise.all(updatePromises);
+      // Otimização: Chamada única via PATCH para edição em massa
+      const { error } = await orionApi.patch('/users', {
+          ids,
+          data
+      });
       
-      const failed = results.filter(r => !r.success);
-      if (failed.length > 0) {
-        throw new Error(`${failed.length} atualizações falharam.`);
-      }
+      if (error) throw new Error(error.message);
 
       toast({
         title: "Atualização concluída",

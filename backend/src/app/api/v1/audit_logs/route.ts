@@ -13,22 +13,13 @@ export async function HEAD() {
 
 export async function GET(request: NextRequest) {
   try {
-    const { validateToken, isUserAdmin } = await import("@/lib/auth/session");
-    let currentUser;
+    const { isUserAdmin } = await import("@/lib/auth/session");
+    const currentUser = await requireAuth(request);
 
-    const token = request.nextUrl.searchParams.get("token");
-    if (token) {
-      const session = await validateToken(token);
-      if (session?.user) {
-        currentUser = session.user;
-      }
-    }
-
-    if (!currentUser) {
-      currentUser = await requireAuth();
-    }
-
-    const isAdmin = isUserAdmin(currentUser.role);
+    const isAdmin = isUserAdmin(
+      currentUser.role,
+      (currentUser as any).hierarchyLevel,
+    );
     const { CONSTANTS } = await import("@/lib/constants");
     const stream = generateAuditLogsStream(currentUser, isAdmin, CONSTANTS);
 
@@ -36,7 +27,7 @@ export async function GET(request: NextRequest) {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
+        Connection: "keep-alive",
         "X-Accel-Buffering": "no",
       },
     });
@@ -47,11 +38,45 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireAuth();
     const body = await request.json();
+    const { HTTP_STATUS, CONSTANTS } = await import("@/lib/constants");
+
+    // Lógica para Iniciar Stream via POST (Auth via JSON)
+    if (body.stream === true || body.token) {
+      const { validateToken, isUserAdmin } = await import("@/lib/auth/session");
+      let currentUser;
+
+      const token = body.token;
+      if (token) {
+        const session = await validateToken(token);
+        if (session?.user) currentUser = session.user;
+      }
+
+      if (!currentUser) {
+        currentUser = await requireAuth(request);
+      }
+
+      const isAdmin = isUserAdmin(
+        currentUser.role,
+        (currentUser as any).hierarchyLevel,
+      );
+
+      const stream = generateAuditLogsStream(currentUser, isAdmin, CONSTANTS);
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+          "X-Accel-Buffering": "no",
+        },
+      });
+    }
+
+    // Lógica Original: Registro de Log Manual
+    const user = await requireAuth(request);
     const clientIp = getClientIp(request);
     const userAgent = request.headers.get("user-agent");
-    const { HTTP_STATUS } = await import("@/lib/constants");
 
     const log = await auditLogService.createLog({
       userId: user.id,
@@ -77,7 +102,7 @@ export async function POST(request: NextRequest) {
 function getClientIp(request: NextRequest): string {
   const forwardedFor = request.headers.get("x-forwarded-for");
   let ip = "127.0.0.1";
-  
+
   if (forwardedFor) {
     ip = forwardedFor.split(",")[0]?.trim();
   } else {
@@ -90,7 +115,11 @@ function getClientIp(request: NextRequest): string {
 /**
  * Função Auxiliar para gerar o Stream de Logs (SRP)
  */
-function generateAuditLogsStream(currentUser: any, isAdmin: boolean, CONSTANTS: any): ReadableStream {
+function generateAuditLogsStream(
+  currentUser: any,
+  isAdmin: boolean,
+  CONSTANTS: any,
+): ReadableStream {
   const encoder = new TextEncoder();
 
   return new ReadableStream({
@@ -99,7 +128,7 @@ function generateAuditLogsStream(currentUser: any, isAdmin: boolean, CONSTANTS: 
         try {
           const event = `data: ${JSON.stringify({ type, ...data })}\n\n`;
           controller.enqueue(encoder.encode(event));
-        } catch (e) {
+        } catch {
           // Stream fechado
         }
       };
@@ -135,12 +164,14 @@ function generateAuditLogsStream(currentUser: any, isAdmin: boolean, CONSTANTS: 
             progress,
           });
 
-          await new Promise((resolve) => setTimeout(resolve, CONSTANTS.API.THROTTLE.MS));
+          await new Promise((resolve) =>
+            setTimeout(resolve, CONSTANTS.API.THROTTLE.MS),
+          );
         }
 
         sendEvent("complete", { total });
-      } catch (error: any) {
-        const message = error instanceof Error ? error.message : String(error);
+      } catch (err: any) {
+        const message = err instanceof Error ? err.message : String(err);
         sendEvent("error", { message });
       } finally {
         controller.close();

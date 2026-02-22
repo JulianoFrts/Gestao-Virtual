@@ -38,7 +38,9 @@ export function ProtectedRoute({
   // Verificar permissão por papéis (RBAC) se fornecido
   if (roles && roles.length > 0 && profile) {
     const userRole = profile.role || (user as any).role;
-    if (!roles.includes(userRole)) {
+    const isGod = (profile as any).isSystemAdmin || can('*');
+
+    if (!isGod && !roles.includes(userRole)) {
       return (
         <div className="flex h-screen flex-col items-center justify-center bg-background p-6 text-center">
           <ShieldAlert className="mb-4 h-16 w-16 text-destructive" />

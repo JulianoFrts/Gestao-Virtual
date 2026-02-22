@@ -10,13 +10,15 @@ const governanceService = new GovernanceService(
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth();
+    const user = await requireAuth(request);
 
     const { searchParams } = new URL(request.url);
-    const type = searchParams.get("type") || "all"; // all, architectural, routes
+    const type = searchParams.get("type") || "all";
     const limit = parseInt(searchParams.get("limit") || "50");
 
-    const results = await governanceService.getHistory(type, limit);
+    // Aplicar isolamento de tenant
+    const companyId = (user as any).companyId;
+    const results = await governanceService.getHistory(type, limit, companyId);
 
     return ApiResponse.json(results);
   } catch (error) {

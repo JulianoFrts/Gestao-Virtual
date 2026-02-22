@@ -1,15 +1,23 @@
 export enum Role {
-    USER = 'Worker',
-    ADMIN = 'Admin',
-    SUPERVISOR = 'Supervisor',
-    // eslint-disable-next-line @typescript-eslint/no-duplicate-enum-values
-    WORKER = 'Worker',
-    COORDINATOR = 'Coordinator',
-    MANAGER = 'Manager',
-    TI_SOFTWARE = 'TI_Software',
-    GESTOR_PROJECT = 'Gestor_Project',
-    GESTOR_CANTEIRO = 'Gestor_Canteiro',
-    SUPERADMIN = 'SuperAdmin'
+    USER = 'USER',
+    ADMIN = 'ADMIN',
+    MODERATOR = 'MODERATOR',
+    MANAGER = 'MANAGER',
+    SUPERVISOR = 'SUPERVISOR',
+    TECHNICIAN = 'TECHNICIAN',
+    OPERATOR = 'OPERATOR',
+    SUPER_ADMIN = 'SUPER_ADMIN',
+    SUPER_ADMIN_GOD = 'SUPER_ADMIN_GOD',
+    SOCIO_DIRETOR = 'SOCIO_DIRETOR',
+    HELPER_SYSTEM = 'HELPER_SYSTEM',
+    WORKER = 'WORKER',
+    TI_SOFTWARE = 'TI_SOFTWARE',
+    GESTOR_PROJECT = 'GESTOR_PROJECT',
+    GESTOR_CANTEIRO = 'GESTOR_CANTEIRO',
+    VIEWER = 'VIEWER',
+    GUEST = 'GUEST',
+    COORDINATOR = 'COORDINATOR',
+    SUPERADMIN = 'SUPER_ADMIN' // Alias
 }
 
 export enum AccountStatus {

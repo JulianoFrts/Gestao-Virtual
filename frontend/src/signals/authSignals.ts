@@ -1,4 +1,4 @@
-import { signal, computed } from "@preact/signals-react";
+import { signal, computed, effect } from "@preact/signals-react";
 
 /**
  * Mapa de permissões granulares vindas do backend.
@@ -32,7 +32,10 @@ export const currentUserSignal = signal<{
 /**
  * Papel simulado (Impersonation).
  */
-export const simulationRoleSignal = signal<string | null>(null);
+const isDevEnv = import.meta.env.DEV && window.location.hostname === 'localhost';
+export const simulationRoleSignal = signal<string | null>(
+    isDevEnv ? localStorage.getItem("dev_sim_role") : null
+);
 
 
 /**
@@ -48,6 +51,28 @@ export const selectedContextSignal = signal<{
  * Indicador de carregamento da sessão.
  */
 export const isAuthLoadingSignal = signal<boolean>(true);
+
+/**
+ * Modo de Mapeamento de Permissões (Visual Dev Tool).
+ */
+export const isMapperModeActiveSignal = signal<boolean>(
+    isDevEnv ? localStorage.getItem("dev_mapper_active") === "true" : false
+);
+
+// [Dev Persistence] Salvar estados de simulação para sobreviver ao F5
+if (isDevEnv) {
+    effect(() => {
+        if (simulationRoleSignal.value) {
+            localStorage.setItem("dev_sim_role", simulationRoleSignal.value);
+        } else {
+            localStorage.removeItem("dev_sim_role");
+        }
+    });
+
+    effect(() => {
+        localStorage.setItem("dev_mapper_active", String(isMapperModeActiveSignal.value));
+    });
+}
 
 // =============================================
 // COMPUTED SIGNALS (CAPABILITIES)

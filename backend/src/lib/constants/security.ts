@@ -1,10 +1,7 @@
 // =============================================
 // 1. CARGOS DE ELITE (GOD ROLES)
 // =============================================
-export const GOD_ROLES = [
-  "HELPER_SYSTEM",
-  "SUPER_ADMIN_GOD"
-] as const;
+export const GOD_ROLES = ["HELPER_SYSTEM", "SUPER_ADMIN_GOD"] as const;
 
 // =============================================
 // 2. DONOS DO SISTEMA (SYSTEM OWNERS)
@@ -14,7 +11,24 @@ export const SYSTEM_OWNERS = [
   "SUPER_ADMIN_GOD",
   "SOCIO_DIRETOR",
   "ADMIN",
-  "TI_SOFTWARE"
+  "TI_SOFTWARE",
+] as const;
+
+export const MANAGEMENT_ROLES = [
+  ...SYSTEM_OWNERS,
+  "GESTOR_PROJECT",
+  "GESTOR_CANTEIRO",
+  "MODERATOR",
+  "MANAGER",
+] as const;
+
+export const FIELD_ROLES = [
+  ...MANAGEMENT_ROLES,
+  "SUPERVISOR",
+  "WORKER",
+  "USER",
+  "TECHNICIAN",
+  "OPERATOR",
 ] as const;
 
 // =============================================
@@ -41,6 +55,7 @@ export const ROLE_FLAGS: Record<string, readonly string[]> = {
     "gapo.view",
     "showAdminMenu",
     "showMaintenance",
+    "functions.manage",
     // Management flags (herança direta)
     "projects.view",
     "projects.progress",
@@ -66,6 +81,7 @@ export const ROLE_FLAGS: Record<string, readonly string[]> = {
     "settings.mfa",
     "gapo.view",
     "showAdminMenu",
+    "functions.manage",
     // Management flags
     "projects.view",
     "projects.progress",
@@ -90,6 +106,7 @@ export const ROLE_FLAGS: Record<string, readonly string[]> = {
     "settings.mfa",
     "showAdminMenu",
     "showMaintenance",
+    "functions.manage",
     // Management flags
     "projects.view",
     "projects.progress",
@@ -117,6 +134,7 @@ export const ROLE_FLAGS: Record<string, readonly string[]> = {
     "viewer_3d.view",
     "work_progress.view",
     "showAdminMenu",
+    "functions.manage",
     // Worker flags
     "clock",
     "daily_reports",
@@ -148,6 +166,7 @@ export const ROLE_FLAGS: Record<string, readonly string[]> = {
     "employees.manage",
     "viewer_3d.view",
     "work_progress.view",
+    "functions.manage",
     // Worker flags
     "clock",
     "daily_reports",
@@ -190,24 +209,12 @@ export const ROLE_FLAGS: Record<string, readonly string[]> = {
     "projects.view",
   ],
 
-  OPERATOR: [
-    "clock",
-    "daily_reports",
-    "time_records.view",
-    "settings.profile",
-  ],
+  OPERATOR: ["clock", "daily_reports", "time_records.view", "settings.profile"],
 
   // --- BASE TIER ---
-  WORKER: [
-    "clock",
-    "daily_reports",
-    "time_records.view",
-    "settings.profile",
-  ],
+  WORKER: ["clock", "daily_reports", "time_records.view", "settings.profile"],
 
-  USER: [
-    "settings.profile",
-  ],
+  USER: ["settings.profile"],
 
   VIEWER: [],
 } as const;
@@ -259,7 +266,7 @@ export const SECURITY_RANKS = {
   GLOBAL: 1000,
   ADMIN: 900,
   MANAGEMENT: 500,
-  OPERATIONAL: 150
+  OPERATIONAL: 150,
 } as const;
 
 // =============================================

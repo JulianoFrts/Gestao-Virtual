@@ -15,6 +15,14 @@ export interface UserWithRelations extends Partial<User> {
   };
   hierarchyLevel?: number;
   isSystemAdmin?: boolean;
+  address?: {
+    cep?: string;
+    logradouro?: string;
+    bairro?: string;
+    localidade?: string;
+    uf?: string;
+    number?: string | null;
+  } | null;
 }
 
 export interface UserListResult {
@@ -57,6 +65,11 @@ export interface UserRepository {
     data: Prisma.UserUpdateInput,
     select?: Prisma.UserSelect,
   ): Promise<Partial<User>>;
+
+  updateMany(
+    ids: string[],
+    data: Prisma.UserUpdateInput,
+  ): Promise<{ count: number }>;
 
   delete(id: string): Promise<void>;
   findByIdentifier(

@@ -58,6 +58,42 @@ class StorageService {
     }
   }
 
+  private handleCriticalError(error: any) {
+    if (error && (error.name === 'DatabaseClosedError' || error.message?.includes('DatabaseClosedError'))) {
+      console.warn("[StorageService] Banco de dados IndexedDB fechado inesperadamente. Forçando limpeza do PWA e revalidação...");
+      
+      // Limpa os caches nativos do PWA Service Worker (se existirem)
+      if (typeof window !== 'undefined' && 'caches' in window) {
+        caches.keys().then((names) => {
+          names.forEach((name) => caches.delete(name));
+        }).catch(err => console.error("Erro ao limpar caches nativos:", err));
+      }
+
+      // Desregistra possíveis Service Workers que possam estar desincronizados ou prendendo o banco
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(let registration of registrations) {
+            registration.unregister();
+          }
+        }).catch(err => console.error("Erro ao desregistrar Service Workers:", err));
+      }
+
+      // Após um curto tempo para a limpeza do cache funcionar, força reload real do navegador,
+      // desde que não tenhamos acabado de tentar fazer isso (evita loop infinito)
+      const RECOVERY_KEY = 'pwa_recovery_count';
+      const recoveryCount = parseInt(window.sessionStorage.getItem(RECOVERY_KEY) || '0', 10);
+      
+      if (recoveryCount < 3) {
+        window.sessionStorage.setItem(RECOVERY_KEY, (recoveryCount + 1).toString());
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      } else {
+        console.error("[StorageService] Falha Crítica: Múltiplas tentativas de recuperação do PWA falharam. O IndexedDB está corrompido ou inacessível no navegador.");
+      }
+    }
+  }
+
   async setItem<T>(key: string, value: T): Promise<void> {
     try {
       // Blindagem robusta contra DataCloneError
@@ -68,8 +104,9 @@ class StorageService {
         value: safeValue,
         updatedAt: Date.now()
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error(`[StorageService] Error saving key "${key}" to IndexedDB:`, error);
+      this.handleCriticalError(error);
     }
   }
 
@@ -78,8 +115,9 @@ class StorageService {
       const item = await db.storage.get(key);
       if (!item) return null;
       return item.value as T;
-    } catch (error) {
+    } catch (error: any) {
       console.error(`[StorageService] Error reading key "${key}" from IndexedDB:`, error);
+      this.handleCriticalError(error);
       return null;
     }
   }
@@ -87,8 +125,9 @@ class StorageService {
   async removeItem(key: string): Promise<void> {
     try {
       await db.storage.delete(key);
-    } catch (error) {
+    } catch (error: any) {
       console.error(`[StorageService] Error removing key "${key}" from IndexedDB:`, error);
+      this.handleCriticalError(error);
     }
   }
 

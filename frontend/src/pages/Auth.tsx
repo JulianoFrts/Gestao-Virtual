@@ -48,7 +48,7 @@ export default function Auth() {
   const [offlineAccount, setOfflineAccount] = useState<OfflineAccountInfo | null>(null);
   const [showContextSelector, setShowContextSelector] = useState(false);
 
-  const { login, loginOffline, getLastOfflineAccount, setMfaVerified } = useAuth();
+  const { login, loginOffline, getLastOfflineAccount, setMfaVerified, user, selectedContext, isLoading: isAuthLoading, bypassAuth } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -60,6 +60,24 @@ export default function Auth() {
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+
+    // [STRICT AUTH] Mostrar erro se redirecionado por falta de permissão
+    const urlParams = new URLSearchParams(window.location.search);
+    const errorParam = urlParams.get('error');
+    if (errorParam === 'unauthorized') {
+      toast({
+        title: "Sessão Inválida",
+        description: "Sua sessão expirou ou você não tem permissão para acessar esta área.",
+        variant: "destructive",
+      });
+      // Limpa o parâmetro da URL sem recarregar
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    // Auto redirect fully authenticated users
+    if (user && selectedContext && !isAuthLoading && !showMfaChallenge && mode !== 'qr') {
+      navigate('/dashboard');
+    }
 
     // Check for last offline account
     getLastOfflineAccount().then(account => {
@@ -188,7 +206,7 @@ export default function Auth() {
       <div className="w-full max-w-lg animate-fade-in flex flex-col items-center relative z-10">
 
 
-        <Card className="w-full max-w-md bg-slate-950 border-slate-800 shadow-[0_8px_30px_rgb(0,0,0,0.2)] ring-1 ring-white/10 rounded-3xl overflow-hidden shine-effect">
+        <Card className={`w-full max-w-md bg-slate-950 border-slate-800 shadow-[0_8px_30px_rgb(0,0,0,0.2)] ring-1 ring-white/10 rounded-3xl overflow-hidden shine-effect ${showContextSelector ? 'opacity-0 pointer-events-none' : ''}`}>
           <div className="absolute inset-0 bg-linear-to-tr from-white/5 to-transparent pointer-events-none" />
           
           {mode === 'qr' && (
@@ -347,6 +365,22 @@ export default function Auth() {
                     ) : 'ENTRAR NO SISTEMA'}
                   </Button>
 
+                  {/* BYPASS DESENVOLVIMENTO: Apenas Localhost */}
+                  {window.location.hostname === 'localhost' && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full h-11 border-dashed border-primary/50 text-primary hover:bg-primary/10 font-black tracking-widest text-[10px]"
+                      onClick={async () => {
+                        const res = await bypassAuth();
+                        if (res?.success) navigate('/dashboard');
+                      }}
+                    >
+                      <ShieldCheck className="w-4 h-4 mr-2" />
+                      MODO DESENVOLVEDOR (BYPASS)
+                    </Button>
+                  )}
+
 
                   <div className="text-center mt-2">
                     <Dialog>
@@ -437,18 +471,20 @@ export default function Auth() {
         </Card>
         
         {/* Footer info */}
-        <div className="mt-8 text-center space-y-2">
-            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">
-                Gestão Virtual &copy; 2024
-            </p>
-        </div>
+        {!showContextSelector && (
+          <div className="mt-8 text-center space-y-2">
+              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">
+                  Gestão Virtual &copy; 2024
+              </p>
+          </div>
+        )}
       </div>
 
       <ContextSelectorModal 
         open={showContextSelector} 
         onSuccess={() => navigate('/dashboard')} 
       />
-    </div >
+    </div>
   );
 }
 

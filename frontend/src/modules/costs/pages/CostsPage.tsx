@@ -13,17 +13,22 @@ import { useProjects } from "@/hooks/useProjects";
 import { ProjectSelector } from "@/components/shared/ProjectSelector";
 import { ProjectEmptyState } from "@/components/shared/ProjectEmptyState";
 import DelayCostModal from "@/modules/production/components/DelayCostModal";
+import { selectedContextSignal } from "@/signals/authSignals";
+import { useSignals } from "@preact/signals-react/runtime";
 
 export default function CostsPage() {
+    useSignals();
     const { profile } = useAuth();
     const navigate = useNavigate();
     const { projects } = useProjects();
     const isGod = (profile?.role as string) === 'SUPER_ADMIN' || (profile?.role as string) === 'SUPER_ADMIN_GOD' || (profile?.role as string) === 'ADMIN' || !!profile?.isSystemAdmin;
-    const [selectedProjectId, setSelectedProjectId] = useState<string>(profile?.projectId || 'all');
+    
+    // Context from Global Signal
+    const selectedContext = selectedContextSignal.value;
+    const projectId = selectedContext?.projectId || 'all';
+
     const [isConfigOpen, setIsConfigOpen] = useState(false);
     const [isDelayModalOpen, setIsDelayModalOpen] = useState(false);
-
-    const projectId = selectedProjectId;
 
     // Fetch Data
     const { data: towers, isLoading: loadingTowers } = useQuery({
@@ -89,11 +94,6 @@ export default function CostsPage() {
                         <Settings2 className="h-3.5 w-3.5 mr-2" />
                         Configurar Custos
                     </Button>
-                    <ProjectSelector
-                        value={selectedProjectId}
-                        onValueChange={setSelectedProjectId}
-                        className="w-[200px]"
-                    />
                 </div>
             </header>
 

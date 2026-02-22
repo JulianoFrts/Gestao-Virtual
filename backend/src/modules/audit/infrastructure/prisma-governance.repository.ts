@@ -8,8 +8,13 @@ import {
 export class PrismaGovernanceRepository implements GovernanceRepository {
   async findGovernanceHistory(
     limit: number,
+    companyId?: string,
   ): Promise<GovernanceAuditHistory[]> {
+    const where: any = {};
+    if (companyId) where.companyId = companyId;
+
     return (prisma as any).governanceAuditHistory.findMany({
+      where,
       take: limit,
       orderBy: { lastDetectedAt: "desc" },
       include: {
@@ -24,8 +29,15 @@ export class PrismaGovernanceRepository implements GovernanceRepository {
     });
   }
 
-  async findRouteHealthHistory(limit: number): Promise<RouteHealthHistory[]> {
+  async findRouteHealthHistory(
+    limit: number,
+    companyId?: string,
+  ): Promise<RouteHealthHistory[]> {
+    const where: any = {};
+    if (companyId) where.companyId = companyId;
+
     return (prisma as any).routeHealthHistory.findMany({
+      where,
       take: limit,
       orderBy: { checkedAt: "desc" },
       include: {
@@ -72,7 +84,7 @@ export class PrismaGovernanceRepository implements GovernanceRepository {
   async findViolationsWithFilters(
     filters: any,
     take: number = 100,
-    skip: number = 0
+    skip: number = 0,
   ): Promise<GovernanceAuditHistory[]> {
     return (prisma as any).governanceAuditHistory.findMany({
       where: filters,

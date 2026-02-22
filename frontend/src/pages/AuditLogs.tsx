@@ -48,7 +48,11 @@ import {
   Info,
   Copy,
   Minimize2,
+  Fingerprint,
 } from "lucide-react";
+import { StreamService } from "@/services/security/StreamService";
+import { ForensicService } from "@/services/security/ForensicService";
+import SecurityInsightsDashboard from "@/components/security/SecurityInsightsDashboard";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn, formatNameForLGPD } from "@/lib/utils";
@@ -513,15 +517,16 @@ export default function AuditLogs() {
       const backendUrl = envUrl.startsWith("http")
         ? envUrl
         : `${window.location.origin}${envUrl.startsWith("/") ? "" : "/"}${envUrl}`;
-      const sseUrl = `${backendUrl}/audit/architectural?${params.toString()}`;
+      const filters = {
+        startDate: dateRange?.from?.toISOString(),
+        endDate: dateRange?.to?.toISOString()
+      };
 
-      const es = new EventSource(sseUrl, { withCredentials: true });
-
-      historyEventSource.current = es;
-
-      es.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
+      StreamService.connect({
+        url: `${backendUrl}/audit/architectural`,
+        token,
+        body: { filters },
+        onMessage: (data) => {
           if (data.type === "start") {
             setHistoryTotal(data.total);
           }
@@ -532,23 +537,17 @@ export default function AuditLogs() {
           if (data.type === "complete") {
             setHistoryProgress(100);
             setIsLoadingHistory(false);
-            es.close();
           }
           if (data.type === "error") {
             toast.error(data.message);
             setIsLoadingHistory(false);
-            es.close();
           }
-        } catch (e) {
-          console.error("Erro parsing SSE history", e);
+        },
+        onError: () => {
+          console.error("Erro conexão SSE History");
+          setIsLoadingHistory(false);
         }
-      };
-
-      es.onerror = () => {
-        console.error("Erro conexão SSE History");
-        es.close();
-        setIsLoadingHistory(false);
-      };
+      });
 
     } catch (error) {
       console.error("[AuditLogs] Erro no catch de fetchAuditHistory:", error);
@@ -566,8 +565,10 @@ export default function AuditLogs() {
     setIsAuditing(true);
     console.log("[AuditLogs] Disparando handleRunArchitecturalAudit (POST)...");
     try {
+      const forensicData = await ForensicService.collect();
       const response = await (orionApi.post(
         "/audit/architectural",
+        { forensicData }
       ) as Promise<any>);
       const data = response.data?.data || response.data || {};
 
@@ -586,9 +587,7 @@ export default function AuditLogs() {
         setTopIssues(data.topIssues);
       }
 
-      toast.success(
-        `Auditoria concluída! Health Score: ${data.healthScore ?? "--"}`,
-      );
+      toast.success(`Auditoria concluída! Score: ${data.healthScore || "--"}`);
     } catch (error) {
       console.error(error);
       toast.error("Erro ao executar auditoria.");
@@ -631,31 +630,28 @@ export default function AuditLogs() {
       const backendUrl = envUrl.startsWith("http")
         ? envUrl
         : `${window.location.origin}${envUrl.startsWith("/") ? "" : "/"}${envUrl}`;
-      const sseUrl = `${backendUrl}/audit/scan-stream?token=${token}`;
+      const url = `${backendUrl}/audit/scan-stream`;
+      console.log("[Stream] URL SEGURA (Auth via JSON Body):", url);
 
-      console.log("[SSE] URL SEGURA (Auth via Cookies):", sseUrl);
-
-      const eventSource = new EventSource(sseUrl, { withCredentials: true });
-
-
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.debug("[AuditLogs:Scan] SSE Message:", data.type, data);
+      const forensicData = await ForensicService.collect();
+      StreamService.connect({
+        url,
+        token,
+        body: { forensicData },
+        onMessage: (data) => {
+          console.debug("[AuditLogs:Scan] Stream Message:", data.type, data);
           setStreamLogs((prev) => [...prev, { type: data.type, data }]);
 
           if (data.type === "progress" && data.total) {
-            // The percentage now accurately climbs 0-100% since backend calculates Total Files
             setStreamProgress(Math.round((data.index / data.total) * 100));
           }
 
           if (data.type === "complete") {
-            console.log("[AuditLogs:Scan] SSE Complete:", data);
+            console.log("[AuditLogs:Scan] Stream Complete:", data);
             setHealthScore(data.healthScore);
             setBySeverity(data.bySeverity);
             setTopIssues(data.topIssues || []);
             setStreamProgress(100);
-            eventSource.close();
             setIsStreaming(false);
             toast.success(`Scan completo! Health Score: ${data.healthScore}`);
             // Recarregar lista de violações
@@ -663,22 +659,17 @@ export default function AuditLogs() {
           }
 
           if (data.type === "error") {
-            console.error("[AuditLogs:Scan] SSE Business Error:", data.message);
-            toast.error(data.message);
-            eventSource.close();
+            console.error("[AuditLogs:Scan] Stream Error:", data.message);
             setIsStreaming(false);
+            toast.error(data.message);
           }
-        } catch (e) {
-          console.error("[AuditLogs:Scan] Erro ao parsear SSE message:", e);
+        },
+        onError: (err) => {
+          console.error("[AuditLogs:Scan] Stream Fatal Error:", err);
+          setIsStreaming(false);
         }
-      };
+      });
 
-      eventSource.onerror = (err) => {
-        console.error("[AuditLogs:Scan] SSE Fatal Error (Connection):", err);
-        eventSource.close();
-        setIsStreaming(false);
-        toast.error("Conexão com o servidor perdida.");
-      };
     } catch (error) {
       console.error(error);
       toast.error("Erro ao iniciar streaming.");
@@ -836,17 +827,17 @@ export default function AuditLogs() {
 
   return (
     
-    <div className="space-y-6 animate-fade-in p-2 md:p-6">
+    <div className="space-y-3 animate-fade-in p-2 md:p-4">
       {!isFocusModeSignal.value && (
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
           <div>
-            <h1 className="text-3xl font-black font-display tracking-tight text-foreground uppercase flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-primary/10">
-                <ShieldCheck className="w-8 h-8 text-primary" />
+            <h1 className="text-xl font-black font-display tracking-tight text-foreground uppercase flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-primary/10">
+                <ShieldCheck className="w-5 h-5 text-primary" />
               </div>
               Central de Segurança
             </h1>
-            <p className="text-muted-foreground mt-1 font-medium italic">
+            <p className="text-[10px] text-muted-foreground mt-0.5 font-medium italic">
               Auditoria completa e validações técnicas do sistema GESTÃO VIRTUAL.
             </p>
           </div>
@@ -861,33 +852,36 @@ export default function AuditLogs() {
         }}
       >
         {!isFocusModeSignal.value && (
-          <TabsList className="glass-card mb-8 p-1 flex justify-start overflow-x-auto gap-2 border-white/5">
-            <TabsTrigger value="audit" className="gap-2 px-6 py-2">
-              <Database className="w-4 h-4" /> Trilha do Sistema
+          <TabsList className="glass-card mb-4 min-h-[36px] h-9 p-0.5 flex justify-start overflow-x-auto gap-0.5 border-white/5">
+            <TabsTrigger value="audit" className="gap-1.5 px-4 py-1 text-xs">
+              <Database className="w-3.5 h-3.5" /> Trilha do Sistema
             </TabsTrigger>
-            <TabsTrigger value="validation" className="gap-2 px-6 py-2">
-              <Activity className="w-4 h-4" /> Sanidade de Rotas
+            <TabsTrigger value="validation" className="gap-1.5 px-4 py-1 text-xs">
+              <Activity className="w-3.5 h-3.5" /> Sanidade de Rotas
             </TabsTrigger>
-            <TabsTrigger value="standards" className="gap-2 px-6 py-2">
-              <ShieldAlert className="w-4 h-4" /> Auditoria de Padrões
+            <TabsTrigger value="standards" className="gap-1.5 px-4 py-1 text-xs">
+              <ShieldAlert className="w-3.5 h-3.5" /> Auditoria de Padrões
             </TabsTrigger>
-            <TabsTrigger value="gapo" className="gap-2 px-6 py-2">
-              <CheckCircle2 className="w-4 h-4" /> Validação GAPO
+            <TabsTrigger value="gapo" className="gap-1.5 px-4 py-1 text-xs">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Validação GAPO
             </TabsTrigger>
-            <TabsTrigger value="checklist" className="gap-2 px-6 py-2">
-              <ShieldCheck className="w-4 h-4" /> Diretrizes de Segurança
+            <TabsTrigger value="checklist" className="gap-1.5 px-4 py-1 text-xs">
+              <ShieldCheck className="w-3.5 h-3.5" /> Diretrizes de Segurança
+            </TabsTrigger>
+            <TabsTrigger value="insights" className="gap-1.5 px-4 py-1 text-xs">
+              <Fingerprint className="w-3.5 h-3.5" /> Inteligência Forense
             </TabsTrigger>
           </TabsList>
         )}
 
         {/* ABA 1: TRILHA DO SISTEMA */}
-        <TabsContent value="audit" className="space-y-6">
-          <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
-            <div className="relative w-full md:w-80">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <TabsContent value="audit" className="space-y-3">
+          <div className="flex flex-col md:flex-row justify-between gap-3 mb-2">
+            <div className="relative w-full md:w-64">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <Input
-                placeholder="Buscar por usuário, tabela ou ação..."
-                className="industrial-input pl-10"
+                placeholder="Busca rápida..."
+                className="industrial-input h-8 pl-9 text-xs"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -917,35 +911,32 @@ export default function AuditLogs() {
             </div>
           </div>
 
-          <Card className="glass-card overflow-hidden">
-            <CardHeader className="border-b border-white/5">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Database className="w-5 h-5 text-primary" />
+          <Card className="glass-card overflow-hidden border-white/5">
+            <CardHeader className="py-2.5 px-4 border-b border-white/5 bg-white/2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Database className="w-4 h-4 text-primary" />
                 Registros do Servidor
               </CardTitle>
-              <CardDescription>
-                Mostrando os últimos {filteredLogs.length} eventos registrados.
-              </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow className="hover:bg-transparent border-white/5 bg-white/2">
-                      <TableHead className="font-bold text-[10px] uppercase tracking-widest pl-6 w-[15%]">
-                        Data/Hora
+                    <TableRow className="hover:bg-transparent border-white/5 bg-white/2 h-8">
+                      <TableHead className="py-0 font-black text-[9px] uppercase tracking-tighter pl-4 w-[12%]">
+                        DATA
                       </TableHead>
-                      <TableHead className="font-bold text-[10px] uppercase tracking-widest w-[30%]">
-                        Usuário / IP
+                      <TableHead className="py-0 font-black text-[9px] uppercase tracking-tighter w-[25%]">
+                        USUÁRIO / IP
                       </TableHead>
-                      <TableHead className="font-bold text-[10px] uppercase tracking-widest w-[30%]">
-                        Módulo / Tabela
+                      <TableHead className="py-0 font-black text-[9px] uppercase tracking-tighter w-[35%]">
+                        MÓDULO / TABELA
                       </TableHead>
-                      <TableHead className="font-bold text-[10px] uppercase tracking-widest w-[15%]">
-                        Ação
+                      <TableHead className="py-0 font-black text-[9px] uppercase tracking-tighter w-[15%] text-center">
+                        AÇÃO
                       </TableHead>
-                      <TableHead className="text-right pr-6 font-bold text-[10px] uppercase tracking-widest w-[10%]">
-                        Detalhes
+                      <TableHead className="py-0 text-right pr-4 font-black text-[9px] uppercase tracking-tighter w-[13%]">
+                        AÇÕES
                       </TableHead>
                     </TableRow>
                   </TableHeader>
@@ -974,32 +965,32 @@ export default function AuditLogs() {
                       filteredLogs.map((logItem) => (
                         <TableRow
                           key={logItem.id}
-                          className="hover:bg-white/2 border-white/5 transition-colors group"
+                          className="hover:bg-white/2 border-white/5 transition-colors group h-10"
                         >
-                          <TableCell className="pl-6 py-4">
-                            <div className="flex flex-col">
-                              <span className="font-bold text-sm text-foreground">
+                          <TableCell className="pl-4 py-1.5">
+                            <div className="flex flex-col leading-tight">
+                              <span className="font-bold text-xs text-foreground">
                                 {safeFormat(logItem.performed_at, "dd/MM/yyyy", {
                                   locale: ptBR,
                                 })}
                               </span>
-                              <span className="text-xs text-muted-foreground">
+                              <span className="text-[10px] text-muted-foreground">
                                 {safeFormat(logItem.performed_at, "HH:mm:ss")}
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="py-1.5">
                             <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center text-[10px] font-black text-white shrink-0">
+                              <div className="w-6 h-6 rounded bg-primary/20 flex items-center justify-center text-[9px] font-black text-primary shrink-0">
                                 {formatNameForLGPD(logItem.performer_name)
                                   ?.charAt(0)
                                   .toUpperCase()}
                               </div>
-                              <div className="flex flex-col">
-                                <span className="font-medium text-sm text-foreground">
+                              <div className="flex flex-col leading-tight">
+                                <span className="font-semibold text-xs text-foreground">
                                   {formatNameForLGPD(logItem.performer_name)}
                                 </span>
-                                <span className="text-[9px] font-mono text-muted-foreground bg-white/5 px-1 rounded w-fit">
+                                <span className="text-[9px] font-mono text-muted-foreground">
                                   {logItem.ipAddress || "0.0.0.0"}
                                 </span>
                               </div>
@@ -2465,6 +2456,11 @@ export default function AuditLogs() {
                   </div>
                 </div>
               </TabsContent>
+
+              {/* ABA 6: INTELIGÊNCIA FORENSE */}
+              <TabsContent value="insights" className="space-y-3">
+                <SecurityInsightsDashboard />
+              </TabsContent>
             </Tabs>
 
       {/* DIALOG DE DETALHES DO LOG */}
@@ -2580,28 +2576,64 @@ export default function AuditLogs() {
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase text-muted-foreground">
-                  Comparativo de Dados
-                </label>
-                <div className="p-4 rounded-xl bg-black/40 border border-white/5 overflow-auto max-h-[400px]">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <h5 className="text-[10px] font-black uppercase text-red-400/70 border-b border-red-500/10 pb-2">Estado Anterior</h5>
-                      <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap leading-tight">
-                        {JSON.stringify(selectedLog.old_data, null, 2)}
-                      </pre>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase text-muted-foreground">
+                    Comparativo de Dados
+                  </label>
+                  <div className="p-3 rounded-xl bg-black/40 border border-white/5 overflow-auto max-h-[300px]">
+                    <div className="grid grid-cols-1 gap-4">
+                      <div className="space-y-2">
+                        <h5 className="text-[9px] font-black uppercase text-red-400/70 border-b border-red-500/10 pb-1">Anterior</h5>
+                        <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap">
+                          {JSON.stringify(selectedLog.old_data, null, 2)}
+                        </pre>
+                      </div>
+                      <div className="space-y-2">
+                        <h5 className="text-[9px] font-black uppercase text-green-400/70 border-b border-green-500/10 pb-1">Novo</h5>
+                        <pre className="text-[10px] font-mono text-foreground whitespace-pre-wrap">
+                          {JSON.stringify(selectedLog.new_data, null, 2)}
+                        </pre>
+                      </div>
                     </div>
-                    <div className="space-y-3">
-                      <h5 className="text-[10px] font-black uppercase text-green-400/70 border-b border-green-500/10 pb-2">Novo Estado</h5>
-                      <pre className="text-[10px] font-mono text-foreground whitespace-pre-wrap leading-tight">
-                        {JSON.stringify(selectedLog.new_data, null, 2)}
-                      </pre>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase text-amber-500 flex items-center gap-1">
+                    <ShieldAlert className="w-3 h-3" /> Metadados Forenses (Audit V2)
+                  </label>
+                  <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-0.5">
+                        <span className="text-[9px] text-muted-foreground uppercase font-black">Hardware ID</span>
+                        <p className="text-[10px] font-mono font-bold truncate">{(selectedLog.metadata as any)?.hwid || "N/A"}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="text-[9px] text-muted-foreground uppercase font-black">Sistema Operacional</span>
+                        <p className="text-[10px] font-bold">{(selectedLog.metadata as any)?.device?.os || "N/A"}</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="text-[9px] text-muted-foreground uppercase font-black">Localização Coletada</span>
+                        <p className="text-[10px] font-bold">
+                          {(selectedLog.metadata as any)?.location?.city}, {(selectedLog.metadata as any)?.location?.country}
+                        </p>
+                      </div>
+                      <div className="space-y-0.5">
+                        <span className="text-[9px] text-muted-foreground uppercase font-black">Rede / ISP</span>
+                        <p className="text-[10px] font-bold">{(selectedLog.metadata as any)?.network?.isp || "N/A"}</p>
+                      </div>
                     </div>
+                    <div className="pt-2 border-t border-amber-500/10">
+                       <span className="text-[9px] text-muted-foreground uppercase font-black block mb-1">Fingerprint Completo</span>
+                       <pre className="text-[9px] font-mono text-amber-200/50 overflow-auto max-h-[100px]">
+                         {JSON.stringify(selectedLog.metadata, null, 2)}
+                       </pre>
                   </div>
                 </div>
               </div>
             </div>
+          </div>
           )}
         </DialogContent>
       </Dialog>

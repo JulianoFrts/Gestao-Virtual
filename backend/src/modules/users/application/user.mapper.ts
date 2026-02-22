@@ -12,7 +12,7 @@ export class UserMapper {
    */
   static toDTO(user: UserWithRelations | null): any {
     if (!user) return null;
-    
+
     // Extraímos os campos aninhados para o nível raiz para facilitar o uso no frontend
     return {
       ...user,
@@ -23,6 +23,13 @@ export class UserMapper {
       companyId: user.affiliation?.companyId,
       projectId: user.affiliation?.projectId,
       siteId: user.affiliation?.siteId,
+      // Flatten Address
+      zipCode: user.address?.cep,
+      street: user.address?.logradouro,
+      neighborhood: user.address?.bairro,
+      city: user.address?.localidade,
+      state: user.address?.uf,
+      number: user.address?.number,
     };
   }
 
@@ -33,11 +40,11 @@ export class UserMapper {
     users: UserWithRelations[],
     total: number,
     page: number,
-    limit: number
+    limit: number,
   ) {
     const flattenedItems = users.map((u) => this.toDTO(u));
     const pages = Math.ceil(total / limit);
-    
+
     return {
       items: flattenedItems,
       pagination: {

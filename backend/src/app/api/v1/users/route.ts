@@ -13,12 +13,12 @@ import { UserService } from "@/modules/users/application/user.service";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
 import { PrismaSystemAuditRepository } from "@/modules/audit/infrastructure/prisma-system-audit.repository";
 
-import { 
-  parsePagination, 
-  parseFilters, 
-  handleSingleUserFetch, 
-  applyHierarchySecurity, 
-  prepareUpdatePayload 
+import {
+  parsePagination,
+  parseFilters,
+  handleSingleUserFetch,
+  applyHierarchySecurity,
+  prepareUpdatePayload,
 } from "./utils";
 import { generateUsersStream } from "./stream";
 import { UserFilters } from "@/types/database";
@@ -46,14 +46,21 @@ export async function GET(request: NextRequest) {
 
     // 1. Validação de Parâmetros
     const pagination = parsePagination(searchParams);
-    if ('errors' in pagination) return ApiResponse.validationError(pagination.errors as string[]);
+    if ("errors" in pagination)
+      return ApiResponse.validationError(pagination.errors as string[]);
 
     const filters = parseFilters(searchParams) as UserFilters;
-    if ((filters as any).errors) return ApiResponse.validationError((filters as any).errors as string[]);
+    if ((filters as any).errors)
+      return ApiResponse.validationError((filters as any).errors as string[]);
 
     // 2. Lógica de Perfil Único (Short-circuit)
     if (filters.id && !filters.search) {
-      const singleUserResponse = await handleSingleUserFetch(filters.id, currentUser, isAdmin, userService);
+      const singleUserResponse = await handleSingleUserFetch(
+        filters.id,
+        currentUser,
+        isAdmin,
+        userService,
+      );
       if (singleUserResponse) return singleUserResponse;
     }
 
@@ -75,10 +82,13 @@ export async function GET(request: NextRequest) {
         sortOrder,
         CONSTANTS,
         userRepository,
-        userService
+        userService,
       });
       return new Response(stream, {
-        headers: { "Content-Type": "application/json", "Transfer-Encoding": "chunked" },
+        headers: {
+          "Content-Type": "application/json",
+          "Transfer-Encoding": "chunked",
+        },
       });
     }
 
@@ -131,7 +141,10 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const currentUser = await authSession.requireAuth();
 
-    const isAdmin = authSession.isUserAdmin(currentUser.role, (currentUser as any).hierarchyLevel);
+    const isAdmin = authSession.isUserAdmin(
+      currentUser.role,
+      (currentUser as any).hierarchyLevel,
+    );
     const canManage = await authSession.can("users.manage");
     const hasFullAccess = await authSession.can("system.full_access");
 
@@ -142,7 +155,11 @@ export async function PUT(request: NextRequest) {
     }
 
     // Validação e Normalização
-    const payload = prepareUpdatePayload(body, { isAdmin, canManage, hasFullAccess });
+    const payload = prepareUpdatePayload(body, {
+      isAdmin,
+      canManage,
+      hasFullAccess,
+    });
     const validation = validate(updateUserSchema, payload);
 
     if (!validation.success) {
@@ -153,11 +170,14 @@ export async function PUT(request: NextRequest) {
       targetUserId,
       validation.data,
       publicUserSelect,
-      currentUser.id
+      currentUser.id,
     );
 
-    await invalidateSessionCache(targetUserId);
-    return ApiResponse.json(updatedUser, CONSTANTS.HTTP.MESSAGES.SUCCESS.UPDATED);
+    await invalidateSessionCache();
+    return ApiResponse.json(
+      updatedUser,
+      CONSTANTS.HTTP.MESSAGES.SUCCESS.UPDATED,
+    );
   } catch (error) {
     return handleApiError(error, "src/app/api/v1/users/route.ts#PUT");
   }
@@ -207,8 +227,59 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    return ApiResponse.json({ success: true }, CONSTANTS.HTTP.MESSAGES.SUCCESS.DELETED);
+    return ApiResponse.json(
+      { success: true },
+      CONSTANTS.HTTP.MESSAGES.SUCCESS.DELETED,
+    );
   } catch (error) {
     return handleApiError(error, "src/app/api/v1/users/route.ts#DELETE");
+  }
+}
+
+// ===== BULK UPDATE USERS =====
+export async function PATCH(request: NextRequest) {
+  try {
+    const currentUser = await authSession.requireAuth();
+    if (!(await authSession.can("users.manage"))) {
+      return ApiResponse.forbidden("Sem permissão para gerenciar usuários");
+    }
+
+    const body = await request.json();
+    const { ids, data } = body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return ApiResponse.validationError([
+        "A list of user IDs is required for bulk update",
+      ]);
+    }
+
+    if (!data || Object.keys(data).length === 0) {
+      return ApiResponse.validationError(["Update data is required"]);
+    }
+
+    const isAdmin = authSession.isUserAdmin(
+      currentUser.role,
+      (currentUser as any).hierarchyLevel,
+    );
+    const canManage = await authSession.can("users.manage");
+    const hasFullAccess = await authSession.can("system.full_access");
+
+    // Validação comum de payload para garantir que não estão alterando campos proibidos
+    const payload = prepareUpdatePayload(data, {
+      isAdmin,
+      canManage,
+      hasFullAccess,
+    });
+
+    // Nota: O Service.bulkUpdateUsers agora usa transação otimizada
+    const result = await userService.bulkUpdateUsers(
+      ids,
+      payload,
+      currentUser.id,
+    );
+
+    return ApiResponse.json(result, CONSTANTS.HTTP.MESSAGES.SUCCESS.UPDATED);
+  } catch (error) {
+    return handleApiError(error, "src/app/api/v1/users/route.ts#PATCH");
   }
 }

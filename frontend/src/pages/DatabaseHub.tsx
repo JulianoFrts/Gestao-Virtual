@@ -4,13 +4,16 @@ import {
     Code2,
     Play,
     Layout,
-    AlertCircle
+    AlertCircle,
+    Maximize2,
+    Minimize2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 // --- Refactored Main Page ---
 import { SqlEditor } from '@/components/database/SqlEditor';
@@ -73,28 +76,38 @@ const SqlConsole = () => {
 };
 
 export default function DatabaseHub() {
+    const [isFullScreen, setIsFullScreen] = useState(false);
+
     return (
-        <div className="p-6 h-[calc(100vh-20px)] flex flex-col gap-6 animate-in fade-in duration-500">
-            {/* Header */}
-            <div className="flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-4">
-                    <div className="p-3 bg-cyan-500/20 rounded-2xl border border-cyan-500/30">
-                        <Database className="w-6 h-6 text-cyan-400" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-black uppercase tracking-tight text-foreground flex items-center gap-3">
-                            Database Hub
-                            <span className="text-[10px] bg-cyan-500/10 text-cyan-400 px-2 py-1 rounded-full border border-cyan-500/20 font-mono">v2.0</span>
-                        </h1>
-                        <p className="text-sm text-muted-foreground">Gerenciamento Avançado de Dados & Schema</p>
+        <div className={cn(
+            "p-6 flex flex-col gap-6 animate-in fade-in duration-500 transition-all",
+            isFullScreen ? "fixed inset-0 z-[100] bg-background p-0 h-screen w-screen" : "h-[calc(100vh-20px)]"
+        )}>
+            {/* Header - Hidden in FullScreen if desired, but user pointed to content area expansion */}
+            {!isFullScreen && (
+                <div className="flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-cyan-500/20 rounded-2xl border border-cyan-500/30">
+                            <Database className="w-6 h-6 text-cyan-400" />
+                        </div>
+                        <div>
+                            <h1 className="text-2xl font-black uppercase tracking-tight text-foreground flex items-center gap-3">
+                                Database Hub
+                                <span className="text-[10px] bg-cyan-500/10 text-cyan-400 px-2 py-1 rounded-full border border-cyan-500/20 font-mono">v2.0</span>
+                            </h1>
+                            <p className="text-sm text-muted-foreground">Gerenciamento Avançado de Dados & Schema</p>
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             {/* Content */}
-            <div className="flex-1 flex flex-col min-h-0 bg-background rounded-xl border border-border shadow-sm overflow-hidden">
+            <div className={cn(
+                "flex-1 flex flex-col min-h-0 bg-background shadow-sm overflow-hidden",
+                isFullScreen ? "rounded-none border-none" : "rounded-xl border border-border"
+            )}>
                 <Tabs defaultValue="console" className="flex-1 flex flex-col min-h-0">
-                    <div className="border-b border-border bg-card/50 px-4 py-2">
+                    <div className="border-b border-border bg-card/50 px-4 py-2 flex items-center justify-between gap-4">
                         <TabsList className="bg-muted p-1 rounded-lg">
                             <TabsTrigger value="console" className="gap-2 px-4">
                                 <Code2 className="w-4 h-4" />
@@ -105,6 +118,15 @@ export default function DatabaseHub() {
                                 Diagram Designer
                             </TabsTrigger>
                         </TabsList>
+
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setIsFullScreen(!isFullScreen)}
+                            className="text-muted-foreground hover:text-foreground hover:bg-white/5"
+                        >
+                            {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                        </Button>
                     </div>
 
                     <TabsContent value="console" className="flex-1 mt-0 p-4 h-full overflow-hidden">

@@ -5,6 +5,7 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
+import { toast } from "@/hooks/use-toast";
 import { storageService } from "@/services/storageService";
 import { logError } from "@/lib/errorHandler";
 import { localApi } from "@/integrations/orion/client";
@@ -95,6 +96,8 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
   selectedContext: { companyId?: string; projectId?: string; siteId?: string } | null;
   selectContext: (context: { companyId?: string; projectId?: string; siteId?: string }) => Promise<void>;
+  bypassAuth: () => Promise<{ success: boolean; error?: string }>;
+  switchRole: (role: string | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -236,6 +239,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const cacheKey = `profile_cache_${newProfile.id}`;
         await storageService.setItem(cacheKey, newProfile);
+
+        // [NOVO] Lógica de Auto-Seleção de Contexto
+        // Se não houver contexto selecionado, populamos com o que veio do perfil
+        if (!selectedContextSignal.value && newProfile.companyId) {
+            const initialContext = {
+                companyId: newProfile.companyId,
+                projectId: newProfile.projectId,
+                siteId: newProfile.siteId || undefined
+            };
+            
+            console.log("[AuthContext] Aplicando auto-seleção de contexto:", initialContext);
+            selectedContextSignal.value = initialContext;
+            await storageService.setItem("selected_context", initialContext);
+        }
+
         return newProfile;
       } catch (error) {
         console.error("Error fetching profile:", error);
@@ -303,8 +321,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         await fetchProfile(currentSession.user.id);
+
+        // [Dev Persistence] Restaurar simulação se houver papel salvo
+        if (simulationRoleSignal.value && window.location.hostname === 'localhost') {
+            console.log("[AuthContext] Restaurando simulação persistente:", simulationRoleSignal.value);
+            // Pequeno delay para garantir que o perfil real e backups estejam prontos
+            setTimeout(() => switchRole(simulationRoleSignal.value), 100);
+        }
       } else {
-        console.log("[AuthContext] No active session found.");
+        console.log("[AuthContext] No active session found. Performing full cleanup.");
+        await storageService.clearAll(); // Limpa cache total se não houver token
         setUser(null);
         setProfile(null);
         permissionsSignal.value = {};
@@ -476,30 +502,138 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = React.useCallback(async () => {
-    if (profile) {
-      try {
+    try {
+      if (profile) {
+        // Opcional: Manter rastro da última conta para conveniência offline (mantenho por compatibilidade)
         await storageService.setItem("last_offline_account", {
-          identifier:
-            profile.email || profile.registrationNumber || profile.username,
+          identifier: profile.email || profile.registrationNumber || profile.username,
           profile: profile,
           passwordHash: "",
           cachedAt: Date.now(),
         });
-      } catch (err) {
-        console.warn("[Auth] Failed to cache last account:", err);
       }
+
+      await localApi.auth.signOut();
+      await storageService.clearAll(); // [STRICT] Limpa Cache Total (IndexedDB)
+      
+      sessionStorage.clear(); // Limpa SessionStorage (MFA, etc)
+      localStorage.removeItem("token");
+      localStorage.removeItem("orion_token");
+
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+      setIsMfaVerified(false);
+      selectedContextSignal.value = null;
+      
+      console.log("[AuthContext] Logout estrito finalizado.");
+      
+      // [STRICT] Force hard refresh to clear all JS memory & React Query cache
+      window.location.href = '/auth';
+    } catch (err) {
+      console.error("[AuthContext] Erro durante logout:", err);
     }
-
-    await localApi.auth.signOut();
-
-    await storageService.removeItem("manual_worker_session");
-    sessionStorage.removeItem("mfa_verified");
-
-    setUser(null);
-    setSession(null);
-    setProfile(null);
-    setIsMfaVerified(false);
   }, [profile]);
+
+  /**
+   * [DEV ONLY] Bypass de Autenticação para testes locais
+   */
+  const bypassAuth = React.useCallback(async () => {
+      if (window.location.hostname !== 'localhost') {
+          console.warn("[AuthContext] Bypass ignorado: Não estamos em localhost");
+          return;
+      }
+      
+      try {
+          setIsLoading(true);
+          // O backend agora aceita ?bypass=true em desenvolvimento
+          const response = await localApi.get("/auth/session?bypass=true");
+          const data = response.data as any;
+          
+          if (data?.user) {
+              const session = {
+                  access_token: "dev-bypass-token",
+                  token_type: "bearer",
+                  expires_in: 3600,
+                  user: data.user
+              };
+              
+              localApi.setToken("dev-bypass-token", session);
+              await fetchProfile(data.user.id);
+              
+              toast({
+                  title: "🔥 MODO DESENVOLVEDOR",
+                  description: "Autenticação liberada (God Mode)",
+              });
+              
+              return { success: true };
+          }
+          return { success: false, error: "Falha no bypass do backend" };
+      } catch (err: any) {
+          return { success: false, error: err.message };
+      } finally {
+          setIsLoading(false);
+      }
+  }, [fetchProfile, toast]);
+  
+  /**
+   * [DEV ONLY] Troca dinâmica de Papel (Simulação)
+   */
+  const switchRole = React.useCallback(async (role: string | null) => {
+    if (window.location.hostname !== 'localhost') return;
+
+    try {
+      if (!role) {
+        // Restaurar estado real
+        if (realPermissionsSignal.value) {
+          permissionsSignal.value = realPermissionsSignal.value;
+          uiSignal.value = realUiSignal.value || {};
+          realPermissionsSignal.value = null;
+          realUiSignal.value = null;
+        }
+        simulationRoleSignal.value = null;
+        toast({ title: "Modo Real Ativado", description: "Simulação encerrada." });
+      } else {
+        // Iniciar simulação
+        if (!realPermissionsSignal.value) {
+          realPermissionsSignal.value = permissionsSignal.value;
+          realUiSignal.value = uiSignal.value;
+        }
+
+        simulationRoleSignal.value = role;
+
+        // Buscar permissões do papel simulado via endpoint dedicado
+        const response = await localApi.get(`/auth/permissions-map?role=${role}`);
+        const data = response.data as any;
+
+        if (data?.permissions) {
+          permissionsSignal.value = data.permissions;
+          uiSignal.value = data.ui || {};
+          toast({ 
+            title: `Simulação: ${role}`, 
+            description: "Permissões atualizadas dinamicamente." 
+          });
+        }
+      }
+
+      // Sincronizar currentUserSignal para refletir a nova realidade (Real ou Simulação)
+      if (profile) {
+        currentUserSignal.value = {
+          ...profile,
+          role: (simulationRoleSignal.value || profile.role) as any,
+          permissions: permissionsSignal.value,
+          ui: uiSignal.value,
+          isSystemAdmin: !simulationRoleSignal.value && !!profile.isSystemAdmin
+        };
+      }
+    } catch (err: any) {
+      toast({ 
+        title: "Erro na Simulação", 
+        description: "Não foi possível carregar as permissões do papel.",
+        variant: "destructive"
+      });
+    }
+  }, [profile, toast]);
 
   const resetPassword = React.useCallback(
     async (email: string): Promise<{ success: boolean; error?: string }> => {
@@ -609,6 +743,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
       selectedContext: selectedContextSignal.value,
       selectContext,
+      bypassAuth,
+      switchRole,
     }),
     [
       user,
@@ -629,6 +765,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       fetchProfile,
       selectedContextSignal.value,
       selectContext,
+      switchRole,
     ],
   );
 

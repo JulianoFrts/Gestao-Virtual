@@ -41,6 +41,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Access } from "@/components/auth/Access";
+import { UserPermission } from "@/hooks/usePermissions";
 import {
   Table,
   TableBody,
@@ -658,28 +660,32 @@ export default function Employees() {
   };
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in view-adaptive-container py-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex gap-2">
           {canUpdate && (
             <>
-              <Button
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-                className="hidden sm:flex"
-              >
-                <FileUp className="w-4 h-4 mr-2" />
-                Importar CSV
-              </Button>
-              <Button
-                variant="outline"
-                onClick={downloadTemplate}
-                className="hidden sm:flex"
-              >
-                <FileDown className="w-4 h-4 mr-2" />
-                Baixar Template
-              </Button>
+              <Access auth="employees.edit" mode="lock">
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="hidden sm:flex"
+                >
+                  <FileUp className="w-4 h-4 mr-2" />
+                  Importar CSV
+                </Button>
+              </Access>
+              <Access auth="employees.view" mode="lock">
+                <Button
+                  variant="outline"
+                  onClick={downloadTemplate}
+                  className="hidden sm:flex"
+                >
+                  <FileDown className="w-4 h-4 mr-2" />
+                  Baixar Template
+                </Button>
+              </Access>
               <Dialog
                 open={isImportModalOpen}
                 onOpenChange={setIsImportModalOpen}
@@ -836,10 +842,12 @@ export default function Employees() {
               }}
             >
               <DialogTrigger asChild>
-                <Button className="gradient-primary text-white shadow-glow">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Novo Funcionário
-                </Button>
+                <Access auth="employees.edit" mode="lock">
+                  <Button className="gradient-primary text-white shadow-glow">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Novo Funcionário
+                  </Button>
+                </Access>
               </DialogTrigger>
               <DialogContent className="max-w-2xl bg-card/95 border-border/50 backdrop-blur-xl text-foreground max-h-[90vh] overflow-y-auto shadow-premium">
                 <DialogHeader>
@@ -880,47 +888,53 @@ export default function Employees() {
                             <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                               Nome Completo *
                             </Label>
-                            <Input
-                              placeholder="Nome do colaborador"
-                              className="industrial-input"
-                              value={formData.fullName}
-                              onChange={(e) =>
-                                handleInputChange("fullName", e.target.value)
-                              }
-                              required
-                            />
+                            <Access auth="employees.edit" mode="read-only">
+                              <Input
+                                placeholder="Nome do colaborador"
+                                className="industrial-input"
+                                value={formData.fullName}
+                                onChange={(e) =>
+                                  handleInputChange("fullName", e.target.value)
+                                }
+                                required
+                              />
+                            </Access>
                           </div>
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                               <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                                 Matrícula
                               </Label>
-                              <Input
-                                placeholder="00000"
-                                className="industrial-input"
-                                value={formData.registrationNumber}
-                                onChange={(e) =>
-                                  handleInputChange(
-                                    "registrationNumber",
-                                    e.target.value,
-                                    "registration",
-                                  )
-                                }
-                              />
+                              <Access auth="employees.edit" mode="read-only">
+                                <Input
+                                  placeholder="00000"
+                                  className="industrial-input"
+                                  value={formData.registrationNumber}
+                                  onChange={(e) =>
+                                    handleInputChange(
+                                      "registrationNumber",
+                                      e.target.value,
+                                      "registration",
+                                    )
+                                  }
+                                />
+                              </Access>
                             </div>
                             <div className="space-y-2">
                               <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                                 Email
                               </Label>
-                              <Input
-                                type="email"
-                                placeholder="email@exemplo.com"
-                                className="industrial-input"
-                                value={formData.email}
-                                onChange={(e) =>
-                                  handleInputChange("email", e.target.value)
-                                }
-                              />
+                              <Access auth="employees.edit" mode="read-only">
+                                <Input
+                                  type="email"
+                                  placeholder="email@exemplo.com"
+                                  className="industrial-input"
+                                  value={formData.email}
+                                  onChange={(e) =>
+                                    handleInputChange("email", e.target.value)
+                                  }
+                                />
+                              </Access>
                             </div>
                           </div>
                         </div>
@@ -941,47 +955,51 @@ export default function Employees() {
                             <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                               Senha de Acesso
                             </Label>
-                            <Input
-                              type="password"
-                              placeholder="Clique para definir"
-                              className="industrial-input center-text"
-                              value={formData.password}
-                              onChange={(e) =>
-                                handleInputChange("password", e.target.value)
-                              }
-                              autoComplete="new-password"
-                            />
+                            <Access auth="employees.edit" mode="read-only">
+                              <Input
+                                type="password"
+                                placeholder="Clique para definir"
+                                className="industrial-input center-text"
+                                value={formData.password}
+                                onChange={(e) =>
+                                  handleInputChange("password", e.target.value)
+                                }
+                                autoComplete="new-password"
+                              />
+                            </Access>
                           </div>
                           <div className="space-y-2">
                             <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                               Cargo / Função *
                             </Label>
-                            <Select
-                              value={formData.functionId}
-                              onValueChange={(val) => {
-                                const selectedFunc = functions.find(
-                                  (f) => f.id === val,
-                                );
-                                setFormData({
-                                  ...formData,
-                                  functionId: val,
-                                  level:
-                                    selectedFunc?.hierarchyLevel ||
-                                    formData.level,
-                                });
-                              }}
-                            >
-                              <SelectTrigger className="industrial-input">
-                                <SelectValue placeholder="Selecione..." />
-                              </SelectTrigger>
-                              <SelectContent className="glass-card border-border/50">
-                                {functions.map((f) => (
-                                  <SelectItem key={f.id} value={f.id}>
-                                    {f.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <Access auth="employees.edit" mode="read-only">
+                              <Select
+                                value={formData.functionId}
+                                onValueChange={(val) => {
+                                  const selectedFunc = functions.find(
+                                    (f) => f.id === val,
+                                  );
+                                  setFormData({
+                                    ...formData,
+                                    functionId: val,
+                                    level:
+                                      selectedFunc?.hierarchyLevel ||
+                                      formData.level,
+                                  });
+                                }}
+                              >
+                                <SelectTrigger className="industrial-input">
+                                  <SelectValue placeholder="Selecione..." />
+                                </SelectTrigger>
+                                <SelectContent className="glass-card border-border/50">
+                                  {functions.map((f) => (
+                                    <SelectItem key={f.id} value={f.id}>
+                                      {f.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </Access>
                           </div>
                         </div>
                       </AccordionContent>
@@ -1001,28 +1019,30 @@ export default function Employees() {
                             <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                               Empresa Afiliada *
                             </Label>
-                            <Select
-                              value={formData.companyId}
-                              onValueChange={(v) =>
-                                setFormData({
-                                  ...formData,
-                                  companyId: v,
-                                  projectId: undefined,
-                                  siteId: undefined,
-                                })
-                              }
-                            >
-                              <SelectTrigger className="industrial-input">
-                                <SelectValue placeholder="Selecione..." />
-                              </SelectTrigger>
-                              <SelectContent className="glass-card border-border/50">
-                                {companies.map((c) => (
-                                  <SelectItem key={c.id} value={c.id}>
-                                    {c.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <Access auth="employees.edit" mode="read-only">
+                              <Select
+                                value={formData.companyId}
+                                onValueChange={(v) =>
+                                  setFormData({
+                                    ...formData,
+                                    companyId: v,
+                                    projectId: undefined,
+                                    siteId: undefined,
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="industrial-input">
+                                  <SelectValue placeholder="Selecione..." />
+                                </SelectTrigger>
+                                <SelectContent className="glass-card border-border/50">
+                                  {companies.map((c) => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                      {c.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </Access>
                           </div>
                         )}
                         <div className="grid grid-cols-2 gap-4">
@@ -1030,64 +1050,68 @@ export default function Employees() {
                             <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                               Obra Vinculada *
                             </Label>
-                            <Select
-                              value={formData.projectId}
-                              onValueChange={(v) =>
-                                setFormData({
-                                  ...formData,
-                                  projectId: v,
-                                  siteId: "",
-                                })
-                              }
-                              disabled={
-                                !formData.companyId &&
-                                isCorporateRole(profile?.role)
-                              }
-                            >
-                              <SelectTrigger className="industrial-input">
-                                <SelectValue placeholder="Selecione..." />
-                              </SelectTrigger>
-                              <SelectContent className="glass-card border-border/50">
-                                {projects
-                                  .filter(
-                                    (p) =>
-                                      !formData.companyId ||
-                                      p.companyId === formData.companyId,
-                                  )
-                                  .map((p) => (
-                                    <SelectItem key={p.id} value={p.id}>
-                                      {p.name}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
+                            <Access auth="employees.edit" mode="read-only">
+                              <Select
+                                value={formData.projectId}
+                                onValueChange={(v) =>
+                                  setFormData({
+                                    ...formData,
+                                    projectId: v,
+                                    siteId: "",
+                                  })
+                                }
+                                disabled={
+                                  !formData.companyId &&
+                                  isCorporateRole(profile?.role)
+                                }
+                              >
+                                <SelectTrigger className="industrial-input">
+                                  <SelectValue placeholder="Selecione..." />
+                                </SelectTrigger>
+                                <SelectContent className="glass-card border-border/50">
+                                  {projects
+                                    .filter(
+                                      (p) =>
+                                        !formData.companyId ||
+                                        p.companyId === formData.companyId,
+                                    )
+                                    .map((p) => (
+                                      <SelectItem key={p.id} value={p.id}>
+                                        {p.name}
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                            </Access>
                           </div>
                           <div className="space-y-2">
                             <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                               Canteiro / Unidade *
                             </Label>
-                            <Select
-                              value={formData.siteId}
-                              onValueChange={(v) =>
-                                setFormData({ ...formData, siteId: v })
-                              }
-                              disabled={!formData.projectId}
-                            >
-                              <SelectTrigger className="industrial-input">
-                                <SelectValue placeholder="Selecione..." />
-                              </SelectTrigger>
-                              <SelectContent className="glass-card border-border/50">
-                                {sites
-                                  .filter(
-                                    (s) => s.projectId === formData.projectId,
-                                  )
-                                  .map((s) => (
-                                    <SelectItem key={s.id} value={s.id}>
-                                      {s.name}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
+                            <Access auth="employees.edit" mode="read-only">
+                              <Select
+                                value={formData.siteId}
+                                onValueChange={(v) =>
+                                  setFormData({ ...formData, siteId: v })
+                                }
+                                disabled={!formData.projectId}
+                              >
+                                <SelectTrigger className="industrial-input">
+                                  <SelectValue placeholder="Selecione..." />
+                                </SelectTrigger>
+                                <SelectContent className="glass-card border-border/50">
+                                  {sites
+                                    .filter(
+                                      (s) => s.projectId === formData.projectId,
+                                    )
+                                    .map((s) => (
+                                      <SelectItem key={s.id} value={s.id}>
+                                        {s.name}
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                            </Access>
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -1095,40 +1119,44 @@ export default function Employees() {
                             <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                               Tipo de Mão de Obra
                             </Label>
-                            <Select
-                              value={formData.laborType}
-                              onValueChange={(val) =>
-                                setFormData({ ...formData, laborType: val })
-                              }
-                            >
-                              <SelectTrigger className="industrial-input">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent className="glass-card border-white/10">
-                                <SelectItem value="MOD">
-                                  Mão de Obra Direta
-                                </SelectItem>
-                                <SelectItem value="MOI">
-                                  Mão de Obra Indireta
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
+                            <Access auth="employees.edit" mode="read-only">
+                              <Select
+                                value={formData.laborType}
+                                onValueChange={(val) =>
+                                  setFormData({ ...formData, laborType: val })
+                                }
+                              >
+                                <SelectTrigger className="industrial-input">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="glass-card border-white/10">
+                                  <SelectItem value="MOD">
+                                    Mão de Obra Direta
+                                  </SelectItem>
+                                  <SelectItem value="MOI">
+                                    Mão de Obra Indireta
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </Access>
                           </div>
                           <div className="space-y-2">
                             <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                               Nível Individual
                             </Label>
-                            <Input
-                              type="number"
-                              value={formData.level}
-                              onChange={(e) =>
-                                setFormData({
-                                  ...formData,
-                                  level: parseInt(e.target.value) || 0,
-                                })
-                              }
-                              className="industrial-input"
-                            />
+                            <Access auth="employees.edit" mode="read-only">
+                              <Input
+                                type="number"
+                                value={formData.level}
+                                onChange={(e) =>
+                                  setFormData({
+                                    ...formData,
+                                    level: parseInt(e.target.value) || 0,
+                                  })
+                                }
+                                className="industrial-input"
+                              />
+                            </Access>
                           </div>
                         </div>
                       </AccordionContent>
@@ -1148,32 +1176,36 @@ export default function Employees() {
                             <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                               CPF
                             </Label>
-                            <Input
-                              placeholder="000.000.000-00"
-                              className="industrial-input"
-                              value={formData.cpf}
-                              onChange={(e) =>
-                                handleInputChange("cpf", e.target.value, "cpf")
-                              }
-                              required
-                            />
+                            <Access auth="employees.edit" mode="read-only">
+                              <Input
+                                placeholder="000.000.000-00"
+                                className="industrial-input"
+                                value={formData.cpf}
+                                onChange={(e) =>
+                                  handleInputChange("cpf", e.target.value, "cpf")
+                                }
+                                required
+                              />
+                            </Access>
                           </div>
                           <div className="space-y-2">
                             <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                               Data Nasc.
                             </Label>
-                            <Input
-                              placeholder="DD/MM/AAAA"
-                              className="industrial-input"
-                              value={formData.birthDate}
-                              onChange={(e) =>
-                                handleInputChange(
-                                  "birthDate",
-                                  e.target.value,
-                                  "date",
-                                )
-                              }
-                            />
+                            <Access auth="employees.edit" mode="read-only">
+                              <Input
+                                placeholder="DD/MM/AAAA"
+                                className="industrial-input"
+                                value={formData.birthDate}
+                                onChange={(e) =>
+                                  handleInputChange(
+                                    "birthDate",
+                                    e.target.value,
+                                    "date",
+                                  )
+                                }
+                              />
+                            </Access>
                           </div>
                         </div>
 
@@ -1181,18 +1213,20 @@ export default function Employees() {
                           <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                             Telefone / Celular
                           </Label>
-                          <Input
-                            placeholder="(00) 00000-0000"
-                            className="industrial-input"
-                            value={formData.phone}
-                            onChange={(e) =>
-                              handleInputChange(
-                                "phone",
-                                e.target.value,
-                                "phone",
-                              )
-                            }
-                          />
+                          <Access auth="employees.edit" mode="read-only">
+                            <Input
+                              placeholder="(00) 00000-0000"
+                              className="industrial-input"
+                              value={formData.phone}
+                              onChange={(e) =>
+                                handleInputChange(
+                                  "phone",
+                                  e.target.value,
+                                  "phone",
+                                )
+                              }
+                            />
+                          </Access>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -1200,28 +1234,32 @@ export default function Employees() {
                             <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                               CEP
                             </Label>
-                            <Input
-                              placeholder="00000-000"
-                              className="industrial-input"
-                              value={formData.cep}
-                              onChange={(e) =>
-                                handleInputChange("cep", e.target.value, "cep")
-                              }
-                              onBlur={(e) => handleCepBlur(e.target.value)}
-                            />
+                            <Access auth="employees.edit" mode="read-only">
+                              <Input
+                                placeholder="00000-000"
+                                className="industrial-input"
+                                value={formData.cep}
+                                onChange={(e) =>
+                                  handleInputChange("cep", e.target.value, "cep")
+                                }
+                                onBlur={(e) => handleCepBlur(e.target.value)}
+                              />
+                            </Access>
                           </div>
                           <div className="space-y-2">
                             <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                               Rua / Logradouro
                             </Label>
-                            <Input
-                              placeholder="Nome da rua"
-                              className="industrial-input"
-                              value={formData.street}
-                              onChange={(e) =>
-                                handleInputChange("street", e.target.value)
-                              }
-                            />
+                            <Access auth="employees.edit" mode="read-only">
+                              <Input
+                                placeholder="Nome da rua"
+                                className="industrial-input"
+                                value={formData.street}
+                                onChange={(e) =>
+                                  handleInputChange("street", e.target.value)
+                                }
+                              />
+                            </Access>
                           </div>
                         </div>
 
@@ -1230,30 +1268,34 @@ export default function Employees() {
                             <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                               Número
                             </Label>
-                            <Input
-                              placeholder="123"
-                              className="industrial-input"
-                              value={formData.number}
-                              onChange={(e) =>
-                                handleInputChange("number", e.target.value)
-                              }
-                            />
+                            <Access auth="employees.edit" mode="read-only">
+                              <Input
+                                placeholder="123"
+                                className="industrial-input"
+                                value={formData.number}
+                                onChange={(e) =>
+                                  handleInputChange("number", e.target.value)
+                                }
+                              />
+                            </Access>
                           </div>
                           <div className="space-y-2">
                             <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                               Bairro
                             </Label>
-                            <Input
-                              placeholder="Nome do bairro"
-                              className="industrial-input"
-                              value={formData.neighborhood}
-                              onChange={(e) =>
-                                handleInputChange(
-                                  "neighborhood",
-                                  e.target.value,
-                                )
-                              }
-                            />
+                            <Access auth="employees.edit" mode="read-only">
+                              <Input
+                                placeholder="Nome do bairro"
+                                className="industrial-input"
+                                value={formData.neighborhood}
+                                onChange={(e) =>
+                                  handleInputChange(
+                                    "neighborhood",
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                            </Access>
                           </div>
                         </div>
 
@@ -1262,26 +1304,30 @@ export default function Employees() {
                             <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                               Cidade
                             </Label>
-                            <Input
-                              className="industrial-input"
-                              value={formData.city}
-                              onChange={(e) =>
-                                handleInputChange("city", e.target.value)
-                              }
-                            />
+                            <Access auth="employees.edit" mode="read-only">
+                              <Input
+                                className="industrial-input"
+                                value={formData.city}
+                                onChange={(e) =>
+                                  handleInputChange("city", e.target.value)
+                                }
+                              />
+                            </Access>
                           </div>
                           <div className="space-y-2">
                             <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                               UF
                             </Label>
-                            <Input
-                              className="industrial-input uppercase"
-                              value={formData.state}
-                              onChange={(e) =>
-                                handleInputChange("state", e.target.value)
-                              }
-                              maxLength={2}
-                            />
+                            <Access auth="employees.edit" mode="read-only">
+                              <Input
+                                className="industrial-input uppercase"
+                                value={formData.state}
+                                onChange={(e) =>
+                                  handleInputChange("state", e.target.value)
+                                }
+                                maxLength={2}
+                              />
+                            </Access>
                           </div>
                         </div>
 
@@ -1289,21 +1335,23 @@ export default function Employees() {
                           <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
                             Gênero
                           </Label>
-                          <Select
-                            value={formData.gender}
-                            onValueChange={(v) =>
-                              setFormData({ ...formData, gender: v })
-                            }
-                          >
-                            <SelectTrigger className="industrial-input">
-                              <SelectValue placeholder="Selecione..." />
-                            </SelectTrigger>
-                            <SelectContent className="glass-card border-white/10">
-                              <SelectItem value="M">Masculino</SelectItem>
-                              <SelectItem value="F">Feminino</SelectItem>
-                              <SelectItem value="O">Outro</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <Access auth="employees.edit" mode="read-only">
+                            <Select
+                              value={formData.gender}
+                              onValueChange={(v) =>
+                                setFormData({ ...formData, gender: v })
+                              }
+                            >
+                              <SelectTrigger className="industrial-input">
+                                <SelectValue placeholder="Selecione..." />
+                              </SelectTrigger>
+                              <SelectContent className="glass-card border-white/10">
+                                <SelectItem value="M">Masculino</SelectItem>
+                                <SelectItem value="F">Feminino</SelectItem>
+                                <SelectItem value="O">Outro</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </Access>
                         </div>
                       </AccordionContent>
                     </AccordionItem>
@@ -1313,18 +1361,20 @@ export default function Employees() {
                     <Button type="button" variant="ghost" onClick={resetForm}>
                       Cancelar
                     </Button>
-                    <Button
-                      type="submit"
-                      className="gradient-primary text-white shadow-glow"
-                      disabled={isSaving}
-                    >
-                      {isSaving ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : null}
-                      {editingEmployee
-                        ? "Salvar Alterações"
-                        : "Cadastrar novo Colaborador"}
-                    </Button>
+                    <Access auth="employees.edit" mode="lock">
+                      <Button
+                        type="submit"
+                        className="gradient-primary text-white shadow-glow"
+                        disabled={isSaving}
+                      >
+                        {isSaving ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : null}
+                        {editingEmployee
+                          ? "Salvar Alterações"
+                          : "Cadastrar novo Colaborador"}
+                      </Button>
+                    </Access>
                   </div>
                 </form>
               </DialogContent>
@@ -1493,29 +1543,33 @@ export default function Employees() {
             </Button>
 
             {selectedIds.length > 0 && (
-              <Button
-                variant="destructive"
-                onClick={handleBulkDelete}
-                className="shadow-glow-red"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Remover ({selectedIds.length})
-              </Button>
+              <Access auth="employees.delete" mode="lock">
+                <Button
+                  variant="destructive"
+                  onClick={handleBulkDelete}
+                  className="shadow-glow-red"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Remover ({selectedIds.length})
+                </Button>
+              </Access>
             )}
 
             {selectedIds.length > 0 && canUpdate && (
-              <Button
-                variant="outline"
-                className="border-primary/50 text-primary bg-primary/5 hover:bg-primary/10"
-                onClick={() => {
-                  setBulkField("");
-                  setBulkValue(null);
-                  setIsBulkDialogOpen(true);
-                }}
-              >
-                <Pencil className="w-4 h-4 mr-2" />
-                Editar ({selectedIds.length})
-              </Button>
+              <Access auth="employees.edit" mode="lock">
+                <Button
+                  variant="outline"
+                  className="border-primary/50 text-primary bg-primary/5 hover:bg-primary/10"
+                  onClick={() => {
+                    setBulkField("");
+                    setBulkValue(null);
+                    setIsBulkDialogOpen(true);
+                  }}
+                >
+                  <Pencil className="w-4 h-4 mr-2" />
+                  Editar ({selectedIds.length})
+                </Button>
+              </Access>
             )}
           </div>
 
@@ -1956,55 +2010,63 @@ export default function Employees() {
 
                           return (
                             <>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEdit(EmployeeProfile)}
-                                className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-colors"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => {
-                                  setFaceRegEmployee(EmployeeProfile);
-                                  setIsFaceRegOpen(true);
-                                }}
-                                className={`h-8 w-8 ${EmployeeProfile.faceDescriptor ? "text-primary" : "text-muted-foreground"} hover:bg-primary/10 transition-colors`}
-                                title={
-                                  EmployeeProfile.faceDescriptor
-                                    ? "Recadastrar Rosto"
-                                    : "Cadastrar Rosto"
-                                }
-                              >
-                                <Scan className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => toggleActive(EmployeeProfile)}
-                                className={`h-8 w-8 ${EmployeeProfile.isActive ? "hover:bg-amber-500/10 hover:text-amber-500" : "hover:bg-green-500/10 hover:text-green-500"}`}
-                                title={
-                                  EmployeeProfile.isActive
-                                    ? "Desativar"
-                                    : "Ativar"
-                                }
-                              >
-                                {EmployeeProfile.isActive ? (
-                                  <XCircle className="w-4 h-4" />
-                                ) : (
-                                  <CheckCircle2 className="w-4 h-4" />
-                                )}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleDelete(EmployeeProfile)}
-                                className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                              <Access auth="employees.edit" mode="lock">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleEdit(EmployeeProfile)}
+                                  className="h-8 w-8 hover:bg-primary/10 hover:text-primary transition-colors"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </Button>
+                              </Access>
+                              <Access auth="employees.edit" mode="lock">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setFaceRegEmployee(EmployeeProfile);
+                                    setIsFaceRegOpen(true);
+                                  }}
+                                  className={`h-8 w-8 ${EmployeeProfile.faceDescriptor ? "text-primary" : "text-muted-foreground"} hover:bg-primary/10 transition-colors`}
+                                  title={
+                                    EmployeeProfile.faceDescriptor
+                                      ? "Recadastrar Rosto"
+                                      : "Cadastrar Rosto"
+                                  }
+                                >
+                                  <Scan className="w-4 h-4" />
+                                </Button>
+                              </Access>
+                              <Access auth="employees.edit" mode="lock">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => toggleActive(EmployeeProfile)}
+                                  className={`h-8 w-8 ${EmployeeProfile.isActive ? "hover:bg-amber-500/10 hover:text-amber-500" : "hover:bg-green-500/10 hover:text-green-500"}`}
+                                  title={
+                                    EmployeeProfile.isActive
+                                      ? "Desativar"
+                                      : "Ativar"
+                                  }
+                                >
+                                  {EmployeeProfile.isActive ? (
+                                    <XCircle className="w-4 h-4" />
+                                  ) : (
+                                    <CheckCircle2 className="w-4 h-4" />
+                                  )}
+                                </Button>
+                              </Access>
+                              <Access auth="employees.delete" mode="lock">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleDelete(EmployeeProfile)}
+                                  className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive transition-colors"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </Access>
                             </>
                           );
                         })()}
@@ -2043,9 +2105,10 @@ export default function Employees() {
                   <SelectValue placeholder="Selecione o campo..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {isCorporateRole(profile?.role) && <SelectItem value="companyId">Empresa</SelectItem>}
-                  <SelectItem value="projectId">Obra / Projeto</SelectItem>
-                  <SelectItem value="siteId">Canteiro / Unidade</SelectItem>
+                  <SelectItem value="allocation">Empresa / Obra / Canteiro</SelectItem>
+                  {isCorporateRole(profile?.role) && <SelectItem value="companyId">Empresa Solo</SelectItem>}
+                  <SelectItem value="projectId">Obra / Projeto Solo</SelectItem>
+                  <SelectItem value="siteId">Canteiro / Unidade Solo</SelectItem>
                   <SelectItem value="functionId">Função / Cargo</SelectItem>
                   <SelectItem value="level">Nível Profissional</SelectItem>
                   <SelectItem value="laborType">Tipo de Mão de Obra</SelectItem>
@@ -2053,51 +2116,172 @@ export default function Employees() {
               </Select>
             </div>
 
-            {bulkField === "companyId" && (
-              <div className="space-y-2">
-                <Label>Nova Empresa</Label>
-                <Select value={bulkValue} onValueChange={setBulkValue}>
-                  <SelectTrigger className="industrial-input">
-                    <SelectValue placeholder="Selecione a empresa..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {companies.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {bulkField === "allocation" && (
+              <div className="space-y-4">
+                {isCorporateRole(profile?.role) && (
+                  <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                    <Label className="flex items-center gap-2">
+                      <span className="bg-primary/20 text-primary w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold">1</span>
+                      Empresa
+                    </Label>
+                    <Select 
+                      value={bulkValue?.companyId || ""} 
+                      onValueChange={(val) => setBulkValue({ companyId: val, projectId: "", siteId: "" })}
+                    >
+                      <SelectTrigger className="industrial-input border-primary/30">
+                        <SelectValue placeholder="-------- Clique para selecionar a empresa --------" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companies.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {(!isCorporateRole(profile?.role) || bulkValue?.companyId) && (
+                  <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                    <Label className="flex items-center gap-2">
+                      <span className="bg-primary/20 text-primary w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold">{isCorporateRole(profile?.role) ? "2" : "1"}</span>
+                      Obra / Projeto
+                    </Label>
+                    <Select 
+                      value={bulkValue?.projectId || ""} 
+                      onValueChange={(val) => setBulkValue({ ...(bulkValue || {}), projectId: val, siteId: "" })}
+                    >
+                      <SelectTrigger className="industrial-input border-primary/30">
+                        <SelectValue placeholder="-------- Clique para selecionar a obra --------" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {projects
+                          .filter(p => !isCorporateRole(profile?.role) || p.companyId === bulkValue?.companyId)
+                          .map((p) => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {((!isCorporateRole(profile?.role) || bulkValue?.companyId) && bulkValue?.projectId) && (
+                  <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                    <Label className="flex items-center gap-2">
+                      <span className="bg-primary/20 text-primary w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold">{isCorporateRole(profile?.role) ? "3" : "2"}</span>
+                      Canteiro / Unidade
+                    </Label>
+                    <Select 
+                      value={bulkValue?.siteId || ""} 
+                      onValueChange={(val) => setBulkValue({ ...(bulkValue || {}), siteId: val })}
+                    >
+                      <SelectTrigger className="industrial-input border-primary/30 focus:border-primary">
+                        <SelectValue placeholder="-------- Clique para selecionar o canteiro --------" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sites
+                          .filter(s => s.projectId === bulkValue?.projectId)
+                          .map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {((!isCorporateRole(profile?.role) || bulkValue?.companyId) && bulkValue?.projectId && bulkValue?.siteId) && (
+                  <div className="space-y-2 animate-in fade-in slide-in-from-bottom-4 p-4 rounded-md bg-warning/10 border border-warning/30 mt-4">
+                    <h4 className="text-sm font-semibold text-warning mb-1 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      Atenção: Transferência em Massa
+                    </h4>
+                    <p className="text-xs text-warning/90 leading-relaxed">
+                      Você está prestes a transferir <strong>{selectedIds.length} colaboradores</strong> para uma nova localidade (Empresa/Obra/Canteiro). 
+                      Caso eles já possuam essas vinculações, elas serão substituídas. Verifique as seleções antes de aplicar a todos.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
-            {bulkField === "projectId" && (
-              <div className="space-y-2">
-                <Label>Nova Obra</Label>
-                <Select value={bulkValue} onValueChange={setBulkValue}>
-                  <SelectTrigger className="industrial-input">
-                    <SelectValue placeholder="Selecione a obra..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            {bulkField === "allocation" && (
+              <div className="space-y-4 pt-2">
+                {((!isCorporateRole(profile?.role) || bulkValue?.companyId) && bulkValue?.projectId && bulkValue?.siteId) && (
+                  <div className="p-3 mb-2 rounded-lg bg-warning/10 border border-warning/30 shadow-inner">
+                    <h4 className="text-sm font-semibold text-warning flex items-center gap-2 mb-1">
+                      <AlertCircle className="w-4 h-4" />
+                      Aviso: Alteração em Massa
+                    </h4>
+                    <p className="text-[12px] text-warning/90 leading-relaxed">
+                      Lembrando: caso o usuário já tenha um desses 3 vínculos exatamente como o selecionado, o sistema o ignorará e pulará para o próximo. Apenas quem não estiver assim será atualizado.
+                    </p>
+                  </div>
+                )}
 
-            {bulkField === "siteId" && (
-              <div className="space-y-2">
-                <Label>Novo Canteiro</Label>
-                <Select value={bulkValue} onValueChange={setBulkValue}>
-                  <SelectTrigger className="industrial-input">
-                    <SelectValue placeholder="Selecione o canteiro..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sites.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {isCorporateRole(profile?.role) && (
+                  <div className="space-y-1">
+                    <Label className="text-white/90 font-medium">Empresa</Label>
+                    <Select 
+                      value={bulkValue?.companyId || ""} 
+                      onValueChange={(val) => setBulkValue({ companyId: val, projectId: "", siteId: "" })}
+                    >
+                      <SelectTrigger className="industrial-input border-primary/30 h-10">
+                        <SelectValue placeholder="-------- Clique para selecionar a empresa --------" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companies.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {(!isCorporateRole(profile?.role) || bulkValue?.companyId) && (
+                  <div className="space-y-1">
+                    <Label className="text-white/90 font-medium">Nova Obra</Label>
+                    <Select 
+                      value={bulkValue?.projectId || ""} 
+                      onValueChange={(val) => setBulkValue({ ...(bulkValue || {}), projectId: val, siteId: "" })}
+                    >
+                      <SelectTrigger className="industrial-input border-primary/30 h-10">
+                        <SelectValue placeholder="-------- Clique para selecionar a Obra --------" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {projects
+                          .filter(p => !isCorporateRole(profile?.role) || p.companyId === bulkValue?.companyId)
+                          .map((p) => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {(!isCorporateRole(profile?.role) || bulkValue?.companyId) && (
+                  <div className="space-y-1">
+                    <Label className="text-white/90 font-medium">Canteiro de Obras</Label>
+                    <Select 
+                      value={bulkValue?.siteId || ""} 
+                      onValueChange={(val) => setBulkValue({ ...(bulkValue || {}), siteId: val })}
+                      disabled={!bulkValue?.projectId}
+                    >
+                      <SelectTrigger className="industrial-input border-primary/30 h-10">
+                        {bulkValue?.projectId ? (
+                          <SelectValue placeholder="-------- Clique para selecionar o Canteiro--------" />
+                        ) : (
+                          <span className="opacity-0">Vazio</span>
+                        )}
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sites
+                          .filter(s => s.projectId === bulkValue?.projectId)
+                          .map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             )}
 
@@ -2147,26 +2331,62 @@ export default function Employees() {
             )}
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
-            <Button variant="ghost" onClick={() => setIsBulkDialogOpen(false)}>
+          <div className="flex justify-center flex-wrap gap-4 pt-4 border-t border-white/10 mt-6">
+            <Button variant="ghost" onClick={() => setIsBulkDialogOpen(false)} className="w-[140px]">
               Cancelar
             </Button>
-            <Button
-              className="gradient-primary shadow-glow"
-              disabled={!bulkField || !bulkValue || isBulkSaving}
-              onClick={async () => {
-                setIsBulkSaving(true);
-                const result = await bulkUpdateEmployees(selectedIds, { [bulkField]: bulkValue });
-                if (result.success) {
-                  setIsBulkDialogOpen(false);
-                  setSelectedIds([]);
+            <Access auth="employees.edit" mode="lock">
+              <Button
+                className="gradient-primary shadow-glow w-[140px]"
+                disabled={
+                  isBulkSaving ||
+                  (bulkField === 'allocation'
+                    ? (!bulkValue?.projectId || !bulkValue?.siteId || (isCorporateRole(profile?.role) && !bulkValue?.companyId))
+                    : !bulkValue)
                 }
-                setIsBulkSaving(false);
-              }}
-            >
-              {isBulkSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Aplicar a Todos
-            </Button>
+                onClick={async () => {
+                  setIsBulkSaving(true);
+                  if (bulkField === 'allocation') {
+                    setConfirmModal({
+                      open: true,
+                      title: "Atenção: Alteração em Massa",
+                      description: `Foi verificado que você irá atualizar ${selectedIds.length} colaboradores na fila. Caso o usuário já tenha um desses 3 vínculos, ignoraremos e pularemos ele; caso ele aceite mesmo assim, aplique. Confirma a Operação?`,
+                      variant: "destructive",
+                      onConfirm: async () => {
+                        setIsBulkSaving(true);
+                        try {
+                          let updates: any = {};
+                          if (bulkValue?.companyId) updates.companyId = bulkValue.companyId;
+                          if (bulkValue?.projectId) updates.projectId = bulkValue.projectId;
+                          if (bulkValue?.siteId) updates.siteId = bulkValue.siteId;
+                          const result = await bulkUpdateEmployees(selectedIds, updates);
+                          if (result.success) {
+                            setIsBulkDialogOpen(false);
+                            setSelectedIds([]);
+                          }
+                        } finally {
+                          setIsBulkSaving(false);
+                        }
+                      }
+                    });
+                  } else {
+                    setIsBulkSaving(true);
+                    try {
+                      const result = await bulkUpdateEmployees(selectedIds, { [bulkField]: bulkValue });
+                      if (result.success) {
+                        setIsBulkDialogOpen(false);
+                        setSelectedIds([]);
+                      }
+                    } finally {
+                      setIsBulkSaving(false);
+                    }
+                  }
+                }}
+              >
+                {isBulkSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Aplicar a Todos
+              </Button>
+            </Access>
           </div>
         </DialogContent>
       </Dialog>

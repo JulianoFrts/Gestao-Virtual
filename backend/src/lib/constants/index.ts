@@ -40,7 +40,7 @@ export const API = {
   LOGGING: {
     STACK_TRACE_LIMIT: 5,
     MAX_LOG_SNAPSHOT: 500,
-  }
+  },
 } as const;
 
 /**
@@ -70,7 +70,7 @@ export const AUTH = {
     DEFAULT_LENGTH: 8,
     EMAIL_VERIFICATION_EXPIRES: 24 * 60 * 60 * 1000,
     PASSWORD_RESET_EXPIRES: 60 * 60 * 1000,
-  }
+  },
 } as const;
 
 /**
@@ -96,7 +96,7 @@ export const VALIDATION = {
   },
   FILE: {
     MAX_SIZE_BYTES: 100 * 1024 * 1024, // 100MB
-  }
+  },
 } as const;
 
 /**
@@ -136,8 +136,8 @@ export const HTTP = {
       CONFLICT: "Conflito com recurso existente",
       RATE_LIMITED: "Muitas requisições. Tente novamente mais tarde.",
       INVALID_CREDENTIALS: "Email ou senha incorretos",
-    }
-  }
+    },
+  },
 } as const;
 
 export const ROLE_LEVELS: Record<string, number> = {
@@ -174,6 +174,14 @@ export const ACCOUNT_STATUS = {
   PENDING_VERIFICATION: "PENDING_VERIFICATION",
 } as const;
 
+export const PRODUCTION_STATUS = {
+  PENDING: "PENDING",
+  IN_PROGRESS: "IN_PROGRESS",
+  FINISHED: "FINISHED",
+  BLOCKED: "BLOCKED",
+  PAUSED: "PAUSED",
+} as const;
+
 /**
  * Constantes de Auditoria e Governança
  */
@@ -189,7 +197,7 @@ export const AUDIT = {
     HIGH: 2,
     MEDIUM: 1,
     LOW: 0,
-  }
+  },
 } as const;
 
 /**
@@ -221,6 +229,7 @@ export const CONSTANTS = {
   HTTP,
   ROLE_LEVELS,
   ACCOUNT_STATUS,
+  PRODUCTION_STATUS,
   AUDIT,
   TIME,
   REGEX,

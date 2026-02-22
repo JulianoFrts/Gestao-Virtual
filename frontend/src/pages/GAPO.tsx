@@ -11,7 +11,11 @@ import {
     FileSpreadsheet,
     Printer,
     Filter as FilterIcon,
+    HardHat,
+    AlertCircle,
 } from 'lucide-react';
+import { selectedContextSignal } from '@/signals/authSignals';
+import { useSignals } from "@preact/signals-react/runtime";
 import { ProjectEmptyState } from '@/components/shared/ProjectEmptyState';
 import { ProjectSelector } from '@/components/shared/ProjectSelector';
 import { Button } from '@/components/ui/button';
@@ -27,23 +31,18 @@ import { useAuditStats } from '@/hooks/useAuditStats';
 import GAPOAuditDashboard from '@/components/gapo/GAPOAuditDashboard';
 import GAPODocumentHub from '@/components/gapo/GAPODocumentHub';
 import GAPOAnalyticsPanel from '@/components/gapo/GAPOAnalyticsPanel';
+import GAPODeviationReport from '@/components/gapo/GAPODeviationReport';
 import GAPOExecutiveOverview from '@/components/gapo/GAPOExecutiveOverview';
 
 export default function GAPO() {
-    // State for Global Selector
-    const [selectedProjectId, setSelectedProjectId] = useState<string | null>(() => localStorage.getItem('gapo_project_id'));
-    const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+    useSignals();
+    
+    // Context from Global Signal
+    const selectedContext = selectedContextSignal.value;
+    const selectedProjectId = selectedContext?.projectId || null;
+    const selectedSiteId = selectedContext?.siteId || 'all';
 
     const { sites } = useSites(selectedProjectId || undefined);
-
-    // Auto-select first site if available and none selected
-    useEffect(() => {
-        if (selectedProjectId && sites.length > 0 && !selectedSiteId) {
-            setSelectedSiteId(sites[0].id);
-        } else if (!selectedProjectId) {
-            setSelectedSiteId(null);
-        }
-    }, [selectedProjectId, sites, selectedSiteId]);
 
     const { toast } = useToast();
 
@@ -75,33 +74,6 @@ export default function GAPO() {
                                 Gestão, Auditoria e Performance de Obras
                             </p>
                         </div>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-                        <div className="w-full sm:w-[250px]">
-                            <ProjectSelector
-                                value={selectedProjectId || ''}
-                                onValueChange={(val) => {
-                                    setSelectedProjectId(val === 'all' ? null : val);
-                                    setSelectedSiteId(null);
-                                }}
-                            />
-                        </div>
-                        {selectedProjectId && (
-                            <div className="w-full sm:w-[200px]">
-                                <Select value={selectedSiteId || ''} onValueChange={setSelectedSiteId}>
-                                    <SelectTrigger className="bg-slate-900/50 border-white/10 h-10 text-[11px] font-bold uppercase tracking-wider rounded-xl">
-                                        <SelectValue placeholder="Todos os Canteiros" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-slate-950 border-white/10">
-                                        <SelectItem value="all" className="text-[11px] font-bold uppercase">Todos os Canteiros</SelectItem>
-                                        {sites.map(s => (
-                                            <SelectItem key={s.id} value={s.id} className="text-[11px] font-bold uppercase">{s.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        )}
                     </div>
                 </div>
 
@@ -162,6 +134,9 @@ export default function GAPO() {
                         <TabsTrigger value="performance" className="gap-2 px-6 py-2">
                             <TrendingUp className="w-4 h-4" /> Performance
                         </TabsTrigger>
+                        <TabsTrigger value="deviation" className="gap-2 px-6 py-2">
+                            <AlertCircle className="w-4 h-4" /> Desvio
+                        </TabsTrigger>
 
                     </TabsList>
 
@@ -187,6 +162,13 @@ export default function GAPO() {
                             projectId={selectedProjectId || undefined} 
                             stages={stages} 
                             records={records} 
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="deviation">
+                        <GAPODeviationReport 
+                            stages={stages} 
+                            projectId={selectedProjectId || undefined} 
                         />
                     </TabsContent>
                 </Tabs>

@@ -54,13 +54,13 @@ export const CatenaryCalculator = {
      * @param start - Point [lng, lat, height]
      * @param end - Point [lng, lat, height]
      * @param constantC - Catenary constant (T/w)
-     * @param subdivisions - Number of points to generate
+     * @param subdivisions - Number of points to generate (will be adjusted by LOD)
      */
     generateCatenaryPoints: (
         start: Point3D,
         end: Point3D,
         constantC: number,
-        subdivisions: number = 100
+        subdivisions: number = 60
     ): Point3D[] => {
         const points: Point3D[] = [];
 
@@ -71,6 +71,16 @@ export const CatenaryCalculator = {
 
         if (L === 0) return [start, end];
 
+        // 1.1 Dynamic LOD: Adjust subdivisions based on Span Length (L)
+        // Short spans don't need 100 points. Long spans might need more if close.
+        // We use a base that scales with distance, capped for performance.
+        let dynamicSubdivisions = subdivisions;
+        if (L < 50) dynamicSubdivisions = 12;      // Very short (anchors/jumpers)
+        else if (L < 150) dynamicSubdivisions = 24; // Short spans
+        else if (L > 600) dynamicSubdivisions = 100; // Long spans (need smoothness)
+
+        const finalSubdivisions = Math.min(120, Math.max(8, dynamicSubdivisions));
+
         // 2. High-precision Catenary Equation for Inclined Spans
         // y(x) = C * cosh((x - x0)/C) + y0
         // We use an approximation that includes the inclined sag effect:
@@ -80,8 +90,8 @@ export const CatenaryCalculator = {
         const theta = Math.atan2(h, L);
         const cosTheta = Math.cos(theta);
 
-        for (let i = 0; i <= subdivisions; i++) {
-            const t = i / subdivisions; // [0, 1]
+        for (let i = 0; i <= finalSubdivisions; i++) {
+            const t = i / finalSubdivisions; // [0, 1]
             const x = t * L;
 
             // Theoretical catenary sag for point x

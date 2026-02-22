@@ -7,6 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from '@/lib/utils';
+import { isSidebarOpenSignal } from '@/signals/uiSignals';
+import { localApi } from '@/integrations/orion/client';
 import { 
   ShieldCheck, 
   Settings, 
@@ -17,11 +20,9 @@ import {
   Save, 
   Loader2,
   AlertTriangle,
-  Info
+  Info,
+  Menu
 } from 'lucide-react';
-import { localApi } from '@/integrations/orion/client';
-import { cn } from '@/lib/utils';
-import { SidebarTrigger } from "@/components/ui/sidebar";
 
 interface PermissionLevel {
   id: string;
@@ -116,13 +117,19 @@ export default function PermissionsManagement() {
     
     setIsSaving(true);
     try {
+      // Filtrar apenas módulos que existem na lista atual para evitar FK violations no backend
+      const activeModuleIds = modules.map(m => m.id);
+      const matrixToSync = Object.entries(matrix)
+        .filter(([moduleId]) => activeModuleIds.includes(moduleId))
+        .map(([moduleId, isGranted]) => ({
+          moduleId,
+          isGranted
+        }));
+
       // O backend deve suportar atualização em lote da matriz para o levelId
       await localApi.post(`/permission_matrix/sync`, {
         levelId: selectedLevelId,
-        matrix: Object.entries(matrix).map(([moduleId, isGranted]) => ({
-          moduleId,
-          isGranted
-        }))
+        matrix: matrixToSync
       });
       
       toast({ title: "Sucesso", description: "Permissões atualizadas com sucesso!" });
@@ -133,7 +140,9 @@ export default function PermissionsManagement() {
     }
   };
 
-  const filteredLevels = levels.filter(l => l.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredLevels = levels
+    .filter(l => l.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    .sort((a, b) => b.rank - a.rank);
   const groupedModules = modules.reduce((acc, mod) => {
     const cat = mod.category || 'Geral';
     if (!acc[cat]) acc[cat] = [];
@@ -153,7 +162,18 @@ export default function PermissionsManagement() {
     <div className="min-h-screen bg-[#050505] text-white p-6 pb-20">
       <header className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
-          <SidebarTrigger />
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="md:flex hidden text-slate-400 hover:text-white"
+            onClick={() => isSidebarOpenSignal.value = !isSidebarOpenSignal.value}
+          >
+            <Menu className="w-5 h-5" />
+          </Button>
+          <div className="md:hidden flex">
+            {/* O Header já provê o menu mobile, então no mobile este botão pode ser opcional ou um simples back */}
+            <Menu className="w-5 h-5 text-slate-500" />
+          </div>
           <div>
             <h1 className="text-3xl font-black uppercase tracking-tighter flex items-center gap-3">
               <ShieldCheck className="w-8 h-8 text-primary" />
@@ -266,7 +286,7 @@ export default function PermissionsManagement() {
                                      </code>
                                   </div>
                                   <Checkbox 
-                                    checked={matrix[mod.id]} 
+                                    checked={!!matrix[mod.id]} 
                                     onCheckedChange={() => handleTogglePermission(mod.id)}
                                     className="h-6 w-6 rounded-lg border-2 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                                   />

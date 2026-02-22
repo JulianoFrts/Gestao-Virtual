@@ -49,6 +49,7 @@ interface SidebarItem {
   label: string;
   path: string;
   requiresProject?: boolean;
+  devOnly?: boolean;
 }
 
 interface SidebarGroup {
@@ -213,6 +214,7 @@ const menuGroups: SidebarGroup[] = [
         icon: Database,
         label: "Database Hub",
         path: "/database-hub",
+        devOnly: true,
       },
       {
         id: "viewer_3d.view",
@@ -270,12 +272,11 @@ function SidebarGroupItem({
   useSignals();
   const isCollapsible = group.title !== "Principal"; // Agora quase todos são colapsáveis
   const visibleItems = group.items.filter((item) => {
+    // Restrição para itens exclusivos de desenvolvimento
+    if (item.devOnly && !import.meta.env.DEV) return false;
+
     const isProtected = isProtectedSignal.value;
-    const hasAdminMenu = show("showAdminMenu");
-    
-    if (item.id === "custom_su.manage") {
-       console.log(`[Sidebar Debug - Custom SU] isProtected: ${isProtected}, hasAdminMenu: ${hasAdminMenu}, signals mapped correctly.`);
-    }
+      const hasAdminMenu = show("showAdminMenu");
 
     if (isProtected || hasAdminMenu) return true;
     const moduleId = item.id;

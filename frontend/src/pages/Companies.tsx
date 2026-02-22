@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Access } from '@/components/auth/Access';
 import { useCompanies, Company } from '@/hooks/useCompanies';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -113,7 +114,7 @@ export default function Companies() {
     }, [companies, searchTerm, isSA, profileCompanyId]);
 
     return (
-        <div className="space-y-6 animate-fade-in h-full flex flex-col p-6 overflow-hidden">
+        <div className="space-y-6 animate-fade-in view-adaptive-container h-full flex flex-col py-6 overflow-hidden">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shrink-0">
                 <div>
                     <h1 className="text-3xl font-display font-bold gradient-text uppercase italic tracking-tighter">Gestão de Empresas</h1>
@@ -125,14 +126,14 @@ export default function Companies() {
                         setIsDialogOpen(open);
                         if (!open) resetForm();
                     }}>
-                        {(isProtectedSignal.value || can('system.is_corporate') || can('companies.create')) && (
+                        <Access auth="companies.create" mode="hide">
                             <DialogTrigger asChild>
                                 <Button className="gradient-primary text-white shadow-glow px-6 font-bold uppercase tracking-widest text-[10px]">
                                     <Plus className="mr-2 h-4 w-4" />
                                     Nova Empresa
                                 </Button>
                             </DialogTrigger>
-                        )}
+                        </Access>
                         <DialogContent className="max-w-md glass-card border-white/10 shadow-2xl overflow-hidden p-0">
                             <div className="absolute top-0 inset-x-0 h-1 gradient-primary shadow-[0_0_15px_rgba(var(--primary),0.5)]" />
                             <DialogHeader className="p-6">
@@ -152,15 +153,15 @@ export default function Companies() {
                                     <div className="space-y-2">
                                         <Label className="text-[10px] uppercase font-black tracking-widest text-primary/70 pl-1">Nome da Empresa / Razão Social *</Label>
                                         <div className="relative">
-                                            <Input
-                                                value={formData.name}
-                                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                                className="industrial-input h-11 bg-black/20 border-white/5 rounded-xl pr-10"
-                                                required
-                                                placeholder="Ex: Construtora Exemplo Ltda"
-                                                disabled={editingCompany && !(isProtectedSignal.value || can('companies.rename'))}
-                                            />
-                                            {editingCompany && !(isProtectedSignal.value || can('companies.rename')) && <Lock className="absolute right-3 top-3 w-5 h-5 text-orange-500/50" />}
+                                            <Access auth="companies.edit" mode="read-only">
+                                                <Input
+                                                    value={formData.name}
+                                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                                    className="industrial-input h-11 bg-black/20 border-white/5 rounded-xl pr-10"
+                                                    required
+                                                    placeholder="Ex: Construtora Exemplo Ltda"
+                                                />
+                                            </Access>
                                         </div>
                                     </div>
 
@@ -244,35 +245,17 @@ export default function Companies() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         {filteredCompanies.map((company) => (
                             <Card key={company.id} className="glass-card group hover:shadow-strong transition-all overflow-hidden border-l-4 border-l-primary relative">
-                                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-20">
-                                    {(() => {
-                                        const canEdit = isProtectedSignal.value || can('companies.update') || can('companies.edit_config');
-                                        const canDelete = isProtectedSignal.value || can('companies.delete');
-
-                                        if (!canEdit && !canDelete) {
-                                            return (
-                                                <div className="h-8 flex items-center px-2 bg-black/40 backdrop-blur-sm rounded text-white/30" title="Sem permissão hierárquica">
-                                                    <Lock className="w-3.5 h-3.5 mr-1" />
-                                                    <span className="text-[10px] uppercase font-bold">Leitura</span>
-                                                </div>
-                                            );
-                                        }
-
-                                        return (
-                                            <>
-                                                {canEdit && (
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary bg-black/20 backdrop-blur-sm" onClick={() => handleEdit(company)}>
-                                                        <Pencil className="w-4 h-4" />
-                                                    </Button>
-                                                )}
-                                                {canDelete && (
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive bg-black/20 backdrop-blur-sm" onClick={() => handleDelete(company)}>
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </Button>
-                                                )}
-                                            </>
-                                        );
-                                    })()}
+                                <div className="absolute top-4 right-4 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-20">
+                                    <Access auth="companies.edit" mode="hide">
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary bg-black/20 backdrop-blur-sm" onClick={() => handleEdit(company)}>
+                                            <Pencil className="w-4 h-4" />
+                                        </Button>
+                                    </Access>
+                                    <Access auth="companies.delete" mode="hide">
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive bg-black/20 backdrop-blur-sm" onClick={() => handleDelete(company)}>
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                    </Access>
                                 </div>
 
                                 <CardHeader className="pb-3 pt-6 px-6">

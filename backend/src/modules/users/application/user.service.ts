@@ -1,14 +1,23 @@
-import { UserRepository, UserWithRelations } from "../domain/user.repository";
+import { UserRepository } from "../domain/user.repository";
 import { SystemAuditRepository } from "../../audit/domain/system-audit.repository";
-import { type Prisma, type User } from "@prisma/client";
-import { isGodRole, isSystemOwner, SECURITY_RANKS } from "@/lib/constants/security";
-import { ROLE_LEVELS, DEFAULT_PAGE } from "@/lib/constants";
+import { type Prisma } from "@prisma/client";
+import { isSystemOwner } from "@/lib/constants/security";
 import { prisma } from "@/lib/prisma/client";
 import { UserPermissionService } from "./user-permission.service";
 import { UserSecurityService } from "./user-security.service";
 import { UserLegacyService } from "./user-legacy.service";
 import { PrismaPermissionRepository } from "../infrastructure/prisma-permission.repository";
 import { UserMapper } from "./user.mapper";
+import { invalidateSessionCache } from "@/lib/auth/session";
+
+interface LogAuditParams {
+  action: string;
+  entity: string;
+  entityId: string;
+  newValues?: any;
+  oldValues?: any;
+  performerId?: string;
+}
 
 export class UserService {
   private readonly permissionService: UserPermissionService;
@@ -84,20 +93,20 @@ export class UserService {
         ...data,
         password: hashedPassword,
         hierarchyLevel,
+        permissions: data.permissions || {},
         status: "ACTIVE",
         emailVerified: new Date(),
       },
       select,
     );
 
-    await this.logAudit(
-      "CREATE",
-      "User",
-      newUser.id!,
-      data,
-      undefined,
+    await this.logAudit({
+      action: "CREATE",
+      entity: "User",
+      entityId: newUser.id!,
+      newValues: data,
       performerId,
-    );
+    });
     return newUser;
   }
 
@@ -113,7 +122,9 @@ export class UserService {
       name: true,
       hierarchyLevel: true,
       authCredential: { select: { email: true, role: true } },
-      affiliation: { select: { companyId: true, projectId: true, siteId: true } }
+      affiliation: {
+        select: { companyId: true, projectId: true, siteId: true },
+      },
     });
     if (!existing) throw new Error("User not found");
 
@@ -124,12 +135,21 @@ export class UserService {
       await this.securityService.validateHierarchySovereignty(
         performerId,
         id,
-        existing.hierarchyLevel || 0
+        existing.hierarchyLevel || 0,
       );
 
-      if (updateData.role && updateData.role !== (existing as any).authCredential?.role) {
-        const newLevel = await this.permissionService.getRankByRole(updateData.role);
-        await this.securityService.validatePromotionPermission(performerId, updateData.role, newLevel);
+      if (
+        updateData.role &&
+        updateData.role !== (existing as any).authCredential?.role
+      ) {
+        const newLevel = await this.permissionService.getRankByRole(
+          updateData.role,
+        );
+        await this.securityService.validatePromotionPermission(
+          performerId,
+          updateData.role,
+          newLevel,
+        );
         updateData.hierarchyLevel = newLevel;
       }
 
@@ -137,14 +157,16 @@ export class UserService {
         await this.securityService.validateSystemAdminFlag(
           performerId,
           updateData.isSystemAdmin,
-          (existing as any).isSystemAdmin || false
+          (existing as any).isSystemAdmin || false,
         );
       }
     }
 
     // 3. Preparação e Senha
     if (updateData.password) {
-      updateData.password = await this.securityService.hashPassword(updateData.password);
+      updateData.password = await this.securityService.hashPassword(
+        updateData.password,
+      );
     }
 
     // 4. Persistência Granular
@@ -152,19 +174,33 @@ export class UserService {
 
     // 5. AuditLog e Retorno
     const finalUser = await this.repository.findById(id, select);
-    await this.logAudit("UPDATE", "User", id, data, existing, performerId);
+    await this.logAudit({
+      action: "UPDATE",
+      entity: "User",
+      entityId: id,
+      newValues: data,
+      oldValues: existing,
+      performerId,
+    });
 
     return {
       ...UserMapper.toDTO(finalUser),
       _report: report,
-      _partial: report.failed.length > 0
+      _partial: report.failed.length > 0,
     };
   }
 
-  private async processGranularUpdates(id: string, existing: any, updateData: any) {
-    const report: { success: string[], failed: { field: string, error: string }[] } = {
+  private async processGranularUpdates(
+    id: string,
+    existing: any,
+    updateData: any,
+  ) {
+    const report: {
+      success: string[];
+      failed: { field: string; error: string }[];
+    } = {
       success: [],
-      failed: []
+      failed: [],
     };
 
     const fieldsToProcess = Object.keys(updateData);
@@ -174,14 +210,21 @@ export class UserService {
         let value = updateData[field];
 
         // Limpeza de CPF e Telefone
-        if ((field === 'cpf' || field === 'phone') && typeof value === 'string') {
-          value = value.replace(/\D/g, '');
+        if (
+          (field === "cpf" || field === "phone") &&
+          typeof value === "string"
+        ) {
+          value = value.replace(/\D/g, "");
         }
 
         // Validação de email único
-        if (field === 'email' && value !== (existing as any).authCredential?.email) {
+        if (
+          field === "email" &&
+          value !== (existing as any).authCredential?.email
+        ) {
           const emailExists = await this.repository.findByEmail(value);
-          if (emailExists) throw new Error("Email já está sendo usado por outro usuário.");
+          if (emailExists)
+            throw new Error("Email já está sendo usado por outro usuário.");
         }
 
         await this.repository.update(id, { [field]: value });
@@ -191,7 +234,11 @@ export class UserService {
         console.error(`[GranularUpdate] Falha no campo ${field}:`, errorMsg);
         report.failed.push({ field, error: errorMsg });
 
-        if (errorMsg.includes('Unique constraint') || errorMsg.includes('P2002') || errorMsg.includes('já está sendo usado')) {
+        if (
+          errorMsg.includes("Unique constraint") ||
+          errorMsg.includes("P2002") ||
+          errorMsg.includes("já está sendo usado")
+        ) {
           throw error;
         }
       }
@@ -204,22 +251,29 @@ export class UserService {
    * Atualização em massa de usuários.
    * Itera sobre os IDs e aplica o updateUser para cada um, garantindo auditoria e segurança.
    */
+  /**
+   * Atualização em massa de usuários otimizada.
+   * Utiliza transação única no banco de dados para garantir performance e atomicidade.
+   */
   async bulkUpdateUsers(ids: string[], data: any, performerId: string) {
-    const results = {
-      success: [] as string[],
-      failed: [] as { id: string; error: string }[],
-    };
+    if (!ids.length) return { count: 0 };
 
-    for (const id of ids) {
-      try {
-        await this.updateUser(id, data, { id: true }, performerId);
-        results.success.push(id);
-      } catch (error: any) {
-        results.failed.push({ id, error: error.message || "Erro desconhecido" });
-      }
-    }
+    // 1. Auditoria da Ação em Massa
+    await this.logAudit({
+      action: "BULK_UPDATE",
+      entity: "User",
+      entityId: `BATCH_${ids.length}`,
+      newValues: { ids, data },
+      performerId,
+    });
 
-    return results;
+    // 2. Execução via Repositório (que gerencia a transação/otimização)
+    const result = await this.repository.updateMany(ids, data);
+
+    // 3. Invalidação de Cache em Massa (Otimizada para chamada única)
+    await invalidateSessionCache();
+
+    return result;
   }
 
   async deleteUser(id: string, performerId?: string) {
@@ -242,7 +296,7 @@ export class UserService {
       await this.securityService.validateHierarchySovereignty(
         performerId,
         id,
-        (existing as any).hierarchyLevel || 0
+        (existing as any).hierarchyLevel || 0,
       );
     }
 
@@ -266,14 +320,18 @@ export class UserService {
 
     await this.repository.delete(id);
     if (performerId) {
-      await this.logAudit(
-        "DELETE",
-        "User",
-        id,
-        null,
-        { email: existingEmail, name: existing.name, role: existingRole },
+      await this.logAudit({
+        action: "DELETE",
+        entity: "User",
+        entityId: id,
+        newValues: null,
+        oldValues: {
+          email: existingEmail,
+          name: existing.name,
+          role: existingRole,
+        },
         performerId,
-      );
+      });
     }
   }
 
@@ -306,7 +364,10 @@ export class UserService {
         },
       });
     } catch (error) {
-      console.error("[UserService] Error fetching user with isSystemAdmin, falling back...", error);
+      console.error(
+        "[UserService] Error fetching user with isSystemAdmin, falling back...",
+        error,
+      );
       // Fallback without isSystemAdmin
       user = await this.repository.findById(userId, {
         id: true,
@@ -343,11 +404,12 @@ export class UserService {
     const ui = await this.permissionService.getUIFlagsMap(
       userRole,
       (user as any).hierarchyLevel || 0,
-      permissions
+      permissions,
     );
 
     // Check both: Role-based (Centralized) OR Explicit Flag in DB
-    const isSystemAdmin = isSystemOwner(userRole) || (user as any).isSystemAdmin === true;
+    const isSystemAdmin =
+      isSystemOwner(userRole) || (user as any).isSystemAdmin === true;
 
     return {
       ...UserMapper.toDTO(user),
@@ -378,14 +440,17 @@ export class UserService {
     const updatedUser = await this.repository.update(userId, {
       email: newEmail,
     } as any);
-    await this.logAudit(
-      "UPDATE_EMAIL",
-      "User",
-      userId,
-      { email: newEmail },
-      { email: (existing as any).authCredential?.email || (existing as any).email },
+    await this.logAudit({
+      action: "UPDATE_EMAIL",
+      entity: "User",
+      entityId: userId,
+      newValues: { email: newEmail },
+      oldValues: {
+        email:
+          (existing as any).authCredential?.email || (existing as any).email,
+      },
       performerId,
-    );
+    });
     return updatedUser;
   }
 
@@ -398,8 +463,16 @@ export class UserService {
     return this.permissionService.getPermissionsMap(role, userId, projectId);
   }
 
-  async getUIFlagsMap(role: string, hierarchyLevel?: number, permissions?: Record<string, boolean>) {
-    return this.permissionService.getUIFlagsMap(role, hierarchyLevel, permissions);
+  async getUIFlagsMap(
+    role: string,
+    hierarchyLevel?: number,
+    permissions?: Record<string, boolean>,
+  ) {
+    return this.permissionService.getUIFlagsMap(
+      role,
+      hierarchyLevel,
+      permissions,
+    );
   }
 
   async upsertAddress(userId: string, data: any) {
@@ -422,22 +495,15 @@ export class UserService {
   // AUDITORIA INTERNA
   // =============================================
 
-  private async logAudit(
-    action: string,
-    entity: string,
-    entityId: string,
-    newValues?: any,
-    oldValues?: any,
-    performerId?: string,
-  ) {
-    if (this.auditRepository && performerId) {
+  private async logAudit(params: LogAuditParams) {
+    if (this.auditRepository && params.performerId) {
       await this.auditRepository.log({
-        userId: performerId,
-        action,
-        entity,
-        entityId,
-        newValues,
-        oldValues,
+        userId: params.performerId,
+        action: params.action,
+        entity: params.entity,
+        entityId: params.entityId,
+        newValues: params.newValues,
+        oldValues: params.oldValues,
       });
     }
   }

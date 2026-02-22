@@ -1,18 +1,23 @@
 import { GovernanceRepository } from "../domain/governance.repository";
 
 export class GovernanceService {
-  constructor(private readonly repository: GovernanceRepository) { }
+  constructor(private readonly repository: GovernanceRepository) {}
 
-  async getHistory(type: string, limit: number) {
+  async getHistory(type: string, limit: number, companyId?: string) {
     const results: any = {};
 
     if (type === "all" || type === "architectural") {
-      results.architectural =
-        await this.repository.findGovernanceHistory(limit);
+      results.architectural = await this.repository.findGovernanceHistory(
+        limit,
+        companyId,
+      );
     }
 
     if (type === "all" || type === "routes") {
-      results.routes = await this.repository.findRouteHealthHistory(limit);
+      results.routes = await this.repository.findRouteHealthHistory(
+        limit,
+        companyId,
+      );
     }
 
     return results;

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Access } from '@/components/auth/Access';
 import { useProjects, Project } from '@/hooks/useProjects';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useUsers } from '@/hooks/useUsers';
@@ -142,7 +143,7 @@ export default function Projects() {
 
 
     return (
-        <div className="space-y-6 animate-fade-in">
+        <div className="space-y-6 animate-fade-in view-adaptive-container pb-10">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-display font-bold gradient-text">Gestão de Obras</h1>
@@ -151,14 +152,14 @@ export default function Projects() {
                 <Dialog open={isDialogOpen} onOpenChange={(open) => {
                     setIsDialogOpen(open);
                 }}>
-                    {(isProtectedSignal.value || can('projects.create') || show('showAdminMenu')) && (
+                    <Access auth="projects.create" mode="hide">
                         <DialogTrigger asChild>
                             <Button className="gradient-primary text-white shadow-glow">
                                 <Plus className="w-4 h-4 mr-2" />
                                 Nova Obra
                             </Button>
                         </DialogTrigger>
-                    )}
+                    </Access>
                     <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle className="flex items-center gap-2 text-2xl font-bold">
@@ -197,17 +198,15 @@ export default function Projects() {
                                     </div>
                                     <div className="space-y-2">
                                         <Label className="text-xs uppercase text-muted-foreground font-bold">Nome da Obra *</Label>
-                                        <Input
-                                            value={formData.name}
-                                            onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                            className="industrial-input h-10 pr-10"
-                                            placeholder="Ex: Edifício Horizonte"
-                                            required
-                                            disabled={editingProject && !(isProtectedSignal.value || can('projects.rename') || show('showMaintenance'))}
-                                        />
-                                        {editingProject && !(isProtectedSignal.value || can('projects.rename') || show('showMaintenance')) && (
-                                            <Lock className="absolute right-3 top-2.5 w-4 h-4 text-orange-500/50" />
-                                        )}
+                                        <Access auth="projects.rename" mode="read-only">
+                                            <Input
+                                                value={formData.name}
+                                                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                                className="industrial-input h-10 pr-10"
+                                                placeholder="Ex: Edifício Horizonte"
+                                                required
+                                            />
+                                        </Access>
                                     </div>
                                     <div className="space-y-2">
                                         <Label className="text-xs uppercase text-muted-foreground font-bold">Endereço</Label>
@@ -350,8 +349,8 @@ export default function Projects() {
 
                     return (
                         <Card key={project.id} className="glass-card group hover:shadow-strong transition-all overflow-hidden border-l-4 border-l-accent relative">
-                            <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                {(isProtectedSignal.value || can('ui.admin_access')) && (
+                            <div className="absolute top-4 right-4 flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                <Access auth="projects.delegate" mode="hide">
                                     <DelegationModal 
                                         projectId={project.id} 
                                         projectName={project.name}
@@ -361,17 +360,17 @@ export default function Projects() {
                                             </Button>
                                         }
                                     />
-                                )}
-                                {(isProtectedSignal.value || can('projects.rename') || can('projects.update') || show('showAdminMenu')) && (
+                                </Access>
+                                <Access auth={['projects.rename', 'projects.update']} mode="hide" any>
                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-accent" onClick={() => handleEdit(project)}>
                                         <Pencil className="w-4 h-4" />
                                     </Button>
-                                )}
-                                {(isProtectedSignal.value || can('projects.delete') || show('showMaintenance')) && (
+                                </Access>
+                                <Access auth="projects.delete" mode="hide">
                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(project)}>
                                         <Trash2 className="w-4 h-4" />
                                     </Button>
-                                )}
+                                </Access>
                             </div>
                             <CardHeader className="pb-3">
                                 <div className="flex items-center gap-3">

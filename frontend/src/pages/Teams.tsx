@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Access } from '@/components/auth/Access';
 import { useTeams } from '@/hooks/useTeams';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { useEmployees } from '@/hooks/useEmployees';
@@ -21,7 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
 import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
-import { isProtectedSignal, can } from '@/signals/authSignals';
+import { isProtectedSignal, can, selectedContextSignal } from '@/signals/authSignals';
 import { useSignals } from "@preact/signals-react/runtime";
 import { ProjectSelector } from '@/components/shared/ProjectSelector';
 import { ProjectEmptyState } from '@/components/shared/ProjectEmptyState';
@@ -38,9 +39,13 @@ export default function Teams() {
     const { companies } = useCompanies();
     const { functions } = useJobFunctions();
     const [searchTerm, setSearchTerm] = React.useState('');
-    const [filterCompany, setFilterCompany] = React.useState('all');
-    const [filterProject, setFilterProject] = React.useState('all');
-    const [filterSite, setFilterSite] = React.useState('all');
+    
+    // Context from Global Signal
+    const selectedContext = selectedContextSignal.value;
+    const filterCompany = selectedContext?.companyId || 'all';
+    const filterProject = selectedContext?.projectId || 'all';
+    const filterSite = selectedContext?.siteId || 'all';
+
     const [isDialogOpen, setIsDialogOpen] = React.useState(false);
     const [editingTeam, setEditingTeam] = React.useState<any>(null);
     const [isSaving, setIsSaving] = React.useState(false);
@@ -48,9 +53,9 @@ export default function Teams() {
         name: '',
         supervisorId: '',
         members: [] as string[],
-        siteId: '',
-        companyId: '',
-        projectId: ''
+        siteId: filterSite !== 'all' ? filterSite : '',
+        companyId: filterCompany !== 'all' ? filterCompany : '',
+        projectId: filterProject !== 'all' ? filterProject : ''
     });
     const [memberSearchTerm, setMemberSearchTerm] = React.useState('');
     const [supervisorSearchOpen, setSupervisorSearchOpen] = React.useState(false);
@@ -221,7 +226,7 @@ export default function Teams() {
     };
 
     const filteredTeams = teams.filter(t => {
-        const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = (t.name || '').toLowerCase().includes(searchTerm.toLowerCase());
         const matchesCompany = filterCompany === 'all' || t.companyId === filterCompany;
 
         // Find project through site if not explicitly labeled (assume schema support or resolve manually)
@@ -247,20 +252,20 @@ export default function Teams() {
     }
 
     return (
-        <div className="space-y-6 animate-fade-in">
+        <div className="space-y-6 animate-fade-in view-adaptive-container py-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <Dialog open={isDialogOpen} onOpenChange={(open) => {
                     if (!open) resetForm();
                     setIsDialogOpen(open);
                 }}>
-                    {(isProtectedSignal.value || can('teams.create')) && (
+                    <Access auth="teams.create" mode="hide">
                         <DialogTrigger asChild>
                             <Button className="gradient-primary text-white shadow-glow">
                                 <Plus className="w-4 h-4 mr-2" />
                                 Nova Equipe
                             </Button>
                         </DialogTrigger>
-                    )}
+                    </Access>
                     <DialogContent className="max-w-md">
                         <DialogHeader>
                             <DialogTitle>{editingTeam ? 'Editar' : 'Nova'} Equipe</DialogTitle>
@@ -515,80 +520,8 @@ export default function Teams() {
             </div>
 
             {/* Barra de Filtros */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-slate-900/40 p-4 rounded-xl border border-white/5">
-                <div className="space-y-2">
-                    <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest px-1">Empresa</Label>
-                    <Select value={filterCompany} onValueChange={v => {
-                        setFilterCompany(v);
-                        if (v === 'all') {
-                            setFilterProject('all');
-                            setFilterSite('all');
-                        }
-                    }}>
-                        <SelectTrigger className="industrial-input h-10">
-                            <SelectValue placeholder="Todas Empresas" />
-                        </SelectTrigger>
-                        <SelectContent className="glass-card">
-                            <SelectItem value="all">Todas Empresas</SelectItem>
-                            {companies.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                </div>
-
-                <div className="space-y-2">
-                    <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest px-1">Obra / Projeto</Label>
-                    <ProjectSelector
-                        value={filterProject}
-                        onValueChange={(v) => {
-                            setFilterProject(v);
-                            setFilterSite('all'); // Reset site when project changes
-
-                            if (v !== 'all') {
-                                // Auto-select company based on project
-                                const project = projects.find(p => p.id === v);
-                                if (project && project.companyId !== filterCompany) {
-                                    setFilterCompany(project.companyId);
-                                }
-                            }
-                        }}
-                        showAll={true}
-                        placeholder="Todas Obras"
-                    />
-                </div>
-
-                <div className="space-y-2">
-                    <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest px-1">Canteiro / Unidade</Label>
-                    <Select value={filterSite} onValueChange={v => {
-                        setFilterSite(v);
-                        if (v !== 'all') {
-                            // Auto-select project and company
-                            const site = sites.find(s => s.id === v);
-                            if (site) {
-                                if (site.projectId !== filterProject) {
-                                    setFilterProject(site.projectId);
-                                    // Cascade to company
-                                    const project = projects.find(p => p.id === site.projectId);
-                                    if (project && project.companyId !== filterCompany) {
-                                        setFilterCompany(project.companyId);
-                                    }
-                                }
-                            }
-                        }
-                    }} disabled={filterProject === 'all'}>
-                        <SelectTrigger className="industrial-input h-10">
-                            <SelectValue placeholder="Todos Canteiros" />
-                        </SelectTrigger>
-                        <SelectContent className="glass-card">
-                            <SelectItem value="all">Todos Canteiros</SelectItem>
-                            {sites
-                                .filter(s => filterProject === 'all' || s.projectId === filterProject)
-                                .map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)
-                            }
-                        </SelectContent>
-                    </Select>
-                </div>
-
-                <div className="relative">
+            <div className="flex items-center justify-between gap-4 bg-slate-900/40 p-4 rounded-xl border border-white/5">
+                <div className="flex-1 max-w-md relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                         placeholder="Buscar equipes..."
@@ -607,7 +540,7 @@ export default function Teams() {
                         description="Você ainda não possui equipes estruturadas para suas obras atuais. Organize seus colaboradores em frentes de trabalho."
                         onAction={() => setIsDialogOpen(true)}
                         actionLabel="Criar Primeira Equipe"
-                        hideAction={!(isProtectedSignal.value || can('teams.create'))}
+                        hideAction={false}
                     />
                 </div>
             ) : (
@@ -630,69 +563,41 @@ export default function Teams() {
                                 <p className="text-sm text-muted-foreground mb-4">
                                     {team.members.length} {team.members.length === 1 ? 'membro cadastrado' : 'membros cadastrados'}
                                 </p>
-                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {(() => {
-                                        const canEdit = isProtectedSignal.value || can('teams.update');
-                                        const canDelete = isProtectedSignal.value || can('teams.delete');
-                                        const hiearchyMatch = isProtectedSignal.value || can('teams.manage'); // Simplified for capabilities
-
-                                        if (!canEdit && !canDelete) {
-                                            return (
-                                                <div className="flex items-center justify-center w-full py-2 text-muted-foreground/30" title="Sem permissão no módulo Custom SU">
-                                                    <Lock className="w-4 h-4 mr-2" />
-                                                    <span className="text-xs uppercase font-bold">Leitura</span>
-                                                </div>
-                                            );
-                                        }
-
-                                        if (!hiearchyMatch) {
-                                            return (
-                                                <div className="flex items-center justify-center w-full py-2 text-muted-foreground/30" title="Sem permissão hierárquica">
-                                                    <Lock className="w-4 h-4 mr-2" />
-                                                    <span className="text-xs uppercase font-bold">Bloqueado</span>
-                                                </div>
-                                            );
-                                        }
-
-                                        return (
-                                            <>
-                                                {canEdit && (
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="flex-1"
-                                                        onClick={() => {
-                                                            const site = sites.find(s => s.id === team.siteId);
-                                                            setEditingTeam(team);
-                                                            setFormData({
-                                                                name: team.name,
-                                                                supervisorId: team.supervisorId || '',
-                                                                members: team.members,
-                                                                siteId: team.siteId || '',
-                                                                companyId: team.companyId || site?.companyId || '',
-                                                                projectId: site?.projectId || ''
-                                                            });
-                                                            setIsDialogOpen(true);
-                                                        }}
-                                                    >
-                                                        <Pencil className="w-4 h-4 mr-1" />
-                                                        Editar
-                                                    </Button>
-                                                )}
-                                                {canDelete && (
-                                                    <Button
-                                                        variant="destructive"
-                                                        size="sm"
-                                                        className="flex-1"
-                                                        onClick={() => handleDelete(team)}
-                                                    >
-                                                        <Trash2 className="w-4 h-4 mr-1" />
-                                                        Excluir
-                                                    </Button>
-                                                )}
-                                            </>
-                                        );
-                                    })()}
+                                <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                    <Access auth="teams.update" mode="hide">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="flex-1"
+                                            onClick={() => {
+                                                const site = sites.find(s => s.id === team.siteId);
+                                                setEditingTeam(team);
+                                                setFormData({
+                                                    name: team.name,
+                                                    supervisorId: team.supervisorId || '',
+                                                    members: team.members,
+                                                    siteId: team.siteId || '',
+                                                    companyId: team.companyId || site?.companyId || '',
+                                                    projectId: site?.projectId || ''
+                                                });
+                                                setIsDialogOpen(true);
+                                            }}
+                                        >
+                                            <Pencil className="w-4 h-4 mr-1" />
+                                            Editar
+                                        </Button>
+                                    </Access>
+                                    <Access auth="teams.delete" mode="hide">
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            className="flex-1"
+                                            onClick={() => handleDelete(team)}
+                                        >
+                                            <Trash2 className="w-4 h-4 mr-1" />
+                                            Excluir
+                                        </Button>
+                                    </Access>
                                 </div>
 
                             </CardContent>

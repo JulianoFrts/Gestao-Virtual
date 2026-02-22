@@ -1,5 +1,5 @@
 import { signal } from "@preact/signals-react";
-import { db } from "@/integrations/database";
+import { db, orionApi } from "@/integrations/database";
 import { type SystemMessage } from "@/hooks/useMessages";
 import { storageService } from "@/services/storageService";
 
@@ -8,7 +8,10 @@ export const isSystemMessagesLoadingSignal = signal(false);
 export const hasSystemMessagesFetchedSignal = signal(false);
 
 export const fetchSystemMessages = async (force = false) => {
-    // Evita refetch desnecessário se já temos dados na memória, a menos que forçado
+    // Evita refetch desnecessário ou sem token (Auth inicial)
+    const token = orionApi.token;
+    if (!token) return;
+
     if (!force && hasSystemMessagesFetchedSignal.value && systemMessagesSignal.value.length > 0) {
         return;
     }

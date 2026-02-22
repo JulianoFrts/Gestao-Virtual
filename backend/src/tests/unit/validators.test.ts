@@ -186,9 +186,12 @@ describe("Validators", () => {
       }
     });
 
-    it("deve rejeitar limit acima de 25000", () => {
+    const MAX_ALLOWED_LIMIT = 25000;
+    const EXCEEDED_LIMIT_VALUE = 30000;
+
+    it(`deve rejeitar limit acima de ${MAX_ALLOWED_LIMIT}`, () => {
       const result = paginationSchema.safeParse({
-        limit: 30000,
+        limit: EXCEEDED_LIMIT_VALUE,
       });
       expect(result.success).toBe(false);
     });

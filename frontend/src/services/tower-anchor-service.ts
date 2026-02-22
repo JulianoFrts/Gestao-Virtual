@@ -159,12 +159,14 @@ export const TowerAnchorService = {
                 const manualDy = individualOffset?.y ?? phaseOffset?.y ?? transform?.anchorGlobalOffset?.y ?? 0;
                 const manualDz = individualOffset?.z ?? phaseOffset?.z ?? transform?.anchorGlobalOffset?.z ?? 0;
 
+                // Sync with Model Translation (Z)
+                // If model has a translation in Z (offZ), we must add it to the anchor too.
+                const effectiveZ = anchorPos.alt + az + offZ + manualDz;
+
                 // Convert meters to lat/lng degrees for the final position shift
-                // Approximation: 1 deg lat ~ 111km, 1 deg lng ~ 111km * cos(lat)
                 const mToDegLat = 1 / 111320;
                 const mToDegLng = 1 / (111320 * Math.cos(towerPos.lat * Math.PI / 180));
 
-                // manualDx/manualDy should follow tower rotation to be intuitive (X = transversal, Y = longitudinal)
                 const radY = (baseRot) * (Math.PI / 180);
                 const manualDxRot = (manualDx * Math.cos(radY)) + (manualDy * Math.sin(radY));
                 const manualDyRot = (manualDy * Math.cos(radY)) - (manualDx * Math.sin(radY));
@@ -172,7 +174,7 @@ export const TowerAnchorService = {
                 return {
                     x: anchorPos.lng + (manualDxRot * mToDegLng),
                     y: anchorPos.lat + (manualDyRot * mToDegLat),
-                    z: anchorPos.alt + az + offZ + manualDz
+                    z: effectiveZ
                 };
             }
         }

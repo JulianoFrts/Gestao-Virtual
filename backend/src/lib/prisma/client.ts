@@ -10,15 +10,18 @@ export type ExtendedPrismaClient = PrismaClient & {
   permissionModule: any;
   taskQueue: any;
   dataIngestion: any;
-  activityUnitCost: any;  
+  activityUnitCost: any;
   activitySchedule: any;
   activityStatus: any;
   productionCategory: any;
   mapElementTechnicalData: any;
   mapElementProductionProgress: any;
-  tower: any; 
+  tower: any;
   activity: any;
   project: any;
+  towerProduction: any;
+  towerConstruction: any;
+  towerActivityGoal: any;
 };
 
 declare global {
@@ -29,12 +32,16 @@ const createPrismaClient = () => {
   const connectionString = process.env.DATABASE_URL;
 
   if (!connectionString) {
-    console.warn("⚠️ DATABASE_URL não definida. Retornando cliente vazio para fase de build.");
+    console.warn(
+      "⚠️ DATABASE_URL não definida. Retornando cliente vazio para fase de build.",
+    );
     return new PrismaClient() as ExtendedPrismaClient;
   }
 
-  const maskedOriginal = connectionString.split('@')[1] || 'oculta';
-  console.log(`[Prisma] Inicializando Standard Client (sem Adapter) com URL: ${maskedOriginal}`);
+  const maskedOriginal = connectionString.split("@")[1] || "oculta";
+  console.log(
+    `[Prisma] Inicializando Standard Client (sem Adapter) com URL: ${maskedOriginal}`,
+  );
 
   // O Prisma padrão lê automaticamente a DATABASE_URL do environment.
   // A URL já contém sslmode e caminhos de certificado injetados pelo start.cjs.
@@ -49,7 +56,11 @@ const globalForPrisma = global as unknown as { prisma: ExtendedPrismaClient };
 
 export const prisma = globalForPrisma.prisma || createPrismaClient();
 
-if ((process.env.NODE_ENV as string) !== "production" && process.env.NODE_ENV !== "remote") globalForPrisma.prisma = prisma;
+if (
+  (process.env.NODE_ENV as string) !== "production" &&
+  (process.env.NODE_ENV as string) !== "remote"
+)
+  globalForPrisma.prisma = prisma;
 
 export default prisma;
 

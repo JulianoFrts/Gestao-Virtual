@@ -8,6 +8,7 @@ import { ProductionSyncRepository } from "../domain/production-sync.repository";
 import { ProductionScheduleRepository } from "../domain/production-schedule.repository";
 import { ProductionProgress } from "../domain/production-progress.entity";
 import { logger } from "@/lib/utils/logger";
+import { PRODUCTION_STATUS } from "@/lib/constants";
 
 export interface UpdateProductionProgressDTO {
   elementId: string;
@@ -31,7 +32,7 @@ export class ProductionProgressService {
     private readonly elementRepository: ProjectElementRepository,
     private readonly syncRepository: ProductionSyncRepository,
     private readonly scheduleRepository: ProductionScheduleRepository,
-  ) { }
+  ) {}
 
   async getElementProgress(elementId: string): Promise<ProductionProgress[]> {
     const results = await this.progressRepository.findByElement(elementId);
@@ -103,7 +104,7 @@ export class ProductionProgressService {
       subtrecho: "trecho",
       SUBTRECHO: "trecho",
       ESTRUTURA: "towerType",
-      "FUNÇÃO": "towerType",
+      FUNÇÃO: "towerType",
       FUNCAO: "towerType",
       "TIPO ESTRUTURA": "towerType",
       TIPO: "towerType",
@@ -202,8 +203,19 @@ export class ProductionProgressService {
     });
   }
 
-  async updateProgress(dto: UpdateProductionProgressDTO): Promise<ProductionProgress> {
-    const { elementId, activityId, projectId, status, progress, metadata, userId, dates } = dto;
+  async updateProgress(
+    dto: UpdateProductionProgressDTO,
+  ): Promise<ProductionProgress> {
+    const {
+      elementId,
+      activityId,
+      projectId,
+      status,
+      progress,
+      metadata,
+      userId,
+      dates,
+    } = dto;
     logger.info(
       `Atualizando progresso: Elemento ${elementId}, Atividade ${activityId}`,
       { ...this.logContext, userId },
@@ -247,25 +259,34 @@ export class ProductionProgressService {
     return new ProductionProgress(saved);
   }
 
-  async updateProgressBatch(dtos: UpdateProductionProgressDTO[]): Promise<void> {
+  async updateProgressBatch(
+    dtos: UpdateProductionProgressDTO[],
+  ): Promise<void> {
     if (dtos.length === 0) return;
 
-    logger.info(`[ProductionProgressService] Iniciando processamento em lote de ${dtos.length} atualizações de progresso`, this.logContext);
+    logger.info(
+      `[ProductionProgressService] Iniciando processamento em lote de ${dtos.length} atualizações de progresso`,
+      this.logContext,
+    );
 
     // 1. Coletar IDs únicos de elementos e atividades para buscas em lote
-    const elementIds = Array.from(new Set(dtos.map(d => d.elementId)));
-    const activityIds = Array.from(new Set(dtos.map(d => d.activityId)));
+    const elementIds = Array.from(new Set(dtos.map((d) => d.elementId)));
+    const activityIds = Array.from(new Set(dtos.map((d) => d.activityId)));
 
     // 2. Pré-carregar dados necessários (SELECT em Lote)
     const [elements, schedules, existingProgresses] = await Promise.all([
       this.elementRepository.findByIds(elementIds), // Precisa implementar findByIds
       this.scheduleRepository.findSchedulesBatch(elementIds, activityIds), // Precisa implementar
-      this.progressRepository.findByElementsBatch(elementIds) // Precisa implementar
+      this.progressRepository.findByElementsBatch(elementIds), // Precisa implementar
     ]);
 
-    const elementsMap = new Map<string, any>(elements.map((e: any) => [e.id, e]));
-    const schedulesMap = new Map<string, any>(schedules.map((s: any) => [`${s.elementId}:${s.activityId}`, s]));
-    
+    const elementsMap = new Map<string, any>(
+      elements.map((e: any) => [e.id, e]),
+    );
+    const schedulesMap = new Map<string, any>(
+      schedules.map((s: any) => [`${s.elementId}:${s.activityId}`, s]),
+    );
+
     // Agrupar progressos existentes por elementId:activityId
     const progressMap = new Map<string, IProductionProgress>();
     existingProgresses.forEach((p: IProductionProgress) => {
@@ -276,30 +297,53 @@ export class ProductionProgressService {
 
     // 3. Processar cada DTO em memória
     for (const dto of dtos) {
-      const { elementId, activityId, status, progress, metadata, userId, dates, projectId: dtoProjectId } = dto;
+      const {
+        elementId,
+        activityId,
+        status,
+        progress,
+        metadata,
+        userId,
+        dates,
+        projectId: dtoProjectId,
+      } = dto;
       const key = `${elementId}:${activityId}`;
+
+      let finalStartDate = dates?.start;
+      let finalEndDate = dates?.end;
 
       // A. Resolver ProjectId
       const projectId = dtoProjectId || elementsMap.get(elementId)?.projectId;
       if (!projectId) {
-        logger.warn(`ProjectId não resolvido para elemento ${elementId}`, this.logContext);
+        logger.warn(
+          `ProjectId não resolvido para elemento ${elementId}`,
+          this.logContext,
+        );
         continue;
       }
 
       // B. Determinar Datas Efetivas
-      let finalStartDate = dates?.start;
-      let finalEndDate = dates?.end;
-
-      if (!finalStartDate || (!finalEndDate && status === "FINISHED")) {
+      if (
+        !finalStartDate ||
+        (!finalEndDate && status === PRODUCTION_STATUS.FINISHED)
+      ) {
         const schedule = schedulesMap.get(key);
         const now = new Date().toISOString();
 
-        if (!finalStartDate && (status === "IN_PROGRESS" || status === "FINISHED")) {
-          finalStartDate = schedule?.plannedStart ? new Date(schedule.plannedStart).toISOString() : now;
+        if (
+          !finalStartDate &&
+          (status === PRODUCTION_STATUS.IN_PROGRESS ||
+            status === PRODUCTION_STATUS.FINISHED)
+        ) {
+          finalStartDate = schedule?.plannedStart
+            ? new Date(schedule.plannedStart).toISOString()
+            : now;
         }
 
-        if (!finalEndDate && status === "FINISHED") {
-          finalEndDate = schedule?.plannedEnd ? new Date(schedule.plannedEnd).toISOString() : now;
+        if (!finalEndDate && status === PRODUCTION_STATUS.FINISHED) {
+          finalEndDate = schedule?.plannedEnd
+            ? new Date(schedule.plannedEnd).toISOString()
+            : now;
         }
       }
 
@@ -309,14 +353,16 @@ export class ProductionProgressService {
 
       if (existing) {
         entity = new ProductionProgress(existing);
-        entity.startDate = finalStartDate ? new Date(finalStartDate) : entity.startDate;
+        entity.startDate = finalStartDate
+          ? new Date(finalStartDate)
+          : entity.startDate;
         entity.endDate = finalEndDate ? new Date(finalEndDate) : entity.endDate;
       } else {
         entity = new ProductionProgress({
           projectId,
           elementId,
           activityId,
-          currentStatus: "PENDING",
+          currentStatus: PRODUCTION_STATUS.PENDING,
           progressPercent: 0,
           startDate: finalStartDate ? new Date(finalStartDate) : null,
           endDate: finalEndDate ? new Date(finalEndDate) : null,
@@ -328,11 +374,11 @@ export class ProductionProgressService {
       // D. Gravar Progresso (Lógica da Entidade)
       // SELECT UPDATE PRE-CHECK: Evitar gravar se nada mudou
       if (
-        entity.currentStatus === status && 
+        entity.currentStatus === status &&
         Math.abs(entity.progressPercent - progress) < 0.01 &&
         !metadata // Se houver metadata novo, gravamos histórico mesmo com status igual
       ) {
-         continue; 
+        continue;
       }
 
       entity.recordProgress(
@@ -348,13 +394,22 @@ export class ProductionProgressService {
     // 4. Salvar tudo em uma transação (UPDATE/CREATE em Lote)
     if (entitiesToSave.length > 0) {
       await this.progressRepository.saveMany(entitiesToSave);
-      logger.info(`[ProductionProgressService] Batch de ${entitiesToSave.length} registros persistido com sucesso.`);
+      logger.info(
+        `[ProductionProgressService] Batch de ${entitiesToSave.length} registros persistido com sucesso.`,
+      );
     } else {
-      logger.info(`[ProductionProgressService] Nenhum registro precisou ser persistido após pre-check.`);
+      logger.info(
+        `[ProductionProgressService] Nenhum registro precisou ser persistido após pre-check.`,
+      );
     }
   }
 
-  async triggerStageSync(elementId: string, activityId: string, projectId: string, userId: string) {
+  async triggerStageSync(
+    elementId: string,
+    activityId: string,
+    projectId: string,
+    userId: string,
+  ) {
     return this.syncRepository.syncWorkStages(
       elementId,
       activityId,
@@ -399,7 +454,7 @@ export class ProductionProgressService {
       projectId,
       elementId,
       activityId,
-      currentStatus: "PENDING",
+      currentStatus: PRODUCTION_STATUS.PENDING,
       progressPercent: 0,
       startDate: startDate ? new Date(startDate) : null,
       endDate: endDate ? new Date(endDate) : null,
@@ -420,7 +475,8 @@ export class ProductionProgressService {
     );
 
     const record = await this.progressRepository.findById(progressId);
-    if (!record) throw new Error(`Registro de progresso ${progressId} não encontrado.`);
+    if (!record)
+      throw new Error(`Registro de progresso ${progressId} não encontrado.`);
 
     const entity = new ProductionProgress(record);
     entity.approveLog(logTimestamp, approvedBy);
@@ -447,14 +503,15 @@ export class ProductionProgressService {
 
       if (
         !finalStartDate &&
-        (status === "IN_PROGRESS" || status === "FINISHED")
+        (status === PRODUCTION_STATUS.IN_PROGRESS ||
+          status === PRODUCTION_STATUS.FINISHED)
       ) {
         finalStartDate = schedule?.plannedStart
           ? new Date(schedule.plannedStart).toISOString()
           : now.toISOString();
       }
 
-      if (!finalEndDate && status === "FINISHED") {
+      if (!finalEndDate && status === PRODUCTION_STATUS.FINISHED) {
         finalEndDate = schedule?.plannedEnd
           ? new Date(schedule.plannedEnd).toISOString()
           : now.toISOString();

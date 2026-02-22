@@ -32,14 +32,24 @@ export interface RouteHealthHistory {
 }
 
 export interface GovernanceRepository {
-  findGovernanceHistory(limit: number): Promise<GovernanceAuditHistory[]>;
-  findRouteHealthHistory(limit: number): Promise<RouteHealthHistory[]>;
+  findGovernanceHistory(
+    limit: number,
+    companyId?: string,
+  ): Promise<GovernanceAuditHistory[]>;
+  findRouteHealthHistory(
+    limit: number,
+    companyId?: string,
+  ): Promise<RouteHealthHistory[]>;
 
   // For Auditor
   findOpenViolation(file: string, violation: string): Promise<any>;
   createViolation(data: any): Promise<any>;
   updateViolation(id: string, data: any): Promise<any>;
   findOpenViolations(): Promise<any[]>;
-  findViolationsWithFilters(filters: any, take?: number, skip?: number): Promise<GovernanceAuditHistory[]>;
+  findViolationsWithFilters(
+    filters: any,
+    take?: number,
+    skip?: number,
+  ): Promise<GovernanceAuditHistory[]>;
   countViolations(filters: any): Promise<number>;
 }

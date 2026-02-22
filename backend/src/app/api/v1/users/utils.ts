@@ -1,5 +1,8 @@
 import { validate } from "@/lib/utils/validators/schemas";
-import { paginationSchema, userFiltersSchema } from "@/lib/utils/validators/schemas";
+import {
+  paginationSchema,
+  userFiltersSchema,
+} from "@/lib/utils/validators/schemas";
 import { CONSTANTS } from "@/lib/constants";
 import { isGodRole, SECURITY_RANKS } from "@/lib/constants/security";
 import { ApiResponse } from "@/lib/utils/api/response";
@@ -54,10 +57,10 @@ export function parseFilters(searchParams: URLSearchParams) {
  * Busca perfil de usuário único (Self or Admin access)
  */
 export async function handleSingleUserFetch(
-  id: string, 
-  currentUser: any, 
+  id: string,
+  currentUser: any,
   isAdmin: boolean,
-  userService: UserService
+  userService: UserService,
 ) {
   if (isAdmin || id === currentUser.id) {
     try {
@@ -94,7 +97,11 @@ export async function handleSingleUserFetch(
 /**
  * Aplica restrições de hierarquia e segurança na cláusula WHERE
  */
-export function applyHierarchySecurity(where: any, currentUser: any, isAdmin: boolean) {
+export function applyHierarchySecurity(
+  where: any,
+  currentUser: any,
+  isAdmin: boolean,
+) {
   if (!isAdmin) {
     if (currentUser.companyId) {
       where.affiliation = { companyId: currentUser.companyId };
@@ -109,7 +116,8 @@ export function applyHierarchySecurity(where: any, currentUser: any, isAdmin: bo
       (currentUser as any).hierarchyLevel >= SECURITY_RANKS.MASTER;
 
     if (!isGod) {
-      const myLevel = (currentUser as any).hierarchyLevel || SECURITY_RANKS.ADMIN;
+      const myLevel =
+        (currentUser as any).hierarchyLevel || SECURITY_RANKS.ADMIN;
       where.hierarchyLevel = { lte: myLevel };
     }
   }
@@ -118,12 +126,23 @@ export function applyHierarchySecurity(where: any, currentUser: any, isAdmin: bo
 /**
  * Prepara o payload de atualização removendo campos protegidos
  */
-export function prepareUpdatePayload(body: any, permissions: { isAdmin: boolean; canManage: boolean; hasFullAccess: boolean }) {
+export function prepareUpdatePayload(
+  body: any,
+  permissions: { isAdmin: boolean; canManage: boolean; hasFullAccess: boolean },
+) {
   const payload = { ...body };
   delete payload.id;
 
-  // Segurança de Campos
-  if (!permissions.hasFullAccess && !permissions.isAdmin && !permissions.canManage) {
+  // Segurança de Campos: Somente God/SystemAdmin pode conceder isSystemAdmin
+  if (!permissions.hasFullAccess) {
+    delete payload.isSystemAdmin;
+  }
+
+  if (
+    !permissions.hasFullAccess &&
+    !permissions.isAdmin &&
+    !permissions.canManage
+  ) {
     delete payload.role;
     delete payload.companyId;
     delete payload.projectId;

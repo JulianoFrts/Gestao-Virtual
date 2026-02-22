@@ -40,6 +40,13 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useToast } from '@/hooks/use-toast';
+import { ModelTransform, CableSettings, DEFAULT_CABLE_SETTINGS } from '@/components/map/cable-config-modal';
+import { TowerPhysics } from '@/services/tower-physics';
+import { CableLayerService } from '@/services/cable-layer';
+import { TowerScenegraphService } from '@/services/tower-scenegraph-service';
+import { orionApi } from '@/integrations/orion/client';
+import { STANDARD_PROJECT_ID } from '@/services/anchorService';
 
 const LOCAL_MODEL_ID = 'industrial-tower';
 const LOCAL_MODEL_URL = `${window.location.origin}/models/towers/scene.gltf`;
@@ -1548,34 +1555,70 @@ export function Mapbox3DLayer({
                 isPointVisible(tgt.coordinates.lng, tgt.coordinates.lat);
         });
 
+        // 2. Selection Effect Logic
+        const selectedPath = selectedPlacemark && (selectedPlacemark.extendedData as any)?.source === '3d_cable_virtual_layer' 
+            ? visiblePaths.filter(p => p.id === selectedPlacemark.id)
+            : [];
+
         const cableLayer = new PathLayer({
             id: 'deck-cables-layer',
             data: visiblePaths,
             pickable: true,
             getPath: (d: Record<string, unknown>) => d.path as [number, number, number][],
-            getColor: (d: Record<string, unknown>) => {
+            getColor: (d: any) => {
+                const isSelected = selectedPlacemark?.id === d.id;
                 const hexValue = (typeof d.color === 'string' ? d.color : '#cbd5e1').replace('#', '');
                 const r = parseInt(hexValue.substring(0, 2), 16) || 203;
                 const g = parseInt(hexValue.substring(2, 4), 16) || 213;
                 const b = parseInt(hexValue.substring(4, 6), 16) || 225;
+                
+                if (isSelected) return [0, 255, 255, 255]; // Ciano para seleção
                 return [r, g, b, 255];
             },
-            getWidth: (d: any) => d.width || 3,
+            getWidth: (d: any) => {
+                const isSelected = selectedPlacemark?.id === d.id;
+                return isSelected ? (d.width || 3) * 2 : (d.width || 3);
+            },
             widthUnits: 'pixels',
             capRounded: true,
             jointRounded: true,
             opacity: cableSettings.globalOpacity,
             parameters: { depthTest: true },
             updateTriggers: {
-                getPath: [visiblePaths.length, cableSettings.towerVerticalOffset, terrainRevision]
+                getPath: [visiblePaths.length, cableSettings.towerVerticalOffset, terrainRevision],
+                getColor: [selectedPlacemark?.id],
+                getWidth: [selectedPlacemark?.id]
             },
             onClick: (info: any) => {
                 if (info.object) {
                     console.log('Clicked Cable:', info.object);
-                    handleCableClick(info, info.x, info.y);
+                    if (onSelectPlacemark) {
+                        onSelectPlacemark({
+                            id: info.object.id,
+                            name: `Vão ${info.object.towerStartName} ↔ ${info.object.towerEndName}`,
+                            coordinates: { lat: 0, lng: 0 },
+                            extendedData: {
+                                ...info.object,
+                                source: '3d_cable_virtual_layer'
+                            }
+                        } as any);
+                    }
                 }
                 return true;
             }
+        });
+
+        // Selection Glow Layer (Cyan)
+        const selectionGlowLayer = new PathLayer({
+            id: 'deck-cables-selection-glow',
+            data: selectedPath,
+            pickable: false,
+            getPath: (d: any) => d.path,
+            getColor: () => [0, 255, 255, 150],
+            getWidth: () => 12,
+            widthUnits: 'pixels',
+            opacity: 0.6,
+            parameters: { depthTest: true }
         });
 
         // Specular Highlight Layer (The "Shine" on the metal)
@@ -1659,8 +1702,8 @@ export function Mapbox3DLayer({
         });
         */
         const anchorLayers: any[] = [];
-        return [cableLayer, cableShineLayer, ...towerLayers, ...anchorLayers];
-    }, [towersWithTerrain, projectSpans, show3D, cableSettings, placemarkOverrides, hiddenSpans, hiddenPlacemarkIds, projectId, canUpdate, terrainRevision, map, towerAlignments]);
+        return [cableLayer, selectionGlowLayer, cableShineLayer, ...towerLayers, ...anchorLayers];
+    }, [towersWithTerrain, projectSpans, show3D, cableSettings, placemarkOverrides, hiddenSpans, hiddenPlacemarkIds, projectId, canUpdate, terrainRevision, map, towerAlignments, selectedPlacemark, onSelectPlacemark, isAutoConnecting, chunkedTowers]);
 
     // GeoJSON for Solid 3D Cables (fill-extrusion)
     const solidCablesGeoJSON = useMemo(() => {

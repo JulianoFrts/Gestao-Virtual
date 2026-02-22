@@ -9,7 +9,9 @@ import { logger } from "@/lib/utils/logger";
 import { jwtVerify } from "jose";
 import { CONSTANTS } from "@/lib/constants";
 
-const governanceService = new GovernanceService(new PrismaGovernanceRepository());
+const governanceService = new GovernanceService(
+  new PrismaGovernanceRepository(),
+);
 const streamService = new AuditStreamService(governanceService);
 
 async function validateTokenFromQuery(token: string) {
@@ -22,8 +24,8 @@ async function validateTokenFromQuery(token: string) {
     if (!payload) throw new Error("Token inválido");
 
     const userId = (payload.sub || payload.id) as string;
-    const name = payload.name as string || "Unknown";
-    const role = (payload.role as string || "").toUpperCase();
+    const name = (payload.name as string) || "Unknown";
+    const role = ((payload.role as string) || "").toUpperCase();
 
     if (!isGodRole(role)) {
       throw new Error(`Acesso restrito. Role: ${role}`);
@@ -41,18 +43,36 @@ export async function HEAD() {
 }
 
 export async function GET(request: NextRequest) {
+  return handleStreamRequest(request);
+}
+
+export async function POST(request: NextRequest) {
+  return handleStreamRequest(request);
+}
+
+async function handleStreamRequest(request: NextRequest) {
   try {
     const { validateToken } = await import("@/lib/auth/session");
     let currentUser;
+    let token = request.nextUrl.searchParams.get("token");
 
-    const token = request.nextUrl.searchParams.get("token");
+    // Se for POST, tenta pegar o token do corpo (JSON)
+    if (request.method === "POST") {
+      try {
+        const body = await request.json();
+        if (body.token) token = body.token;
+      } catch {
+        /* Ignora erro se não houver body JSON */
+      }
+    }
+
     if (token) {
       const session = await validateToken(token);
       if (session?.user) currentUser = session.user;
     }
 
     if (!currentUser) {
-      currentUser = await requireAuth();
+      currentUser = await requireAuth(request);
     }
 
     const stream = streamService.createScanStream(currentUser.id);
@@ -61,7 +81,7 @@ export async function GET(request: NextRequest) {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
+        Connection: "keep-alive",
         "X-Accel-Buffering": "no",
       },
     });
