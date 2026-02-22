@@ -28,5 +28,6 @@ export interface SegmentRepository {
   saveMany(segments: Segment[]): Promise<Segment[]>;
   findById(id: string): Promise<Segment | null>;
   findByProject(projectId: string): Promise<Segment[]>;
+  findByCompany(companyId: string): Promise<Segment[]>;
   deleteById(id: string): Promise<void>;
 }

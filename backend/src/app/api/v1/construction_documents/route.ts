@@ -4,7 +4,7 @@ import { requireAuth } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { Validator } from "@/lib/utils/api/validator";
-import { paginationQuerySchema } from "@/core/common/domain/common.schema";
+import { paginationQuerySchema } from "@/modules/common/domain/common.schema";
 import { ConstructionDocumentService } from "@/modules/documents/application/document.service";
 import { PrismaDocumentRepository } from "@/modules/documents/infrastructure/prisma-document.repository";
 import { VALIDATION } from "@/lib/constants";
@@ -19,7 +19,10 @@ const createDocumentSchema = z.object({
   companyId: z.string().optional(),
   projectId: z.string().optional(),
   siteId: z.string().optional(),
-  name: z.string().min(1, "Nome do documento é obrigatório").max(VALIDATION.STRING.MAX_NAME),
+  name: z
+    .string()
+    .min(1, "Nome do documento é obrigatório")
+    .max(VALIDATION.STRING.MAX_NAME),
   documentType: z.string().min(1, "Tipo do documento é obrigatório"),
   fileUrl: z
     .string()
@@ -84,7 +87,10 @@ export async function GET(request: NextRequest) {
 
     return ApiResponse.json(result);
   } catch (error) {
-    return handleApiError(error, "src/app/api/v1/construction_documents/route.ts#GET");
+    return handleApiError(
+      error,
+      "src/app/api/v1/construction_documents/route.ts#GET",
+    );
   }
 }
 
@@ -109,7 +115,10 @@ export async function POST(request: NextRequest) {
 
     return ApiResponse.created(document, "Documento criado com sucesso");
   } catch (error) {
-    return handleApiError(error, "src/app/api/v1/construction_documents/route.ts#POST");
+    return handleApiError(
+      error,
+      "src/app/api/v1/construction_documents/route.ts#POST",
+    );
   }
 }
 
@@ -128,12 +137,15 @@ export async function PUT(request: NextRequest) {
     logger.info("Documento atualizado", {
       documentId: id,
       userId: user.id,
-      updates: Object.keys(updates)
+      updates: Object.keys(updates),
     });
 
     return ApiResponse.json(document, "Documento atualizado com sucesso");
   } catch (error) {
-    return handleApiError(error, "src/app/api/v1/construction_documents/route.ts#PUT");
+    return handleApiError(
+      error,
+      "src/app/api/v1/construction_documents/route.ts#PUT",
+    );
   }
 }
 
@@ -156,11 +168,14 @@ export async function DELETE(request: NextRequest) {
     logger.info("Documento removido", {
       documentId: id,
       userId: user.id,
-      documentName: document.name
+      documentName: document.name,
     });
 
     return ApiResponse.json(null, "Documento removido com sucesso");
   } catch (error) {
-    return handleApiError(error, "src/app/api/v1/construction_documents/route.ts#DELETE");
+    return handleApiError(
+      error,
+      "src/app/api/v1/construction_documents/route.ts#DELETE",
+    );
   }
 }

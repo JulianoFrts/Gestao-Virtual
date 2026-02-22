@@ -13,7 +13,7 @@ import { requireAuth, requireAdmin } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { Validator } from "@/lib/utils/api/validator";
-import { paginationQuerySchema } from "@/core/common/domain/common.schema";
+import { paginationQuerySchema } from "@/modules/common/domain/common.schema";
 import { emptyToUndefined } from "@/lib/utils/validators/schemas";
 import { CompanyService } from "@/modules/companies/application/company.service";
 import { PrismaCompanyRepository } from "@/modules/companies/infrastructure/prisma-company.repository";
@@ -28,7 +28,10 @@ const companyService = new CompanyService(companyRepository);
 // =============================================
 
 const createCompanySchema = z.object({
-  name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres").max(VALIDATION.STRING.MAX_NAME),
+  name: z
+    .string()
+    .min(2, "Nome deve ter no mínimo 2 caracteres")
+    .max(VALIDATION.STRING.MAX_NAME),
   taxId: z.string().optional(),
   address: z.string().optional(),
   phone: z.string().optional(),
@@ -57,7 +60,12 @@ export async function GET(request: NextRequest) {
     );
     if (!validation.success) return validation.response;
 
-    const { page = API.PAGINATION.DEFAULT_PAGE, limit = API.PAGINATION.DEFAULT_LIMIT, search, isActive } = validation.data as any;
+    const {
+      page = API.PAGINATION.DEFAULT_PAGE,
+      limit = API.PAGINATION.DEFAULT_LIMIT,
+      search,
+      isActive,
+    } = validation.data as any;
 
     const result = await companyService.listCompanies({
       page,

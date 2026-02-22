@@ -25,7 +25,14 @@ function log(message, color = colors.reset) {
   console.log(`${color}${message}${colors.reset}`);
 }
 
-function startProcess(command, args, label, color, cwd = rootDir, extraEnv = {}) {
+function startProcess(
+  command,
+  args,
+  label,
+  color,
+  cwd = rootDir,
+  extraEnv = {},
+) {
   const env = {
     ...process.env,
     ...extraEnv,
@@ -45,7 +52,7 @@ function startProcess(command, args, label, color, cwd = rootDir, extraEnv = {})
       shell: true,
       windowsHide: true,
       cwd,
-      env
+      env,
     });
 
     proc.unref();
@@ -61,9 +68,51 @@ function startProcess(command, args, label, color, cwd = rootDir, extraEnv = {})
   proc.stdout.on("data", (data) => {
     const lines = data.toString().split("\n");
     lines.forEach((line) => {
-      if (line.trim()) {
-        console.log(`${color}[${label}]${colors.reset} ${line}`);
+      const trimmed = line.trim();
+      if (!trimmed) return;
+
+      // Suporte a Pino JSON Logs
+      if (trimmed.startsWith('{"level":')) {
+        try {
+          const pinoLog = JSON.parse(trimmed);
+          const time = pinoLog.time || Date.now();
+          const msg = pinoLog.msg || "";
+          const levelVal = pinoLog.level;
+
+          let levelName = "INFO";
+          let levelColor = colors.reset;
+
+          if (levelVal <= 10) {
+            levelName = "TEST";
+            levelColor = colors.magenta;
+          } else if (levelVal <= 20) {
+            levelName = "TRACE";
+            levelColor = colors.gray || "";
+          } else if (levelVal <= 30) {
+            levelName = "DEBUG";
+            levelColor = colors.blue;
+          } else if (levelVal === 38) {
+            levelName = "SUCCESS";
+            levelColor = colors.green;
+          } else if (levelVal === 40) {
+            levelName = "WARN";
+            levelColor = colors.yellow;
+          } else if (levelVal >= 50) {
+            levelName = "ERROR";
+            levelColor = colors.red;
+          }
+
+          const timeStr = new Date(time).toLocaleTimeString();
+          console.log(
+            `${color}[${label}]${colors.reset} ${colors.cyan}[${timeStr}]${colors.reset} ${levelColor}[${levelName}]${colors.reset} ${msg}`,
+          );
+          return;
+        } catch (e) {
+          // Se falhar no parse, segue o fluxo normal
+        }
       }
+
+      console.log(`${color}[${label}]${colors.reset} ${line}`);
     });
   });
 
@@ -102,7 +151,10 @@ async function start() {
       try {
         // Timeout maior para sistemas Windows mais lentos
         execSync("docker info", { stdio: "ignore", timeout: 10000 });
-        execSync("docker-compose up -d db", { stdio: "inherit", timeout: 20000 });
+        execSync("docker-compose up -d db", {
+          stdio: "inherit",
+          timeout: 20000,
+        });
         log("✅ Banco de Dados iniciado via Docker.", colors.green);
       } catch (e) {
         log(
@@ -111,13 +163,16 @@ async function start() {
         );
       }
     } else {
-      log("\n🚀 MODO LITE ATIVADO: Pulando verificação do Docker.", colors.green);
+      log(
+        "\n🚀 MODO LITE ATIVADO: Pulando verificação do Docker.",
+        colors.green,
+      );
     }
 
     log("\n⚡ Parando processos anteriores...", colors.red + colors.bright);
     try {
       execSync("npm run dev:stop", { stdio: "ignore", cwd: rootDir });
-    } catch (e) { }
+    } catch (e) {}
 
     // ... (rest of the code)
 
@@ -125,7 +180,10 @@ async function start() {
     const backendDir = path.join(rootDir, "backend");
     const frontendDir = path.join(rootDir, "frontend");
 
-    if (!isLite || !fs.existsSync(path.join(backendDir, "node_modules/.prisma"))) {
+    if (
+      !isLite ||
+      !fs.existsSync(path.join(backendDir, "node_modules/.prisma"))
+    ) {
       log("\n️ Passo 1.1: Gerando Prisma Client...", colors.yellow);
       try {
         execSync("npx prisma generate", {
@@ -139,8 +197,21 @@ async function start() {
     }
 
     // Comandos diretos usando node para evitar problemas com espaços no PATH/NPX do Windows
-    const nextBin = path.join(rootDir, "node_modules", "next", "dist", "bin", "next");
-    const viteBin = path.join(rootDir, "node_modules", "vite", "bin", "vite.js");
+    const nextBin = path.join(
+      rootDir,
+      "node_modules",
+      "next",
+      "dist",
+      "bin",
+      "next",
+    );
+    const viteBin = path.join(
+      rootDir,
+      "node_modules",
+      "vite",
+      "bin",
+      "vite.js",
+    );
     const tsxBin = path.join(rootDir, "node_modules", "tsx", "dist", "cli.mjs");
 
     log("\n⚡ Passo 2: Iniciando serviços (Modo Robusto)...", colors.yellow);
@@ -150,7 +221,7 @@ async function start() {
       ["run", "dev", "-w", "backend"],
       "BACKEND",
       colors.blue,
-      rootDir
+      rootDir,
     );
 
     const frontend = startProcess(
@@ -158,7 +229,7 @@ async function start() {
       [`"${viteBin}"`],
       "FRONTEND",
       colors.green,
-      frontendDir
+      frontendDir,
     );
 
     const worker = startProcess(
@@ -166,7 +237,7 @@ async function start() {
       [`"${tsxBin}"`, "worker.ts"],
       "WORKER",
       colors.yellow,
-      path.join(rootDir, "backend")
+      path.join(rootDir, "backend"),
     );
 
     log("\n===================================================", colors.cyan);

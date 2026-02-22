@@ -7,7 +7,7 @@ import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth, requireAdmin } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { Validator } from "@/lib/utils/api/validator";
-import { paginationQuerySchema } from "@/core/common/domain/common.schema";
+import { paginationQuerySchema } from "@/modules/common/domain/common.schema";
 import { z } from "zod";
 import { emptyToUndefined } from "@/lib/utils/validators/schemas";
 import { PrismaSiteRepository } from "@/modules/sites/infrastructure/prisma-site.repository";
@@ -20,7 +20,10 @@ const service = new SiteService(repository);
 
 const createSiteSchema = z.object({
   projectId: z.string().min(1, "ID do projeto é obrigatório"),
-  name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres").max(VALIDATION.STRING.MAX_NAME),
+  name: z
+    .string()
+    .min(2, "Nome deve ter no mínimo 2 caracteres")
+    .max(VALIDATION.STRING.MAX_NAME),
   code: z
     .string()
     .optional()
@@ -48,7 +51,6 @@ const createSiteSchema = z.object({
   responsibleIds: z.array(z.string().min(1)).optional().default([]),
 });
 
-
 const querySchema = paginationQuerySchema.extend({
   projectId: z.preprocess(emptyToUndefined, z.string().optional().nullable()),
   search: z.preprocess(emptyToUndefined, z.string().optional().nullable()),
@@ -64,7 +66,12 @@ export async function GET(request: NextRequest) {
     );
     if (!validation.success) return validation.response;
 
-    const { page = API.PAGINATION.DEFAULT_PAGE, limit = API.PAGINATION.DEFAULT_LIMIT, projectId, search } = validation.data as any;
+    const {
+      page = API.PAGINATION.DEFAULT_PAGE,
+      limit = API.PAGINATION.DEFAULT_LIMIT,
+      projectId,
+      search,
+    } = validation.data as any;
 
     const { isUserAdmin: checkAdmin } = await import("@/lib/auth/session");
     const isAdmin = checkAdmin(user.role);

@@ -10,7 +10,7 @@ import { requireAuth, requireAdmin } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { Validator } from "@/lib/utils/api/validator";
-import { paginationQuerySchema } from "@/core/common/domain/common.schema";
+import { paginationQuerySchema } from "@/modules/common/domain/common.schema";
 import { ProjectService } from "@/modules/projects/application/project.service";
 import { PrismaProjectRepository } from "@/modules/projects/infrastructure/prisma-project.repository";
 import { PrismaCompanyRepository } from "@/modules/companies/infrastructure/prisma-company.repository";
@@ -23,7 +23,10 @@ const projectService = new ProjectService(projectRepository);
 
 const createProjectSchema = z.object({
   companyId: z.string().uuid("ID da empresa deve ser um UUID válido"),
-  name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres").max(VALIDATION.STRING.MAX_NAME),
+  name: z
+    .string()
+    .min(2, "Nome deve ter no mínimo 2 caracteres")
+    .max(VALIDATION.STRING.MAX_NAME),
   code: z
     .string()
     .optional()

@@ -3,17 +3,16 @@ import {
   Segment,
   SegmentRepository,
 } from "@/modules/segment/domain/segment.repository";
+import { randomUUID } from "crypto";
 
-export class PrismaSegmentRepository implements SegmentRepository {
+export class PrismaSegmentRepository implements TowerSegmentRepository {
   async save(segment: Segment): Promise<Segment> {
     const { id, conductors, ...data } = segment;
 
-    // If ID is provided, update by ID
     if (id) {
       return this.handleUpdate(id, data, conductors);
     }
 
-    // Upsert by Unique Constraint
     return this.handleUpsert(data, conductors);
   }
 
@@ -55,7 +54,6 @@ export class PrismaSegmentRepository implements SegmentRepository {
     const existing = await prisma.segment.findUnique({ where: whereInput });
 
     if (existing) {
-      // Update
       await prisma.segment.update({
         where: { id: existing.id },
         data: {
@@ -69,42 +67,45 @@ export class PrismaSegmentRepository implements SegmentRepository {
       }
       return this.findById(existing.id) as unknown as Promise<Segment>;
     } else {
-      // Create
-      const createData = {
-        projectId: data.projectId,
-        fromTowerId: data.towerStartId,
-        toTowerId: data.towerEndId,
-        length: data.spanLength,
-        groundLevel: data.elevationStart || 0,
-        conductors: {
-          create: this.mapConductorsForCreate(conductors),
-        },
-      };
-
       const created = await prisma.segment.create({
-        data: createData,
+        data: {
+          projectId: data.projectId,
+          fromTowerId: data.towerStartId,
+          toTowerId: data.towerEndId,
+          length: data.spanLength,
+          groundLevel: data.elevationStart || 0,
+          conductors: {
+            create: this.mapConductorsForCreate(conductors),
+          },
+        },
         include: { conductors: true },
       });
-      return created as unknown as Segment;
+      return this.mapFromPrisma(created);
     }
   }
 
   private async updateConductors(segmentId: string, conductors: any[]) {
     await prisma.conductor.deleteMany({ where: { segmentId } });
-    await prisma.conductor.createMany({
-      data: conductors.map((c) => ({
-        segmentId: segmentId,
-        phase: c.phase,
-        circuitId: c.circuitId,
-        cableType: c.cableType,
-        voltageKv: c.voltageKv,
-        color: c.cableColor,
-      })),
-    });
+
+    // Using individual creates or a loop since createMany doesn't handle IDs automatically if not defined in schema
+    for (const c of conductors) {
+      await prisma.conductor.create({
+        data: {
+          id: c.id || randomUUID(),
+          segmentId: segmentId,
+          phase: c.phase,
+          circuitId: c.circuitId,
+          cableType: c.cableType,
+          voltageKv: c.voltageKv,
+          color: c.cableColor,
+        },
+      });
+    }
   }
 
   private mapConductorsForCreate(conductors?: any[]) {
     return conductors?.map((c) => ({
+      id: c.id || randomUUID(),
       phase: c.phase,
       circuitId: c.circuitId,
       cableType: c.cableType,
@@ -114,7 +115,6 @@ export class PrismaSegmentRepository implements SegmentRepository {
   }
 
   async saveMany(segments: Segment[]): Promise<Segment[]> {
-    // Prisma createMany doesn't support nested writes (conductors), so we loop
     const results: Segment[] = [];
     for (const seg of segments) {
       results.push(await this.save(seg));
@@ -125,9 +125,9 @@ export class PrismaSegmentRepository implements SegmentRepository {
   async findById(id: string): Promise<Segment | null> {
     const result = await prisma.segment.findUnique({
       where: { id },
-      include: { conductors: true, circuits: true },
+      include: { conductors: true, segmentCircuits: true },
     });
-    return result as unknown as Segment | null;
+    return result ? this.mapFromPrisma(result) : null;
   }
 
   async findByProject(projectId: string): Promise<Segment[]> {
@@ -136,7 +136,7 @@ export class PrismaSegmentRepository implements SegmentRepository {
       include: { conductors: true },
       orderBy: { createdAt: "desc" },
     });
-    return results as unknown as Segment[];
+    return results.map((r) => this.mapFromPrisma(r));
   }
 
   async findByCompany(companyId: string): Promise<Segment[]> {
@@ -149,10 +149,39 @@ export class PrismaSegmentRepository implements SegmentRepository {
       include: { conductors: true },
       orderBy: { projectId: "asc" },
     });
-    return results as unknown as Segment[];
+    return results.map((r) => this.mapFromPrisma(r));
+  }
+
+  private mapFromPrisma(prismaSegment: any): Segment {
+    return {
+      id: prismaSegment.id,
+      projectId: prismaSegment.projectId,
+      towerStartId: prismaSegment.fromTowerId,
+      towerEndId: prismaSegment.toTowerId,
+      spanLength: prismaSegment.length
+        ? Number(prismaSegment.length)
+        : undefined,
+      elevationStart: prismaSegment.groundLevel
+        ? Number(prismaSegment.groundLevel)
+        : undefined,
+      conductors: prismaSegment.conductors?.map((c: any) => ({
+        id: c.id,
+        segmentId: c.segmentId,
+        phase: c.phase,
+        circuitId: c.circuitId,
+        cableType: c.cableType,
+        voltageKv: c.voltageKv ? Number(c.voltageKv) : undefined,
+        cableColor: c.color,
+      })),
+      createdAt: prismaSegment.createdAt,
+      updatedAt: prismaSegment.updatedAt,
+    };
   }
 
   async deleteById(id: string): Promise<void> {
     await prisma.segment.delete({ where: { id } });
   }
 }
+
+// Alias for compatibility if needed elsewhere
+export type TowerSegmentRepository = SegmentRepository;

@@ -13,6 +13,10 @@ export interface Tower {
   goForward?: number;
   fusoObject?: string;
   fixConductor?: string;
+  trecho?: string;
+  technicalKm?: number;
+  technicalIndex?: number;
+  circuitId?: string;
   metadata?: any;
   createdAt?: Date;
   updatedAt?: Date;

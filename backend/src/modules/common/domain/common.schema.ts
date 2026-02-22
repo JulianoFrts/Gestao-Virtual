@@ -1,24 +1,43 @@
 import { z } from "zod";
+import { emptyToUndefined } from "@/lib/utils/validators/schemas";
+import { CONSTANTS } from "@/lib/constants";
 
 /**
  * Common validation rules shared across the system
  */
 
-import { DEFAULT_PAGE, DEFAULT_LIMIT, MAX_LIMIT, BATCH_SIZE } from "@/lib/constants";
-
-export const idSchema = z.string().uuid("ID deve ser um UUID válido");
-export const optionalIdSchema = idSchema.optional().nullable();
+// Inclusive ID schema to support CUID, UUID and technical IDs (like Tower objectId)
+export const idSchema = z
+  .string()
+  .min(3, "ID deve ter pelo menos 3 caracteres");
+export const optionalIdSchema = z.preprocess(
+  emptyToUndefined,
+  idSchema.optional().nullable(),
+);
 
 export const paginationQuerySchema = z.object({
   page: z.preprocess(
-    (val) => (val === null || val === "" ? undefined : val),
-    z.coerce.number().int().min(1).default(DEFAULT_PAGE),
+    (val) =>
+      val === null || val === "" || val === "undefined" ? undefined : val,
+    z.coerce
+      .number()
+      .int()
+      .min(1)
+      .default(CONSTANTS.API.PAGINATION.DEFAULT_PAGE),
   ),
   limit: z.preprocess(
-    (val) => (val === null || val === "" ? undefined : val),
-    z.coerce.number().int().min(1).max(BATCH_SIZE).default(DEFAULT_LIMIT),
+    (val) =>
+      val === null || val === "" || val === "undefined" || val === "0"
+        ? undefined
+        : val,
+    z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(CONSTANTS.API.BATCH.EXTREME)
+      .default(CONSTANTS.API.PAGINATION.DEFAULT_LIMIT),
   ),
-  sortBy: z.string().optional().nullable(),
+  sortBy: z.preprocess(emptyToUndefined, z.string().optional().nullable()),
   sortOrder: z.enum(["asc", "desc"]).default("asc"),
 });
 

@@ -1,11 +1,10 @@
-import { prisma } from '../../../lib';
-import { DataIngestion } from '@prisma/client';
-import { ParserStrategy } from '../strategies/ParserStrategy';
-import { CsvParser } from '../strategies/CsvParser';
-import { ExcelParser } from '../strategies/ExcelParser';
-import { TxtParser } from '../strategies/TxtParser';
-import { SvgParser } from '../strategies/SvgParser';
-
+import { prisma } from "../../../lib";
+import { DataIngestion } from "@prisma/client";
+import { ParserStrategy } from "../strategies/ParserStrategy";
+import { CsvParser } from "../strategies/CsvParser";
+import { ExcelParser } from "../strategies/ExcelParser";
+import { TxtParser } from "../strategies/TxtParser";
+import { SvgParser } from "../strategies/SvgParser";
 
 interface MulterFile {
   fieldname: string;
@@ -41,7 +40,7 @@ export class DataIngestionService {
       data: {
         filename: file.originalname,
         fileType: fileType,
-        status: 'PROCESSING',
+        status: "PROCESSING",
       },
     });
 
@@ -53,7 +52,7 @@ export class DataIngestionService {
       return await prisma.dataIngestion.update({
         where: { id: ingestionRecord.id },
         data: {
-          status: 'COMPLETED',
+          status: "COMPLETED",
           recordsProcessed: result.data.length,
           metadata: result.metadata || {},
         },
@@ -63,7 +62,7 @@ export class DataIngestionService {
       await prisma.dataIngestion.update({
         where: { id: ingestionRecord.id },
         data: {
-          status: 'FAILED',
+          status: "FAILED",
           errorMessage: error.message,
         },
       });
@@ -72,19 +71,23 @@ export class DataIngestionService {
   }
 
   private detectFileType(filename: string, mimeType: string): string {
-    const extension = filename.split('.').pop()?.toUpperCase();
+    const extension = filename.split(".").pop()?.toUpperCase();
 
-    if (extension === 'CSV' || mimeType === 'text/csv') return 'CSV';
-    if (['XLS', 'XLSX'].includes(extension || '') || mimeType.includes('spreadsheet')) return 'EXCEL';
-    if (extension === 'TXT' || mimeType === 'text/plain') return 'TXT';
-    if (extension === 'SVG' || mimeType === 'image/svg+xml') return 'SVG';
+    if (extension === "CSV" || mimeType === "text/csv") return "CSV";
+    if (
+      ["XLS", "XLSX"].includes(extension || "") ||
+      mimeType.includes("spreadsheet")
+    )
+      return "EXCEL";
+    if (extension === "TXT" || mimeType === "text/plain") return "TXT";
+    if (extension === "SVG" || mimeType === "image/svg+xml") return "SVG";
 
-    return 'UNKNOWN';
+    return "UNKNOWN";
   }
 
   async getAllIngestions() {
     return prisma.dataIngestion.findMany({
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
   }
 
@@ -92,5 +95,16 @@ export class DataIngestionService {
     return prisma.dataIngestion.findUnique({
       where: { id },
     });
+  }
+
+  getTemplate(type: string): string {
+    switch (type.toLowerCase()) {
+      case "tower":
+        return "externalId,trecho,towerType,foundationType,totalConcreto,pesoArmacao,pesoEstrutura,goForward,tramoLancamento,tipificacaoEstrutura,lat,lng,alt,siteId";
+      case "employee":
+        return "fullName,email,phone,registrationNumber,cpf,functionId,level,laborType,companyId,projectId,siteId";
+      default:
+        throw new Error(`Template type not supported: ${type}`);
+    }
   }
 }

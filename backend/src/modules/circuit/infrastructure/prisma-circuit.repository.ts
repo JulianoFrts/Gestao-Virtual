@@ -9,15 +9,17 @@ export class PrismaCircuitRepository implements CircuitRepository {
     const { id, ...data } = circuit;
 
     if (id) {
-      return (await prisma.circuit.update({
+      const updated = await prisma.circuit.update({
         where: { id },
         data: data as any,
-      })) as unknown as Circuit;
+      });
+      return this.mapFromPrisma(updated);
     }
 
-    return (await prisma.circuit.create({
+    const created = await prisma.circuit.create({
       data: data as any,
-    })) as unknown as Circuit;
+    });
+    return this.mapFromPrisma(created);
   }
 
   async saveMany(circuits: Circuit[]): Promise<Circuit[]> {
@@ -29,16 +31,34 @@ export class PrismaCircuitRepository implements CircuitRepository {
   }
 
   async findById(id: string): Promise<Circuit | null> {
-    return (await prisma.circuit.findUnique({
+    const found = await prisma.circuit.findUnique({
       where: { id },
-    })) as unknown as Circuit | null;
+    });
+    return found ? this.mapFromPrisma(found) : null;
   }
 
   async findByProject(projectId: string): Promise<Circuit[]> {
-    return (await prisma.circuit.findMany({
+    const found = await prisma.circuit.findMany({
       where: { projectId },
       orderBy: { name: "asc" },
-    })) as unknown as Circuit[];
+    });
+    return found.map(this.mapFromPrisma);
+  }
+
+  private mapFromPrisma(prismaCircuit: any): Circuit {
+    return {
+      id: prismaCircuit.id,
+      projectId: prismaCircuit.projectId,
+      name: prismaCircuit.name,
+      type: prismaCircuit.type,
+      color: prismaCircuit.color,
+      voltageKv: prismaCircuit.voltageKv
+        ? Number(prismaCircuit.voltageKv)
+        : undefined,
+      isActive: prismaCircuit.isActive,
+      createdAt: prismaCircuit.createdAt,
+      updatedAt: prismaCircuit.updatedAt,
+    };
   }
 
   async deleteById(id: string): Promise<void> {

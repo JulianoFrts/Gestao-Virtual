@@ -206,8 +206,8 @@ export default function Functions() {
         setIsDialogOpen(false);
     };
 
-    const filteredFunctions = functions.filter(f =>
-        f.name.toLowerCase().includes(searchTerm.toLowerCase())
+    const filteredFunctions = (functions || []).filter(f =>
+        f?.name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     if (isLoading) {

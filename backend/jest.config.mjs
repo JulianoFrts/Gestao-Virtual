@@ -10,7 +10,7 @@ const customJestConfig = {
   testEnvironment: "node",
 
   // Setup após o ambiente estar pronto
-  setupFilesAfterEnv: ["<rootDir>/src/tests/setup.ts"],
+  setupFilesAfterEnv: ["<rootDir>/src/__tests__/setup.ts"],
 
   // Mapeamento de módulos (path aliases)
   moduleNameMapper: {

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma/client";
-import { Tower, TowerRepository } from "@/core/tower/domain/tower.repository";
+import { Tower, TowerRepository } from "../domain/tower.repository";
 
 export class PrismaTowerRepository implements TowerRepository {
   private mapToUnified(tower: Tower) {
@@ -17,6 +17,10 @@ export class PrismaTowerRepository implements TowerRepository {
       goForward,
       fusoObject,
       fixConductor,
+      trecho,
+      technicalKm,
+      technicalIndex,
+      circuitId,
       metadata,
     } = tower;
 
@@ -37,6 +41,10 @@ export class PrismaTowerRepository implements TowerRepository {
         goForward,
         fusoObject,
         fixConductor,
+        trecho,
+        technicalKm,
+        technicalIndex,
+        circuitId,
         ...(metadata || {}),
       },
     };
@@ -58,9 +66,10 @@ export class PrismaTowerRepository implements TowerRepository {
       xCoordinate: unified.latitude ? Number(unified.latitude) : undefined,
       yCoordinate: unified.longitude ? Number(unified.longitude) : undefined,
       deflection: meta?.deflection,
-      goForward: meta?.goForward,
-      fusoObject: meta?.fusoObject,
-      fixConductor: meta?.fixConductor,
+      trecho: meta?.trecho,
+      technicalKm: meta?.technicalKm,
+      technicalIndex: meta?.technicalIndex,
+      circuitId: meta?.circuitId,
       metadata: meta,
       createdAt: unified.createdAt,
       updatedAt: unified.updatedAt,
@@ -106,7 +115,7 @@ export class PrismaTowerRepository implements TowerRepository {
     for (let i = 0; i < towers.length; i += BATCH_SIZE) {
       const batch = towers.slice(i, i + BATCH_SIZE);
       const batchResults = await Promise.all(
-        batch.map(tower => this.save(tower))
+        batch.map((tower) => this.save(tower)),
       );
       results.push(...batchResults);
     }

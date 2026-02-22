@@ -40,8 +40,22 @@ export class ApiResponse {
     };
   }
 
-  static json<T>(data: T, message?: string, status: number = HTTP_STATUS.OK): NextResponse {
-    return NextResponse.json(this.success(data, message), { status });
+  static json<T>(
+    data: T,
+    message?: string,
+    status: number = HTTP_STATUS.OK,
+  ): NextResponse {
+    const responseData = this.success(data, message);
+
+    // Otimização de Log: Evita imprimir payloads gigantescos (ex: 800+ torres)
+    const logData = this.summarizeForLog(data);
+    logger.info(`Response JSON ${status}`, {
+      status,
+      message,
+      data: logData,
+    });
+
+    return NextResponse.json(responseData, { status });
   }
 
   static errorJson(
@@ -50,7 +64,47 @@ export class ApiResponse {
     errors?: string[],
     code?: ErrorCode,
   ): NextResponse {
-    return NextResponse.json(this.error(message, errors, code), { status });
+    const errorData = this.error(message, errors, code);
+
+    // Erros geralmente são pequenos, mas vamos summarizar por segurança
+    const logData = this.summarizeForLog(errorData);
+    logger.warn(`Response Error JSON ${status}`, {
+      status,
+      data: logData,
+    });
+
+    return NextResponse.json(errorData, { status });
+  }
+
+  /**
+   * Resume dados para o log para evitar bottlenecks de stdout
+   */
+  private static summarizeForLog(data: any): any {
+    if (Array.isArray(data)) {
+      if (data.length > 10) {
+        return {
+          _type: "LargeArray",
+          length: data.length,
+          preview: data.slice(0, 3),
+          note: "Payload resumido para performance",
+        };
+      }
+      return data;
+    }
+
+    if (data && typeof data === "object") {
+      const keys = Object.keys(data);
+      if (keys.length > 50) {
+        return {
+          _type: "LargeObject",
+          keysCount: keys.length,
+          keysPreview: keys.slice(0, 10),
+          note: "Payload resumido para performance",
+        };
+      }
+    }
+
+    return data;
   }
 
   static created<T>(data: T, message = "Criado com sucesso"): NextResponse {
@@ -65,19 +119,39 @@ export class ApiResponse {
     message = "Requisição inválida",
     errors?: string[],
   ): NextResponse {
-    return this.errorJson(message, HTTP_STATUS.BAD_REQUEST, errors, "VALIDATION_ERROR");
+    return this.errorJson(
+      message,
+      HTTP_STATUS.BAD_REQUEST,
+      errors,
+      "VALIDATION_ERROR",
+    );
   }
 
   static unauthorized(message = "Não autenticado"): NextResponse {
-    return this.errorJson(message, HTTP_STATUS.UNAUTHORIZED, undefined, "UNAUTHORIZED");
+    return this.errorJson(
+      message,
+      HTTP_STATUS.UNAUTHORIZED,
+      undefined,
+      "UNAUTHORIZED",
+    );
   }
 
   static forbidden(message = "Sem permissão para esta ação"): NextResponse {
-    return this.errorJson(message, HTTP_STATUS.FORBIDDEN, undefined, "FORBIDDEN");
+    return this.errorJson(
+      message,
+      HTTP_STATUS.FORBIDDEN,
+      undefined,
+      "FORBIDDEN",
+    );
   }
 
   static notFound(message = "Recurso não encontrado"): NextResponse {
-    return this.errorJson(message, HTTP_STATUS.NOT_FOUND, undefined, "NOT_FOUND");
+    return this.errorJson(
+      message,
+      HTTP_STATUS.NOT_FOUND,
+      undefined,
+      "NOT_FOUND",
+    );
   }
 
   static conflict(message = "Conflito com recurso existente"): NextResponse {
@@ -88,7 +162,12 @@ export class ApiResponse {
     message = "Muitas requisições. Tente novamente mais tarde.",
     retryAfter?: number,
   ): NextResponse {
-    const response = this.errorJson(message, HTTP_STATUS.TOO_MANY_REQUESTS, undefined, "RATE_LIMITED");
+    const response = this.errorJson(
+      message,
+      HTTP_STATUS.TOO_MANY_REQUESTS,
+      undefined,
+      "RATE_LIMITED",
+    );
 
     if (retryAfter) {
       response.headers.set("Retry-After", String(retryAfter));
@@ -101,7 +180,12 @@ export class ApiResponse {
     message = "Erro interno do servidor",
     errors?: string[],
   ): NextResponse {
-    return this.errorJson(message, HTTP_STATUS.INTERNAL_ERROR, errors, "INTERNAL_ERROR");
+    return this.errorJson(
+      message,
+      HTTP_STATUS.INTERNAL_ERROR,
+      errors,
+      "INTERNAL_ERROR",
+    );
   }
 
   static validationError(errors: string[]): NextResponse {
@@ -171,14 +255,19 @@ type PrismaKnownError = {
 };
 
 function isPrismaError(error: unknown): error is PrismaKnownError {
-  if (typeof error !== "object" || error === null || !("code" in error)) return false;
+  if (typeof error !== "object" || error === null || !("code" in error))
+    return false;
   const code = (error as any).code;
   // Prisma error codes always start with "P" followed by digits
   return typeof code === "string" && /^P\d{4}$/.test(code);
 }
 
 function handlePrismaError(error: PrismaKnownError): NextResponse {
-  const logContext = { code: error.code, meta: error.meta, message: error.message };
+  const logContext = {
+    code: error.code,
+    meta: error.meta,
+    message: error.message,
+  };
 
   switch (error.code) {
     // Unique constraint violation
@@ -200,13 +289,17 @@ function handlePrismaError(error: PrismaKnownError): NextResponse {
       logger.error("Prisma connection error", logContext);
       return ApiResponse.errorJson(
         "Serviço temporariamente indisponível. Tente novamente.",
-        HTTP_STATUS.SERVICE_UNAVAILABLE, undefined, "SERVICE_UNAVAILABLE"
+        HTTP_STATUS.SERVICE_UNAVAILABLE,
+        undefined,
+        "SERVICE_UNAVAILABLE",
       );
     // Schema errors (table/column not found)
     case "P2021":
     case "P2022":
       logger.error("Prisma schema mismatch error", logContext);
-      return ApiResponse.internalError("Erro de configuração do banco de dados");
+      return ApiResponse.internalError(
+        "Erro de configuração do banco de dados",
+      );
     default:
       logger.error("Unhandled Prisma error", logContext);
       return ApiResponse.internalError();
@@ -221,7 +314,11 @@ function handleCustomError(error: Error, source?: string): NextResponse {
     return ApiResponse.unauthorized();
   }
 
-  if (message.includes("Sem permissão") || message.includes("Acesso restrito") || message.includes("Soberania de Hierarquia")) {
+  if (
+    message.includes("Sem permissão") ||
+    message.includes("Acesso restrito") ||
+    message.includes("Soberania de Hierarquia")
+  ) {
     logger.warn(message, { source });
     return ApiResponse.forbidden(message);
   }

@@ -149,13 +149,16 @@ const TowerImportModal = ({
     ];
     const ws = utils.json_to_sheet(template);
     
-    // Force specific columns to be text to prevent Excel date auto-conversion
-    Object.keys(ws).forEach(cell => {
-      // Column C is 'NumeroTorre' (0-indexed A, B, C...)
-      if (cell.startsWith('C') && cell !== 'C1') { 
-        if (ws[cell]) ws[cell].t = 's';
-      }
-    });
+    // Forçar colunas específicas para texto para evitar a conversão automática de datas no Excel
+    // NumeroTorre (identificador alfanumérico como 0/1, TRIO_C1)
+    const range = utils.decode_range(ws['!ref'] || 'A1:K2');
+    for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+        const cellAddress = utils.encode_cell({ r: R, c: 2 }); // Coluna C (NumeroTorre)
+        if (ws[cellAddress]) {
+            ws[cellAddress].t = 's'; // Force type to string
+            ws[cellAddress].z = '@'; // Force Excel format to text
+        }
+    }
 
     const wb = utils.book_new();
     utils.book_append_sheet(wb, ws, "Modelo Importação");
@@ -178,43 +181,61 @@ const TowerImportModal = ({
     }
 
     setIsSubmitting(true);
-    try {
-      const { data: job, error } = await orionApi.post<{ id: string }>('jobs', {
-        type: 'TOWER_IMPORT',
-        payload: { 
-            data: itemsToImport.map(i => ({
-                projectId: selectedProjectId,
-                companyId: initialCompanyId || profile?.companyId,
-                siteId: (selectedSiteId && selectedSiteId !== 'none') ? selectedSiteId : null,
-                externalId: i.externalId,
-                trecho: i.trecho,
-                towerType: i.towerType,
-                foundationType: i.foundationType,
-                totalConcreto: i.totalConcreto,
-                pesoArmacao: i.pesoArmacao,
-                pesoEstrutura: i.pesoEstrutura,
-                goForward: i.goForward,
-                objectSeq: i.objectSeq,
-                tramoLancamento: i.tramoLancamento,
-                tipificacaoEstrutura: i.tipificacaoEstrutura,
-                type: 'TOWER'
-            })),
-            projectId: selectedProjectId,
-            companyId: initialCompanyId || profile?.companyId,
-            siteId: (selectedSiteId && selectedSiteId !== 'none') ? selectedSiteId : null,
-            requestedBy: profile?.id,
-            requestedAt: new Date().toISOString()
-        }
-      });
+    
+    // Configuração de Loteamento (Batching) para "Stream" de dados
+    const BATCH_SIZE = 100;
+    const totalBatches = Math.ceil(itemsToImport.length / BATCH_SIZE);
+    let successfullyStarted = 0;
 
-      if (error) throw new Error(error.message);
-      if (job) {
-        updateJobState(job.id, job as any);
-        monitorJob(job.id);
-        toast({ title: 'Importação iniciada', description: `${itemsToImport.length} torres em processamento.` });
-        onClose();
-        setItems([]);
+    try {
+      for (let i = 0; i < itemsToImport.length; i += BATCH_SIZE) {
+        const batch = itemsToImport.slice(i, i + BATCH_SIZE);
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+
+        const { data: job, error } = await orionApi.post<{ id: string }>('jobs', {
+          type: 'TOWER_IMPORT',
+          payload: { 
+              data: batch.map(item => ({
+                  projectId: selectedProjectId,
+                  companyId: initialCompanyId || profile?.companyId,
+                  siteId: (selectedSiteId && selectedSiteId !== 'none') ? selectedSiteId : null,
+                  externalId: item.externalId,
+                  trecho: item.trecho,
+                  towerType: item.towerType,
+                  foundationType: item.foundationType,
+                  totalConcreto: item.totalConcreto,
+                  pesoArmacao: item.pesoArmacao,
+                  pesoEstrutura: item.pesoEstrutura,
+                  goForward: item.goForward,
+                  objectSeq: item.objectSeq,
+                  tramoLancamento: item.tramoLancamento,
+                  tipificacaoEstrutura: item.tipificacaoEstrutura,
+                  type: 'TOWER'
+              })),
+              projectId: selectedProjectId,
+              companyId: initialCompanyId || profile?.companyId,
+              siteId: (selectedSiteId && selectedSiteId !== 'none') ? selectedSiteId : null,
+              requestedBy: profile?.id,
+              requestedAt: new Date().toISOString(),
+              batchInfo: { current: batchNum, total: totalBatches, size: batch.length }
+          }
+        });
+
+        if (error) throw new Error(`Erro no lote ${batchNum}: ${error.message}`);
+        
+        if (job) {
+          updateJobState(job.id, job as any);
+          monitorJob(job.id);
+          successfullyStarted += batch.length;
+        }
       }
+
+      toast({ 
+        title: 'Importação iniciada', 
+        description: `${successfullyStarted} torres enviadas em ${totalBatches} lotes.` 
+      });
+      onClose();
+      setItems([]);
     } catch (err: any) {
       toast({ title: 'Erro na importação', description: err.message, variant: 'destructive' });
     } finally {
@@ -392,9 +413,12 @@ const TowerImportModal = ({
                         <TableHead className="w-16 text-center py-6"></TableHead>
                         <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-6">Identificador (Nº)</TableHead>
                         <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-6">Trecho</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-6 text-center">Configuração</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-6 text-right">Vão Vante</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-6 text-right pr-10">Peso Estrutura</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-6 text-center">Estrutura / Fundação</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-6 text-right">Vão (m)</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-6 text-right">Concreto (m³)</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-6 text-right">Aço (kg)</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-6 text-right pr-6">Peso (t)</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-6 text-center pr-10">Complemento</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -415,15 +439,30 @@ const TowerImportModal = ({
                           </TableCell>
                           <TableCell className="text-xs font-bold text-slate-400 font-mono tracking-tighter uppercase">{item.trecho || '-'}</TableCell>
                           <TableCell className="text-center">
-                            <Badge className="bg-white/10 text-white border-white/5 text-[9px] font-black uppercase hover:bg-white/20 whitespace-nowrap px-2.5 py-1">
-                                {item.towerType || 'Autoportante'}
-                            </Badge>
+                            <div className="flex flex-col items-center gap-1">
+                                <Badge className="bg-white/10 text-white border-white/5 text-[9px] font-black uppercase hover:bg-white/20 whitespace-nowrap px-2.5 py-1">
+                                    {item.towerType || 'Autoportante'}
+                                </Badge>
+                                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">{item.foundationType || '-'}</span>
+                            </div>
                           </TableCell>
                           <TableCell className="text-right font-mono text-xs font-bold text-slate-400">
-                            {item.goForward?.toFixed(1)} m
+                             {item.goForward?.toFixed(1)}
                           </TableCell>
-                           <TableCell className="text-right font-mono text-sm font-black text-white pr-10">
-                            {(item.pesoEstrutura || 0).toFixed(2)} t
+                          <TableCell className="text-right font-mono text-xs font-bold text-emerald-500/80">
+                             {item.totalConcreto?.toFixed(1)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs font-bold text-amber-500/80">
+                             {item.pesoArmacao?.toLocaleString()}
+                          </TableCell>
+                           <TableCell className="text-right font-mono text-sm font-black text-white pr-6">
+                            {(item.pesoEstrutura || 0).toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-center pr-10">
+                            <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-[8px] font-black text-primary/60 uppercase">{item.tramoLancamento || '-'}</span>
+                                <span className="text-[8px] font-black text-slate-600 uppercase italic">{item.tipificacaoEstrutura || '-'}</span>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}

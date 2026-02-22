@@ -1,14 +1,14 @@
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth } from "@/lib/auth/session";
-import { PrismaSegmentRepository } from "@/infrastructure/repositories/prisma-segment.repository";
-import { SegmentService } from "@/core/segment/application/segment.service";
+import { PrismaSegmentRepository } from "@/modules/segment/infrastructure/prisma-segment.repository";
+import { SegmentService } from "@/modules/segment/application/segment.service";
 import { z } from "zod";
 import { Validator } from "@/lib/utils/api/validator";
 import {
   idSchema,
   paginationQuerySchema,
-} from "@/core/common/domain/common.schema";
+} from "@/modules/common/domain/common.schema";
 
 const segmentRepository = new PrismaSegmentRepository();
 const segmentService = new SegmentService(segmentRepository);
@@ -25,16 +25,13 @@ export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth();
     const params = Object.fromEntries(request.nextUrl.searchParams.entries());
-    
+
     // Alias project_id -> projectId para compatibilidade
     if (params.project_id && !params.projectId) {
       params.projectId = params.project_id;
     }
 
-    const validation = Validator.validate(
-      getSegmentsSchema,
-      params
-    );
+    const validation = Validator.validate(getSegmentsSchema, params);
     if (!validation.success) return validation.response;
 
     const { projectId, companyId } = validation.data;

@@ -1,254 +1,53 @@
+import pino from "pino";
+import { PINO_CONFIG } from "./logger.config";
+
 /**
  * Logger Estruturado - GESTÃO VIRTUAL Backend
  *
- * Sistema de logging com níveis, contexto e formatação consistente
+ * Baseado em Pino para alta performance e segurança (redação de dados sensíveis).
+ * Otimizado para Next.js: Saída JSON pura via stdout para compatibilidade com Edge e Node.js.
+ * Formatação (Pretty) é delegada ao terminal via CLI em modo desenvolvimento.
  */
 
-// =============================================
-// TIPOS
-// =============================================
-
-type LogLevel = "debug" | "info" | "warn" | "error" | "test" | "success";
-
-interface LogContext {
-  source?: string; // Path format like "src/modules/Feature/infrastructure"
-  [key: string]: unknown;
-}
-
-const LOG_LEVEL_DEBUG = 0;
-const LOG_LEVEL_TEST = 1;
-const LOG_LEVEL_SUCCESS = 2;
-const LOG_LEVEL_INFO = 3;
-const LOG_LEVEL_WARN = 4;
-const LOG_LEVEL_ERROR = 5;
-
-const LOG_LEVELS: Record<LogLevel, number> = {
-  debug: LOG_LEVEL_DEBUG,
-  test: LOG_LEVEL_TEST,
-  success: LOG_LEVEL_SUCCESS,
-  info: LOG_LEVEL_INFO,
-  warn: LOG_LEVEL_WARN,
-  error: LOG_LEVEL_ERROR,
-};
-
-const CURRENT_LEVEL: LogLevel =
-  (process.env.LOG_LEVEL as LogLevel) ||
-  (process.env.NODE_ENV === "development" ? "debug" : "info");
-
-const IS_PRODUCTION = process.env.NODE_ENV === "production" || (process.env.NODE_ENV as string) === "remote";
+const pinoInstance = pino(PINO_CONFIG);
 
 // =============================================
-// FORMATADORES
-// =============================================
-
-/**
- * Formata timestamp no padrão yyyy/mm/dd-HH:mm/SS
- */
-function getCustomTimestamp(): string {
-  const now = new Date();
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  const y = now.getFullYear();
-  const m = pad(now.getMonth() + 1);
-  const d = pad(now.getDate());
-  const h = pad(now.getHours());
-  const min = pad(now.getMinutes());
-  const s = pad(now.getSeconds());
-  return `${y}/${m}/${d}-${h}:${min}/${s}`;
-}
-
-/**
- * Formata entrada de log para console seguindo o padrão solicitado
- * Formato: Log.[Level]: yyyy/mm/dd-HH:mm/SS][source]: [UserID] > {Message}
- */
-function formatForConsole(
-  level: LogLevel,
-  message: string,
-  timestamp: string,
-  context?: LogContext,
-  error?: any,
-): string {
-  const colors = {
-    reset: "\x1b[0m",
-    red: "\x1b[31m",
-    orange: "\x1b[33m",
-    blue: "\x1b[34m",
-    cyan: "\x1b[36m",
-    green: "\x1b[32m",
-    white: "\x1b[37m",
-    gray: "\x1b[90m",
-  };
-
-  const { colorCode, levelLabel } = getColorForLevel(level, colors);
-  return buildLogOutput({
-    levelLabel,
-    colorCode,
-    message,
-    timestamp,
-    colors,
-    context,
-    error,
-  });
-}
-
-function getColorForLevel(
-  level: LogLevel,
-  colors: any,
-): { colorCode: string; levelLabel: string } {
-  let colorCode = "";
-  let levelLabel = "";
-  switch (level) {
-    case "error":
-      colorCode = colors.red;
-      levelLabel = "Erro";
-      break;
-    case "warn":
-      colorCode = colors.orange;
-      levelLabel = "Aviso";
-      break;
-    case "info":
-      colorCode = colors.blue;
-      levelLabel = "Info";
-      break;
-    case "success":
-      colorCode = colors.green;
-      levelLabel = "Sucesso";
-      break;
-    case "debug":
-      colorCode = colors.cyan;
-      levelLabel = "Debug";
-      break;
-    case "test":
-      colorCode = colors.white;
-      levelLabel = "Teste";
-      break;
-    default:
-      colorCode = colors.reset;
-      levelLabel = level;
-  }
-  return { colorCode, levelLabel };
-}
-
-interface BuildLogParams {
-  levelLabel: string;
-  colorCode: string;
-  message: string;
-  timestamp: string;
-  colors: any;
-  context?: LogContext;
-  error?: any;
-}
-
-function buildLogOutput(params: BuildLogParams): string {
-  const { levelLabel, colorCode, message, timestamp, colors, context, error } = params;
-  const source = context?.source ? `${context.source}` : "src";
-  const userId = context?.userId ? `[${context.userId}] ` : "";
-
-  const header = `${colorCode}Log.${levelLabel}: ${timestamp}]${colors.reset}`;
-  const path = `${colors.gray}${source}:${colors.reset}`;
-  const body = ` ${userId}> ${colorCode}${message}${colors.reset}`;
-
-  let output = `${header}${path}${body}`;
-
-  if (context?.violation) {
-    output += `\n${colors.red}  [VIOLAÇÃO]: ${context.violation}${colors.reset}`;
-  }
-
-  if (context?.suggestion) {
-    output += `\n${colors.green}  [SUGESTÃO]: ${context.suggestion}${colors.reset}`;
-  }
-
-  if (error) {
-    if (error instanceof Error) {
-      output += `\n${colors.red}  Error: ${error.name}: ${error.message}${colors.reset}`;
-      if (!IS_PRODUCTION && error.stack) {
-        output += `\n  ${error.stack}`;
-      }
-    } else if (typeof error === "string") {
-      output += `\n${colors.red}  Error: ${error}${colors.reset}`;
-    } else {
-      output += `\n${colors.red}  Error: ${JSON.stringify(error)}${colors.reset}`;
-    }
-  }
-
-  return output;
-}
-
-// =============================================
-// LOGGER PRINCIPAL
-// =============================================
-
-/**
- * Logger interno
- */
-function log(level: LogLevel, message: string, context?: LogContext): void {
-  if (LOG_LEVELS[level] < LOG_LEVELS[CURRENT_LEVEL]) return;
-
-  let error: any;
-  let cleanContext: LogContext | undefined;
-
-  if (context) {
-    const { error: contextError, ...rest } = context;
-    error = contextError;
-    cleanContext = Object.keys(rest).length > 0 ? rest : undefined;
-  }
-
-  const timestamp = getCustomTimestamp();
-  const formatted = formatForConsole(
-    level,
-    message,
-    timestamp,
-    cleanContext,
-    error,
-  );
-
-  console.log(formatted);
-}
-
-// =============================================
-// API PÚBLICA
+// API PÚBLICA (Compatibilidade)
 // =============================================
 
 export const logger = {
-  /**
-   * Log de debug (desenvolvimento)
-   */
-  debug(message: string, context?: LogContext): void {
-    log("debug", message, context);
+  debug(message: string, context?: any): void {
+    pinoInstance.debug(context || {}, message);
+  },
+
+  info(message: string, context?: any): void {
+    pinoInstance.info(context || {}, message);
+  },
+
+  warn(message: string, context?: any): void {
+    pinoInstance.warn(context || {}, message);
+  },
+
+  error(message: string, context?: any): void {
+    if (context?.error instanceof Error) {
+      pinoInstance.error(context.error, message);
+    } else {
+      pinoInstance.error(context || {}, message);
+    }
   },
 
   /**
-   * Log informativo
+   * Log de sucesso (verde no dev)
    */
-  info(message: string, context?: LogContext): void {
-    log("info", message, context);
+  success(message: string, context?: any): void {
+    pinoInstance.info({ ...context, logType: "success" }, `✅ ${message}`);
   },
 
   /**
-   * Log de aviso
+   * Log de teste (branco no dev)
    */
-  warn(message: string, context?: LogContext): void {
-    log("warn", message, context);
-  },
-
-  /**
-   * Log de erro (vermelho)
-   */
-  error(message: string, context?: LogContext): void {
-    log("error", message, context);
-  },
-
-  /**
-   * Log de teste (branco)
-   */
-  test(message: string, context?: LogContext): void {
-    log("test", message, context);
-  },
-
-  /**
-   * Log de sucesso (verde)
-   */
-  success(message: string, context?: LogContext): void {
-    log("success", message, context);
+  test(message: string, context?: any): void {
+    pinoInstance.info({ ...context, logType: "test" }, `🧪 ${message}`);
   },
 
   /**
@@ -259,30 +58,40 @@ export const logger = {
     path: string,
     statusCode: number,
     durationMs: number,
-    context?: LogContext,
+    context?: any,
   ): void {
-    const level: LogLevel =
+    const level =
       statusCode >= 500 ? "error" : statusCode >= 400 ? "warn" : "info";
-    log(level, `${method} ${path} ${statusCode} ${durationMs}ms`, context);
+    pinoInstance[level](
+      {
+        ...context,
+        method,
+        path,
+        statusCode,
+        durationMs,
+      },
+      `HTTP ${method} ${path} ${statusCode} (${durationMs}ms)`,
+    );
   },
 
   /**
    * Cria logger com contexto fixo
    */
-  child(defaultContext: LogContext) {
+  child(defaultContext: any) {
+    const childPino = pinoInstance.child(defaultContext);
     return {
-      debug: (message: string, context?: LogContext) =>
-        log("debug", message, { ...defaultContext, ...context }),
-      test: (message: string, context?: LogContext) =>
-        log("test", message, { ...defaultContext, ...context }),
-      success: (message: string, context?: LogContext) =>
-        log("success", message, { ...defaultContext, ...context }),
-      info: (message: string, context?: LogContext) =>
-        log("info", message, { ...defaultContext, ...context }),
-      warn: (message: string, context?: LogContext) =>
-        log("warn", message, { ...defaultContext, ...context }),
-      error: (message: string, context?: LogContext) =>
-        log("error", message, { ...defaultContext, ...context }),
+      debug: (message: string, context?: any) =>
+        childPino.debug(context || {}, message),
+      info: (message: string, context?: any) =>
+        childPino.info(context || {}, message),
+      warn: (message: string, context?: any) =>
+        childPino.warn(context || {}, message),
+      error: (message: string, context?: any) =>
+        childPino.error(context || {}, message),
+      success: (message: string, context?: any) =>
+        childPino.info({ ...context, logType: "success" }, `✅ ${message}`),
+      test: (message: string, context?: any) =>
+        childPino.info({ ...context, logType: "test" }, `🧪 ${message}`),
     };
   },
 };

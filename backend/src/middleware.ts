@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { checkRateLimit } from "@/lib/utils/rate-limiter";
 import { jwtVerify } from "jose";
 import { HTTP_STATUS } from "@/lib/constants";
+import { logger } from "@/lib/utils/logger";
 
 // ======================================================
 // ENV CONFIG
@@ -302,6 +303,20 @@ function isPublicRoute(pathname: string): boolean {
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const pathname = request.nextUrl.pathname;
+  const requestId = crypto.randomUUID();
+
+  // Log Request
+  const headersObj: Record<string, string> = {};
+  request.headers.forEach((value, key) => {
+    headersObj[key] = value;
+  });
+
+  logger.info(`Request ${request.method} ${pathname}`, {
+    requestId,
+    method: request.method,
+    url: request.url,
+    headers: headersObj,
+  });
 
   const securityResponse = handleSecurityCheck(request);
   if (securityResponse) {

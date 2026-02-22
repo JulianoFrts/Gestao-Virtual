@@ -39,23 +39,15 @@ export class TowerImportService {
     if (typeof value === 'number') return value;
     if (!value) return 0;
     
-    // Brazilian format: "1.234,56" or "1234,56"
-    // European/US format: "1,234.56" or "1234.56"
     let sanitized = String(value).trim();
-    
-    // If it has both dot and comma, we need to know which is which.
-    // Usually, the last one is the decimal separator.
     const lastComma = sanitized.lastIndexOf(',');
     const lastDot = sanitized.lastIndexOf('.');
     
     if (lastComma > lastDot) {
-      // Comma is decimal, dot is thousand separator
       sanitized = sanitized.replace(/\./g, '').replace(',', '.');
     } else if (lastDot > lastComma) {
-      // Dot is decimal, comma is thousand separator
       sanitized = sanitized.replace(/,/g, '');
     } else {
-      // Only one type of separator or none
       sanitized = sanitized.replace(',', '.');
     }
     
@@ -73,26 +65,11 @@ export class TowerImportService {
                 const sheetName = workbook.SheetNames[0];
                 const sheet = workbook.Sheets[sheetName];
                 
-                // Using sheet_to_json with raw: false usually works, 
-                // but we'll add a specific check for date serials in identifiers
                 const json = utils.sheet_to_json(sheet, { raw: false, defval: '' }) as any[];
                 
                 const results: RawTowerImportItem[] = json.map((row, idx) => {
                     let towerNumberVal = this.smartGet(row, ['torre', 'numero', 'identificador', 'externalid', 'objectid']);
                     let towerNumber = String(towerNumberVal || "").trim();
-
-                    // TRICKY: If towerNumber is a date serial (e.g. 45678), convert it to something sensible
-                    // Excel serials for recent years are in the 40000-50000 range.
-                    // If the user typed "0/1", Excel might save it as a date.
-                    if (/^\d{5}(\.\d+)?$/.test(towerNumber)) {
-                        const num = parseFloat(towerNumber);
-                        if (num > 30000 && num < 60000) {
-                            // This looks like a date. Since we don't know if they wanted D/M or M/D, 
-                            // we try to keep it as simple as possible or look at the row again.
-                            // However, sheet_to_json with raw:false should have given us the formatted text.
-                            // If it didn't, we'll just have to hope the user uses our new template.
-                        }
-                    }
 
                     const trecho = String(this.smartGet(row, ['trecho', 'subtrecho', 'linh', 'lote', 'trech']) || "").trim();
                     const concreto = this.robustParseFloat(this.smartGet(row, ['concreto', 'conc', 'm3']));
@@ -109,7 +86,8 @@ export class TowerImportService {
                     
                     const towerType = String(this.smartGet(row, ['tipotorre', 'tipoestru', 'config', 'modelo', 'tipo', 'port']) || "Autoportante").trim();
                     const foundationType = String(this.smartGet(row, ['tipofund', 'fundacao', 'base']) || "").trim();
-                    const seq = parseInt(String(this.smartGet(row, ['sequencia', 'ordem', 'index', 'posicao', 'sequen']) || (idx + 1)));
+                    const seqVal = this.smartGet(row, ['sequencia', 'ordem', 'index', 'posicao', 'sequen']);
+                    const seq = seqVal !== undefined ? parseInt(String(seqVal)) : (idx + 1);
 
                     const errors: string[] = [];
                     if (!towerNumber || towerNumber === "undefined" || towerNumber === "null" || towerNumber === "") {
@@ -125,7 +103,7 @@ export class TowerImportService {
                         pesoArmacao: armacao,
                         pesoEstrutura: pesoEstrutura,
                         goForward: vaoVante,
-                        objectSeq: seq,
+                        objectSeq: isNaN(seq) ? (idx + 1) : seq,
                         tramoLancamento: String(this.smartGet(row, ['tramo', 'lancamento']) || "").trim(),
                         tipificacaoEstrutura: String(this.smartGet(row, ['tipificacao', 'estru']) || "").trim(),
                         status: errors.length > 0 ? 'invalid' : 'valid',

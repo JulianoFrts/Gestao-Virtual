@@ -1,11 +1,11 @@
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth } from "@/lib/auth/session";
-import { PrismaCircuitRepository } from "@/infrastructure/repositories/prisma-circuit.repository";
-import { CircuitService } from "@/core/circuit/application/circuit.service";
+import { PrismaCircuitRepository } from "@/modules/circuit/infrastructure/prisma-circuit.repository";
+import { CircuitService } from "@/modules/circuit/application/circuit.service";
 import { z } from "zod";
 import { Validator } from "@/lib/utils/api/validator";
-import { idSchema } from "@/core/common/domain/common.schema";
+import { idSchema } from "@/modules/common/domain/common.schema";
 
 const circuitRepository = new PrismaCircuitRepository();
 const circuitService = new CircuitService(circuitRepository);

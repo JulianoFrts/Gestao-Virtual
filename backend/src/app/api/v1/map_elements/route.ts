@@ -4,7 +4,7 @@ import { requireAuth, isUserAdmin } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { Validator } from "@/lib/utils/api/validator";
-import { paginationQuerySchema } from "@/core/common/domain/common.schema";
+import { paginationQuerySchema } from "@/modules/common/domain/common.schema";
 import { PrismaMapElementRepository } from "@/modules/map-elements/infrastructure/prisma-map-element.repository";
 import { MapElementService } from "@/modules/map-elements/application/map-element.service";
 import { API } from "@/lib/constants";
@@ -36,13 +36,12 @@ export async function GET(request: NextRequest) {
     const params = Object.fromEntries(request.nextUrl.searchParams.entries());
 
     // Alias project_id -> projectId e company_id -> companyId para compatibilidade
-    if (params.project_id && !params.projectId) params.projectId = params.project_id;
-    if (params.company_id && !params.companyId) params.companyId = params.company_id;
+    if (params.project_id && !params.projectId)
+      params.projectId = params.project_id;
+    if (params.company_id && !params.companyId)
+      params.companyId = params.company_id;
 
-    const validation = Validator.validate(
-      querySchema,
-      params,
-    );
+    const validation = Validator.validate(querySchema, params);
     if (!validation.success) {
       logger.warn("Falha na validação de map_elements", { params });
       return validation.response;
@@ -58,8 +57,8 @@ export async function GET(request: NextRequest) {
     // If projectId is provided, filter by project (and optionally company)
     if (projectId) {
       const elements = await service.getElements(projectId, companyId);
-      const filtered = companyId 
-        ? elements.filter(e => e.companyId === companyId)
+      const filtered = companyId
+        ? elements.filter((e) => e.companyId === companyId)
         : elements;
       return ApiResponse.json(filtered);
     }
@@ -115,13 +114,15 @@ export async function POST(request: NextRequest) {
       return item;
     };
 
-    const finalBody = Array.isArray(body) ? body.map(processItem) : processItem(body);
+    const finalBody = Array.isArray(body)
+      ? body.map(processItem)
+      : processItem(body);
 
-    logger.info("POST /api/v1/map_elements: Received body", { 
-      isArray: Array.isArray(body), 
+    logger.info("POST /api/v1/map_elements: Received body", {
+      isArray: Array.isArray(body),
       count: Array.isArray(body) ? body.length : 1,
       projectId: urlProjectId,
-      siteId: urlSiteId
+      siteId: urlSiteId,
     });
 
     if (Array.isArray(finalBody)) {
@@ -135,10 +136,10 @@ export async function POST(request: NextRequest) {
     const result = await service.saveElement(body);
     return ApiResponse.json(result, "Elemento processado com sucesso.");
   } catch (error: any) {
-    logger.error("Erro ao salvar elemento(s) do mapa", { 
+    logger.error("Erro ao salvar elemento(s) do mapa", {
       message: error.message,
       stack: error.stack,
-      error 
+      error,
     });
     return handleApiError(error, "src/app/api/v1/map_elements/route.ts#POST");
   }

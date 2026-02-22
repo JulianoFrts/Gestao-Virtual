@@ -7,6 +7,10 @@ export class SegmentService {
     return await this.segmentRepository.findByProject(projectId);
   }
 
+  async getCompanySegments(companyId: string): Promise<Segment[]> {
+    return await this.segmentRepository.findByCompany(companyId);
+  }
+
   async saveSegment(segment: Segment): Promise<Segment> {
     return await this.segmentRepository.save(segment);
   }
