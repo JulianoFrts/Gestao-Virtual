@@ -1,41 +1,18 @@
 import { read, utils } from 'xlsx';
 
 export interface RawTowerImportItem {
-  id?: string;
-  externalId: string;
-  name?: string;
-  trecho?: string;
-  towerType?: string;
-  foundationType?: string;
-  totalConcreto: number;
-  pesoArmacao: number;
-  pesoEstrutura: number;
-  goForward: number;
-  objectSeq: number;
-  tramoLancamento?: string;
-  tipificacaoEstrutura?: string;
+  Sequencia: number;
+  Trecho: string;
+  NumeroTorre: string;
+  TextoTorre: string;
+  Tipificacao: string;
+  TramoLancamento: number;
   status: 'valid' | 'invalid' | 'warning';
   errors?: string[];
 }
 
 export class TowerImportService {
-  private static normalizeKey(key: string): string {
-    return key.toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
-      .replace(/[^a-z0-9]/g, ""); // Remove non-alphanumeric
-  }
-
-  private static smartGet(row: any, searchTerms: string[]): any {
-    const keys = Object.keys(row);
-    for (const term of searchTerms) {
-      const normalizedTerm = this.normalizeKey(term);
-      const foundKey = keys.find(k => this.normalizeKey(k).includes(normalizedTerm));
-      if (foundKey) return row[foundKey];
-    }
-    return undefined;
-  }
-
-  private static robustParseFloat(value: any): number {
+  private static parseNumber(value: any): number {
     if (typeof value === 'number') return value;
     if (!value) return 0;
     
@@ -55,59 +32,52 @@ export class TowerImportService {
     return isNaN(parsed) ? 0 : parsed;
   }
 
+  private static parseInt64(value: any): number {
+    const num = this.parseNumber(value);
+    return Math.round(num);
+  }
+
+  private static parseText(value: any): string {
+    if (value === null || value === undefined) return "";
+    
+    // Se, por acaso, a biblioteca interpretou como data (ex: 31/1 -> date object)
+    if (value instanceof Date && !isNaN(value.getTime())) {
+        return `${value.getDate()}/${value.getMonth() + 1}`;
+    }
+
+    return String(value).trim();
+  }
+
   static async parseFile(file: File): Promise<RawTowerImportItem[]> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
+        
         reader.onload = (e) => {
             try {
                 const data = e.target?.result as ArrayBuffer;
-                const workbook = read(data, { type: 'array', cellDates: false });
-                const sheetName = workbook.SheetNames[0];
-                const sheet = workbook.Sheets[sheetName];
+                // raw: true OBRIGA a biblioteca a ler tudo como texto, impedindo que "1/1" vire uma Data. 
+                const workbook = read(data, { type: 'array', raw: true, codepage: 65001 });
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
                 
-                const json = utils.sheet_to_json(sheet, { raw: false, defval: '' }) as any[];
+                // Mapeia usando apenas os cabeçalhos exatos informados com raw: true
+                const json = utils.sheet_to_json(sheet, { raw: true, defval: '' }) as any[];
                 
                 const results: RawTowerImportItem[] = json.map((row, idx) => {
-                    let towerNumberVal = this.smartGet(row, ['torre', 'numero', 'identificador', 'externalid', 'objectid']);
-                    let towerNumber = String(towerNumberVal || "").trim();
-
-                    const trecho = String(this.smartGet(row, ['trecho', 'subtrecho', 'linh', 'lote', 'trech']) || "").trim();
-                    const concreto = this.robustParseFloat(this.smartGet(row, ['concreto', 'conc', 'm3']));
+                    const numeroTorre = this.parseText(row['NumeroTorre']);
                     
-                    let armacao = this.robustParseFloat(this.smartGet(row, ['armacao', 'aco', 'iron', 'kg', 'ton', 'armac']));
-                    const isTonArmacao = Object.keys(row).some(k => {
-                        const nk = this.normalizeKey(k);
-                        return nk.includes('armac') && nk.includes('ton');
-                    });
-                    if (isTonArmacao && armacao < 100 && armacao > 0) armacao *= 1000;
+                    // Log solicitado pelo usuário para verificar o processamento
+                    console.log(`[Importação Torres] Linha ${idx + 2} - Raw:`, row['NumeroTorre'], '=> Interpretado:', numeroTorre);
 
-                    const pesoEstrutura = this.robustParseFloat(this.smartGet(row, ['estrutura', 'peso', 'metal', 'ton', 'estru']));
-                    const vaoVante = this.robustParseFloat(this.smartGet(row, ['vao', 'vante', 'distancia', 'fwd']));
-                    
-                    const towerType = String(this.smartGet(row, ['tipotorre', 'tipoestru', 'config', 'modelo', 'tipo', 'port']) || "Autoportante").trim();
-                    const foundationType = String(this.smartGet(row, ['tipofund', 'fundacao', 'base']) || "").trim();
-                    const seqVal = this.smartGet(row, ['sequencia', 'ordem', 'index', 'posicao', 'sequen']);
-                    const seq = seqVal !== undefined ? parseInt(String(seqVal)) : (idx + 1);
-
-                    const errors: string[] = [];
-                    if (!towerNumber || towerNumber === "undefined" || towerNumber === "null" || towerNumber === "") {
-                        errors.push('Identificador da torre ausente');
-                    }
-
+                    const seq = this.parseInt64(row['Sequencia']);
                     return {
-                        externalId: towerNumber,
-                        trecho: trecho,
-                        towerType: towerType,
-                        foundationType: foundationType,
-                        totalConcreto: concreto,
-                        pesoArmacao: armacao,
-                        pesoEstrutura: pesoEstrutura,
-                        goForward: vaoVante,
-                        objectSeq: isNaN(seq) ? (idx + 1) : seq,
-                        tramoLancamento: String(this.smartGet(row, ['tramo', 'lancamento']) || "").trim(),
-                        tipificacaoEstrutura: String(this.smartGet(row, ['tipificacao', 'estru']) || "").trim(),
-                        status: errors.length > 0 ? 'invalid' : 'valid',
-                        errors: errors.length > 0 ? errors : undefined
+                        Sequencia: seq ? seq : (idx + 1),
+                        Trecho: this.parseText(row['Trecho']),
+                        NumeroTorre: numeroTorre,
+                        TextoTorre: this.parseText(row['TextoTorre']),
+                        Tipificacao: this.parseText(row['Tipificacao']),
+                        TramoLancamento: this.parseInt64(row['TramoLancamento']),
+                        status: numeroTorre ? 'valid' : 'invalid',
+                        errors: numeroTorre ? undefined : ['Identificador (NumeroTorre) ausente']
                     };
                 });
 

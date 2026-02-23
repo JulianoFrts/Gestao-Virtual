@@ -1,11 +1,14 @@
 import { NextRequest } from "next/server";
 import { PrismaTowerConstructionRepository } from "@/modules/tower/infrastructure/prisma-tower-construction.repository";
+import { PrismaTowerProductionRepository } from "@/modules/tower/infrastructure/prisma-tower-production.repository";
 import { TowerConstructionService } from "@/modules/tower/application/tower-construction.service";
 import { requireAuth } from "@/lib/auth/session";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
+import { logger } from "@/lib/utils/logger";
 
-const repository = new PrismaTowerConstructionRepository();
-const service = new TowerConstructionService(repository);
+const constructionRepo = new PrismaTowerConstructionRepository();
+const productionRepo = new PrismaTowerProductionRepository();
+const service = new TowerConstructionService(constructionRepo, productionRepo);
 
 export async function GET(req: NextRequest) {
   try {
@@ -29,12 +32,25 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAuth();
+    const session = await requireAuth();
     const body = await req.json();
-    const { projectId, companyId, data } = body;
+
+    const { projectId, data } = body;
+    const companyId =
+      body.companyId ||
+      (session as any)?.user?.affiliation?.companyId ||
+      (session as any)?.user?.companyId ||
+      (session as any)?.companyId;
 
     if (!projectId || !companyId || !Array.isArray(data)) {
-      return ApiResponse.badRequest("Missing required fields");
+      logger.warn("[TOWER_CONSTRUCTION_API] Validation Failed", {
+        projectId,
+        companyId,
+        isArray: Array.isArray(data),
+      });
+      return ApiResponse.badRequest(
+        "Missing required fields: projectId or companyId",
+      );
     }
 
     const result = await service.importProjectData(projectId, companyId, data);

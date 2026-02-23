@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { utils, writeFile } from "xlsx";
+import { selectedContextSignal } from "@/signals/authSignals";
 
 interface ConstructionImportModalProps {
   isOpen: boolean;
@@ -42,6 +43,9 @@ const ConstructionImportModal = ({
   const { profile } = useAuth();
   const { toast } = useToast();
   
+  const selectedContext = selectedContextSignal.value;
+  const initialCompanyId = selectedContext?.companyId || 'company-dev-xyz';
+
   const [items, setItems] = useState<RawConstructionImportItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,18 +77,19 @@ const ConstructionImportModal = ({
   const downloadTemplate = () => {
     const template = [
       {
-          Torre: "0/1",
-          Lat: -23.55052,
-          Lng: -46.633308,
-          Elevacao: 760.5,
-          Vao: 450,
-          Zona: "23K",
-          PesoEstrutura: 8.5,
-          PesoConcreto: 15.2,
-          PesoEscavacao: 45,
-          Aco1: 1.2,
-          Aco2: 0.5,
-          Aco3: 0.1
+          Sequencia: 1,
+          Torre: "TRIO_C1",
+          Lat: -43.7689,
+          Lng: -22.6529,
+          Zona: 23,
+          Elevacao: 614.74,
+          Vao: 113.39,
+          PesoEstrutura: 0,
+          PesoConcreto: 0,
+          PesoEscavacao: 0,
+          Aco1: 0,
+          Aco2: 0,
+          Aco3: 0
       }
     ];
     const ws = utils.json_to_sheet(template);
@@ -94,6 +99,11 @@ const ConstructionImportModal = ({
   };
 
   const handleConfirm = async () => {
+    if (!projectId || projectId === 'all') {
+      toast({ title: 'Obra não selecionada', description: 'Por favor, selecione uma obra específica no topo da tela antes de importar.', variant: 'destructive' });
+      return;
+    }
+
     const validItems = items.filter(i => i.status !== 'invalid');
     if (validItems.length === 0) {
       toast({ title: 'Nenhum item válido para importar', variant: 'destructive' });
@@ -104,7 +114,7 @@ const ConstructionImportModal = ({
     try {
       const res = await orionApi.post('/tower-construction', {
         projectId,
-        companyId: profile?.companyId,
+        companyId: profile?.companyId || initialCompanyId,
         data: validItems
       });
 
@@ -184,10 +194,13 @@ const ConstructionImportModal = ({
                     <TableHeader className="bg-white/5">
                       <TableRow className="border-white/10">
                         <TableHead className="w-16 text-center">Status</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase">Seq</TableHead>
                         <TableHead className="text-[10px] font-black uppercase">Torre</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase">Latitude / Longitude</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase text-center">Lat / Lng</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase text-center">Zona</TableHead>
                         <TableHead className="text-[10px] font-black uppercase text-right">Cota (m)</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase text-right">Peso Estru (t)</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase text-right">Peso (t)</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase text-right">Aço (t)</TableHead>
                         <TableHead className="text-[10px] font-black uppercase text-right pr-10">Conc (m³)</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -201,13 +214,16 @@ const ConstructionImportModal = ({
                               <AlertCircle className="w-4 h-4 text-rose-500 mx-auto" />
                             )}
                           </TableCell>
-                          <TableCell className="font-bold text-white">{item.towerId}</TableCell>
-                          <TableCell className="text-xs text-slate-400 font-mono">
-                            {item.lat.toFixed(6)}, {item.lng.toFixed(6)}
+                          <TableCell className="text-xs font-bold text-slate-500">{item.sequencia}</TableCell>
+                          <TableCell className="font-bold text-white whitespace-nowrap">{item.towerId}</TableCell>
+                          <TableCell className="text-[10px] text-slate-400 font-mono text-center">
+                            {item.lat.toFixed(4)}, {item.lng.toFixed(4)}
                           </TableCell>
-                          <TableCell className="text-right text-slate-300">{item.elevacao.toFixed(2)}</TableCell>
-                          <TableCell className="text-right text-slate-300">{item.pesoEstrutura.toFixed(2)}</TableCell>
-                          <TableCell className="text-right text-white font-bold pr-10">{item.pesoConcreto.toFixed(2)}</TableCell>
+                          <TableCell className="text-[10px] text-slate-400 font-mono text-center">{item.zona}</TableCell>
+                          <TableCell className="text-right text-slate-300 font-mono text-xs">{item.elevacao.toFixed(2)}</TableCell>
+                          <TableCell className="text-right text-amber-500/70 font-mono text-xs">{item.pesoEstrutura.toFixed(2)}</TableCell>
+                          <TableCell className="text-right text-emerald-500/70 font-mono text-xs">{(item.aco1 || 0).toFixed(2)}</TableCell>
+                          <TableCell className="text-right text-white font-bold pr-10 font-mono text-xs">{item.pesoConcreto.toFixed(2)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

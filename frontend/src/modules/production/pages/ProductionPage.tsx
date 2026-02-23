@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -13,6 +13,7 @@ import {
     permissionsSignal,
     selectedContextSignal
 } from "@/signals/authSignals";
+import { activeJobs, JobState } from "@/signals/jobSignals";
 import { useSignals } from "@preact/signals-react/runtime";
 import {
     Table,
@@ -26,7 +27,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, HardHat, Edit2, Trash2, Loader2, Info, Activity, Upload, Plus, ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Search, HardHat, Edit2, Trash2, Loader2, Info, Activity, Upload, Plus, ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Database } from "lucide-react";
 import { orionApi } from "@/integrations/orion/client";
 import { TowerProductionData, ProductionCategory, TowerActivityStatus } from "../types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -36,7 +37,7 @@ import TowerFormModal from "../components/TowerFormModal";
 import TowerImportModal from "../components/TowerImportModal";
 import ActivityImportModal from "../components/ActivityImportModal";
 import ExecutionDetailsModal from "../components/ExecutionDetailsModal";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { BarChart3, LayoutGrid } from "lucide-react";
@@ -123,7 +124,7 @@ const ProductionTableRow = React.memo(({
             </TableCell>
 
             {/* ACTION CELLS */}
-            <TableCell className="sticky left-[40px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-center p-2 transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
+            <TableCell className="sticky left-[40px] w-[80px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-center p-2 transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
                 <div className="flex items-center justify-center gap-1">
                     <Button
                         variant="ghost"
@@ -144,27 +145,46 @@ const ProductionTableRow = React.memo(({
                     </Button>
                 </div>
             </TableCell>
-            <TableCell className="font-black sticky left-[120px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-center text-primary text-xs transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
+
+            {/* FROZEN DATA CELLS - SWAPPED SEQ AND TORRE */}
+            <TableCell className="sticky left-[120px] w-[60px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] font-bold text-center text-primary/60 tracking-wider font-mono transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
+                {tower.objectSeq || "-"}
+            </TableCell>
+
+            <TableCell className="font-black sticky left-[180px] w-[100px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-center text-primary text-xs transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
                 <span className="font-mono tracking-tighter text-shadow-glow">{tower.objectId}</span>
             </TableCell>
-            <TableCell className="sticky left-[220px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] font-bold text-center text-amber-100/40 tracking-wider font-mono transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
+
+            <TableCell className="sticky left-[280px] w-[120px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] font-bold text-center text-amber-100/40 tracking-wider font-mono transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
                 {tower.trecho || "-"}
             </TableCell>
-            <TableCell className="sticky left-[300px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-center transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
-                <Badge variant="outline" className="px-2 py-0.5 text-[8px] font-black uppercase tracking-widest border-amber-900/30 text-amber-600/50">
-                    {tower.towerType || "N/A"}
-                </Badge>
+
+            <TableCell className="sticky left-[400px] w-[100px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-center transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
+                <div className="flex flex-col items-center gap-1">
+                    <Badge variant="outline" className="px-2 py-0.5 text-[8px] font-black uppercase tracking-widest border-amber-900/30 text-amber-600/50">
+                        {tower.towerType || tower.metadata?.towerType || "Autoportante"}
+                    </Badge>
+                    {tower.metadata?.tipificacaoEstrutura && (
+                        <span className="text-[7px] font-bold text-muted-foreground/40 uppercase tracking-tighter">
+                            {tower.metadata.tipificacaoEstrutura}
+                        </span>
+                    )}
+                </div>
             </TableCell>
-            <TableCell className="sticky left-[400px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] text-center font-bold text-amber-100/20 italic transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
+
+            <TableCell className="sticky left-[500px] w-[100px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] text-center font-bold text-amber-100/20 italic transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
                 {tower.goForward || "-"}
             </TableCell>
-            <TableCell className="sticky left-[500px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] text-center font-bold text-amber-100/20 italic transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
+
+            <TableCell className="sticky left-[600px] w-[100px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] text-center font-bold text-amber-100/20 italic transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
                 {tower.totalConcreto || "-"}
             </TableCell>
-            <TableCell className="sticky left-[600px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] text-center font-bold text-amber-100/20 italic transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.3)] opacity-100">
+
+            <TableCell className="sticky left-[700px] w-[100px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] text-center font-bold text-amber-100/20 italic transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.3)] opacity-100">
                 {tower.pesoArmacao || "-"}
             </TableCell>
-            <TableCell className="sticky left-[700px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] text-center font-bold text-primary italic transition-colors shadow-[4px_0_15px_rgba(0,0,0,0.7)] opacity-100">
+
+            <TableCell className="sticky left-[800px] w-[100px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] text-center font-bold text-primary italic transition-colors shadow-[4px_0_15px_rgba(0,0,0,0.7)] opacity-100">
                 {tower.pesoEstrutura || "-"}
             </TableCell>
 
@@ -349,20 +369,69 @@ const ProductionPage = () => {
     // Hooks for Analytics Tabs
     const { sites, isLoading: isLoadingSites } = useSites(projectId !== 'all' ? projectId : undefined);
 
-    const { data: towers, isLoading: loadingTowers } = useQuery({
+    const { 
+        data: towersData, 
+        isLoading: loadingTowers,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage
+    } = useInfiniteQuery({
         queryKey: ["production-towers", projectId, companyId, selectedSiteId],
-        queryFn: async () => {
-             // Construct query params
+        queryFn: async ({ pageParam = 1 }) => {
              const params = new URLSearchParams();
+
              if (projectId && projectId !== 'all') params.append('projectId', projectId);
              if (companyId) params.append('companyId', companyId);
              if (selectedSiteId && selectedSiteId !== 'all') params.append('siteId', selectedSiteId);
+             params.append('page', pageParam.toString());
+             params.append('limit', '1000'); 
              
             const response = await orionApi.get(`/production/tower-status?${params.toString()}`);
             return response.data as TowerProductionData[];
         },
-        enabled: !!companyId || !!profile?.companyId // Enable if we have a company context
+        initialPageParam: 1,
+        getNextPageParam: (lastPage, allPages) => {
+            return lastPage.length === 1000 ? allPages.length + 1 : undefined;
+        },
+        enabled: !!companyId || !!profile?.companyId
     });
+
+    const towers = React.useMemo(() => {
+        return towersData?.pages.flat() || [];
+    }, [towersData]);
+
+    const observerTarget = React.useRef<HTMLDivElement>(null);
+    const fetchLock = React.useRef(false);
+
+    React.useEffect(() => {
+        const observer = new IntersectionObserver(
+            async (entries) => {
+                const target = entries[0];
+                if (target.isIntersecting && hasNextPage && !isFetchingNextPage && !fetchLock.current) {
+                    fetchLock.current = true;
+                    await fetchNextPage();
+                    // Optional tiny delay to let react render new height
+                    setTimeout(() => { fetchLock.current = false; }, 300);
+                }
+            },
+            { 
+               root: null, 
+               threshold: 0.1, 
+               rootMargin: '200px' // Restore to moderate threshold
+            }
+        );
+
+        if (observerTarget.current) {
+            observer.observe(observerTarget.current);
+        }
+
+        return () => {
+            if (observerTarget.current) {
+                observer.unobserve(observerTarget.current);
+            }
+            observer.disconnect();
+        };
+    }, [observerTarget, fetchNextPage, hasNextPage, isFetchingNextPage]);
 
     const { data: productionCategories = [], isLoading: loadingCategories } = useQuery({
         queryKey: ['production-categories'],
@@ -433,6 +502,24 @@ const ProductionPage = () => {
             setIsBulkDeleting(false);
         }
     };
+
+    // Monitoramento reativo de jobs para atualização automática do grid
+    const jobs = activeJobs.value;
+    const prevJobsCountRef = React.useRef(0);
+
+    React.useEffect(() => {
+        const jobsList = Object.values(jobs) as JobState[];
+        const towerImportJobs = jobsList.filter(j => j.type === 'TOWER_IMPORT');
+        
+        // Verifica se algum job de importação acabou de ser concluído
+        const hasCompletedJob = towerImportJobs.some(j => j.status === 'completed');
+        
+        if (hasCompletedJob) {
+            console.log("[ProductionPage] Job de importação detectado como concluído. Revalidando grid...");
+            queryClient.invalidateQueries({ queryKey: ["production-towers"] });
+            queryClient.invalidateQueries({ queryKey: ['tower-activity-goals'] });
+        }
+    }, [jobs, queryClient]);
 
     const handleBulkUnlink = async () => {
         if (!stages || stages.length === 0) return;
@@ -903,6 +990,15 @@ const ProductionPage = () => {
                                 <Button
                                     variant="outline"
                                     size="sm"
+                                    className="gap-2 border-primary/30 hover:bg-primary/10 text-primary font-bold h-9 px-4 rounded-lg flex-1 sm:flex-none uppercase text-[10px] tracking-wider"
+                                    onClick={() => navigate('/producao/projeto')}
+                                >
+                                    <Database className="h-3.5 w-3.5" />
+                                    Dados Técnicos
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
                                     className="gap-2 border-sky-500/30 hover:bg-sky-500/10 text-sky-400 font-bold h-9 px-4 rounded-lg flex-1 sm:flex-none uppercase text-[10px] tracking-wider"
                                     onClick={() => navigate('/producao/analytics')}
                                 >
@@ -957,7 +1053,7 @@ const ProductionPage = () => {
                                             <TableRow className="bg-[#0a0806] hover:bg-[#0a0806] border-b border-amber-900/30">
                                                 {/* FROZEN HEADERS */}
                                                 {/* FROZEN HEADERS - SHIFTED FOR CHECKBOX */}
-                                                <TableHead className="w-[70px] h-14 sticky left-0 top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 text-center font-black uppercase text-[10px] tracking-widest text-foreground p-0">
+                                                <TableHead className="w-[40px] h-14 sticky left-0 top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 text-center font-black uppercase text-[10px] tracking-widest text-foreground p-0">
                                                      <div className="flex items-center justify-center w-full h-full">
                                                         <Checkbox
                                                             checked={filteredTowers && filteredTowers.length > 0 && selectedTowers.length === filteredTowers.length}
@@ -970,15 +1066,37 @@ const ProductionPage = () => {
                                                 <TableHead className="w-[80px] h-14 sticky left-[40px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 text-center font-black uppercase text-[10px] tracking-widest text-foreground">
                                                     MENU
                                                 </TableHead>
+
                                                 <TableHead
                                                     className={cn(
-                                                        "w-[100px] h-14 sticky left-[120px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
+                                                        "w-[60px] h-14 sticky left-[120px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
+                                                        sortConfig?.key === 'objectSeq' && "text-primary"
+                                                    )}
+                                                    onClick={() => requestSort('objectSeq')}
+                                                >
+                                                    <div className="flex items-center justify-center gap-1 h-full">
+                                                        <span className="font-black uppercase text-[10px] tracking-widest group-hover:text-primary transition-colors">SEQ</span>
+                                                        {sortConfig?.key === 'objectSeq' ? (
+                                                            sortConfig.direction === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                                        ) : (
+                                                            <ArrowUpDown className="h-3 w-3 opacity-30 group-hover:opacity-100 transition-opacity" />
+                                                        )}
+                                                    </div>
+                                                    <div className={cn(
+                                                        "absolute bottom-0 left-0 w-full h-0.5 bg-primary transition-transform origin-left",
+                                                        sortConfig?.key === 'objectSeq' ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+                                                    )} />
+                                                </TableHead>
+
+                                                <TableHead
+                                                    className={cn(
+                                                        "w-[100px] h-14 sticky left-[180px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
                                                         sortConfig?.key === 'objectId' && "text-primary"
                                                     )}
                                                     onClick={() => requestSort('objectId')}
                                                 >
                                                     <div className="flex items-center justify-center gap-1 h-full">
-                                                        <span className="font-black uppercase text-[10px] tracking-widest group-hover:text-primary transition-colors">ID OBRA</span>
+                                                        <span className="font-black uppercase text-[10px] tracking-widest group-hover:text-primary transition-colors">TORRE</span>
                                                         {sortConfig?.key === 'objectId' ? (
                                                             sortConfig.direction === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                                                         ) : (
@@ -990,9 +1108,10 @@ const ProductionPage = () => {
                                                         sortConfig?.key === 'objectId' ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
                                                     )} />
                                                 </TableHead>
+
                                                 <TableHead
                                                     className={cn(
-                                                        "w-[120px] h-14 sticky left-[220px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
+                                                        "w-[120px] h-14 sticky left-[280px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
                                                         sortConfig?.key === 'trecho' && "text-primary"
                                                     )}
                                                     onClick={() => requestSort('trecho')}
@@ -1010,9 +1129,10 @@ const ProductionPage = () => {
                                                         sortConfig?.key === 'trecho' ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
                                                     )} />
                                                 </TableHead>
+
                                                 <TableHead
                                                     className={cn(
-                                                        "w-[100px] h-14 sticky left-[340px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
+                                                        "w-[100px] h-14 sticky left-[400px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
                                                         sortConfig?.key === 'towerType' && "text-primary"
                                                     )}
                                                     onClick={() => requestSort('towerType')}
@@ -1033,7 +1153,7 @@ const ProductionPage = () => {
 
                                                 <TableHead
                                                     className={cn(
-                                                        "w-[100px] h-14 sticky left-[440px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
+                                                        "w-[100px] h-14 sticky left-[500px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
                                                         sortConfig?.key === 'goForward' && "text-primary"
                                                     )}
                                                     onClick={() => requestSort('goForward')}
@@ -1054,7 +1174,7 @@ const ProductionPage = () => {
 
                                                 <TableHead
                                                     className={cn(
-                                                        "w-[100px] h-14 sticky left-[540px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
+                                                        "w-[100px] h-14 sticky left-[600px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
                                                         sortConfig?.key === 'totalConcreto' && "text-primary"
                                                     )}
                                                     onClick={() => requestSort('totalConcreto')}
@@ -1075,7 +1195,7 @@ const ProductionPage = () => {
 
                                                 <TableHead
                                                     className={cn(
-                                                        "w-[100px] h-14 sticky left-[640px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
+                                                        "w-[100px] h-14 sticky left-[700px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
                                                         sortConfig?.key === 'pesoArmacao' && "text-primary"
                                                     )}
                                                     onClick={() => requestSort('pesoArmacao')}
@@ -1096,7 +1216,7 @@ const ProductionPage = () => {
 
                                                 <TableHead
                                                     className={cn(
-                                                        "w-[100px] h-14 sticky left-[740px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[4px_0_15px_rgba(0,0,0,0.7)] opacity-100",
+                                                        "w-[100px] h-14 sticky left-[800px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[4px_0_15px_rgba(0,0,0,0.7)] opacity-100",
                                                         sortConfig?.key === 'pesoEstrutura' && "text-primary"
                                                     )}
                                                     onClick={() => requestSort('pesoEstrutura')}
@@ -1187,6 +1307,14 @@ const ProductionPage = () => {
                                             ))}
                                         </TableBody>
                                     </Table>
+                                    
+                                    {/* Infinite Scroll trigger */}
+                                    <div ref={observerTarget} className="h-4 w-full" />
+                                    {isFetchingNextPage && (
+                                        <div className="py-4 flex justify-center text-muted-foreground text-sm font-bold items-center gap-2">
+                                            <Loader2 className="w-4 h-4 animate-spin" /> Carregando mais torres...
+                                        </div>
+                                    )}
                                 </div>
                             </>
                         )}
@@ -1258,6 +1386,7 @@ const ProductionPage = () => {
                 onClose={() => setIsImportModalOpen(false)}
                 projectId={projectId!}
                 companyId={selectedCompanyId}
+                siteId={selectedSiteId}
             />
 
             <TowerActivityGoalModal

@@ -48,6 +48,22 @@ export async function GET(request: NextRequest) {
 
     const siteId = searchParams.get("siteId");
 
+    // Pagination parameters
+    const pageParam = searchParams.get("page");
+    const limitParam = searchParams.get("limit");
+
+    let skip: number | undefined;
+    let take: number | undefined;
+
+    if (pageParam && limitParam) {
+      const page = parseInt(pageParam, 10);
+      const limit = parseInt(limitParam, 10);
+      if (!isNaN(page) && !isNaN(limit)) {
+        take = limit;
+        skip = (page > 0 ? page - 1 : 0) * limit;
+      }
+    }
+
     // Determinar empresa para filtro (Multitenancy)
     const isAdmin = await can("production.view_all_scopes");
 
@@ -75,7 +91,9 @@ export async function GET(request: NextRequest) {
     const towers = await service.listProjectProgress(
       projectId || "all",
       companyIdFilter,
-      siteId || undefined
+      siteId || undefined,
+      skip,
+      take,
     );
 
     return ApiResponse.json(towers);

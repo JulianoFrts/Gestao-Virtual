@@ -1,6 +1,4 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import pg from "pg";
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { DATA_PART_1 } from "./data-real-1";
@@ -14,18 +12,7 @@ import { JOB_HIERARCHY, PASSWORD_HASHES } from "../src/lib/constants/business";
 
 dotenv.config();
 
-// Create a helper to get prisma client
-const getPrisma = () => {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error("DATABASE_URL is not defined");
-  }
-  const pool = new pg.Pool({ connectionString });
-  const adapter = new PrismaPg(pool);
-  return new PrismaClient({ adapter });
-};
-
-const globalPrisma = new PrismaClient(); // Keep for backward compatibility if needed outside
+const globalPrisma = new PrismaClient();
 
 interface Person {
   nGeral: number;
@@ -81,18 +68,23 @@ export async function seedPersonnel(prisma: PrismaClient = globalPrisma) {
       f.includes("RESIDENTE")
     )
       return JOB_HIERARCHY.MANAGER;
-    if (f.includes("COORDENADOR") || f.includes("SUPERVISOR")) return JOB_HIERARCHY.COORDINATOR;
+    if (f.includes("COORDENADOR") || f.includes("SUPERVISOR"))
+      return JOB_HIERARCHY.COORDINATOR;
     if (f.includes("ENGENHEIRO")) return JOB_HIERARCHY.ENGINEER;
-    if (f.includes("ENCARREGADO") || f.includes("LÍDER")) return JOB_HIERARCHY.LEADER;
-    if (f.includes("TECNICO") || f.includes("TOPOGRAFO")) return JOB_HIERARCHY.TECHNICIAN;
-    if (f.includes("MOTORISTA") || f.includes("OPERADOR")) return JOB_HIERARCHY.OPERATOR;
+    if (f.includes("ENCARREGADO") || f.includes("LÍDER"))
+      return JOB_HIERARCHY.LEADER;
+    if (f.includes("TECNICO") || f.includes("TOPOGRAFO"))
+      return JOB_HIERARCHY.TECHNICIAN;
+    if (f.includes("MOTORISTA") || f.includes("OPERADOR"))
+      return JOB_HIERARCHY.OPERATOR;
     if (
       f.includes("PEDREIRO") ||
       f.includes("CARPINTEIRO") ||
       f.includes("ARMADOR")
     )
       return JOB_HIERARCHY.SKILLED;
-    if (f.includes("AJUDANTE") || f.includes("SERVENTE")) return JOB_HIERARCHY.HELPER;
+    if (f.includes("AJUDANTE") || f.includes("SERVENTE"))
+      return JOB_HIERARCHY.HELPER;
     return JOB_HIERARCHY.DEFAULT;
   };
 
@@ -104,6 +96,7 @@ export async function seedPersonnel(prisma: PrismaClient = globalPrisma) {
         canLeadTeam: getHierarchy(funcName) <= JOB_HIERARCHY.LEADER,
       },
       create: {
+        id: crypto.randomUUID(),
         companyId,
         name: funcName,
         hierarchyLevel: getHierarchy(funcName),
@@ -164,10 +157,10 @@ export async function seedPersonnel(prisma: PrismaClient = globalPrisma) {
           affiliation: {
             upsert: {
               create: { projectId: project.id, companyId },
-              update: { projectId: project.id }
-            }
-          }
-        }
+              update: { projectId: project.id },
+            },
+          },
+        },
       });
     } else {
       user = await prisma.user.create({
@@ -182,16 +175,16 @@ export async function seedPersonnel(prisma: PrismaClient = globalPrisma) {
               email,
               password: PASSWORD_HASHES.DEFAULT_SEED,
               role: person.moe === "MOI" ? "MANAGER" : "USER", // Role enum usually has USER, ADMIN, etc. Assuming USER for WORKER equivalent or verify Enum
-              status: "ACTIVE"
-            }
+              status: "ACTIVE",
+            },
           },
           affiliation: {
             create: {
               projectId: project.id,
-              companyId: companyId
-            }
-          }
-        }
+              companyId: companyId,
+            },
+          },
+        },
       });
     }
 
@@ -219,8 +212,7 @@ export async function seedPersonnel(prisma: PrismaClient = globalPrisma) {
 
 // Self-run only if called directly
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const prismaInstance = getPrisma();
-  seedPersonnel(prismaInstance)
+  seedPersonnel(globalPrisma)
     .catch(console.error)
-    .finally(() => prismaInstance.$disconnect());
+    .finally(() => globalPrisma.$disconnect());
 }

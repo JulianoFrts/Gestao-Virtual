@@ -101,6 +101,13 @@ const menuGroups: SidebarGroup[] = [
         requiresProject: true,
       },
       {
+        id: "production.planning",
+        icon: Database,
+        label: "Dados Técnicos",
+        path: "/producao/projeto",
+        requiresProject: true,
+      },
+      {
         id: "production.analytics",
         icon: PieChart,
         label: "Analytics",

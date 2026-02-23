@@ -1,6 +1,7 @@
 export interface TowerConstructionData {
   id?: string;
   towerId: string;
+  sequencia?: number;
   companyId: string;
   projectId: string;
   siteId?: string | null;

@@ -25,6 +25,23 @@ function log(message, color = colors.reset) {
   console.log(`${color}${message}${colors.reset}`);
 }
 
+function summarizeValue(val) {
+  if (typeof val === "string" && val.length > 50) {
+    return `${val.slice(0, 10)}... [+${val.length - 10} chars]`;
+  }
+  if (Array.isArray(val)) {
+    return val.map(summarizeValue);
+  }
+  if (val !== null && typeof val === "object") {
+    const obj = {};
+    for (const key in val) {
+      obj[key] = summarizeValue(val[key]);
+    }
+    return obj;
+  }
+  return val;
+}
+
 function startProcess(
   command,
   args,
@@ -65,51 +82,190 @@ function startProcess(
 
   const proc = spawn(command, args, { stdio: "pipe", shell: true, cwd, env });
 
+  let stdoutBuffer = "";
   proc.stdout.on("data", (data) => {
-    const lines = data.toString().split("\n");
+    stdoutBuffer += data.toString();
+    const lines = stdoutBuffer.split("\n");
+    stdoutBuffer = lines.pop() || "";
+
+    let currentRawObject = null;
+    let rawObjectLines = [];
+
     lines.forEach((line) => {
       const trimmed = line.trim();
       if (!trimmed) return;
 
-      // Suporte a Pino JSON Logs
+      // Suporte a Pino JSON Logs (Visualização Premium)
       if (trimmed.startsWith('{"level":')) {
         try {
           const pinoLog = JSON.parse(trimmed);
-          const time = pinoLog.time || Date.now();
-          const msg = pinoLog.msg || "";
-          const levelVal = pinoLog.level;
+          const { level, time, msg, logType, ...context } = pinoLog;
+
+          // 1. Filtro de Ruído: Omitir Health Checks bem-sucedidos
+          if (msg.includes("/api/v1/health") && level <= 30) return;
+          if (context.url?.includes("/api/v1/health") && level <= 30) return;
+          if (msg.includes("Response JSON") && context.data?.status === "ok")
+            return;
+
+          // 2. Simplificação de Metadados: Ocultar headers redundantes
+          if (context.headers) {
+            const noisyHeaders = [
+              "sec-ch-ua",
+              "sec-ch-ua-mobile",
+              "sec-ch-ua-platform",
+              "sec-fetch-dest",
+              "sec-fetch-mode",
+              "sec-fetch-site",
+              "accept-encoding",
+              "accept-language",
+              "connection",
+              "accept",
+              "purpose",
+              "host",
+              "origin",
+              "referer",
+              "user-agent",
+              "x-forwarded-for",
+              "x-forwarded-host",
+              "x-forwarded-port",
+              "x-forwarded-proto",
+            ];
+            noisyHeaders.forEach((h) => delete context.headers[h]);
+            if (Object.keys(context.headers).length === 0)
+              delete context.headers;
+          }
+
+          const timeStr = new Date(time || Date.now()).toLocaleTimeString();
 
           let levelName = "INFO";
           let levelColor = colors.reset;
+          let icon = "ℹ️";
 
-          if (levelVal <= 10) {
+          if (level <= 10) {
             levelName = "TEST";
-            levelColor = colors.magenta;
-          } else if (levelVal <= 20) {
+            levelColor = colors.bright;
+            icon = "🧪";
+          } else if (level <= 20) {
             levelName = "TRACE";
-            levelColor = colors.gray || "";
-          } else if (levelVal <= 30) {
+            levelColor = "\x1b[90m"; // Gray
+            icon = "🔍";
+          } else if (level <= 30) {
             levelName = "DEBUG";
             levelColor = colors.blue;
-          } else if (levelVal === 38) {
+            icon = "🛰️";
+          } else if (logType === "success" || level === 38) {
             levelName = "SUCCESS";
             levelColor = colors.green;
-          } else if (levelVal === 40) {
+            icon = "✅";
+          } else if (level === 40) {
             levelName = "WARN";
             levelColor = colors.yellow;
-          } else if (levelVal >= 50) {
+            icon = "⚠️";
+          } else if (level >= 50) {
             levelName = "ERROR";
             levelColor = colors.red;
+            icon = "❌";
           }
 
-          const timeStr = new Date(time).toLocaleTimeString();
-          console.log(
-            `${color}[${label}]${colors.reset} ${colors.cyan}[${timeStr}]${colors.reset} ${levelColor}[${levelName}]${colors.reset} ${msg}`,
-          );
+          // Formatar o Header da linha
+          let formattedMsg = colors.bright + msg + colors.reset;
+
+          // Especial: Colorir logs de HTTP / Request
+          if (msg.startsWith("HTTP ") || msg.startsWith("Request ")) {
+            const parts = msg.split(" ");
+            if (parts.length >= 3) {
+              const method = parts[1];
+              const pathStr = parts[2];
+              const status = parts[3] || "";
+
+              const methodColor =
+                method === "GET"
+                  ? colors.green
+                  : method === "POST"
+                    ? colors.cyan
+                    : colors.yellow;
+              const statusColor = status.startsWith("2")
+                ? colors.green
+                : status.startsWith("4")
+                  ? colors.yellow
+                  : status.startsWith("5")
+                    ? colors.red
+                    : colors.reset;
+
+              formattedMsg = `${colors.bright}${parts[0]}${colors.reset} ${methodColor}${method}${colors.reset} ${colors.bright}${pathStr}${colors.reset} ${statusColor}${status}${colors.reset}${msg.slice(msg.indexOf("(") !== -1 ? msg.indexOf("(") - 1 : msg.length)}`;
+            }
+          }
+
+          const header = `${color}[${label}]${colors.reset} ${colors.cyan}[${timeStr}]${colors.reset} ${levelColor}${icon} [${levelName}]${colors.reset} ${formattedMsg}`;
+          console.log(header);
+
+          // Se houver contexto (metadata), exibir de forma indentada e bonita (Resumindo strings longas)
+          if (Object.keys(context).length > 0) {
+            const summarizedContext = summarizeValue(context);
+            const contextStr = JSON.stringify(summarizedContext, null, 2)
+              .split("\n")
+              .map(
+                (l) =>
+                  `${color}[${label}]${colors.reset}   ${colors.cyan}│${colors.reset} ${l}`,
+              )
+              .join("\n");
+            console.log(contextStr);
+          }
           return;
         } catch (e) {
-          // Se falhar no parse, segue o fluxo normal
+          // Fallback se o JSON for inválido
         }
+      }
+
+      // Detector de Objetos brutos (Multi-linha)
+      if (trimmed === "{") {
+        currentRawObject = true;
+        rawObjectLines = ["{"];
+        return;
+      }
+      if (currentRawObject) {
+        rawObjectLines.push(line);
+        if (
+          trimmed === "}" ||
+          (trimmed.startsWith("}") && trimmed.length < 5)
+        ) {
+          const joined = rawObjectLines.join("\n");
+
+          // Filtro de Health Check em bloco bruto
+          if (joined.includes("/api/v1/health")) {
+            currentRawObject = null;
+            rawObjectLines = [];
+            return;
+          }
+
+          // Tentar truncar strings longas no bloco bruto antes de imprimir
+          const processed = joined
+            .replace(/'([^']{50,})'/g, (match, p1) => {
+              return `'${p1.slice(0, 10)}... [+${p1.length - 10} chars]'`;
+            })
+            .replace(/"([^"]{50,})"/g, (match, p1) => {
+              return `"${p1.slice(0, 10)}... [+${p1.length - 10} chars]"`;
+            });
+
+          console.log(`${color}[${label}]${colors.reset} ${processed}`);
+          currentRawObject = null;
+          rawObjectLines = [];
+          return;
+        }
+        return;
+      }
+
+      // Filtro Final: Evita logs "brutos" de health residuais
+      if (
+        trimmed.includes("/api/v1/health") ||
+        trimmed.includes("Request GET /api/v1/health") ||
+        trimmed.includes("Response JSON 200")
+      ) {
+        if (
+          trimmed.includes('status": 200') ||
+          trimmed.includes('"status": "ok"')
+        )
+          return;
       }
 
       console.log(`${color}[${label}]${colors.reset} ${line}`);

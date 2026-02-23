@@ -292,6 +292,7 @@ function isPublicRoute(pathname: string): boolean {
     "/api/v1/health",
     "/api/v1/docs",
     "/api/v1/storage",
+    "/api/v1/debug",
   ];
 
   return publicRoutes.some((route) => pathname.startsWith(route));
@@ -305,11 +306,19 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const pathname = request.nextUrl.pathname;
   const requestId = crypto.randomUUID();
 
-  // Log Request
-  const headersObj: Record<string, string> = {};
-  request.headers.forEach((value, key) => {
-    headersObj[key] = value;
-  });
+  // Log Request (Ignorar Health Check para reduzir ruído de log, mas aplicar CORS)
+  if (pathname === "/api/v1/health") {
+    const healthResponse = NextResponse.next();
+    handleCors(request, healthResponse);
+    applySecurityHeaders(healthResponse);
+    return healthResponse;
+  }
+
+  const headersObj: Record<string, string> = {
+    host: request.headers.get("host") || "",
+    "user-agent": request.headers.get("user-agent") || "",
+    "x-request-id": requestId,
+  };
 
   logger.info(`Request ${request.method} ${pathname}`, {
     requestId,

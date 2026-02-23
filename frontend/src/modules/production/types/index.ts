@@ -100,6 +100,7 @@ export interface TowerProductionData {
     tipificacaoEstrutura: string | null;
     goForward: number | null;
     technicalKm: number | null;
+    metadata?: any;
     activityStatuses: TowerActivityStatus[];
     activitySchedules: ActivitySchedule[];
     overallStatus?: ActivityStatus;

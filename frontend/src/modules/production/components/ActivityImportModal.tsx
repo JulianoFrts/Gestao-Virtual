@@ -133,8 +133,8 @@ const ActivityImportModal = ({
                 <DialogTitle className="text-2xl font-black uppercase tracking-tight text-white mb-1">
                   Importação de Atividades & Metas
                 </DialogTitle>
-                <DialogDescription className="text-slate-400 font-medium">
-                  Defina a estrutura de etapas e metas do projeto via planilha
+                <DialogDescription className="sr-only">
+                  Assistente de importação para configurar a EAP e metas de produção das torres.
                 </DialogDescription>
               </div>
             </div>

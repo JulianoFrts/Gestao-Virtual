@@ -22,10 +22,23 @@ export class PrismaMapElementRepository implements MapElementRepository {
     id: string,
     data: any,
   ): Promise<MapElementTechnicalData> {
-    return (await prisma.mapElementTechnicalData.update({
+    const updated = await prisma.mapElementTechnicalData.update({
       where: { id },
       data: data as any,
-    })) as unknown as MapElementTechnicalData;
+    });
+
+    // Sincronização com as novas tabelas se for torre
+    if (updated.elementType === "TOWER") {
+      await this.syncTower(
+        updated.projectId,
+        updated.externalId,
+        updated.companyId,
+        updated.siteId,
+        updated.metadata,
+      );
+    }
+
+    return updated as unknown as MapElementTechnicalData;
   }
 
   private async performUpsert(
@@ -35,16 +48,87 @@ export class PrismaMapElementRepository implements MapElementRepository {
   ): Promise<MapElementTechnicalData> {
     // Upsert logic for externalId within a project
     const existing = await this.findByExternalId(projectId, externalId);
+    let result;
+
     if (existing) {
-      return (await prisma.mapElementTechnicalData.update({
+      result = await prisma.mapElementTechnicalData.update({
         where: { id: existing.id },
         data: data as any,
-      })) as unknown as MapElementTechnicalData;
+      });
+    } else {
+      result = await prisma.mapElementTechnicalData.create({
+        data: data as any,
+      });
     }
 
-    return (await prisma.mapElementTechnicalData.create({
-      data: data as any,
-    })) as unknown as MapElementTechnicalData;
+    // Sincronização com as novas tabelas se for torre
+    if (result.elementType === "TOWER") {
+      await this.syncTower(
+        result.projectId,
+        result.externalId,
+        result.companyId,
+        result.siteId,
+        result.metadata,
+      );
+    }
+
+    return result as unknown as MapElementTechnicalData;
+  }
+
+  /**
+   * Helper para sincronizar dados de torre entre a skeleton e as tabelas especializadas
+   */
+  private async syncTower(
+    projectId: string,
+    towerId: string,
+    companyId: string,
+    siteId: string | null,
+    metadata: any,
+  ) {
+    const meta = typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+
+    await Promise.all([
+      prisma.towerProduction.upsert({
+        where: { projectId_towerId: { projectId, towerId } },
+        update: { companyId, siteId, metadata: meta },
+        create: { projectId, towerId, companyId, siteId, metadata: meta },
+      }),
+      prisma.towerConstruction.upsert({
+        where: { projectId_towerId: { projectId, towerId } },
+        update: {
+          companyId,
+          siteId,
+          metadata: {
+            lat: meta.latitude || 0,
+            lng: meta.longitude || 0,
+            elevacao: meta.elevation || 0,
+            vao: meta.goForward || 0,
+            pesoEstrutura: meta.pesoEstrutura || 0,
+            pesoConcreto: meta.totalConcreto || 0,
+            pesoAco1: meta.pesoArmacao || 0,
+            tipificacaoEstrutura: meta.tipificacaoEstrutura || "",
+            foundationType: meta.tipoFundacao || meta.foundationType || "",
+          },
+        },
+        create: {
+          projectId,
+          towerId,
+          companyId,
+          siteId,
+          metadata: {
+            lat: meta.latitude || 0,
+            lng: meta.longitude || 0,
+            elevacao: meta.elevation || 0,
+            vao: meta.goForward || 0,
+            pesoEstrutura: meta.pesoEstrutura || 0,
+            pesoConcreto: meta.totalConcreto || 0,
+            pesoAco1: meta.pesoArmacao || 0,
+            tipificacaoEstrutura: meta.tipificacaoEstrutura || "",
+            foundationType: meta.tipoFundacao || meta.foundationType || "",
+          },
+        },
+      }),
+    ]);
   }
 
   async saveMany(
@@ -142,6 +226,26 @@ export class PrismaMapElementRepository implements MapElementRepository {
       }
     }
 
+    // 4. Sincronização em lote para torres
+    const towers = uniqueElements.filter((el) => el.elementType === "TOWER");
+    if (towers.length > 0) {
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < towers.length; i += BATCH_SIZE) {
+        const batch = towers.slice(i, i + BATCH_SIZE);
+        await Promise.all(
+          batch.map((el) =>
+            this.syncTower(
+              el.projectId,
+              el.externalId,
+              el.companyId,
+              el.siteId,
+              el.metadata,
+            ),
+          ),
+        );
+      }
+    }
+
     // 4. Return correct data (fetch again or construct)
     // For performance, we can just return what we have, or re-fetch if needed.
     // Re-fetching ensures we have generated IDs for new items.
@@ -219,26 +323,131 @@ export class PrismaMapElementRepository implements MapElementRepository {
   }
 
   async delete(id: string): Promise<boolean> {
-    await prisma.mapElementTechnicalData.deleteMany({
+    // Try to find the element in either legacy or production table
+    const legacy = await prisma.mapElementTechnicalData.findUnique({
       where: { id },
+      select: { projectId: true, externalId: true },
     });
+
+    const production = await prisma.towerProduction.findUnique({
+      where: { id },
+      select: { projectId: true, towerId: true },
+    });
+
+    if (!legacy && !production) return false;
+
+    const projectId = legacy?.projectId || production?.projectId;
+    const towerId = legacy?.externalId || production?.towerId;
+
+    if (!projectId || !towerId) return false;
+
+    await prisma.$transaction([
+      prisma.towerProduction.deleteMany({
+        where: { projectId, towerId },
+      }),
+      prisma.towerConstruction.deleteMany({
+        where: { projectId, towerId },
+      }),
+      prisma.towerActivityGoal.deleteMany({
+        where: { projectId, towerId },
+      }),
+      prisma.mapElementTechnicalData.deleteMany({
+        where: { id: legacy?.id || "not-found" },
+      }),
+    ]);
     return true;
   }
 
   async deleteMany(ids: string[]): Promise<number> {
-    const result = await prisma.mapElementTechnicalData.deleteMany({
-      where: {
-        id: { in: ids },
-      },
+    if (ids.length === 0) return 0;
+
+    // 1. Identify which IDs are from legacy and which are from new TowerProduction
+    const legacyElements = await prisma.mapElementTechnicalData.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, projectId: true, externalId: true },
     });
-    return result.count;
+
+    const productionElements = await prisma.towerProduction.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, projectId: true, towerId: true },
+    });
+
+    const legacyIds = legacyElements.map((e) => e.id);
+    const productionIds = productionElements.map((e) => e.id);
+
+    // Group by projectId for efficient deletion in related tables
+    const projectsMap = new Map<string, Set<string>>();
+
+    legacyElements.forEach((e: any) => {
+      const set = projectsMap.get(e.projectId) || new Set<string>();
+      set.add(e.externalId);
+      projectsMap.set(e.projectId, set);
+    });
+
+    productionElements.forEach((e: any) => {
+      const set = projectsMap.get(e.projectId) || new Set<string>();
+      set.add(e.towerId);
+      projectsMap.set(e.projectId, set);
+    });
+
+    if (
+      projectsMap.size === 0 &&
+      legacyIds.length === 0 &&
+      productionIds.length === 0
+    ) {
+      return 0;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const [projectId, externalIdsSet] of projectsMap.entries()) {
+        const externalIds = Array.from(externalIdsSet);
+        await tx.towerProduction.deleteMany({
+          where: { projectId, towerId: { in: externalIds } },
+        });
+        await tx.towerConstruction.deleteMany({
+          where: { projectId, towerId: { in: externalIds } },
+        });
+        await tx.towerActivityGoal.deleteMany({
+          where: { projectId, towerId: { in: externalIds } },
+        });
+      }
+
+      if (legacyIds.length > 0) {
+        await tx.mapElementTechnicalData.deleteMany({
+          where: { id: { in: legacyIds } },
+        });
+      }
+
+      if (productionIds.length > 0) {
+        // Should already be deleted by the loop above via towerId,
+        // but we ensure it here just to be safe if direct ID deletion is expected
+        await tx.towerProduction.deleteMany({
+          where: { id: { in: productionIds } },
+        });
+      }
+    });
+
+    // Return the unique count of items intented to be removed
+    const uniqueElementIdentifiers = new Set([...legacyIds, ...productionIds]);
+    return uniqueElementIdentifiers.size;
   }
 
   async deleteByProject(projectId: string): Promise<number> {
-    const result = await prisma.mapElementTechnicalData.deleteMany({
-      where: { projectId },
-    });
-    return result.count;
+    const [count] = await prisma.$transaction([
+      prisma.towerProduction.deleteMany({
+        where: { projectId },
+      }),
+      prisma.towerConstruction.deleteMany({
+        where: { projectId },
+      }),
+      prisma.towerActivityGoal.deleteMany({
+        where: { projectId },
+      }),
+      prisma.mapElementTechnicalData.deleteMany({
+        where: { projectId },
+      }),
+    ]);
+    return count.count;
   }
 
   async getProjectCompanyId(projectId: string): Promise<string | null> {

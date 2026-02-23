@@ -1147,6 +1147,7 @@ enum DailyReportStatus {
 model TowerProduction {
   id        String   @id @default(cuid())
   towerId   String   @map("tower_id")
+  sequencia Int      @default(0)
   companyId String   @map("company_id")
   projectId String   @map("project_id")
   siteId    String?  @map("site_id")
@@ -1165,6 +1166,7 @@ model TowerProduction {
 model TowerConstruction {
   id        String   @id @default(cuid())
   towerId   String   @map("tower_id")
+  sequencia Int      @default(0)
   companyId String   @map("company_id")
   projectId String   @map("project_id")
   siteId    String?  @map("site_id")

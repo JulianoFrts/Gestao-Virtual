@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { 
     ArrowLeft, 
@@ -26,6 +26,7 @@ import { selectedContextSignal } from "@/signals/authSignals";
 import { useSignals } from "@preact/signals-react/runtime";
 import { useQueryClient } from "@tanstack/react-query";
 import ConstructionImportModal from "../components/ConstructionImportModal";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const TowerConstructionPage = () => {
     useSignals();
@@ -35,6 +36,7 @@ const TowerConstructionPage = () => {
     const projectId = selectedContext?.projectId || 'all';
     
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     const { data: constructionData = [], isLoading } = useQuery<any[]>({
         queryKey: ["tower-construction", projectId],
@@ -45,6 +47,23 @@ const TowerConstructionPage = () => {
         },
         enabled: projectId !== 'all'
     });
+
+    const toggleSelectAll = () => {
+        if (selectedIds.size === constructionData.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(constructionData.map((item: any) => item.id)));
+        }
+    };
+
+    const toggleSelect = (id: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
 
     return (
         <div className="h-screen w-full bg-background flex flex-col overflow-hidden font-sans">
@@ -107,14 +126,22 @@ const TowerConstructionPage = () => {
                     <Table>
                         <TableHeader>
                             <TableRow className="bg-white/5 border-b border-white/5 hover:bg-white/5">
+                                <TableHead className="w-10">
+                                    <Checkbox
+                                        checked={constructionData.length > 0 && selectedIds.size === constructionData.length}
+                                        onCheckedChange={toggleSelectAll}
+                                        className="border-white/20"
+                                    />
+                                </TableHead>
+                                <TableHead className="font-black text-[10px] uppercase tracking-widest text-primary">Seq</TableHead>
                                 <TableHead className="font-black text-[10px] uppercase tracking-widest text-primary">ID Torre</TableHead>
+                                <TableHead className="font-black text-[10px] uppercase tracking-widest">Vão Vante (m)</TableHead>
+                                <TableHead className="font-black text-[10px] uppercase tracking-widest">Elevação</TableHead>
                                 <TableHead className="font-black text-[10px] uppercase tracking-widest">Latitude</TableHead>
                                 <TableHead className="font-black text-[10px] uppercase tracking-widest">Longitude</TableHead>
-                                <TableHead className="font-black text-[10px] uppercase tracking-widest">Elevação</TableHead>
-                                <TableHead className="font-black text-[10px] uppercase tracking-widest">Vão Vante (m)</TableHead>
-                                <TableHead className="font-black text-[10px] uppercase tracking-widest text-amber-500">Peso Estru. (Ton)</TableHead>
-                                <TableHead className="font-black text-[10px] uppercase tracking-widest text-sky-500">Vol Conc. (m³)</TableHead>
                                 <TableHead className="font-black text-[10px] uppercase tracking-widest">Zona</TableHead>
+                                <TableHead className="font-black text-[10px] uppercase tracking-widest text-sky-500">Vol Conc. (m³)</TableHead>
+                                <TableHead className="font-black text-[10px] uppercase tracking-widest text-amber-500">Peso Estru. (Ton)</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -126,21 +153,29 @@ const TowerConstructionPage = () => {
                                 </TableRow>
                             ) : constructionData?.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="h-64 text-center text-muted-foreground italic">
+                                    <TableCell colSpan={10} className="h-64 text-center text-muted-foreground italic">
                                         Nenhum dado de projeto importado para este projeto.
                                     </TableCell>
                                 </TableRow>
                             ) : (
                                 constructionData?.map((item: any) => (
                                     <TableRow key={item.id} className="border-b border-white/5 hover:bg-white/5 transition-colors font-mono text-xs">
+                                        <TableCell>
+                                            <Checkbox
+                                                checked={selectedIds.has(item.id)}
+                                                onCheckedChange={() => toggleSelect(item.id)}
+                                                className="border-white/20"
+                                            />
+                                        </TableCell>
+                                        <TableCell className="font-bold text-primary">{item.sequencia || "-"}</TableCell>
                                         <TableCell className="font-bold text-primary">{item.towerId}</TableCell>
+                                        <TableCell>{item.metadata?.distancia_vao || "-"}</TableCell>
+                                        <TableCell>{item.metadata?.elevacao || "-"}</TableCell>
                                         <TableCell>{item.metadata?.latitude || "-"}</TableCell>
                                         <TableCell>{item.metadata?.longitude || "-"}</TableCell>
-                                        <TableCell>{item.metadata?.elevacao || "-"}</TableCell>
-                                        <TableCell>{item.metadata?.distancia_vao || "-"}</TableCell>
-                                        <TableCell className="text-amber-500/80">{item.metadata?.peso_estrutura || "-"}</TableCell>
-                                        <TableCell className="text-sky-500/80">{item.metadata?.peso_concreto || "-"}</TableCell>
                                         <TableCell>{item.metadata?.zona || "-"}</TableCell>
+                                        <TableCell className="text-sky-500/80">{item.metadata?.peso_concreto || "-"}</TableCell>
+                                        <TableCell className="text-amber-500/80">{item.metadata?.peso_estrutura || "-"}</TableCell>
                                     </TableRow>
                                 ))
                             )}

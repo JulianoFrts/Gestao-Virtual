@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { db } from '@/integrations/database';
+import { orionApi } from '@/integrations/orion/client';
 import { storageService } from '@/services/storageService';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface Company {
     id: string;
@@ -13,9 +14,6 @@ export interface Company {
     createdAt: Date;
 }
 
-import { useAuth } from '@/contexts/AuthContext';
-import { isGestaoGlobal, isCorporateRole } from '@/utils/permissionHelpers';
-
 export function useCompanies() {
     const [companies, setCompanies] = useState<Company[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -24,14 +22,9 @@ export function useCompanies() {
     const { profile } = useAuth();
 
     const profileId = profile?.id;
-    const profileRole = profile?.role;
-    const profileCompanyId = profile?.companyId;
 
     const loadCompanies = useCallback(async (force = false) => {
-        // Se já estiver carregando e não for uma chamada forçada, ignora
         if (isLoading && !force) return;
-        
-        // Se já buscou inicialmente e não for forçado, ignora para evitar loops
         if (hasInitialFetched.current && !force) return;
 
         setIsLoading(true);
@@ -39,19 +32,15 @@ export function useCompanies() {
         
         try {
             if (navigator.onLine) {
-                let query = (db as any).from('companies').select('*').order('name');
-
-                // Security filtering
-                const isGod = isGestaoGlobal(profile) || isCorporateRole(profileRole);
-                if (!isGod && profileCompanyId) {
-                    query = query.eq('id', profileCompanyId);
-                }
-
-                const { data, error } = await query;
+                // Usar orionApi diretamente para evitar problemas de compatibilidade com db syntax
+                const { data, error } = await orionApi.get<any>('/companies');
 
                 if (error) throw error;
 
-                const mapped = (data || []).map((c: any) => ({
+                // O backend retorna { items, pagination } ou apenas o array
+                const rawItems = Array.isArray(data) ? data : (data?.items || []);
+                
+                const mapped: Company[] = rawItems.map((c: any) => ({
                     id: c.id,
                     name: c.name,
                     taxId: c.taxId || c.tax_id,
@@ -67,47 +56,26 @@ export function useCompanies() {
                 const cached = await storageService.getItem<Company[]>('companies') || [];
                 setCompanies(cached);
             }
-        } catch (error) {
-            console.error('Error loading companies:', error);
+        } catch (error: any) {
+            console.error('[useCompanies] Error loading companies:', error);
             const cached = await storageService.getItem<Company[]>('companies') || [];
             setCompanies(cached);
         } finally {
             setIsLoading(false);
         }
-    }, [profileId, profileRole, profileCompanyId]);
+    }, [isLoading]);
 
     useEffect(() => {
-        // Dispara apenas na montagem ou se as dependências fundamentais mudarem
         if (profileId) {
             loadCompanies();
         }
-    }, [loadCompanies, profileId]);
+    }, [profileId, loadCompanies]);
 
-    const createCompany = async (data: Partial<Company>) => {
-        console.log('[useCompanies] Criando empresa com dados:', data);
+    const createCompany = async (companyData: Partial<Company>) => {
         try {
-            const payload: any = {
-                name: data.name?.trim()
-            };
-            if (data.taxId?.trim()) payload.taxId = data.taxId.trim();
-            if (data.address?.trim()) payload.address = data.address.trim();
-            if (data.phone?.trim()) payload.phone = data.phone.trim();
-            if (data.logoUrl?.trim()) payload.logoUrl = data.logoUrl.trim();
+            const { data: created, error } = await orionApi.post<any>('/companies', companyData);
 
-            console.log('[useCompanies] Payload final:', payload);
-
-            const { data: created, error } = await (db as any)
-                .from('companies')
-                .insert(payload)
-                .select()
-                .single();
-
-            if (error) {
-                console.error('[useCompanies] Erro na inserção:', error);
-                throw error;
-            }
-
-            console.log('[useCompanies] Empresa criada com sucesso:', created);
+            if (error) throw error;
 
             const newCompany: Company = {
                 id: created.id,
@@ -122,28 +90,15 @@ export function useCompanies() {
             setCompanies(prev => [...prev, newCompany]);
             return { success: true, data: newCompany };
         } catch (error: any) {
-            console.error('[useCompanies] Exception in createCompany:', error);
+            console.error('[useCompanies] Error creating company:', error);
             toast({ title: 'Erro ao criar empresa', description: error.message, variant: 'destructive' });
             return { success: false, error: error.message };
         }
     };
 
-    const updateCompany = async (id: string, data: Partial<Company>) => {
+    const updateCompany = async (id: string, companyData: Partial<Company>) => {
         try {
-            const payload: any = {
-                name: data.name?.trim()
-            };
-            if (data.taxId !== undefined) payload.taxId = data.taxId?.trim() || null;
-            if (data.address !== undefined) payload.address = data.address?.trim() || null;
-            if (data.phone !== undefined) payload.phone = data.phone?.trim() || null;
-            if (data.logoUrl !== undefined) payload.logoUrl = data.logoUrl?.trim() || null;
-
-            const { data: updated, error } = await (db as any)
-                .from('companies')
-                .update(payload)
-                .eq('id', id)
-                .select()
-                .single();
+            const { data: updated, error } = await orionApi.put<any>(`/companies/${id}`, companyData);
 
             if (error) throw error;
 
@@ -160,6 +115,7 @@ export function useCompanies() {
             setCompanies(prev => prev.map(c => c.id === id ? mapped : c));
             return { success: true, data: mapped };
         } catch (error: any) {
+            console.error('[useCompanies] Error updating company:', error);
             toast({ title: 'Erro ao atualizar empresa', description: error.message, variant: 'destructive' });
             return { success: false, error: error.message };
         }
@@ -167,16 +123,14 @@ export function useCompanies() {
 
     const deleteCompany = async (id: string) => {
         try {
-            const { error } = await (db as any)
-                .from('companies')
-                .delete()
-                .eq('id', id);
+            const { error } = await orionApi.delete(`/companies/${id}`);
 
             if (error) throw error;
 
             setCompanies(prev => prev.filter(c => c.id !== id));
             return { success: true };
         } catch (error: any) {
+            console.error('[useCompanies] Error deleting company:', error);
             toast({ title: 'Erro ao excluir empresa', description: error.message, variant: 'destructive' });
             return { success: false, error: error.message };
         }
@@ -188,7 +142,7 @@ export function useCompanies() {
         createCompany,
         updateCompany,
         deleteCompany,
-        refresh: loadCompanies
+        refresh: () => loadCompanies(true)
     };
 }
 

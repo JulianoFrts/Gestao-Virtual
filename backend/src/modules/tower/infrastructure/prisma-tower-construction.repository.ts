@@ -48,7 +48,7 @@ export class PrismaTowerConstructionRepository implements TowerConstructionRepos
   async findByProject(projectId: string): Promise<TowerConstructionData[]> {
     return (await prisma.towerConstruction.findMany({
       where: { projectId },
-      orderBy: { towerId: "asc" },
+      orderBy: { sequencia: "asc" },
     })) as unknown as TowerConstructionData[];
   }
 

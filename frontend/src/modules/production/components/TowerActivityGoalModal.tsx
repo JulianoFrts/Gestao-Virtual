@@ -5,7 +5,8 @@ import {
     DialogContent, 
     DialogHeader, 
     DialogTitle, 
-    DialogFooter 
+    DialogFooter,
+    DialogDescription 
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,6 +86,9 @@ const TowerActivityGoalModal = ({
                     <DialogTitle className="text-xl font-black uppercase tracking-tighter italic text-primary">
                         {editingGoal ? "Editar Atividade" : "Nova Atividade"}
                     </DialogTitle>
+                    <DialogDescription className="sr-only">
+                        Formulário para {editingGoal ? "editar" : "cadastrar"} uma meta de atividade para torres do projeto.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">

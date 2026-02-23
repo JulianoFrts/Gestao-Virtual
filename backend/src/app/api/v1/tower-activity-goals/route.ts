@@ -9,7 +9,7 @@ const service = new TowerActivityService(repository);
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAuth(req);
+    const user = await requireAuth(req);
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get("projectId");
 
@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await requireAuth(req);
     const body = await req.json();
     const { projectId, companyId, data, single } = body;
 
@@ -54,6 +55,7 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    const user = await requireAuth(req);
     const body = await req.json();
     const { id, parentId, order } = body;
 
@@ -68,13 +70,14 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
-
-  if (!id)
-    return NextResponse.json({ error: "id is required" }, { status: 400 });
-
   try {
+    const user = await requireAuth(req);
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get("id");
+
+    if (!id)
+      return NextResponse.json({ error: "id is required" }, { status: 400 });
+
     await service.deleteGoal(id);
     return NextResponse.json({ success: true });
   } catch (error: any) {

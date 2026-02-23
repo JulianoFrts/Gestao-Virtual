@@ -43,11 +43,15 @@ export class ProductionProgressService {
     projectId: string,
     companyId?: string | null,
     siteId?: string,
+    skip?: number,
+    take?: number,
   ): Promise<any[]> {
     const elements = await this.elementRepository.findByProjectId(
       projectId,
       companyId,
       siteId,
+      skip,
+      take,
     );
 
     return elements.map((el) => this.mapElementToProgressResponse(el));

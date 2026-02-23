@@ -5,6 +5,8 @@ export interface ProjectElementRepository {
     projectId: string,
     companyId?: string | null,
     siteId?: string,
+    skip?: number,
+    take?: number,
   ): Promise<any[]>;
   findLinkedActivityIds(projectId: string, siteId?: string): Promise<string[]>;
   findProjectId(elementId: string): Promise<string | null>;

@@ -1,11 +1,12 @@
-import {
-  ProductionProgressRepository,
-} from "../domain/production.repository";
+import { ProductionProgressRepository } from "../domain/production.repository";
 import { ProjectElementRepository } from "../domain/project-element.repository";
 import { ProductionSyncRepository } from "../domain/production-sync.repository";
 import { ProductionScheduleRepository } from "../domain/production-schedule.repository";
 import { ProductionProgress } from "../domain/production-progress.entity";
-import { ProductionProgressService, UpdateProductionProgressDTO } from "./production-progress.service";
+import {
+  ProductionProgressService,
+  UpdateProductionProgressDTO,
+} from "./production-progress.service";
 import { ProductionScheduleService } from "./production-schedule.service";
 import { DailyProductionService } from "./daily-production.service";
 import { RecordDailyProductionDTO } from "./dtos/record-daily-production.dto";
@@ -29,15 +30,15 @@ export class ProductionService {
       progressRepository,
       elementRepository,
       syncRepository,
-      scheduleRepository
+      scheduleRepository,
     );
     this.scheduleService = new ProductionScheduleService(
       scheduleRepository,
-      progressRepository
+      progressRepository,
     );
     this.dailyService = new DailyProductionService(
       progressRepository,
-      elementRepository
+      elementRepository,
     );
   }
 
@@ -53,8 +54,16 @@ export class ProductionService {
     projectId: string,
     companyId?: string | null,
     siteId?: string,
+    skip?: number,
+    take?: number,
   ): Promise<any[]> {
-    return this.progressService.listProjectProgress(projectId, companyId, siteId);
+    return this.progressService.listProjectProgress(
+      projectId,
+      companyId,
+      siteId,
+      skip,
+      take,
+    );
   }
 
   async getLogsByElement(
@@ -68,7 +77,9 @@ export class ProductionService {
     return this.progressService.getPendingLogs(companyId);
   }
 
-  async updateProgress(dto: UpdateProductionProgressDTO): Promise<ProductionProgress> {
+  async updateProgress(
+    dto: UpdateProductionProgressDTO,
+  ): Promise<ProductionProgress> {
     return this.progressService.updateProgress(dto);
   }
 

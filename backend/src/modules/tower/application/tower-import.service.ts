@@ -1,8 +1,8 @@
-import {
-  MapElementRepository,
-  MapElementTechnicalData,
-} from "@/modules/map-elements/domain/map-element.repository";
 import { logger } from "@/lib/utils/logger";
+import { TowerProductionService } from "./tower-production.service";
+import { TowerConstructionService } from "./tower-construction.service";
+import { TowerActivityService } from "./tower-activity.service";
+import { MapElementRepository } from "@/modules/map-elements/domain/map-element.repository";
 
 export interface TowerImportItem {
   number?: string;
@@ -36,10 +36,16 @@ export interface ImportResults {
 }
 
 export class TowerImportService {
-  constructor(private readonly repository: MapElementRepository) {}
+  constructor(
+    private readonly productionService: TowerProductionService,
+    private readonly constructionService: TowerConstructionService,
+    private readonly activityService: TowerActivityService,
+    private readonly mapElementRepository: MapElementRepository,
+  ) {}
 
   /**
    * Processa uma lista de torres para importação/atualização
+   * Distribuindo os dados entre as 3 tabelas especializadas.
    */
   async processImport(
     projectId: string,
@@ -55,62 +61,121 @@ export class TowerImportService {
     };
 
     logger.info(
-      `[TowerImportService] Iniciando processamento de ${data.length} torres para o projeto ${projectId}`,
+      `[TowerImportService] Iniciando processamento de ${data.length} torres nas 3 tabelas para o projeto ${projectId}`,
     );
 
-    const elements: MapElementTechnicalData[] = data.map((item, index) => {
-      // Normalização de campos com fallback para suporte legado e premium
-      const towerNumber = item.externalId || item.number || "";
-      const concrete = item.totalConcreto ?? item.concreteVolume ?? 0;
-      const steel = item.pesoArmacao ?? item.steelWeight ?? 0;
-      const structure = item.pesoEstrutura ?? item.structureWeight ?? 0;
-      const span = item.goForward ?? item.spanLength ?? 0;
-      const seq = item.objectSeq ?? item.sequence ?? index + 1;
-
-      return {
-        projectId,
-        companyId,
-        siteId:
-          item.siteId || defaultSiteId
-            ? String(item.siteId || defaultSiteId)
-            : null,
-        externalId: String(towerNumber),
-        name: `Torre ${towerNumber}`,
-        elementType: "TOWER",
-        sequence: seq,
-        latitude: item.lat || null,
-        longitude: item.lng || null,
-        elevation: item.alt || null,
-        metadata: {
-          trecho: item.trecho || "",
-          tower_type: item.towerType || "Autoportante",
-          tipo_fundacao: item.foundationType || "",
-          total_concreto: Number(concrete),
-          peso_armacao: Number(steel),
-          peso_estrutura: Number(structure),
-          go_forward: Number(span),
-          tramo_lancamento: item.tramoLancamento || "",
-          tipificacao_estrutura: item.tipificacaoEstrutura || "",
-          description: `Importado via Job em ${new Date().toLocaleDateString()}`,
-        },
-      };
-    });
-
     try {
-      // O repositório já lidará com Upsert (verifica externalId) e batch insertion
-      const saved = await this.repository.saveMany(elements);
-      results.imported = saved.length;
+      const siteId =
+        defaultSiteId && defaultSiteId !== "none" ? defaultSiteId : null;
+
+      // 1. Preparar dados para TowerProduction (Lista mestre)
+      const productionData = data.map((item, index) => {
+        const id = String(
+          item.externalId || item.number || item.objectSeq || index + 1,
+        );
+        return {
+          projectId,
+          companyId,
+          siteId,
+          towerId: id,
+          metadata: {
+            trecho: item.trecho || "",
+            towerType: item.towerType || "Autoportante",
+            tramoLancamento: item.tramoLancamento || "",
+            siteId: item.siteId || siteId,
+          },
+        };
+      });
+
+      // 2. Preparar dados para TowerConstruction (Dados técnicos)
+      const constructionData = data.map((item, index) => {
+        const id = String(
+          item.externalId || item.number || item.objectSeq || index + 1,
+        );
+        return {
+          projectId,
+          companyId,
+          siteId,
+          towerId: id,
+          metadata: {
+            vao: item.goForward ?? item.spanLength ?? 0,
+            elevacao: item.alt ?? 0,
+            lat: item.lat ?? 0,
+            lng: item.lng ?? 0,
+            pesoEstrutura: item.pesoEstrutura ?? item.structureWeight ?? 0,
+            pesoConcreto: item.totalConcreto ?? item.concreteVolume ?? 0,
+            pesoAco1: item.pesoArmacao ?? item.steelWeight ?? 0,
+            tipificacaoEstrutura: item.tipificacaoEstrutura || "",
+            foundationType: item.foundationType || "",
+          },
+        };
+      });
+
+      // 4. Skeleton Sync (MapElementTechnicalData) para suporte a progresso legado
+      const skeletonData = data.map((item, index) => {
+        const id = String(
+          item.externalId || item.number || item.objectSeq || index + 1,
+        );
+        return {
+          projectId,
+          companyId,
+          siteId: item.siteId || siteId,
+          externalId: id,
+          name: `Torre ${id}`,
+          elementType: "TOWER" as any,
+          sequence: item.objectSeq ?? item.sequence ?? index + 1,
+          metadata: {
+            trecho: item.trecho || "",
+            towerType: item.towerType || "Autoportante",
+            tramoLancamento: item.tramoLancamento || "",
+            tipoFundacao: item.foundationType || "",
+            totalConcreto: item.totalConcreto ?? item.concreteVolume ?? 0,
+            pesoArmacao: item.steelWeight ?? 0,
+            pesoEstrutura: item.pesoEstrutura ?? 0,
+            goForward: item.goForward ?? item.spanLength ?? 0,
+            latitude: item.lat || 0,
+            longitude: item.lng || 0,
+            elevation: item.alt || 0,
+            _legacy: true,
+            importedAt: new Date().toISOString(),
+          },
+        };
+      });
+
+      // Executar importações em paralelo
+      await Promise.all([
+        this.productionService.importTowers(
+          projectId,
+          companyId,
+          siteId,
+          productionData,
+        ),
+        this.constructionService.importProjectData(
+          projectId,
+          companyId,
+          constructionData,
+        ),
+        // Removido importação automática de metas individuais para evitar poluir a EAP
+        // this.activityService.importGoals(projectId, companyId, activityData),
+        this.mapElementRepository.saveMany(skeletonData as any),
+      ]);
+
+      results.imported = data.length;
       logger.info(
-        `[TowerImportService] Sucesso: ${saved.length} torres processadas.`,
+        `[TowerImportService] Sucesso: ${data.length} torres processadas nas 3 tabelas + Skeleton Sync.`,
       );
     } catch (error: any) {
-      logger.error(`[TowerImportService] Erro fatal no processamento do lote`, {
-        error: error.message,
-      });
+      logger.error(
+        `[TowerImportService] Erro fatal no processamento das 3 tabelas`,
+        {
+          error: error.message,
+        },
+      );
       results.failed = data.length;
       results.errors.push({
-        item: "Batch Process",
-        error: error.message || "Erro desconhecido na persistência do lote",
+        item: "3-Table Batch Process",
+        error:
+          error.message || "Erro desconhecido na persistência das 3 tabelas",
       });
     }
 

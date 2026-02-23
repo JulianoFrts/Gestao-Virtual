@@ -1,6 +1,7 @@
 import { read, utils } from 'xlsx';
 
 export interface RawConstructionImportItem {
+  sequencia: number;
   towerId: string;
   lat: number;
   lng: number;
@@ -10,9 +11,9 @@ export interface RawConstructionImportItem {
   pesoEstrutura: number;
   pesoConcreto: number;
   pesoEscavacao: number;
-  pesoAco1: number;
-  pesoAco2: number;
-  pesoAco3: number;
+  aco1: number;
+  aco2: number;
+  aco3: number;
   status: 'valid' | 'invalid' | 'warning';
   errors?: string[];
 }
@@ -63,36 +64,38 @@ export class ConstructionImportService {
           const json = utils.sheet_to_json(sheet, { raw: false, defval: '' }) as any[];
 
           const results: RawConstructionImportItem[] = json.map((row, idx) => {
-            const towerId = String(this.smartGet(row, ['torre', 'id', 'numero', 'identificador']) || "").trim();
+            const sequencia = this.robustParseFloat(this.smartGet(row, ['sequencia', 'seq', 'posicao', 'ordem']));
+            const towerId = String(this.smartGet(row, ['torre', 'id', 'numero', 'identificador', 'id_torre', 'id torre']) || "").trim();
             const lat = this.robustParseFloat(this.smartGet(row, ['lat', 'latitude', 'y']));
             const lng = this.robustParseFloat(this.smartGet(row, ['lng', 'long', 'longitude', 'x']));
-            const elev = this.robustParseFloat(this.smartGet(row, ['elev', 'alt', 'cota', 'z']));
-            const vao = this.robustParseFloat(this.smartGet(row, ['vao', 'dist', 'distancia']));
             const zona = String(this.smartGet(row, ['zona', 'utm', 'fus']) || "").trim();
+            const elev = this.robustParseFloat(this.smartGet(row, ['elev', 'alt', 'cota', 'z', 'elevacao']));
+            const vao = this.robustParseFloat(this.smartGet(row, ['vao', 'dist', 'distancia']));
             
-            const pEstrutura = this.robustParseFloat(this.smartGet(row, ['pesoestru', 'estrutura', 'metal']));
-            const pConcreto = this.robustParseFloat(this.smartGet(row, ['pesoconc', 'concreto', 'vol']));
-            const pEscavacao = this.robustParseFloat(this.smartGet(row, ['escav', 'terra']));
-            const pAco1 = this.robustParseFloat(this.smartGet(row, ['aco1', 'ca50', 'armac']));
-            const pAco2 = this.robustParseFloat(this.smartGet(row, ['aco2', 'ca60']));
-            const pAco3 = this.robustParseFloat(this.smartGet(row, ['aco3', 'ca25']));
+            const pEstrutura = this.robustParseFloat(this.smartGet(row, ['pesoestru', 'estrutura', 'metal', 'pesoestrutura']));
+            const pConcreto = this.robustParseFloat(this.smartGet(row, ['pesoconc', 'concreto', 'vol', 'pesoconcreto']));
+            const pEscavacao = this.robustParseFloat(this.smartGet(row, ['escav', 'terra', 'pesoescavacao']));
+            const valAco1 = this.robustParseFloat(this.smartGet(row, ['aco1', 'ca50', 'armac']));
+            const valAco2 = this.robustParseFloat(this.smartGet(row, ['aco2', 'ca60']));
+            const valAco3 = this.robustParseFloat(this.smartGet(row, ['aco3', 'ca25']));
 
             const errors: string[] = [];
             if (!towerId) errors.push('ID da Torre ausente');
 
             return {
+              sequencia: sequencia || (idx + 1),
               towerId,
               lat,
               lng,
+              zona,
               elevacao: elev,
               vao,
-              zona,
               pesoEstrutura: pEstrutura,
               pesoConcreto: pConcreto,
               pesoEscavacao: pEscavacao,
-              pesoAco1: pAco1,
-              pesoAco2: pAco2,
-              pesoAco3: pAco3,
+              aco1: valAco1,
+              aco2: valAco2,
+              aco3: valAco3,
               status: errors.length > 0 ? 'invalid' : 'valid',
               errors: errors.length > 0 ? errors : undefined
             };

@@ -47,13 +47,20 @@ export class ApiResponse {
   ): NextResponse {
     const responseData = this.success(data, message);
 
-    // Otimização de Log: Evita imprimir payloads gigantescos (ex: 800+ torres)
-    const logData = this.summarizeForLog(data);
-    logger.info(`Response JSON ${status}`, {
-      status,
-      message,
-      data: logData,
-    });
+    // Otimização de Log: Pular health checks e evitar payloads gigantescos
+    const isHealthCheck =
+      typeof data === "object" &&
+      data !== null &&
+      (data as any).status === "ok";
+
+    if (!isHealthCheck) {
+      const logData = this.summarizeForLog(data);
+      logger.info(`Response JSON ${status}`, {
+        status,
+        message,
+        data: logData,
+      });
+    }
 
     return NextResponse.json(responseData, { status });
   }
@@ -80,16 +87,20 @@ export class ApiResponse {
    * Resume dados para o log para evitar bottlenecks de stdout
    */
   private static summarizeForLog(data: any): any {
+    if (typeof data === "string" && data.length > 50) {
+      return `${data.slice(0, 10)}... [+${data.length - 10} chars]`;
+    }
+
     if (Array.isArray(data)) {
       if (data.length > 10) {
         return {
           _type: "LargeArray",
           length: data.length,
-          preview: data.slice(0, 3),
+          preview: data.slice(0, 3).map((item) => this.summarizeForLog(item)),
           note: "Payload resumido para performance",
         };
       }
-      return data;
+      return data.map((item) => this.summarizeForLog(item));
     }
 
     if (data && typeof data === "object") {
@@ -102,6 +113,12 @@ export class ApiResponse {
           note: "Payload resumido para performance",
         };
       }
+
+      const result: any = {};
+      for (const key of keys) {
+        result[key] = this.summarizeForLog(data[key]);
+      }
+      return result;
     }
 
     return data;

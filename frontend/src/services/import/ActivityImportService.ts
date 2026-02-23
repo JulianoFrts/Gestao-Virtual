@@ -18,6 +18,11 @@ export class ActivityImportService {
       .replace(/[^a-z0-9]/g, "");
   }
 
+  private static sanitizeTowerIdentifier(value: any): string {
+    if (value === null || value === undefined) return "";
+    return String(value).trim();
+  }
+
   private static smartGet(row: any, searchTerms: string[]): any {
     const keys = Object.keys(row);
     for (const term of searchTerms) {
@@ -34,16 +39,17 @@ export class ActivityImportService {
       reader.onload = (e) => {
         try {
           const data = e.target?.result as ArrayBuffer;
-          const workbook = read(data, { type: 'array' });
+          const workbook = read(data, { type: 'array', cellDates: false });
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
-          const json = utils.sheet_to_json(sheet) as any[];
+          const json = utils.sheet_to_json(sheet, { raw: false, defval: '' }) as any[];
 
           const results: RawActivityImportItem[] = json.map((row, idx) => {
             const name = String(this.smartGet(row, ['atividades', 'nome', 'titulo', 'item']) || "").trim();
             const level = parseInt(String(this.smartGet(row, ['nivel', 'level', 'camada']) || "1"));
             const order = parseInt(String(this.smartGet(row, ['ordem', 'sequencia', 'posicao']) || idx));
             const desc = String(this.smartGet(row, ['descricao', 'detalhe']) || "").trim();
-            const towerId = String(this.smartGet(row, ['torre', 'vinculo']) || "").trim();
+            const towerIdRaw = this.smartGet(row, ['torre', 'vinculo']) || "";
+            const towerId = this.sanitizeTowerIdentifier(towerIdRaw);
 
             const errors = [];
             if (!name) errors.push('Nome da atividade ausente');

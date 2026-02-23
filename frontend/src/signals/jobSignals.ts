@@ -68,11 +68,15 @@ export const monitorJob = async (jobId: string) => {
       updateJobState(jobId, job);
 
       if (job.status === "completed") {
-        const results = job.payload?.results;
-        toast({
-          title: "Processamento concluído",
-          description: `Tarefa ${job.type} finalizada com sucesso.`,
-        });
+        const batchInfo = job.payload?.batchInfo;
+        const isLastBatch = batchInfo ? batchInfo.current === batchInfo.total : true;
+
+        if (isLastBatch) {
+          toast({
+            title: "Processamento concluído",
+            description: `Tarefa ${job.type} finalizada com sucesso.`,
+          });
+        }
 
         // Remove do monitor após 5 segundos
         setTimeout(() => removeJob(jobId), 5000);

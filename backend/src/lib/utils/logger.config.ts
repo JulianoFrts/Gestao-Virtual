@@ -8,11 +8,15 @@ export const REDACTED_FIELDS = [
   "authorization",
   "cookie",
   "access_token",
+  "refresh_token",
   "secret",
   "jwt",
   "orion_token",
   "next-auth.session-token",
   "__Secure-next-auth.session-token",
+  "api_key",
+  "apikey",
+  "x-internal-proxy-key",
 ];
 
 export const LOG_LEVEL =

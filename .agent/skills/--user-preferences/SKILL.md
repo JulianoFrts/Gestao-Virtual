@@ -1,4 +1,5 @@
 # GESTÃO VIRTUAL
+
 ## Documento Oficial de Governança Técnica
 
 Versão: 1.0
@@ -12,10 +13,10 @@ Aplicação: Backend + Frontend
 3. src/index.css é a única fonte de verdade visual.
 4. Código deve seguir DDD + SOLID + Clean Code.
 5. Workspace deve permanecer limpo.
-6. NÃO  FIQUE CONVERSANDO  SEM EU TER  PERGUNTADO, FAÇA SOMENTE O oque  for te ordenado.
+6. NÃO FIQUE CONVERSANDO SEM EU TER PERGUNTADO, FAÇA SOMENTE O oque for te ordenado.
 7. seja objetivo e direto ao ponto e rapido e eficiente.
 8. não perca tempo com coisas que não são importantes.
-9. não faça nada sem minha permissão.   
+9. não faça nada sem minha permissão.
 
 ## 2. Comunicação
 
@@ -31,6 +32,7 @@ Aplicação: Backend + Frontend
 O arquivo src/index.css é a única fonte de estilos globais.
 
 É proibido:
+
 - Hardcode de cores
 - Estilos ad-hoc
 - Sombras fora de variáveis
@@ -56,6 +58,7 @@ O arquivo src/index.css é a única fonte de estilos globais.
 ### 4.1 Backend
 
 Obrigatório:
+
 - DDD
 - SOLID
 - Clean Code
@@ -65,6 +68,7 @@ Obrigatório:
 - Entidades ricas
 
 Proibido:
+
 - Regra de negócio no controller
 - Lógica complexa no frontend
 

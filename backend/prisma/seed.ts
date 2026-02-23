@@ -1,61 +1,60 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import pg from "pg";
 import dotenv from "dotenv";
+import { seedGlobalUsers } from "./seed-global";
 import { seedAdmin } from "./seed-admin";
+import { seedInfrastructure } from "./seed-infrastructure";
 import { seedProduction } from "./seed-production";
 import { seedPersonnel } from "./master-seed-personnel";
-import { seedGlobalUsers } from "./seed-global";
-import { fileURLToPath } from "url";
 
 dotenv.config();
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-    throw new Error("DATABASE_URL is not defined");
-}
+const prisma = new PrismaClient();
 
-const pool = new pg.Pool({ connectionString });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
-
+/**
+ * ╔══════════════════════════════════════════════════════════╗
+ * ║              UNIFIED SEED CHAIN (v2)                    ║
+ * ║                                                         ║
+ * ║  Ordem de execução:                                     ║
+ * ║  0. Usuários Globais (Super Admin, Sócio, TI)           ║
+ * ║  1. Admin Orion (admin@orion.com)                       ║
+ * ║  2. Infraestrutura (Empresa → Obra → Canteiros → Funções)║
+ * ║  3. Produção (Categorias e Atividades)                  ║
+ * ║  4. Pessoal (Funcionários → Equipes → Vínculos)         ║
+ * ╚══════════════════════════════════════════════════════════╝
+ */
 async function main() {
-    console.log("🌱 STARTING UNIFIED SEEDING 🌱");
-    console.log("===============================");
+  console.log("🌱 STARTING UNIFIED SEEDING v2 🌱");
+  console.log("===================================");
 
-    try {
-        // 0. Global Master Users (Juliano, Socio, etc)
-        await seedGlobalUsers(prisma);
+  // 0. Usuários Globais (Super Admin God, Sócio, Admin, TI)
+  console.log("\n📌 STEP 0: Usuários Globais");
+  await seedGlobalUsers(prisma);
 
-        // 1. Admin & Basic Users
-        await seedAdmin(prisma);
+  // 1. Admin Orion
+  console.log("\n📌 STEP 1: Admin Orion");
+  await seedAdmin(prisma);
 
-        // 2. Production Config (Categories/Activities)
-        await seedProduction(prisma);
+  // 2. Infraestrutura: Empresa → Obra → Canteiros → Funções → Vínculos Admin
+  console.log("\n📌 STEP 2: Infraestrutura");
+  await seedInfrastructure(prisma);
 
-        // 3. Personnel & Teams (Implementation Check: only if project exists or safe to run?)
-        // This seed depends on "LA TESTE" project existing basically.
-        // Assuming seed-map or similar runs before? Or maybe we should be careful.
-        // For now, let's include it as it's idempotent.
-        // Note: master-seed-personnel expects "LA TESTE" project initiated elsewhere (e.g. initial-data).
-        // If it fails, we catch it.
-        await seedPersonnel(prisma);
+  // 3. Configuração de Produção (Categorias e Atividades)
+  console.log("\n📌 STEP 3: Configuração de Produção");
+  await seedProduction(prisma);
 
-    } catch (e) {
-        console.error("❌ Link Error in Unified Seed:", e);
-        // Don't throw, let other seeds try? Or throw to stop CI.
-        throw e;
-    }
+  // 4. Pessoal: Funcionários → Funções → Equipes → Vínculos
+  console.log("\n📌 STEP 4: Pessoal e Equipes");
+  await seedPersonnel(prisma);
 
-    console.log("===============================");
-    console.log("✅ UNIFIED SEEDING COMPLETE ✅");
+  console.log("\n===================================");
+  console.log("✅ UNIFIED SEEDING v2 COMPLETE ✅");
 }
 
 main()
-    .catch((e) => {
-        console.error(e);
-        process.exit(1);
-    })
-    .finally(async () => {
-        await prisma.$disconnect();
-    });
+  .catch((e) => {
+    console.error("❌ Seed falhou:", e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

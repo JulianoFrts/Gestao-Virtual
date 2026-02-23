@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const user = await requireAuth();
+    const user = await requireAuth(request);
     const id = request.nextUrl.searchParams.get("id");
     const projectId = request.nextUrl.searchParams.get("projectId");
 
