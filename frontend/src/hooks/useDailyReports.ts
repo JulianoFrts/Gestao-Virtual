@@ -4,6 +4,7 @@ import { orionApi } from '@/integrations/orion/client';
 import { storageService } from "@/services/storageService";
 import { useToast } from "@/hooks/use-toast";
 import { generateId, safeDate } from "@/lib/utils";
+import { globalReportRefreshSignal } from "@/signals/dailyReportSignals";
 
 export enum DailyReportStatus {
   PROGRAMMED = 'PROGRAMMED',
@@ -88,7 +89,7 @@ export function useDailyReports() {
 
         if (error) throw error;
 
-        console.log("[useDailyReports] RAW Data from Supabase:", data.slice(0, 3));
+        console.log("[useDailyReports] RAW Data from Backend:", data.slice(0, 3));
 
         const mapped = (data || []).map(
           (r) => {
@@ -98,7 +99,7 @@ export function useDailyReports() {
               teamName: r.team?.name || r.teams?.name,
               userId: r.userId || r.user_id,
               userName: r.user?.name || (r as any).userName || "Sistema",
-              reportDate: safeDate(r.reportDate || r.report_date) || new Date(),
+              reportDate: safeDate((r.reportDate || r.report_date)?.toString().substring(0, 10)) || new Date(),
               activities: r.activities,
               observations: r.observations,
               subPoint: r.subPoint || r.sub_point,
@@ -168,10 +169,9 @@ export function useDailyReports() {
       setIsLoading(false);
     }
   }, []);
-
   useEffect(() => {
     loadReports();
-  }, [loadReports]);
+  }, [loadReports, globalReportRefreshSignal.value]);
 
   const createReport = async (data: {
     teamId?: string;
@@ -384,13 +384,25 @@ export function useDailyReports() {
 
     if (isOnline) {
       try {
+        const updatePayload: any = { syncedAt: new Date().toISOString() };
+        if (data.reportDate) updatePayload.reportDate = data.reportDate instanceof Date ? data.reportDate.toISOString().split("T")[0] : data.reportDate;
+        if (data.teamId || data.teamIds) updatePayload.teamId = data.teamId || data.teamIds?.[0] || null;
+        if (data.employeeId) updatePayload.userId = data.employeeId;
+        if (data.companyId) updatePayload.companyId = data.companyId;
+        if (data.activities !== undefined) updatePayload.activities = data.activities;
+        if (data.observations !== undefined || data.generalObservations !== undefined) updatePayload.observations = data.observations || data.generalObservations;
+        if (data.metadata !== undefined) updatePayload.metadata = data.metadata;
+        if (data.status !== undefined) updatePayload.status = data.status;
+        if (data.weather !== undefined) updatePayload.weather = data.weather;
+        if (data.manpower !== undefined) updatePayload.manpower = data.manpower;
+        if (data.equipment !== undefined) updatePayload.equipment = data.equipment;
+        if (data.rdoNumber !== undefined) updatePayload.rdoNumber = data.rdoNumber;
+        if (data.revision !== undefined) updatePayload.revision = data.revision;
+        if (data.projectDeadline !== undefined) updatePayload.projectDeadline = data.projectDeadline;
+
         const { data: updated, error } = await db
           .from("daily_reports")
-          .update({
-            ...data,
-            report_date: data.reportDate instanceof Date ? data.reportDate.toISOString().split("T")[0] : data.reportDate,
-            synced_at: new Date().toISOString(),
-          } as any)
+          .update(updatePayload)
           .eq('id', id)
           .select(`*, teams(name), user:users!daily_reports_user_id_fkey(name)`)
           .single();

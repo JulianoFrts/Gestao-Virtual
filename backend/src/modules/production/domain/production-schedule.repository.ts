@@ -5,7 +5,7 @@ export interface ProductionSchedule {
   plannedStart: Date;
   plannedEnd: Date;
   plannedQuantity?: number;
-  plannedHHH?: number;
+  plannedHhh?: number;
   createdById?: string;
   updatedAt?: Date;
   createdAt?: Date;
@@ -13,8 +13,14 @@ export interface ProductionSchedule {
 
 export interface ProductionScheduleRepository {
   findSchedule(elementId: string, activityId: string): Promise<any | null>;
-  findSchedulesBatch(elementIds: string[], activityIds: string[]): Promise<any[]>;
-  findScheduleByElement(elementId: string, activityId: string): Promise<any | null>;
+  findSchedulesBatch(
+    elementIds: string[],
+    activityIds: string[],
+  ): Promise<any[]>;
+  findScheduleByElement(
+    elementId: string,
+    activityId: string,
+  ): Promise<any | null>;
   findScheduleById(id: string): Promise<any | null>;
   saveSchedule(data: any): Promise<any>;
   deleteSchedule(id: string): Promise<void>;

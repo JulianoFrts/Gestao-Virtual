@@ -42,6 +42,8 @@ export interface SystemUser {
   birthDate?: string | null;
   laborType?: string | null;
   iapName?: string | null;
+  functionId?: string | null;
+  jobFunction?: { id: string; name: string } | null;
   permissions?: string[] | null;
 }
 
@@ -52,6 +54,7 @@ export interface UserFilters {
   search?: string;
   onlyCorporate?: boolean;
   excludeCorporate?: boolean;
+  global?: boolean;
 }
 
 export interface UserUpdateDTO {
@@ -82,6 +85,7 @@ export interface UserUpdateDTO {
   birthDate?: string | null;
   laborType?: string | null;
   iapName?: string | null;
+  functionId?: string | null;
   // Access
 }
 
@@ -98,6 +102,7 @@ export function useUsers(filters?: UserFilters) {
   const searchFilter = filters?.search;
   const onlyCorporateFilter = filters?.onlyCorporate;
   const excludeCorporateFilter = filters?.excludeCorporate;
+  const globalFilter = filters?.global;
   const hasInitialFetched = React.useRef(false);
   const previousFiltersRef = React.useRef<string>("");
 
@@ -113,6 +118,7 @@ export function useUsers(filters?: UserFilters) {
         siteId: siteIdFilter,
         onlyCorporate: onlyCorporateFilter,
         excludeCorporate: excludeCorporateFilter,
+        global: globalFilter,
       });
 
       // Sempre refaz a busca se os filtros mudaram
@@ -129,16 +135,18 @@ export function useUsers(filters?: UserFilters) {
         let query = localApi
           .from("users")
           .select(
-            "id, name, email, role, phone, image, registrationNumber, cpf, createdAt, companyId, projectId, siteId, status, isSystemAdmin, hierarchyLevel, userRole(role), iap_name, address",
+            "id, name, email, role, phone, image, registrationNumber, cpf, createdAt, companyId, projectId, siteId, status, isSystemAdmin, hierarchyLevel, userRole(role), iap_name, address, functionId, jobFunction(id, name)",
           );
 
         // IMPORTANT: Search must be sent to API for global search in backend
         if (searchFilter && searchFilter.trim().length > 0) {
           query = query.eq("search", searchFilter.trim());
         }
-        if (companyIdFilter) query = query.eq("companyId", companyIdFilter);
-        if (projectIdFilter) query = query.eq("projectId", projectIdFilter);
-        if (siteIdFilter) query = query.eq("siteId", siteIdFilter);
+        if (!globalFilter) {
+          if (companyIdFilter) query = query.eq("companyId", companyIdFilter);
+          if (projectIdFilter) query = query.eq("projectId", projectIdFilter);
+          if (siteIdFilter) query = query.eq("siteId", siteIdFilter);
+        }
         if (onlyCorporateFilter) query = query.eq("onlyCorporate", true);
         if (excludeCorporateFilter) query = query.eq("excludeCorporate", true);
 
@@ -158,43 +166,49 @@ export function useUsers(filters?: UserFilters) {
         if (error) throw error;
 
         const mapped = (data || []).map((p) => {
+          const auth = p.authCredential || {};
+          const affil = p.affiliation || {};
+          const rawEmail = (p.email as string) || (auth.email as string) || "";
+          
           const name =
             (p.name as string) ||
             (p.fullName as string) ||
-            (p.email as string)?.split("@")[0] ||
+            rawEmail.split("@")[0] ||
             "Usuário";
           const addr = p.address ? (p.address as any) : {};
 
           return {
             id: p.id,
             fullName: name,
-            email: p.email || "",
+            email: rawEmail,
             registrationNumber: p.registrationNumber,
             createdAt: p.createdAt,
-            role: (p.role || "WORKER").toUpperCase(),
+            role: ((auth.role as string) || (p.role as string) || "WORKER").toUpperCase(),
             phone: p.phone,
-            companyId: p.companyId,
-            projectId: p.projectId,
-            siteId: p.siteId,
+            companyId: affil.companyId || p.companyId,
+            projectId: affil.projectId || p.projectId,
+            siteId: affil.siteId || p.siteId,
             isBlocked:
-              (p.status || p.isBlocked) === "SUSPENDED" ||
-              (p.status || p.isBlocked) === "INACTIVE" ||
+              (auth.status || p.status || p.isBlocked) === "SUSPENDED" ||
+              (auth.status || p.status || p.isBlocked) === "INACTIVE" ||
               p.isBlocked === true,
-            status: p.status,
+            status: auth.status || p.status,
             isSystemAdmin: p.isSystemAdmin || false,
             hierarchyLevel: p.hierarchyLevel,
             userRole: p.userRole,
             image: p.image,
             zipCode: addr?.cep,
-            street: addr?.street,
+            street: addr?.logradouro || addr?.street,
             number: addr?.number,
-            neighborhood: addr?.neighborhood,
-            city: addr?.city,
-            state: addr?.stateCode,
+            neighborhood: addr?.bairro || addr?.neighborhood,
+            city: addr?.localidade || addr?.city,
+            state: addr?.uf || addr?.state || addr?.stateCode,
             gender: p.gender as any,
             birthDate: p.birthDate,
             laborType: p.laborType,
             iapName: p.iapName,
+            functionId: p.functionId,
+            jobFunction: p.jobFunction,
           };
         });
 
@@ -229,6 +243,7 @@ export function useUsers(filters?: UserFilters) {
       searchFilter,
       onlyCorporateFilter,
       excludeCorporateFilter,
+      globalFilter,
     ],
   );
 
@@ -264,6 +279,7 @@ export function useUsers(filters?: UserFilters) {
     // Affiliation
     laborType?: string,
     iapName?: string,
+    functionId?: string,
   ) => {
     try {
       if (password.length < 6) {
@@ -307,6 +323,7 @@ export function useUsers(filters?: UserFilters) {
             birth_date: birthDate || null,
             labor_type: laborType || null,
             iap_name: iapName || null,
+            functionId: functionId || null,
           })
           .eq("id", data.user.id);
 
@@ -405,6 +422,8 @@ export function useUsers(filters?: UserFilters) {
         profileUpdates.laborType = updates.laborType;
       if (updates.iapName !== undefined)
         profileUpdates.iapName = updates.iapName;
+      if (updates.functionId !== undefined)
+        profileUpdates.functionId = updates.functionId;
 
       // Novos campos de endereço (Mapear para camelCase conforme esperado pelo updateUserSchema)
       if (updates.zipCode !== undefined)
@@ -491,6 +510,8 @@ export function useUsers(filters?: UserFilters) {
               updatedUser.laborType = updates.laborType;
             if (updates.iapName !== undefined)
               updatedUser.iapName = updates.iapName;
+            if (updates.functionId !== undefined)
+              updatedUser.functionId = updates.functionId;
             if (updates.zipCode !== undefined)
               updatedUser.zipCode = updates.zipCode;
             if (updates.street !== undefined)

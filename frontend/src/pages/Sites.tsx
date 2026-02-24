@@ -226,11 +226,12 @@ export default function Sites() {
 
   const groupedSites = useMemo(() => {
     let filtered = sites.filter(
-      (s) =>
-        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        getProjectName(s.projectId)
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase()),
+      (s) => {
+        const siteMatch = (s.name || "").toLowerCase().includes((searchTerm || "").toLowerCase());
+        const projectName = getProjectName(s.projectId);
+        const projectMatch = (projectName || "").toLowerCase().includes((searchTerm || "").toLowerCase());
+        return siteMatch || projectMatch;
+      }
     );
 
     if (selectedProjectId && selectedProjectId !== "all") {

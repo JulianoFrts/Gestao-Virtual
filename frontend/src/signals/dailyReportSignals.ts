@@ -72,6 +72,7 @@ export interface DailyReportDraft {
     projectDeadline?: number;
     editingReportId?: string; // ID do relatório original se for uma correção
     isCorrection?: boolean;   // Sinaliza que este rascunho é para corrigir um RDO devolvido
+    isProgrammed?: boolean;   // Sinaliza que este rascunho originou-se de uma programação do supervisor
     step: number;
     updatedAt: number;
 }
@@ -132,3 +133,9 @@ effect(() => {
         storageService.setItem('daily-report-draft', data);
     }
 });
+
+// Signal para forçar atualização em tempo real entre telas (Auditoria, Meus RDOs, etc)
+export const globalReportRefreshSignal = signal<number>(Date.now());
+export const triggerGlobalReportRefresh = () => {
+    globalReportRefreshSignal.value = Date.now();
+};

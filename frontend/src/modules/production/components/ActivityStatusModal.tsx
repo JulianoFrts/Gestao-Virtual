@@ -32,7 +32,8 @@ import {
     CommandItem,
     CommandList,
 } from "@/components/ui/command";
-import { CalendarIcon, Loader2, Check, ChevronsUpDown, User, X, FileText } from "lucide-react";
+import { CalendarIcon, Loader2, Check, ChevronsUpDown, User, X, FileText, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { ActivityStatus, TowerActivityStatus, LandStatus, ImpedimentType, ActivitySchedule, DelayReason, HistoryLog } from "@/modules/production/types";
 import { orionApi } from "@/integrations/orion/client";
@@ -76,6 +77,7 @@ const ActivityStatusModal = React.memo(({
 }: ActivityStatusModalProps) => {
     const queryClient = useQueryClient();
     const { profile } = useAuth();
+    const isUnlinked = activityId?.startsWith('custom-');
 
     // Estado Principal
     const [status, setStatus] = useState<ActivityStatus>(currentStatus?.status || 'PENDING');
@@ -140,7 +142,7 @@ const ActivityStatusModal = React.memo(({
             if (scheduleData.plannedStart) setPlannedStart(new Date(scheduleData.plannedStart));
             if (scheduleData.plannedEnd) setPlannedEnd(new Date(scheduleData.plannedEnd));
             if (scheduleData.plannedQuantity) setPlannedQuantity(scheduleData.plannedQuantity.toString());
-            if (scheduleData.plannedHours) setPlannedHours(scheduleData.plannedHours.toString());
+            if (scheduleData.plannedHhh) setPlannedHours(scheduleData.plannedHhh.toString());
         }
     }, [scheduleData]);
 
@@ -252,19 +254,33 @@ const ActivityStatusModal = React.memo(({
             if (!finalPlannedStart && finalStartDate) finalPlannedStart = finalStartDate;
             if (!finalPlannedEnd && finalEndDate) finalPlannedEnd = finalEndDate;
 
-            if (finalPlannedStart && finalPlannedEnd) {
-                const toNoon = (d: Date) => new Date(d.setHours(12, 0, 0, 0)).toISOString();
-                await orionApi.post("/production/schedule", {
+            if (finalPlannedStart && finalPlannedEnd && !isNaN(finalPlannedStart.getTime()) && !isNaN(finalPlannedEnd.getTime())) {
+                const toNoon = (d: Date) => {
+                    const copy = new Date(d);
+                    copy.setHours(12, 0, 0, 0);
+                    return copy.toISOString();
+                };
+                
+                const resSchedule = await orionApi.post("/production/schedule", {
                     towerId: elementId,
                     activityId,
                     plannedStart: toNoon(finalPlannedStart),
                     plannedEnd: toNoon(finalPlannedEnd),
-                    plannedQuantity: plannedQuantity ? parseFloat(plannedQuantity) : null,
-                    plannedHHH: plannedHours ? parseFloat(plannedHours) : null
+                    plannedQuantity: plannedQuantity ? (parseFloat(plannedQuantity) || null) : null,
+                    plannedHhh: plannedHours ? (parseFloat(plannedHours) || null) : null
                 });
+
+                if (resSchedule.error) {
+                    console.error("[ActivityStatusModal] Schedule error:", resSchedule.error);
+                    throw new Error(resSchedule.error.message);
+                }
             }
 
             const response = await orionApi.post("/production/tower-status", payload);
+            if (response.error) {
+                console.error("[ActivityStatusModal] Tower-status error:", response.error);
+                throw new Error(response.error.message);
+            }
             return response.data;
         },
         onSuccess: () => {
@@ -274,7 +290,11 @@ const ActivityStatusModal = React.memo(({
             toast.success("Dados atualizados com sucesso");
             onClose();
         },
-        
+        onError: (error: any) => {
+            console.error("[ActivityStatusModal] Mutation Error:", error);
+            const message = error.message || "Erro desconhecido";
+            toast.error("Erro ao atualizar: " + message);
+        }
     });
 
     React.useEffect(() => {
@@ -359,6 +379,17 @@ const ActivityStatusModal = React.memo(({
 
                     <TabsContent value="status" className="m-0 focus-visible:outline-hidden animate-in fade-in slide-in-from-bottom-2 duration-300">
                         <div className="px-8 py-6 max-h-[60vh] overflow-y-auto custom-scrollbar space-y-8">
+                            {isUnlinked && (
+                                <Alert variant="destructive" className="bg-red-500/10 border-red-500/20 text-red-500 mb-6 rounded-xl animate-pulse">
+                                    <AlertCircle className="h-4 w-4" />
+                                    <AlertTitle className="text-xs font-black uppercase tracking-widest">Etapa não vinculada!</AlertTitle>
+                                    <AlertDescription className="text-[10px] uppercase font-bold tracking-tight opacity-80 leading-relaxed">
+                                        Esta etapa ainda não está vinculada a uma atividade real do catálogo. 
+                                        Vá em <b>Configurações &gt; Auto-Vincular</b> antes de registrar progresso.
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+
                             {/* Componente de Liderança - Premium Look */}
                             <div className="grid gap-3">
                                 <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
@@ -496,15 +527,18 @@ const ActivityStatusModal = React.memo(({
                               isSystemAdminSignal.value || 
                               profile?.isSystemAdmin || 
                               ['SUPER_ADMIN_GOD', 'SUPERADMINGOD', 'SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'TI_SOFTWARE', 'TISOFTWARE', 'HELPER_SYSTEM'].includes(profile?.role || '')) && (
-                                <Button 
-                                    size="sm" 
-                                    onClick={() => updateMutation.mutate()} 
-                                    disabled={updateMutation.isPending} 
-                                    className="bg-amber-600 hover:bg-amber-500 text-black font-black px-8 h-12 text-[10px] uppercase tracking-[0.2em] shadow-[0_10px_40px_rgba(217,119,6,0.2)] hover:shadow-[0_10px_40px_rgba(217,119,6,0.4)] transition-all hover:scale-[1.02] active:scale-95 rounded-xl border border-white/10"
-                                >
-                                    {updateMutation.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                                    Registrar Avanço
-                                </Button>
+                                    <Button 
+                                        size="sm" 
+                                        onClick={() => updateMutation.mutate()} 
+                                        disabled={updateMutation.isPending || isUnlinked} 
+                                        className={cn(
+                                            "bg-amber-600 hover:bg-amber-500 text-black font-black px-8 h-12 text-[10px] uppercase tracking-[0.2em] shadow-[0_10px_40px_rgba(217,119,6,0.2)] hover:shadow-[0_10px_40px_rgba(217,119,6,0.4)] transition-all hover:scale-[1.02] active:scale-95 rounded-xl border border-white/10",
+                                            isUnlinked && "opacity-50 cursor-not-allowed grayscale"
+                                        )}
+                                    >
+                                        {updateMutation.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                                        {isUnlinked ? "Vínculo Necessário" : "Registrar Avanço"}
+                                    </Button>
                             )}
                         </DialogFooter>
                     </TabsContent>

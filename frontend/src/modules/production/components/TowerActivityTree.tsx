@@ -7,7 +7,8 @@ import {
   Trash2, 
   Edit3, 
   AlertTriangle,
-  Move
+  Move,
+  Layers
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -30,6 +31,7 @@ interface TowerActivityTreeProps {
   onEdit: (node: ActivityNode) => void;
   onDelete: (id: string) => void;
   onCreate: (parentId: string | null) => void;
+  onOpenPresets?: () => void;
 }
 
 const ActivityItem = React.memo(({ 
@@ -121,7 +123,8 @@ export const TowerActivityTree = ({
   onMove, 
   onEdit, 
   onDelete, 
-  onCreate 
+  onCreate,
+  onOpenPresets 
 }: TowerActivityTreeProps) => {
   return (
     <div className="space-y-2 p-4">
@@ -129,9 +132,16 @@ export const TowerActivityTree = ({
         <h3 className="text-lg font-black tracking-tighter uppercase italic text-primary">
           Hierarquia de Atividades & Metas
         </h3>
-        <Button size="sm" onClick={() => onCreate(null)} className="gradient-primary">
-          <Plus className="w-4 h-4 mr-2" /> Atividade Mãe
-        </Button>
+        <div className="flex gap-2">
+          {onOpenPresets && (
+            <Button size="sm" variant="outline" onClick={onOpenPresets} className="border-primary/20 hover:border-primary/40 hover:bg-primary/5">
+              <Layers className="w-4 h-4 mr-2" /> Padrões
+            </Button>
+          )}
+          <Button size="sm" onClick={() => onCreate(null)} className="gradient-primary">
+            <Plus className="w-4 h-4 mr-2" /> Atividade Mãe
+          </Button>
+        </div>
       </div>
       
       <div className="rounded-xl border border-primary/10 bg-black/40 p-4 shadow-inner">

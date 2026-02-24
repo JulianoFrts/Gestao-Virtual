@@ -35,6 +35,7 @@ export class ProductionService {
     this.scheduleService = new ProductionScheduleService(
       scheduleRepository,
       progressRepository,
+      elementRepository,
     );
     this.dailyService = new DailyProductionService(
       progressRepository,

@@ -87,29 +87,8 @@ export class TowerImportService {
         };
       });
 
-      // 2. Preparar dados para TowerConstruction (Dados técnicos)
-      const constructionData = data.map((item, index) => {
-        const id = String(
-          item.externalId || item.number || item.objectSeq || index + 1,
-        );
-        return {
-          projectId,
-          companyId,
-          siteId,
-          towerId: id,
-          metadata: {
-            vao: item.goForward ?? item.spanLength ?? 0,
-            elevacao: item.alt ?? 0,
-            lat: item.lat ?? 0,
-            lng: item.lng ?? 0,
-            pesoEstrutura: item.pesoEstrutura ?? item.structureWeight ?? 0,
-            pesoConcreto: item.totalConcreto ?? item.concreteVolume ?? 0,
-            pesoAco1: item.pesoArmacao ?? item.steelWeight ?? 0,
-            tipificacaoEstrutura: item.tipificacaoEstrutura || "",
-            foundationType: item.foundationType || "",
-          },
-        };
-      });
+      // NOTA: Dados técnicos (TowerConstruction) NÃO são escritos aqui.
+      // Eles vêm exclusivamente do import de Dados Técnicos (ConstructionImportModal).
 
       // 4. Skeleton Sync (MapElementTechnicalData) para suporte a progresso legado
       const skeletonData = data.map((item, index) => {
@@ -143,17 +122,15 @@ export class TowerImportService {
       });
 
       // Executar importações em paralelo
+      // NOTA: NÃO escrevemos em TowerConstruction aqui!
+      // Dados técnicos (vao, lat, lng, peso, aco) vêm APENAS do import de Dados Técnicos.
+      // O import de Produção só escreve em TowerProduction + MapElementTechnicalData (skeleton).
       await Promise.all([
         this.productionService.importTowers(
           projectId,
           companyId,
           siteId,
           productionData,
-        ),
-        this.constructionService.importProjectData(
-          projectId,
-          companyId,
-          constructionData,
         ),
         // Removido importação automática de metas individuais para evitar poluir a EAP
         // this.activityService.importGoals(projectId, companyId, activityData),

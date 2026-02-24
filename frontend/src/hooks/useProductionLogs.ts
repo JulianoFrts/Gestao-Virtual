@@ -12,6 +12,8 @@ export interface ProductionLog {
     requiresApproval: boolean;
     approvalReason?: string;
     createdAt: string;
+    timestamp?: string; // Fundamental para aprovação no histórico JSON
+    progressId?: string; // Alias para id do registro de progresso
     tower?: { objectId: string };
     activity?: { name: string };
     changedBy?: { name: string; email: string };
@@ -33,11 +35,10 @@ export function useProductionLogs(pendingOnly = false) {
     });
 
     const approveMutation = useMutation({
-        mutationFn: async ({ logId, approved, reason }: { logId: string; approved: boolean; reason?: string }) => {
+        mutationFn: async ({ progressId, logTimestamp }: { progressId: string; logTimestamp: string }) => {
             const response = await orionApi.post('/production/logs', {
-                logId,
-                approved,
-                reason
+                progressId,
+                logTimestamp
             });
             if (response.error) throw new Error(response.error.message);
             return response.data;

@@ -12,7 +12,7 @@ export class DailyProductionService {
   constructor(
     private readonly progressRepository: ProductionProgressRepository,
     private readonly elementRepository: ProjectElementRepository,
-  ) { }
+  ) {}
 
   async recordDailyProduction(
     dto: RecordDailyProductionDTO,
@@ -51,14 +51,26 @@ export class DailyProductionService {
   async listDailyProduction(
     towerId: string,
     activityId?: string,
-    user?: { role: string; companyId?: string | null },
+    user?: {
+      role: string;
+      companyId?: string | null;
+      hierarchyLevel?: number;
+      permissions?: Record<string, boolean>;
+    },
   ) {
-    const progress = await this.progressRepository.findProgress(towerId, activityId);
+    const progress = await this.progressRepository.findProgress(
+      towerId,
+      activityId,
+    );
     if (!progress) return [];
 
     if (user) {
       const { isUserAdmin } = await import("@/lib/auth/session");
-      const isAdmin = isUserAdmin(user.role);
+      const isAdmin = isUserAdmin(
+        user.role,
+        user.hierarchyLevel,
+        user.permissions,
+      );
       if (!isAdmin || !user.role.includes("SUPER_ADMIN")) {
         const elementCompanyId =
           await this.elementRepository.findCompanyId(towerId);

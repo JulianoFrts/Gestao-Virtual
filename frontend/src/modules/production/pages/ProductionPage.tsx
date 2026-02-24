@@ -27,7 +27,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, HardHat, Edit2, Trash2, Loader2, Info, Activity, Upload, Plus, ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Database } from "lucide-react";
+import { Search, HardHat, Edit2, Trash2, Loader2, Info, Activity, Upload, Plus, ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Database, Filter, AlertCircle, Link2 } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { orionApi } from "@/integrations/orion/client";
 import { TowerProductionData, ProductionCategory, TowerActivityStatus } from "../types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -41,6 +42,8 @@ import ExecutionDetailsModal from "../components/ExecutionDetailsModal";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { BarChart3, LayoutGrid } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProjectSelector } from "@/components/shared/ProjectSelector";
 // import { ProjectEmptyState } from "@/components/shared/ProjectEmptyState";
@@ -50,6 +53,7 @@ import { StageHeaderSelector } from "../components/StageHeaderSelector";
 import GAPOProgressTracker from "@/components/gapo/GAPOProgressTracker";
 import { TowerActivityTree } from "../components/TowerActivityTree";
 import TowerActivityGoalModal from "../components/TowerActivityGoalModal";
+import ActivityPresetsModal from "../components/ActivityPresetsModal";
 import { useCompanies } from "@/hooks/useCompanies";
 import { Building2 } from "lucide-react";
 import { useProjects } from "@/hooks/useProjects"; // Necessary for auto-selection logic
@@ -191,8 +195,8 @@ const ProductionTableRow = React.memo(({
             {/* SCROLLING CELLS */}
             {categories?.map(cat => (
                 <React.Fragment key={cat.id}>
-                    {cat.activities.map(act => {
-                        const status = tower.activityStatuses.find(s => s.activityId === act.id);
+                    {cat.activities?.map(act => {
+                        const status = tower.activityStatuses?.find(s => s.activityId === act.id);
                         const schedule = tower.activitySchedules?.find(s => s.activityId === act.id);
 
                         let isDelayed = false;
@@ -212,6 +216,16 @@ const ProductionTableRow = React.memo(({
                                 }
                             }
                         }
+
+                        // Helper to format short date
+                        const formatShortDate = (dateStr?: string) => {
+                            if (!dateStr) return "";
+                            try {
+                                return format(new Date(dateStr), "dd/MM", { locale: ptBR });
+                            } catch (e) {
+                                return "";
+                            }
+                        };
 
                         return (
                             <TableCell
@@ -234,9 +248,9 @@ const ProductionTableRow = React.memo(({
                                     status: status
                                 })}
                             >
-                                {status ? (
+                                {status || schedule ? (
                                     <div className="flex flex-col items-center justify-center gap-1.5 py-1.5 relative min-h-[52px]">
-                                        {status.requiresApproval && (
+                                        {status?.requiresApproval && (
                                             <div className="badge-verificar animate-verificar">VERIFICAR</div>
                                         )}
 
@@ -251,21 +265,36 @@ const ProductionTableRow = React.memo(({
                                                 "absolute bottom-0 left-0 h-0.5 transition-all duration-500 z-10",
                                                 isDelayed ? "bg-red-500/80" : "bg-blue-500/80"
                                             )}
-                                            style={{ width: `${status.progressPercent || 0}%` }}
+                                            style={{ width: `${status?.progressPercent || 0}%` }}
                                         />
 
-                                        <div className={cn(
-                                            "w-full px-1.5 py-0.5 rounded text-[11px] font-black uppercase tracking-tight z-10 shadow-sm",
-                                            status.status === 'FINISHED' ? 'status-concluido' :
-                                                status.status === 'IN_PROGRESS' ? 'status-andamento' : 'status-pendente',
-                                            isDelayed && status.status !== 'FINISHED' && "border border-red-500/50 text-red-100" // Highlight text if delayed and not finished
-                                        )}>
-                                            {status.status === 'FINISHED' ? 'CONCLUÍDO' :
-                                                status.status === 'IN_PROGRESS' ? `AND. ${status.progressPercent}%` : 'PENDENTE'}
-                                        </div>
+                                        {!status || status.status === 'PENDING' ? (
+                                            schedule ? (
+                                                <div className="flex flex-col items-center gap-0.5 z-10">
+                                                    <div className="w-full px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-tight shadow-sm bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                                                        Programado
+                                                    </div>
+                                                    <div className="text-[8px] font-bold text-blue-500/60 font-mono tracking-tighter mt-0.5 whitespace-nowrap">
+                                                        {formatShortDate(schedule.plannedStart)} | {formatShortDate(schedule.plannedEnd)}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="status-pendente w-full px-1.5 py-0.5 rounded text-[11px] font-black uppercase tracking-tight z-10 shadow-sm">
+                                                    PENDENTE
+                                                </div>
+                                            )
+                                        ) : (
+                                            <div className={cn(
+                                                "w-full px-1.5 py-0.5 rounded text-[11px] font-black uppercase tracking-tight z-10 shadow-sm",
+                                                status.status === 'FINISHED' ? 'status-concluido' : 'status-andamento',
+                                                isDelayed && status.status !== 'FINISHED' && "border border-red-500/50 text-red-100"
+                                            )}>
+                                                {status.status === 'FINISHED' ? 'CONCLUÍDO' : `AND. ${status.progressPercent}%`}
+                                            </div>
+                                        )}
 
                                         {/* Seção Fundiária Separada */}
-                                        {status.landStatus && status.landStatus !== 'FREE' && (
+                                        {status?.landStatus && status.landStatus !== 'FREE' && (
                                             <div className={cn(
                                                 "w-full px-1 py-0.5 rounded-sm text-[10px] font-black uppercase tracking-tighter z-10 border",
                                                 status.landStatus === 'EMBARGO' ? 'bg-red-950/40 text-red-500 border-red-500/50' :
@@ -276,7 +305,7 @@ const ProductionTableRow = React.memo(({
                                         )}
 
                                         <div className="flex items-center gap-1.5 z-10 mt-0.5">
-                                            {status.metadata?.leadName && status.metadata.leadName !== 'none' && (
+                                            {status?.metadata?.leadName && status.metadata.leadName !== 'none' && (
                                                 <span className="text-[8px] font-bold text-amber-500/80 uppercase tracking-tighter">
                                                     {status.metadata.leadName.split(' ')[0]}
                                                 </span>
@@ -329,6 +358,7 @@ const ProductionPage = () => {
     const [isActivityImportModalOpen, setIsActivityImportModalOpen] = useState(false);
     const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
     const [editingGoal, setEditingGoal] = useState<any>(null);
+    const [isPresetsModalOpen, setIsPresetsModalOpen] = useState(false);
     const [parentGoalId, setParentGoalId] = useState<string | null>(null);
 
     // Modular Data: Activities/Goals Hierarchy
@@ -361,6 +391,7 @@ const ProductionPage = () => {
     const companyId = selectedCompanyId === 'all' ? undefined : selectedCompanyId;
 
     const [sortConfig, setSortConfig] = useState<{ key: keyof TowerProductionData; direction: "asc" | "desc" } | null>({ key: "objectSeq", direction: "asc" });
+    const [selectedMetaMae, setSelectedMetaMae] = useState<string>("all");
 
     // Hooks
     const { companies, isLoading: isLoadingCompanies } = useCompanies();
@@ -387,17 +418,32 @@ const ProductionPage = () => {
              params.append('limit', '1000'); 
              
             const response = await orionApi.get(`/production/tower-status?${params.toString()}`);
-            return response.data as TowerProductionData[];
+            const payloadData = response.data as any;
+            
+            let dataArray: any[] = [];
+            if (Array.isArray(payloadData)) {
+                dataArray = payloadData;
+            } else if (payloadData && typeof payloadData === 'object') {
+                if (Array.isArray(payloadData.data)) {
+                    dataArray = payloadData.data;
+                } else if (payloadData.data && Array.isArray(payloadData.data.data)) {
+                    dataArray = payloadData.data.data;
+                } else if (Array.isArray(payloadData.items)) {
+                    dataArray = payloadData.items;
+                }
+            }
+            
+            return dataArray as TowerProductionData[];
         },
         initialPageParam: 1,
         getNextPageParam: (lastPage, allPages) => {
-            return lastPage.length === 1000 ? allPages.length + 1 : undefined;
+            return (lastPage?.length === 1000) ? allPages.length + 1 : undefined;
         },
         enabled: !!companyId || !!profile?.companyId
     });
 
     const towers = React.useMemo(() => {
-        return towersData?.pages.flat() || [];
+        return towersData?.pages.flat().filter((t): t is TowerProductionData => !!t) || [];
     }, [towersData]);
 
     const observerTarget = React.useRef<HTMLDivElement>(null);
@@ -447,7 +493,7 @@ const ProductionPage = () => {
 
     const deleteMutation = useMutation({
         mutationFn: async (id: string) => {
-            await orionApi.delete(`/map_elements?id=${id}`);
+            await orionApi.post('/tower-production/delete', { ids: [id] });
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["production-towers"] });
@@ -459,6 +505,7 @@ const ProductionPage = () => {
     });
 
     const [selectedTowers, setSelectedTowers] = useState<string[]>([]);
+    const [isBulkLinking, setIsBulkLinking] = useState(false);
     const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
     const handleToggleSelect = React.useCallback((id: string, checked: boolean) => {
@@ -477,7 +524,7 @@ const ProductionPage = () => {
         if (selectedTowers.length === 0) return;
         setIsBulkDeleting(true);
         try {
-            await orionApi.delete(`/map_elements?ids=${selectedTowers.join(",")}`);
+            await orionApi.post('/tower-production/delete', { ids: selectedTowers });
             toast.success(`${selectedTowers.length} torres removidas com sucesso`);
             setSelectedTowers([]);
             queryClient.invalidateQueries({ queryKey: ["production-towers"] });
@@ -492,7 +539,7 @@ const ProductionPage = () => {
         if (!towers || towers.length === 0) return;
         setIsBulkDeleting(true);
         try {
-            await orionApi.delete(`/map_elements?projectId=${selectedProjectId}`);
+            await orionApi.post('/tower-production/delete', { projectId: selectedProjectId });
             toast.success("Todas as torres foram removidas com sucesso");
             setSelectedTowers([]);
             queryClient.invalidateQueries({ queryKey: ["production-towers"] });
@@ -542,34 +589,58 @@ const ProductionPage = () => {
     };
 
     const handleBulkAutoLink = async () => {
-        if (!stages || !productionCategories || stages.length === 0) return;
-        setIsBulkDeleting(true); // Reuse loading state
+        if (!stages || !productionCategories || stages.length === 0) {
+            console.warn("[BulkLink] Dados insuficientes para vincular:", { stages: !!stages, cats: !!productionCategories });
+            return;
+        }
+
+        setIsBulkLinking(true);
+        console.log("[BulkLink] Iniciando vínculo em lote para", stages.length, "etapas");
+
         try {
             const categories = productionCategories;
+            const normalize = (s: string) => (s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
             
             let matchCount = 0;
             for (const stage of stages) {
-                // Find match
                 let matchId = '';
+                const targetName = normalize(stage.name);
+
                 for (const cat of categories) {
-                    const match = cat.activities.find(a => a.name.trim().toLowerCase() === stage.name.trim().toLowerCase());
-                    if (match) {
-                        matchId = match.id;
-                        break;
+                    // 1. Tenta achar match na lista de sub-atividades (Prioridade)
+                    if (cat.activities) {
+                        const match = cat.activities.find(a => normalize(a.name) === targetName);
+                        if (match) {
+                            matchId = match.id;
+                            break;
+                        }
+                    }
+
+                    // 2. Se o nome da etapa bate com a CATEGORIA, procura uma atividade idêntica dentro dela
+                    if (normalize(cat.name) === targetName) {
+                        const directMatch = cat.activities?.find(a => normalize(a.name) === targetName);
+                        if (directMatch) {
+                            matchId = directMatch.id;
+                        } else if (cat.activities?.length === 1) {
+                            // Heurística: se a categoria só tem UMA atividade, podemos sugerir o vínculo?
+                            // Por enquanto, vamos ser conservadores e não vincular se os nomes não baterem.
+                            // matchId = cat.activities[0].id; 
+                        }
+                        if (matchId) break;
                     }
                 }
                 
                 if (matchId && matchId !== 'none') {
-                   // Ensure it's linked AND map enabled
                    const needsUpdate = stage.productionActivityId !== matchId || stage.metadata?.mapEnabled !== true;
                    
                    if (needsUpdate) {
+                       console.log(`[BulkLink] Vinculando "${stage.name}" -> ID ${matchId}`);
                        matchCount++;
                        await updateStage(stage.id, { 
                            productionActivityId: matchId,
                            metadata: { ...stage.metadata, mapEnabled: true }
                        });
-                       await new Promise(resolve => setTimeout(resolve, 150)); // Throttling
+                       await new Promise(resolve => setTimeout(resolve, 150));
                    }
                 }
             }
@@ -577,14 +648,19 @@ const ProductionPage = () => {
             if (matchCount > 0) {
                  toast.success(`${matchCount} etapas vinculadas automaticamente.`);
             } else {
-                 toast.info("Nenhuma nova vinculação encontrada.");
+                 toast.info("Nenhuma nova vinculação necessária.");
             }
-        } catch {
+        } catch (error) {
+            console.error("[BulkLink] Erro fatal:", error);
             toast.error("Erro ao realizar vínculo automático.");
         } finally {
-            setIsBulkDeleting(false);
+            setIsBulkLinking(false);
         }
     };
+
+    const unlinkedStagesCount = React.useMemo(() => 
+        stages?.filter(s => !s.productionActivityId).length || 0
+    , [stages]);
 
     // Transform WorkStages into the structure expected by the Grid
     const stageColumns = React.useMemo<ProductionCategory[] | undefined>(() => {
@@ -592,16 +668,31 @@ const ProductionPage = () => {
 
         console.log("[stageColumns] Transformando etapas:", stages.length);
 
-        // 1. Identify Parents (Categories) and Children (Activities)
-        // Ensure numeric sort for displayOrder
-        const parents = stages
-            .filter(s => !s.parentId)
+        // 1. Identificar nomes das metas existentes para filtragem estrita
+        const activeGoalNames = new Set<string>();
+        const collectGoalNames = (nodes: any[]) => {
+            if (!Array.isArray(nodes)) return;
+            nodes.forEach(node => {
+                if (node.name) activeGoalNames.add(node.name.trim().toUpperCase());
+                if (node.children) collectGoalNames(node.children);
+            });
+        };
+        if (activitiesHierarchy) collectGoalNames(activitiesHierarchy);
+
+        // 2. Identify Parents (Categories) and Children (Activities)
+        // Ensure numeric sort for displayOrder and filter by active goals
+        const parents = (stages || [])
+            .filter(s => s && !s.parentId && s.name && activeGoalNames.has(s.name.trim().toUpperCase()))
             .sort((a, b) => (Number(a.displayOrder) || 0) - (Number(b.displayOrder) || 0));
         
-        const children = stages.filter(s => s.parentId);
+        const filteredParents = parents.filter(p => 
+            selectedMetaMae === 'all' || p.name === selectedMetaMae
+        );
+
+        const children = (stages || []).filter(s => s && s.parentId && s.name && activeGoalNames.has(s.name.trim().toUpperCase()));
 
         // 2. Map to grid structure
-        return parents.map((p, idx) => {
+        return filteredParents.map((p, idx) => {
             let catActivities = children
                 .filter(c => c.parentId === p.id)
                 .sort((a, b) => (Number(a.displayOrder) || 0) - (Number(b.displayOrder) || 0))
@@ -640,7 +731,7 @@ const ProductionPage = () => {
                 activities: catActivities
             };
         }).filter(cat => cat.activities.length > 0);
-    }, [stages]);
+    }, [stages, selectedMetaMae, activitiesHierarchy]);
     
 
 
@@ -655,9 +746,10 @@ const ProductionPage = () => {
 
     const sortedTowers = React.useMemo(() => {
         if (!towers) return [];
-        const sortableItems = [...towers];
+        const sortableItems = towers.filter(Boolean);
         if (sortConfig !== null) {
             sortableItems.sort((a, b) => {
+                if (!a || !b) return 0;
                 const aValue = a[sortConfig.key];
                 const bValue = b[sortConfig.key];
 
@@ -676,10 +768,13 @@ const ProductionPage = () => {
         return sortableItems;
     }, [towers, sortConfig]);
 
-    const filteredTowers = sortedTowers?.filter(tower =>
-        tower.objectId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        tower.trecho?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredTowers = sortedTowers?.filter(tower => {
+        if (!tower) return false;
+        const objectId = tower.objectId?.toLowerCase() || "";
+        const trecho = tower.trecho?.toLowerCase() || "";
+        const search = searchTerm.toLowerCase();
+        return objectId.includes(search) || trecho.includes(search);
+    });
 
     const [scrollWidth, setScrollWidth] = useState(0);
     const scrollContainerRef = React.useRef<HTMLDivElement>(null);
@@ -862,14 +957,36 @@ const ProductionPage = () => {
 
                         <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
                             {activeTab === 'grid' && (
-                                <div className="relative w-full sm:w-80 group">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary/50 group-focus-within:text-primary transition-colors" />
-                                    <Input
-                                        placeholder="Localizar torre ou trecho..."
-                                        className="pl-9 bg-black/40 border-white/10 focus:border-primary/50 focus:ring-1 focus:ring-primary/20 h-9 text-xs transition-all rounded-lg text-foreground placeholder:text-muted-foreground/30 font-medium"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                    />
+                                <div className="flex items-center gap-3 w-full sm:w-80">
+                                    <div className="relative flex-1 group">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary/50 group-focus-within:text-primary transition-colors" />
+                                        <Input
+                                            placeholder="Localizar torre ou trecho..."
+                                            className="pl-9 bg-black/40 border-white/10 focus:border-primary/50 focus:ring-1 focus:ring-primary/20 h-9 text-xs transition-all rounded-lg text-foreground placeholder:text-muted-foreground/30 font-medium"
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                        />
+                                    </div>
+
+                                    {/* Meta Mae Filter */}
+                                    <Select value={selectedMetaMae} onValueChange={setSelectedMetaMae}>
+                                        <SelectTrigger className="w-[200px] h-9 bg-black/40 border-white/10 text-xs font-bold uppercase tracking-wider text-primary/80 transition-all rounded-lg focus:ring-1 focus:ring-primary/20">
+                                            <div className="flex items-center gap-2 truncate">
+                                                <Filter className="w-3.5 h-3.5 text-primary/60" />
+                                                <SelectValue placeholder="Filtrar Etapa" />
+                                            </div>
+                                        </SelectTrigger>
+                                        <SelectContent className="bg-slate-950 border-white/10">
+                                            <SelectItem value="all" className="text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-primary">
+                                                Todas as Etapas
+                                            </SelectItem>
+                                            {stages?.filter(s => !s.parentId).map(parent => (
+                                                <SelectItem key={parent.id} value={parent.name} className="text-xs font-bold uppercase tracking-widest text-primary/80">
+                                                    {parent.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             )}
 
@@ -895,8 +1012,8 @@ const ProductionPage = () => {
                                                 </DropdownMenuItem>
                                                 <DropdownMenuSeparator className="bg-slate-800" />
                                                 <DropdownMenuLabel>Mapa Visual (Vínculos)</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={handleBulkAutoLink} className="cursor-pointer">
-                                                    <Activity className="mr-2 h-4 w-4 text-green-500" /> 
+                                                <DropdownMenuItem onClick={handleBulkAutoLink} className="cursor-pointer" disabled={isBulkLinking}>
+                                                    {isBulkLinking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Activity className="mr-2 h-4 w-4 text-green-500" />}
                                                     Auto-Vincular Todas
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem onClick={handleBulkUnlink} className="cursor-pointer text-red-500 focus:text-red-500">
@@ -1030,7 +1147,32 @@ const ProductionPage = () => {
                             </div>
                         ) : (
                             <>
-                                {/* KPI Dashboard Section - Collapsible or Always Visible? */}
+                                {unlinkedStagesCount > 0 && (
+                                    <div className="px-6 py-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                                        <Alert className="bg-amber-500/10 border-amber-500/30 text-amber-500 border-2 rounded-2xl flex items-center justify-between p-4 px-6 shadow-[0_0_20px_rgba(245,158,11,0.1)]">
+                                            <div className="flex items-center gap-4">
+                                                <div className="p-3 bg-amber-500/20 rounded-xl">
+                                                    <Link2 className="h-6 w-6" />
+                                                </div>
+                                                <div>
+                                                    <AlertTitle className="text-sm font-black uppercase tracking-widest mb-1 italic">Vínculo de Atividades Necessário</AlertTitle>
+                                                    <AlertDescription className="text-xs font-bold opacity-80 uppercase tracking-tight">
+                                                        Existem <span className="text-white font-black">{unlinkedStagesCount} etapas</span> que ainda não estão conectadas ao seu catálogo de metas.
+                                                    </AlertDescription>
+                                                </div>
+                                            </div>
+                                            <Button 
+                                                onClick={handleBulkAutoLink}
+                                                disabled={isBulkLinking}
+                                                className="bg-amber-500 hover:bg-amber-400 text-black font-black uppercase tracking-tighter px-6 h-11 rounded-xl shadow-lg transition-all hover:scale-[1.05]"
+                                            >
+                                                {isBulkLinking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Activity className="mr-2 h-4 w-4" />}
+                                                Vincular Todas Automaticamente
+                                            </Button>
+                                        </Alert>
+                                    </div>
+                                )}
+                                {/* Componente de Liderança - Premium Look */}
 
 
                                 {/* Top Sync Scrollbar Container */}
@@ -1222,7 +1364,7 @@ const ProductionPage = () => {
                                                     onClick={() => requestSort('pesoEstrutura')}
                                                 >
                                                     <div className="flex items-center justify-center gap-1 h-full">
-                                                        <span className="font-black uppercase text-[10px] tracking-widest group-hover:text-primary transition-colors">TORRE (T)</span>
+                                                        <span className="font-black uppercase text-[10px] tracking-widest group-hover:text-primary transition-colors">ESTRUTURA (T)</span>
                                                         {sortConfig?.key === 'pesoEstrutura' ? (
                                                             sortConfig.direction === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
                                                         ) : (
@@ -1238,11 +1380,11 @@ const ProductionPage = () => {
                                                 {/* SCROLLING HEADERS */}
                                                 {stageColumns?.map(cat => (
                                                     <React.Fragment key={cat.id}>
-                                                        {cat.activities.map(act => (
+                                                        {cat.activities?.map(act => (
                                                             <TableHead key={act.id} className="min-w-[160px] h-14 bg-[#0a0806] z-40 sticky top-0 text-center border-r border-amber-900/10 font-black text-[10px] uppercase tracking-widest text-[#d4af37]/80 group hover:bg-[#1a1612] transition-colors opacity-100 p-0">
                                                                 <div className="w-full h-full flex flex-col justify-center">
                                                                     <div className="w-full text-center py-1 bg-[#1a1612]/50 border-b border-white/5">
-                                                                        <span className="text-amber-600/40 text-[8px] font-bold tracking-[0.2em] leading-none">{cat.name.toUpperCase()}</span>
+                                                                        <span className="text-amber-600/40 text-[8px] font-bold tracking-[0.2em] leading-none">{(cat.name || '').toUpperCase()}</span>
                                                                     </div>
                                                                     <StageHeaderSelector
                                                                         stage={{
@@ -1342,6 +1484,7 @@ const ProductionPage = () => {
                                 setParentGoalId(parentId);
                                 setIsActivityModalOpen(true);
                             }}
+                            onOpenPresets={() => setIsPresetsModalOpen(true)}
                         />
                     </TabsContent>
                 </main>
@@ -1396,6 +1539,14 @@ const ProductionPage = () => {
                 companyId={selectedCompanyId}
                 editingGoal={editingGoal}
                 parentId={parentGoalId}
+            />
+
+            <ActivityPresetsModal
+                isOpen={isPresetsModalOpen}
+                onClose={() => setIsPresetsModalOpen(false)}
+                projectId={selectedProjectId}
+                companyId={selectedCompanyId}
+                siteId={selectedSiteId}
             />
 
             <ActivityImportModal 

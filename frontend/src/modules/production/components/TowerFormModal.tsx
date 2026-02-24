@@ -90,10 +90,11 @@ const TowerFormModal = ({
 
     const saveMutation = useMutation({
         mutationFn: async () => {
+            const normalizedObjectId = formData.objectId.replace(/^(Torre|TORRE)\s+/i, "").trim();
             const payload = {
                 projectId,
                 id: tower?.id,
-                objectId: formData.objectId,
+                objectId: normalizedObjectId,
                 metadata: {
                     towerType: formData.towerType,
                     trecho: formData.trecho,

@@ -1,11 +1,12 @@
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { requireAuth, requireAdmin } from "@/lib/auth/session";
+import { requireAuth } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { JobFunctionService } from "@/modules/companies/application/job-function.service";
 import { PrismaJobFunctionRepository } from "@/modules/companies/infrastructure/prisma-job-function.repository";
 import { VALIDATION, API } from "@/lib/constants";
+import { isSystemOwner } from "@/lib/constants/security";
 
 // DI
 const jobFunctionService = new JobFunctionService(
@@ -21,6 +22,8 @@ const createJobFunctionSchema = z.object({
   laborType: z.string().optional().default("MOD"),
 });
 
+const updateJobFunctionSchema = createJobFunctionSchema.partial();
+
 const querySchema = z.object({
   page: z.preprocess(
     (val) => (val === null || val === "" ? undefined : val),
@@ -28,7 +31,11 @@ const querySchema = z.object({
   ),
   limit: z.preprocess(
     (val) => (val === null || val === "" ? undefined : val),
-    z.coerce.number().min(1).max(API.PAGINATION.MAX_LIMIT).default(API.PAGINATION.DEFAULT_LIMIT),
+    z.coerce
+      .number()
+      .min(1)
+      .max(API.PAGINATION.MAX_LIMIT)
+      .default(API.PAGINATION.DEFAULT_LIMIT),
   ),
   companyId: z
     .string()
@@ -44,8 +51,6 @@ const querySchema = z.object({
     .transform((val) => val || undefined),
 });
 
-import { isSystemOwner } from "@/lib/constants/security";
-
 export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth();
@@ -59,7 +64,11 @@ export async function GET(request: NextRequest) {
     });
 
     const { isUserAdmin: checkAdmin } = await import("@/lib/auth/session");
-    const isAdmin = checkAdmin(user.role as unknown as string);
+    const isAdmin = checkAdmin(
+      user.role as unknown as string,
+      (user as any).hierarchyLevel,
+      (user as any).permissions,
+    );
 
     const result = await jobFunctionService.listJobFunctions({
       ...query,
@@ -76,7 +85,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireAdmin();
+    const { can } = await import("@/lib/auth/permissions");
+    if (!(await can("functions.manage"))) {
+      return ApiResponse.forbidden("Sem permissão para gerenciar cargos");
+    }
+    const user = await requireAuth();
 
     const body = await request.json();
     const data = createJobFunctionSchema.parse(body);
@@ -90,6 +103,7 @@ export async function POST(request: NextRequest) {
         );
       }
     }
+    // ... (omitting for brevity, but I will include full logic in the tool call)
 
     try {
       const jobFunction = await jobFunctionService.createJobFunction(data);
@@ -112,9 +126,69 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PATCH(request: NextRequest) {
+  try {
+    const { can } = await import("@/lib/auth/permissions");
+    if (!(await can("functions.manage"))) {
+      return ApiResponse.forbidden("Sem permissão para gerenciar cargos");
+    }
+    const user = await requireAuth();
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return ApiResponse.badRequest("ID do cargo é obrigatório");
+    }
+
+    const body = await request.json();
+    const data = updateJobFunctionSchema.parse(body);
+
+    // Business Logic: If updating a global template (companyId is null/missing)
+    // Check if user is system owner
+    const existing = await jobFunctionService.getJobFunctionById(id);
+    if (!existing) {
+      return ApiResponse.notFound("Cargo não encontrado");
+    }
+
+    if (!existing.companyId) {
+      const isGlobalManager = isSystemOwner(user.role as string);
+      if (!isGlobalManager) {
+        return ApiResponse.forbidden(
+          "Apenas gestores globais podem editar cargos modelos",
+        );
+      }
+    }
+
+    try {
+      const updated = await jobFunctionService.updateJobFunction(id, data);
+      logger.info("Cargo atualizado (PATCH)", {
+        jobFunctionId: id,
+        updatedBy: user.id,
+      });
+      return ApiResponse.json(updated, "Cargo atualizado com sucesso");
+    } catch (error: any) {
+      if (error.message === "DUPLICATE_NAME") {
+        return ApiResponse.conflict("Já existe um cargo com este nome");
+      }
+      throw error;
+    }
+  } catch (error) {
+    logger.error("Erro ao atualizar cargo (PATCH)", { error });
+    return handleApiError(error, "src/app/api/v1/job_functions/route.ts#PATCH");
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  return PATCH(request);
+}
+
 export async function DELETE(request: NextRequest) {
   try {
-    const user = await requireAdmin();
+    const { can } = await import("@/lib/auth/permissions");
+    if (!(await can("functions.manage"))) {
+      return ApiResponse.forbidden("Sem permissão para gerenciar cargos");
+    }
+    const user = await requireAuth();
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
 
@@ -134,6 +208,9 @@ export async function DELETE(request: NextRequest) {
     }
   } catch (error) {
     logger.error("Erro ao excluir cargo", { error });
-    return handleApiError(error, "src/app/api/v1/job_functions/route.ts#DELETE");
+    return handleApiError(
+      error,
+      "src/app/api/v1/job_functions/route.ts#DELETE",
+    );
   }
 }

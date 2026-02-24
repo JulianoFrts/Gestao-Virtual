@@ -6,16 +6,44 @@ import {
 
 export class PrismaTowerActivityRepository implements TowerActivityRepository {
   async save(data: TowerActivityGoalData): Promise<TowerActivityGoalData> {
-    const { id, children, ...rest } = data;
-    if (id) {
-      return (await prisma.towerActivityGoal.update({
-        where: { id },
-        data: rest as any,
-      })) as unknown as TowerActivityGoalData;
+    const { parentId, name, description, order, metadata, towerId, siteId } =
+      data;
+
+    let calculatedLevel = 0;
+
+    if (parentId) {
+      const parent = await prisma.towerActivityGoal.findUnique({
+        where: { id: parentId },
+      });
+
+      if (!parent) throw new Error("Parent not found");
+
+      calculatedLevel = parent.level + 1;
     }
-    return (await prisma.towerActivityGoal.create({
-      data: rest as any,
-    })) as unknown as TowerActivityGoalData;
+
+    const prismaData = {
+      name,
+      description: description || "",
+      level: calculatedLevel,
+      order: Number(order || 0),
+      metadata: metadata || {},
+      projectId: data.projectId,
+      companyId: data.companyId,
+      towerId: towerId || null,
+      siteId: siteId || null,
+      parentId: parentId || null,
+    };
+
+    if (data.id) {
+      return prisma.towerActivityGoal.update({
+        where: { id: data.id },
+        data: prismaData,
+      }) as any;
+    }
+
+    return prisma.towerActivityGoal.create({
+      data: prismaData,
+    }) as any;
   }
 
   async saveMany(
@@ -48,7 +76,7 @@ export class PrismaTowerActivityRepository implements TowerActivityRepository {
   async findHierarchy(projectId: string): Promise<TowerActivityGoalData[]> {
     const all = await prisma.towerActivityGoal.findMany({
       where: { projectId },
-      orderBy: { order: "asc" },
+      orderBy: [{ level: "asc" }, { order: "asc" }],
     });
 
     // Simple nesting logic (could be optimized with raw SQL or recursive include)
@@ -56,8 +84,8 @@ export class PrismaTowerActivityRepository implements TowerActivityRepository {
       parentId: string | null = null,
     ): TowerActivityGoalData[] => {
       return all
-        .filter((item) => item.parentId === parentId)
-        .map((item) => ({
+        .filter((item: any) => (item.parentId ?? null) === parentId)
+        .map((item: any) => ({
           ...(item as unknown as TowerActivityGoalData),
           children: buildTree(item.id),
         }));
@@ -67,8 +95,11 @@ export class PrismaTowerActivityRepository implements TowerActivityRepository {
   }
 
   async delete(id: string): Promise<boolean> {
-    // Delete children first or rely on cascade if configured (Prisma doesn't easily do recursive delete)
-    // We'll trust the parent relationship or simple delete if atomic
+    // Manually delete children first because the database cascade might not be active
+    await prisma.towerActivityGoal.deleteMany({
+      where: { parentId: id },
+    });
+
     await prisma.towerActivityGoal.delete({ where: { id } });
     return true;
   }

@@ -4,8 +4,11 @@ import { TowerActivityService } from "@/modules/tower/application/tower-activity
 import { requireAuth } from "@/lib/auth/session";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 
+import { PrismaWorkStageRepository } from "@/modules/work-stages/domain/work-stage.repository";
+
 const repository = new PrismaTowerActivityRepository();
-const service = new TowerActivityService(repository);
+const workStageRepository = new PrismaWorkStageRepository();
+const service = new TowerActivityService(repository, workStageRepository);
 
 export async function GET(req: NextRequest) {
   try {
@@ -35,7 +38,9 @@ export async function POST(req: NextRequest) {
 
     // Support single save or bulk import
     if (single) {
-      const result = await service.saveGoal(body);
+      // Destructure only the 'single' flag to avoid passing it to Prisma
+      const { single: _, ...cleanData } = body;
+      const result = await service.saveGoal(cleanData as any);
       return NextResponse.json(result);
     }
 

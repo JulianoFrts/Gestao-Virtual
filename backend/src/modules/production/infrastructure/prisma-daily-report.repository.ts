@@ -28,12 +28,13 @@ export class PrismaDailyReportRepository implements DailyReportRepository {
     return prisma.dailyReport.findUnique({
       where: { id },
       include: {
-        team: { 
-          select: { 
-            id: true, 
+        team: {
+          select: {
+            id: true,
             name: true,
-            site: { select: { projectId: true } }
-          } 
+            supervisor: { select: { name: true } },
+            site: { select: { projectId: true } },
+          },
         },
         user: { select: { id: true, name: true } },
         approvedBy: { select: { id: true, name: true } },
@@ -56,7 +57,13 @@ export class PrismaDailyReportRepository implements DailyReportRepository {
       where: { id },
       data,
       include: {
-        team: { select: { id: true, name: true } },
+        team: {
+          select: {
+            id: true,
+            name: true,
+            supervisor: { select: { name: true } },
+          },
+        },
         user: { select: { id: true, name: true } },
         approvedBy: { select: { id: true, name: true } },
       },
@@ -64,11 +71,11 @@ export class PrismaDailyReportRepository implements DailyReportRepository {
   }
 
   async updateMany(ids: string[], data: any): Promise<any> {
-    const updates = ids.map(id => 
+    const updates = ids.map((id) =>
       prisma.dailyReport.update({
         where: { id },
-        data
-      })
+        data,
+      }),
     );
     return Promise.all(updates);
   }
@@ -80,13 +87,16 @@ export class PrismaDailyReportRepository implements DailyReportRepository {
         id: true,
         status: true,
         metadata: true,
+        user: { select: { name: true } },
         team: {
           select: {
+            name: true,
+            supervisor: { select: { name: true } },
             site: {
-              select: { projectId: true }
-            }
-          }
-        }
+              select: { projectId: true },
+            },
+          },
+        },
       },
     });
   }

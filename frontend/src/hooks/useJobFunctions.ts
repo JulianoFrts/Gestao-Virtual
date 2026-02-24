@@ -33,7 +33,8 @@ export function useJobFunctions() {
         const { data, error } = await db
           .from('job_functions')
           .select('*')
-          .order('level', { ascending: false })
+          .limit(500)
+          .order('hierarchy_level', { ascending: false })
           .order('name');
 
         if (error) throw error;

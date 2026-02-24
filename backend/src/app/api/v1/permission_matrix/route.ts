@@ -10,15 +10,21 @@ const accessService = new AccessControlService(
   new PrismaAccessControlRepository(),
 );
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await requireAuth();
 
-    const matrix = await accessService.listMatrix();
+    const { searchParams } = new URL(request.url);
+    const levelId = searchParams.get("levelId") || undefined;
+
+    const matrix = await accessService.listMatrix(levelId);
 
     return ApiResponse.json(matrix);
   } catch (error) {
-    return handleApiError(error, "src/app/api/v1/permission_matrix/route.ts#GET");
+    return handleApiError(
+      error,
+      "src/app/api/v1/permission_matrix/route.ts#GET",
+    );
   }
 }
 
@@ -38,6 +44,9 @@ export async function POST(request: NextRequest) {
 
     return ApiResponse.json(result);
   } catch (error) {
-    return handleApiError(error, "src/app/api/v1/permission_matrix/route.ts#POST");
+    return handleApiError(
+      error,
+      "src/app/api/v1/permission_matrix/route.ts#POST",
+    );
   }
 }

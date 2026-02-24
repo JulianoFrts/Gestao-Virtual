@@ -35,28 +35,8 @@ export function ProtectedRoute({
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
-  // Verificar permissão por papéis (RBAC) se fornecido
-  if (roles && roles.length > 0 && profile) {
-    const userRole = profile.role || (user as any).role;
-    const isGod = (profile as any).isSystemAdmin || can('*');
-
-    if (!isGod && !roles.includes(userRole)) {
-      return (
-        <div className="flex h-screen flex-col items-center justify-center bg-background p-6 text-center">
-          <ShieldAlert className="mb-4 h-16 w-16 text-destructive" />
-          <h2 className="mb-2 text-2xl font-bold">Acesso Restrito por Papel</h2>
-          <p className="mb-6 max-w-md text-muted-foreground">
-            Seu nível de acesso ({userRole}) não permite ver esta página.
-          </p>
-          <Button onClick={() => navigate("/")} variant="outline">
-            Voltar para o Início
-          </Button>
-        </div>
-      );
-    }
-  }
-
-  // Verificar permissão do módulo se fornecido
+  // 1. O Nível de Decisão Máximo é a Matriz (moduleId).
+  // Se a rota define um moduleId, ele é o guia exclusivo de acesso. Ignora os 'roles' hardcoded da rota.
   if (moduleId && profile) {
     const hasPermission = can(moduleId);
     if (!hasPermission) {
@@ -67,6 +47,25 @@ export function ProtectedRoute({
           <p className="mb-6 max-w-md text-muted-foreground">
             Você não possui as permissões necessárias para acessar este módulo.
             Entre em contato com o administrador do sistema.
+          </p>
+          <Button onClick={() => navigate("/")} variant="outline">
+            Voltar para o Início
+          </Button>
+        </div>
+      );
+    }
+  } else if (roles && roles.length > 0 && profile) {
+    // 2. Se NÃO houver moduleId, fazemos o fallback para a checagem tradicional (legado / fallback)
+    const userRole = profile.role || (user as any).role;
+    const isGod = (profile as any).isSystemAdmin || can('*');
+
+    if (!isGod && !roles.includes(userRole)) {
+      return (
+        <div className="flex h-screen flex-col items-center justify-center bg-background p-6 text-center">
+          <ShieldAlert className="mb-4 h-16 w-16 text-destructive" />
+          <h2 className="mb-2 text-2xl font-bold">Acesso Restrito por Papel</h2>
+          <p className="mb-6 max-w-md text-muted-foreground">
+            Seu nível de acesso ({userRole}) não permite ver esta página.
           </p>
           <Button onClick={() => navigate("/")} variant="outline">
             Voltar para o Início

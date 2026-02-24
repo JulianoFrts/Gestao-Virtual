@@ -79,6 +79,16 @@ export function TowerDetailsModals({ isOpen, onClose, tower }: TowerDetailsModal
                             </p>
                         </div>
                     </div>
+                    
+                    {/* Technical Stats - Vão Vante */}
+                    <div className="bg-white/5 border border-white/5 p-4 rounded-2xl group hover:bg-white/10 transition-all duration-500">
+                        <h4 className="text-[9px] text-neutral-500 font-black uppercase tracking-widest mb-1 flex items-center gap-2">
+                            <Navigation className="w-3 h-3 text-emerald-500" /> Vão Vante
+                        </h4>
+                        <p className="text-2xl font-black text-white italic tracking-tighter uppercase">
+                            {tower.metadata?.goForward || tower.metadata?.["VÃO (M)"] || tower.metadata?.["VAO (M)"] || "0.00"}<span className="text-[10px] not-italic ml-1 text-neutral-500">M</span>
+                        </p>
+                    </div>
 
                     {/* Coordinates Section */}
                     <div className="space-y-4">

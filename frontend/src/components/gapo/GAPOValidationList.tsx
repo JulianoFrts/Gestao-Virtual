@@ -56,10 +56,12 @@ export default function GAPOValidationList({ projectId }: GAPOValidationListProp
                 
                 // Process each selected log
                 for (const logId of selectedIds) {
+                    const log = displayLogs.find(l => l.id === logId);
+                    if (!log) continue;
+
                     await approve({
-                        logId,
-                        approved: isApproved,
-                        reason: auditNote || `Processamento em massa via GAPO.`
+                        progressId: log.progressId || log.id,
+                        logTimestamp: (log as any).timestamp || (log as any).logTimestamp || ""
                     });
                 }
 
@@ -71,9 +73,8 @@ export default function GAPOValidationList({ projectId }: GAPOValidationListProp
                 setSelectedIds([]);
             } else if (selectedLog) {
                 await approve({
-                    logId: selectedLog.id,
-                    approved: modalAction === 'approve',
-                    reason: auditNote
+                    progressId: selectedLog.progressId || selectedLog.id,
+                    logTimestamp: (selectedLog as any).timestamp || (selectedLog as any).logTimestamp || ""
                 });
 
                 toast({

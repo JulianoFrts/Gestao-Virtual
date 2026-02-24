@@ -13,7 +13,7 @@ const scheduleSchema = z.object({
   plannedStart: z.string(), // Service converts to Date
   plannedEnd: z.string(),
   plannedQuantity: z.number().optional().nullable(),
-  plannedHHH: z.number().optional().nullable(),
+  plannedHhh: z.number().optional().nullable(),
 });
 
 // POST - Define ou atualiza cronograma de atividade numa torre (elemento)
@@ -22,9 +22,24 @@ export async function POST(request: NextRequest) {
   try {
     user = await requireAuth();
     const body = await request.json();
-    const data = scheduleSchema.parse(body);
+    console.log("[schedule] POST Body:", JSON.stringify(body, null, 2));
 
-    const schedule = await service.saveSchedule(data, user);
+    let data;
+    try {
+      data = scheduleSchema.parse(body);
+    } catch (zodError: any) {
+      console.error("[schedule] Validation Error:", zodError.errors);
+      return ApiResponse.badRequest(
+        "Erro de validação no agendamento",
+        zodError.errors,
+      );
+    }
+
+    const schedule = await service.saveSchedule(data, {
+      ...user,
+      hierarchyLevel: (user as any).hierarchyLevel,
+      permissions: (user as any).permissions,
+    } as any);
 
     return ApiResponse.json(schedule, "Cronograma salvo com sucesso");
   } catch (error: any) {
@@ -33,7 +48,10 @@ export async function POST(request: NextRequest) {
       source: "src/app/api/v1/production/schedule",
       userId: user?.id,
     });
-    return handleApiError(error, "src/app/api/v1/production/schedule/route.ts#POST");
+    return handleApiError(
+      error,
+      "src/app/api/v1/production/schedule/route.ts#POST",
+    );
   }
 }
 
@@ -51,9 +69,17 @@ export async function DELETE(request: NextRequest) {
     if (scheduleId) {
       const targetDateStr = searchParams.get("targetDate");
 
-      await service.removeSchedule(scheduleId, user, {
-        targetDate: targetDateStr || undefined,
-      });
+      await service.removeSchedule(
+        scheduleId,
+        {
+          ...user,
+          hierarchyLevel: (user as any).hierarchyLevel,
+          permissions: (user as any).permissions,
+        } as any,
+        {
+          targetDate: targetDateStr || undefined,
+        },
+      );
 
       return ApiResponse.json(
         { count: 1 },
@@ -68,7 +94,11 @@ export async function DELETE(request: NextRequest) {
       const result = await service.removeSchedulesByScope(
         "project_all",
         { projectId },
-        user,
+        {
+          ...user,
+          hierarchyLevel: (user as any).hierarchyLevel,
+          permissions: (user as any).permissions,
+        },
       );
       return ApiResponse.json(result);
     }
@@ -90,7 +120,11 @@ export async function DELETE(request: NextRequest) {
           startDate,
           endDate,
         },
-        user,
+        {
+          ...user,
+          hierarchyLevel: (user as any).hierarchyLevel,
+          permissions: (user as any).permissions,
+        },
       );
 
       return ApiResponse.json(result);
@@ -103,7 +137,10 @@ export async function DELETE(request: NextRequest) {
       source: "src/app/api/v1/production/schedule",
       userId: user?.id,
     });
-    return handleApiError(error, "src/app/api/v1/production/schedule/route.ts#DELETE");
+    return handleApiError(
+      error,
+      "src/app/api/v1/production/schedule/route.ts#DELETE",
+    );
   }
 }
 
@@ -124,7 +161,11 @@ export async function GET(request: NextRequest) {
         elementId: towerId || undefined,
         //projectId: projectId || undefined
       },
-      user,
+      {
+        ...user,
+        hierarchyLevel: (user as any).hierarchyLevel,
+        permissions: (user as any).permissions,
+      } as any,
     );
 
     return ApiResponse.json(schedules);
@@ -134,6 +175,9 @@ export async function GET(request: NextRequest) {
       source: "src/app/api/v1/production/schedule",
       userId: user?.id,
     });
-    return handleApiError(error, "src/app/api/v1/production/schedule/route.ts#GET");
+    return handleApiError(
+      error,
+      "src/app/api/v1/production/schedule/route.ts#GET",
+    );
   }
 }

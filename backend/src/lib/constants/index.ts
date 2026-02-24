@@ -12,7 +12,7 @@ export const API = {
   PAGINATION: {
     DEFAULT_PAGE: 1,
     DEFAULT_LIMIT: 10,
-    MAX_LIMIT: 100,
+    MAX_LIMIT: 1000,
     DEFAULT_PAGE_SIZE: 20,
   },
   BATCH: {

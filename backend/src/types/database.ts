@@ -104,6 +104,7 @@ export interface UserFilters {
   companyId?: string | null;
   onlyCorporate?: boolean;
   excludeCorporate?: boolean;
+  or?: string | null;
 }
 
 /**
@@ -130,6 +131,37 @@ export function buildUserWhereClause(
 
   // 4. Filtros de Afiliação (Empresa, Projeto, Canteiro)
   Object.assign(where, buildAffiliationFilter(filters));
+
+  // 5. Filtro OR Manual (PostgREST style: col.eq.val,col.is.null)
+  if (filters.or) {
+    const orConditions = filters.or
+      .split(",")
+      .map((cond) => {
+        const [col, op, val] = cond.split(".");
+        if (op === "eq") {
+          if (["projectId", "siteId", "companyId"].includes(col)) {
+            return { affiliation: { [col]: val } };
+          }
+          return { [col]: val };
+        }
+        if (op === "is" && val === "null") {
+          if (["projectId", "siteId", "companyId"].includes(col)) {
+            // This covers users with affiliation record but null project/site
+            // To also cover users without any affiliation record, we'd need more complex OR
+            return {
+              OR: [{ affiliation: { [col]: null } }, { affiliation: null }],
+            };
+          }
+          return { [col]: null };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    if (orConditions.length > 0) {
+      where.OR = ((where.OR as any[]) || []).concat(orConditions);
+    }
+  }
 
   return where;
 }

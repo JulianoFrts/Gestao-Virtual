@@ -1,12 +1,16 @@
 import * as React from 'react';
+import { format } from "date-fns";
+import { employees as employeesSignal } from "@/signals/employeeSignals";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTeams } from "@/hooks/useTeams";
 import { useDailyReports, DailyReportStatus, ActivityStatus } from "@/hooks/useDailyReports";
 import { useSites } from "@/hooks/useSites";
 import { orionApi } from "@/integrations/orion/client";
+import { db } from "@/integrations/database";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -35,6 +39,7 @@ import {
   ChevronUp,
   ChevronDown,
   Check,
+  CheckCircle2,
   ChevronsUpDown,
   Info,
   Search,
@@ -50,10 +55,12 @@ import {
   PanelLeft,
   PanelLeftClose,
   PanelLeftOpen,
-  AlertCircle
+  AlertCircle,
+  Lock
 } from "lucide-react";
 import { isProtectedSignal, can } from "@/signals/authSignals";
 import { useSignals } from "@preact/signals-react/runtime";
+import { getRoleStyle, getRoleLabel, STANDARD_ROLES } from "@/utils/roleUtils";
 import {
   dailyReportDraftSignal,
   updateReportDraft,
@@ -94,6 +101,7 @@ import { Progress } from "@/components/ui/progress";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useProjects } from "@/hooks/useProjects";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 
 // Definir interface de torre para alinhar com o backend (MapElementTechnicalData)
@@ -417,6 +425,7 @@ export default function DailyReport() {
   const [selectedProjectId, setSelectedProjectId] = React.useState<string | undefined>(undefined);
   const [hasAttemptedAutoLoad, setHasAttemptedAutoLoad] = React.useState(false);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState<string>("meus-rdos");
 
   // Se for Super Admin, permitir selecionar empresa
   const { companies } = useCompanies();
@@ -459,6 +468,11 @@ export default function DailyReport() {
   const [selectedPhoto, setSelectedPhoto] = React.useState<string | null>(null);
   const [showManpower, setShowManpower] = React.useState(true);
   const [showEquipment, setShowEquipment] = React.useState(true);
+
+  // Resetar carregamento se o usuário mudar de líder
+  React.useEffect(() => {
+    setHasAttemptedAutoLoad(false);
+  }, [employeeId]);
 
     // Carregamento automático de programação
     React.useEffect(() => {
@@ -544,26 +558,54 @@ export default function DailyReport() {
     () => ({ 
       companyId: selectedCompanyId,
       excludeCorporate: false,
-      roles: ["WORKER", "SUPERVISOR", "MANAGER", "ADMIN", "SUPER_ADMIN", "GESTOR_PROJECT", "GESTOR_CANTEIRO", "TECHNICIAN"]
+      roles: STANDARD_ROLES.map(r => r.name)
     }),
     [selectedCompanyId],
   );
   const { employees } = useEmployees(employeesFilter);
 
+  const isReportEditable = React.useMemo(() => {
+    if (!draft.editingReportId) return true;
+    const report = reports.find(r => r.id === draft.editingReportId);
+    if (!report) return true;
+    
+    return [
+      DailyReportStatus.DRAFT,
+      DailyReportStatus.PROGRAMMED,
+      DailyReportStatus.RETURNED
+    ].includes(report.status as DailyReportStatus);
+  }, [draft.editingReportId, reports]);
+
   // Componente de Seleção de Funcionário com Busca
   const EmployeePicker = ({ value, onChange, placeholder }: any) => {
     const [open, setOpen] = React.useState(false);
     const [searchTerm, setSearchTerm] = React.useState("");
+    const [roleFilter, setRoleFilter] = React.useState<string>("all");
 
     const filteredEmployees = React.useMemo(() => {
-      if (!searchTerm) return employees.slice(0, 10);
-      const search = searchTerm.toLowerCase();
-      return employees.filter(e => 
-        e.fullName.toLowerCase().includes(search) || 
-        (e.registrationNumber || "").toLowerCase().includes(search) ||
-        (e.email || "").toLowerCase().includes(search)
-      ).slice(0, 50);
-    }, [employees, searchTerm]);
+      let result = employees;
+
+      if (roleFilter !== "all") {
+        result = result.filter(e => e.role === roleFilter);
+      }
+
+      if (searchTerm) {
+        const search = searchTerm.toLowerCase();
+        result = result.filter(e => 
+          (e.fullName || "").toLowerCase().includes(search) || 
+          (e.registrationNumber || "").toLowerCase().includes(search) ||
+          (e.email || "").toLowerCase().includes(search)
+        );
+      }
+
+      // Ordenar por prioridade de cargo (rank) igual ao Gestão de Usuários
+      return result.sort((a, b) => {
+        const rankA = STANDARD_ROLES.find((r) => r.name === (a.role || "WORKER").toUpperCase())?.rank || 0;
+        const rankB = STANDARD_ROLES.find((r) => r.name === (b.role || "WORKER").toUpperCase())?.rank || 0;
+        if (rankB !== rankA) return rankB - rankA;
+        return (a.fullName || "").localeCompare(b.fullName || "");
+      }).slice(0, 50);
+    }, [employees, searchTerm, roleFilter]);
 
     return (
       <Popover open={open} onOpenChange={setOpen}>
@@ -581,7 +623,24 @@ export default function DailyReport() {
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[300px] p-0 glass-card border-primary/20" align="start">
+        <PopoverContent className="w-[380px] p-0 glass-card border-primary/20" align="start">
+          <div className="flex flex-col gap-2 p-2 border-b border-white/5">
+            <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <SelectTrigger className="h-8 bg-black/40 border-white/10 text-[10px] font-bold uppercase tracking-wider">
+                <SelectValue placeholder="Filtrar por Cargo" />
+              </SelectTrigger>
+              <SelectContent className="glass-card border-white/10 bg-black/95 max-h-[200px]">
+                <SelectItem value="all" className="font-bold text-[10px] uppercase tracking-wider">
+                  TODOS OS CARGOS
+                </SelectItem>
+                {STANDARD_ROLES.map((r) => (
+                  <SelectItem key={r.name} value={r.name.toUpperCase()} className="font-bold text-[10px] uppercase tracking-wider">
+                    {getRoleLabel(r.name)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Command shouldFilter={false} className="bg-transparent text-foreground">
             <CommandInput 
               placeholder="Buscar por nome, email ou matrícula..." 
@@ -589,9 +648,12 @@ export default function DailyReport() {
               onValueChange={setSearchTerm}
               className="h-11 border-none focus:ring-0 text-foreground text-xs" 
             />
-            <CommandList>
-              <CommandEmpty className="text-muted-foreground py-4 text-center text-xs">Nenhum colaborador encontrado.</CommandEmpty>
-              <CommandGroup heading={searchTerm ? "Resultados da Busca" : "Sugestões Recentes"}>
+            <CommandList className="max-h-[300px]">
+              <CommandEmpty className="text-muted-foreground py-8 flex flex-col items-center justify-center gap-2 text-xs">
+                <Search className="h-6 w-6 text-muted-foreground/50" />
+                Nenhum colaborador encontrado.
+              </CommandEmpty>
+              <CommandGroup heading={searchTerm || roleFilter !== "all" ? "Resultados da Busca" : "Sugestões Recentes"}>
                 {filteredEmployees.map((e) => (
                   <CommandItem
                     key={e.id}
@@ -601,12 +663,23 @@ export default function DailyReport() {
                       setOpen(false);
                       setSearchTerm("");
                     }}
-                    className="hover:bg-primary/20 cursor-pointer text-foreground data-[selected=true]:bg-primary/20 p-2"
+                    className="hover:bg-primary/20 cursor-pointer text-foreground data-[selected=true]:bg-primary/20 p-3 mb-1 rounded-lg"
                   >
-                    <Check className={cn("mr-2 h-4 w-4 text-primary shrink-0", value === e.id ? "opacity-100" : "opacity-0")} />
-                    <div className="flex flex-col min-w-0 pr-2">
-                      <span className="font-bold text-sm truncate">{e.fullName}</span>
-                      <span className="text-[10px] text-muted-foreground truncate">{e.registrationNumber || e.email}</span>
+                    <div className="flex flex-col w-full min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-sm truncate pr-2" title={e.fullName}>{e.fullName}</span>
+                        <Badge variant="outline" className={cn("text-[9px] h-4 shrink-0 shadow-sm", getRoleStyle(e.role || "WORKER"))}>
+                          {getRoleLabel(e.role || "WORKER")}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between opacity-60">
+                        <span className="text-xs truncate flex items-center gap-1.5 min-w-0">
+                          <span className="truncate">{e.email || "Sem e-mail"}</span>
+                        </span>
+                        {e.registrationNumber && (
+                          <span className="text-[10px] font-bold shrink-0 ml-2">MAT: {e.registrationNumber}</span>
+                        )}
+                      </div>
                     </div>
                   </CommandItem>
                 ))}
@@ -784,9 +857,10 @@ export default function DailyReport() {
     selectedCompanyId
   );
 
-  // Forçar reload das stages quando o projeto mudar
+  // Forçar reload das stages quando o projeto, canteiro ou empresa mudar (ou na inicialização)
   React.useEffect(() => {
-    if (effectiveProjectId) {
+    // Mesmo sem projeto, se houver empresa selecionada, buscamos as etapas universais daquela empresa
+    if (selectedCompanyId) {
       fetchWorkStages(true, effectiveSiteId || undefined, effectiveProjectId, selectedCompanyId).catch(console.error);
     }
   }, [effectiveProjectId, effectiveSiteId, selectedCompanyId]);
@@ -1126,12 +1200,46 @@ export default function DailyReport() {
     }
   }, [isWorker, workerEmployeeId, workerTeam, employeeId]);
 
+  // Garantir que o Encarregado (employeeId) esteja sempre no manpower
+  React.useEffect(() => {
+    if (!employeeId || !employees.length) return;
+
+    const leader = employees.find(e => e.id === employeeId);
+    if (!leader) return;
+
+    const currentManpower = Array.isArray(manpower) ? [...manpower] : [];
+    const isAlreadyIn = currentManpower.some(m => 
+      (m.registration && m.registration === leader.registrationNumber) || 
+      (m.name && m.name.toLowerCase() === leader.fullName.toLowerCase())
+    );
+
+    if (!isAlreadyIn) {
+      const newManpower = [
+        { 
+          registration: leader.registrationNumber || "", 
+          name: leader.fullName, 
+          role: leader.functionName || "Encarregado" 
+        },
+        ...currentManpower
+      ];
+      updateReportDraft({ manpower: newManpower });
+    }
+  }, [employeeId, employees, manpower]);
+
   const todayReports = getTodayReports().filter((r) => {
     if (isWorker && workerTeam) {
       return r.teamId === workerTeam.id;
     }
     return true;
   });
+
+  const hasSentToday = React.useMemo(() => {
+    if (draft.isCorrection || !isWorker) return false;
+    return todayReports.some(r => 
+      r.status === DailyReportStatus.SENT || 
+      r.status === DailyReportStatus.APPROVED
+    );
+  }, [todayReports, isWorker, draft.isCorrection]);
 
   const isStep1Valid = !!employeeId;
 
@@ -1267,9 +1375,9 @@ export default function DailyReport() {
         },
       };
 
-      // 4. Salvar RDO no Backend (Create ou Update se for correção)
+      // 4. Salvar RDO no Backend (Create ou Update se for correção/programado)
       let result;
-      if (draft.isCorrection && draft.editingReportId) {
+      if ((draft.isCorrection || draft.isProgrammed) && draft.editingReportId) {
         result = await (updateReport as any)(draft.editingReportId, reportPayload);
       } else {
         result = await createReport(reportPayload);
@@ -1378,8 +1486,251 @@ export default function DailyReport() {
   return (
     <>
       <div className="space-y-6 animate-fade-in pb-10">
-        <div className="flex flex-col lg:grid lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-12">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <TabsList className="bg-primary/5 p-1 rounded-2xl h-14 w-full md:w-auto border border-primary/10">
+            <TabsTrigger 
+              value="meus-rdos" 
+              className="rounded-xl px-8 h-full data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-xs tracking-widest transition-all"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              Meus RDOs
+            </TabsTrigger>
+            <TabsTrigger 
+              value="novo-rdo" 
+              className="rounded-xl px-8 h-full data-[state=active]:bg-primary data-[state=active]:text-black font-black uppercase text-xs tracking-widest transition-all"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Formulário
+            </TabsTrigger>
+          </TabsList>
+
+          {activeTab === 'meus-rdos' && (
+            <Button 
+              onClick={() => {
+                resetReportDraft();
+                setActiveTab('novo-rdo');
+              }}
+              className="bg-primary hover:bg-primary/90 text-black font-black uppercase text-xs tracking-widest h-14 px-8 rounded-2xl shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95"
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              Iniciar Novo RDO
+            </Button>
+          )}
+        </div>
+
+        <TabsContent value="meus-rdos" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Resumo do Dia */}
+              <div className="lg:col-span-4 space-y-6">
+                <Card className="glass-card border-none bg-primary/5 p-6 rounded-3xl relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1.5 h-full bg-primary" />
+                  <CardHeader className="p-0 mb-4">
+                    <CardTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
+                       <Calendar className="w-5 h-5 text-primary" /> Hoje
+                    </CardTitle>
+                    <CardDescription className="text-white/40 font-bold uppercase text-[10px] tracking-widest">
+                       {new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                    </CardDescription>
+                  </CardHeader>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-black/40 rounded-2xl border border-white/5">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Enviados</span>
+                        <span className="text-2xl font-black text-white">
+                          {getTodayReports().filter(r => r.status === DailyReportStatus.SENT || r.status === DailyReportStatus.APPROVED).length}
+                        </span>
+                      </div>
+                      <Send className="w-8 h-8 text-primary/20" />
+                    </div>
+                    <div className="flex items-center justify-between p-4 bg-black/40 rounded-2xl border border-white/5">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">Para Corrigir</span>
+                        <span className="text-2xl font-black text-red-500">
+                          {getTodayReports().filter(r => r.status === DailyReportStatus.RETURNED).length}
+                        </span>
+                      </div>
+                      <AlertCircle className="w-8 h-8 text-red-500/20" />
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Info Card */}
+                <div className="bg-amber-500/10 border border-amber-500/20 p-6 rounded-3xl space-y-3">
+                   <div className="flex items-center gap-2 text-amber-500 font-black uppercase text-xs tracking-widest">
+                      <Info className="w-4 h-4" /> Dica de Produtividade
+                   </div>
+                   <p className="text-xs text-white/70 font-medium leading-relaxed">
+                      Sempre verifique se há <strong>Programações</strong> enviadas pelo seu supervisor antes de iniciar um lançamento manual.
+                   </p>
+                </div>
+              </div>
+
+              {/* Listagem de RDOs e Programações */}
+              <div className="lg:col-span-8 space-y-8">
+                 <div className="space-y-4">
+                    <h3 className="text-xs font-black uppercase text-white/40 tracking-[0.3em] flex items-center gap-2 pl-2">
+                       <Clock className="w-4 h-4 text-primary" /> Programações & RDOs Pendentes
+                    </h3>
+                    
+                    <div className="grid gap-4">
+                       {getTodayReports().length === 0 ? (
+                         <div className="p-20 flex flex-col items-center justify-center bg-white/5 rounded-[2.5rem] border border-dashed border-white/10 opacity-40">
+                            <FileText className="w-16 h-16 mb-4" />
+                            <p className="font-black uppercase tracking-tighter text-xl">Nenhuma atividade hoje</p>
+                            <p className="text-sm font-medium">Clique em "Iniciar Novo RDO" para começar.</p>
+                         </div>
+                       ) : (
+                         getTodayReports().sort((a,b) => {
+                           // Priorizar Returned, depois Programmed
+                           if (a.status === DailyReportStatus.RETURNED) return -1;
+                           if (b.status === DailyReportStatus.RETURNED) return 1;
+                           if (a.status === DailyReportStatus.PROGRAMMED) return -1;
+                           if (b.status === DailyReportStatus.PROGRAMMED) return 1;
+                           return 0;
+                         }).map((r) => (
+                           <div 
+                              key={r.id}
+                              className={cn(
+                                "group relative overflow-hidden p-6 rounded-3xl border transition-all cursor-pointer",
+                                r.status === DailyReportStatus.RETURNED ? "bg-red-500/5 border-red-500/20 hover:bg-red-500/10" :
+                                r.status === DailyReportStatus.PROGRAMMED ? "bg-blue-500/5 border-blue-500/20 hover:bg-blue-500/10" :
+                                "bg-white/5 border-white/10 hover:bg-white/10"
+                              )}
+                              onClick={() => {
+                                 if (r.status === DailyReportStatus.PROGRAMMED || r.status === DailyReportStatus.RETURNED) {
+                                    const metadata = r.metadata || {};
+                                    // Forçar carregamento explícito do RDO no formulário ao clicar
+                                    updateReportDraft({
+                                      editingReportId: r.id,
+                                      isCorrection: r.status === DailyReportStatus.RETURNED,
+                                      isProgrammed: r.status === DailyReportStatus.PROGRAMMED,
+                                      employeeId: r.employeeId || metadata.employeeId || "",
+                                      teamIds: r.teamId ? [r.teamId] : [],
+                                      projectId: r.projectId || metadata.projectId,
+                                      siteId: metadata.siteId,
+                                      companyId: r.companyId || undefined,
+                                      rdoNumber: r.rdoNumber || undefined,
+                                      selectedActivities: metadata.selectedActivities || [],
+                                      weather: metadata.weather,
+                                      manpower: metadata.manpower || [],
+                                      equipment: metadata.equipment || [],
+                                      generalObservations: metadata.generalObservations || "",
+                                      generalPhotos: metadata.generalPhotos || [],
+                                    });
+
+                                    // Forçar a tela e auto-seleção da empresa/projeto
+                                    if (r.companyId) setSelectedCompanyId(r.companyId);
+                                    if (metadata.projectId) setSelectedProjectId(metadata.projectId);
+                                    
+                                    setActiveTab('novo-rdo');
+                                    
+                                    toast({
+                                      title: r.status === DailyReportStatus.PROGRAMMED ? "Programação Carregada" : "Correção Carregada",
+                                      description: "Os dados deste RDO foram preenchidos no formulário.",
+                                    });
+                                 }
+                              }}
+                           >
+                              <div className="flex items-center justify-between relative z-10">
+                                 <div className="flex items-center gap-4">
+                                    <div className={cn(
+                                      "w-12 h-12 rounded-2xl flex items-center justify-center",
+                                      r.status === DailyReportStatus.RETURNED ? "bg-red-500/20 text-red-500" :
+                                      r.status === DailyReportStatus.PROGRAMMED ? "bg-blue-500/20 text-blue-500" :
+                                      "bg-green-500/20 text-green-500"
+                                    )}>
+                                      {r.status === DailyReportStatus.RETURNED ? <AlertCircle className="w-6 h-6" /> :
+                                       r.status === DailyReportStatus.PROGRAMMED ? <Calendar className="w-6 h-6" /> :
+                                       <CheckCircle2 className="w-6 h-6" />}
+                                    </div>
+                                    <div className="flex flex-col">
+                                       <div className="flex items-center gap-2">
+                                          <span className="font-black text-white uppercase tracking-tight flex items-center gap-2">
+                                             {r.status === DailyReportStatus.PROGRAMMED ? "Programação do Supervisor" : 
+                                              r.status === DailyReportStatus.RETURNED ? "Correção Necessária" : "RDO Enviado"}
+                                          </span>
+                                          <Badge className={cn(
+                                            "uppercase text-[8px] font-black tracking-widest px-2 py-0.5 rounded-lg border-0",
+                                            r.status === DailyReportStatus.RETURNED ? "bg-red-500 text-white" :
+                                            r.status === DailyReportStatus.PROGRAMMED ? "bg-blue-500 text-white" :
+                                            "bg-green-500 text-white"
+                                          )}>
+                                            {r.status}
+                                          </Badge>
+                                       </div>
+                                       <div className="flex flex-col mt-1 gap-1">
+                                          <span className="text-xs text-white/40 font-medium">
+                                             {r.activities || "Sem descrição de atividade"}
+                                          </span>
+                                            <div className="flex flex-col sm:flex-row gap-2 sm:gap-6 mt-1">
+                                                 <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <span className="text-[9px] font-black uppercase text-white/30 tracking-widest">Enviado em:</span>
+                                                    <span className="text-[10px] font-bold text-white/60 bg-white/5 px-2 py-0.5 rounded border border-white/5">
+                                                       {r.createdAt ? format(new Date(r.createdAt), "dd/MM/yyyy 'às' HH:mm") : '--'}
+                                                    </span>
+                                                 </div>
+                                                 <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <span className="text-[9px] font-black uppercase text-white/30 tracking-widest">{r.status === DailyReportStatus.PROGRAMMED ? 'Programado para:' : 'Executado em:'}</span>
+                                                    <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                                                       {r.reportDate ? format(new Date(r.reportDate), "dd/MM/yyyy") : '--'}
+                                                    </span>
+                                                 </div>
+                                                 <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <span className="text-[9px] font-black uppercase text-white/30 tracking-widest">{r.status === DailyReportStatus.PROGRAMMED ? 'Programado por:' : 'Enviado por:'}</span>
+                                                    <span className="text-amber-500 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 text-[10px] tracking-widest flex items-center gap-1">
+                                                       Resp: {
+                                                          employeesSignal.value.find(e => e.id === r.createdBy)?.fullName?.split(" ")[0] || 
+                                                          (r.createdBy === profile?.id ? profile?.fullName?.split(" ")[0] : null) ||
+                                                          employeesSignal.value.find(e => e.id === r.employeeId)?.fullName?.split(" ")[0] || 
+                                                          "Supervisor"
+                                                       }
+                                                       <span className="opacity-50 text-[8px]">({
+                                                          employeesSignal.value.find(e => e.id === r.createdBy)?.role || 
+                                                          (r.createdBy === profile?.id ? profile?.role : "SUPERVISOR")
+                                                       })</span>
+                                                    </span>
+                                                 </div>
+                                                 <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <span className="text-[9px] font-black uppercase text-white/30 tracking-widest">Encarregado:</span>
+                                                    <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1">
+                                                       {employeesSignal.value.find(e => e.id === r.employeeId)?.fullName?.split(" ")[0] || "Não definido"}
+                                                       <span className="opacity-50 text-[8px]">({(employeesSignal.value.find(e => e.id === r.employeeId)?.role || "OPERADOR")})</span>
+                                                    </span>
+                                                 </div>
+                                              </div>
+                                       </div>
+                                    </div>
+                                 </div>
+                                 
+                                 <div className="flex items-center gap-4">
+                                    {(r.status === DailyReportStatus.PROGRAMMED || r.status === DailyReportStatus.RETURNED) && (
+                                       <Button className="rounded-xl h-10 px-4 bg-primary text-black font-black uppercase text-[10px] tracking-widest group-hover:scale-105 transition-all">
+                                          Continuar
+                                          <ChevronRight className="w-4 h-4 ml-1" />
+                                       </Button>
+                                    )}
+                                 </div>
+                              </div>
+                              
+                              {/* Decoração sutil de fundo */}
+                              <div className="absolute -right-4 -bottom-4 opacity-5 transform rotate-12 transition-transform group-hover:scale-110">
+                                 {r.status === DailyReportStatus.RETURNED ? <AlertCircle className="w-32 h-32" /> :
+                                  r.status === DailyReportStatus.PROGRAMMED ? <Calendar className="w-32 h-32" /> :
+                                  <FileText className="w-32 h-32" />}
+                              </div>
+                           </div>
+                         ))
+                       )}
+                    </div>
+                 </div>
+              </div>
+           </div>
+        </TabsContent>
+
+        <TabsContent value="novo-rdo" className="animate-in fade-in slide-in-from-right-4 duration-500">
+          <div className="flex flex-col lg:grid lg:grid-cols-12 gap-8">
+            <div className="lg:col-span-12">
             <Card
               className={cn(
                 "glass-card transition-all duration-500 border-none shadow-2xl relative overflow-hidden",
@@ -1441,33 +1792,79 @@ export default function DailyReport() {
                 </div>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-8 p-4">
-                  <div className="space-y-8">
-                    <div className="flex justify-end">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="text-[10px] uppercase font-black tracking-widest text-primary/40 hover:text-primary transition-all flex items-center gap-2"
-                        onClick={async () => {
-                          setIsRefreshing(true);
-                          try {
-                            await refresh({ hard: true });
-                            setHasAttemptedAutoLoad(false); // Permite tentar auto-load de novo após limpar cache
-                            toast({
-                              title: "Cache Limpo",
-                              description: "As programações foram atualizadas com o servidor.",
-                            });
-                          } finally {
-                            setIsRefreshing(false);
-                          }
-                        }}
-                        disabled={isRefreshing}
+                {hasSentToday ? (
+                  <div className="flex flex-col items-center justify-center py-20 px-6 space-y-6 animate-in fade-in zoom-in-95 duration-500">
+                    <div className="w-24 h-24 rounded-full bg-emerald-500/10 border-2 border-emerald-500/20 flex items-center justify-center shadow-[0_0_50px_rgba(16,185,129,0.1)]">
+                      <Check className="w-12 h-12 text-emerald-500" />
+                    </div>
+                    <div className="text-center space-y-2">
+                      <h3 className="text-2xl font-black text-white uppercase tracking-tight">RDO Já Enviado Hoje</h3>
+                      <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
+                        Sua equipe já finalizou o relatório diário para a data de hoje. 
+                        O formulário ficará disponível novamente se houver uma devolução para correção.
+                      </p>
+                    </div>
+                    <div className="flex gap-4">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => refresh()}
+                        className="rounded-2xl h-12 px-8 uppercase font-black text-[10px] tracking-widest gap-2 bg-white/5 border-white/10 hover:bg-white/10"
                       >
-                        <RefreshCw className={cn("w-3 h-3", isRefreshing && "animate-spin")} />
-                        Limpar Cache e Sincronizar
+                        <RefreshCw className="w-4 h-4" /> Atualizar
+                      </Button>
+                      <Button 
+                        onClick={() => window.location.href = '/'}
+                        className="rounded-2xl h-12 px-8 uppercase font-black text-[10px] tracking-widest bg-emerald-600 hover:bg-emerald-500 text-white"
+                      >
+                        Voltar ao Início
                       </Button>
                     </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSubmit} className="space-y-8 p-4">
+                  <div className="space-y-8">
+                    <div className="flex items-center gap-4 mt-10">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={handlePrevStep}
+                    className="h-14 px-8 rounded-2xl uppercase font-black text-xs tracking-widest text-white/40 hover:text-white hover:bg-white/5 transition-all"
+                  >
+                    Voltar
+                  </Button>
+                  
+                  {!isReportEditable && (
+                    <div className="flex-1 px-6 py-3 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2">
+                      <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
+                      <p className="text-[10px] uppercase font-black text-red-500 leading-tight">
+                        Este relatório já foi enviado ou aprovado e não pode mais ser editado.
+                      </p>
+                    </div>
+                  )}
+
+                  <Button
+                    type="button"
+                    onClick={handleSubmit}
+                    className={cn(
+                      "flex-1 h-16 rounded-3xl uppercase font-black text-sm tracking-widest shadow-2xl transition-all active:scale-95 group overflow-hidden relative",
+                      isReportEditable 
+                        ? "bg-primary hover:bg-primary/90 text-white shadow-primary/20" 
+                        : "bg-white/5 text-white/20 border-white/10 cursor-not-allowed"
+                    )}
+                    disabled={isSaving || !isReportEditable}
+                  >
+                    {isSaving ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <>
+                        <span className="relative z-10 flex items-center gap-2">
+                          Finalizar e Enviar RDO <Send className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                        </span>
+                        <div className="absolute inset-0 bg-linear-to-r from-white/0 via-white/10 to-white/0 -translate-x-full group-hover:translate-x-full duration-1000 transition-transform" />
+                      </>
+                    )}
+                  </Button>
+                </div>
 
                     {/* IDENTIFICAÇÃO BÁSICA (Fica fixo no topo) */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-primary/5 rounded-3xl border border-primary/10">
@@ -1483,18 +1880,32 @@ export default function DailyReport() {
 
                         <div className="space-y-3">
                           <Label className="text-primary/80 font-bold uppercase text-[10px] tracking-widest pl-1">Obra / Projeto</Label>
-                          <Select value={selectedProjectId || ""} onValueChange={(val) => { setSelectedProjectId(val); updateReportDraft({ siteId: "" }); }} disabled={!selectedCompanyId}>
-                            <SelectTrigger className="bg-black/20 border-primary/20 rounded-xl h-11"><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
-                            <SelectContent className="glass-card">{filteredProjects.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}</SelectContent>
-                          </Select>
+                          {isWorker || !selectedCompanyId ? (
+                            <div className="bg-black/40 border border-white/5 h-11 flex items-center justify-between px-4 rounded-xl text-xs font-bold text-white/50 cursor-not-allowed ring-1 ring-inset ring-black/50">
+                               <span>{filteredProjects.find(p => p.id === selectedProjectId)?.name || "Obra Automática"}</span>
+                               <Lock className="w-4 h-4 text-white/20" />
+                            </div>
+                          ) : (
+                            <Select value={selectedProjectId || ""} onValueChange={(val) => { setSelectedProjectId(val); updateReportDraft({ siteId: "" }); }} disabled={!selectedCompanyId}>
+                              <SelectTrigger className="bg-black/20 border-primary/20 rounded-xl h-11"><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
+                              <SelectContent className="glass-card">{filteredProjects.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}</SelectContent>
+                            </Select>
+                          )}
                         </div>
 
                         <div className="space-y-3">
                           <Label className="text-primary/80 font-bold uppercase text-[10px] tracking-widest pl-1">Canteiro</Label>
-                          <Select value={effectiveSiteId || ""} onValueChange={(val) => updateReportDraft({ siteId: val })} disabled={!selectedProjectId}>
-                            <SelectTrigger className="bg-black/20 border-primary/20 rounded-xl h-11"><SelectValue placeholder="Selecione o canteiro..." /></SelectTrigger>
-                            <SelectContent className="glass-card">{sites.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent>
-                          </Select>
+                          {isWorker || !selectedProjectId ? (
+                            <div className="bg-black/40 border border-white/5 h-11 flex items-center justify-between px-4 rounded-xl text-xs font-bold text-white/50 cursor-not-allowed ring-1 ring-inset ring-black/50">
+                               <span>{sites.find(s => s.id === effectiveSiteId)?.name || "Canteiro Automático"}</span>
+                               <Lock className="w-4 h-4 text-white/20" />
+                            </div>
+                          ) : (
+                            <Select value={effectiveSiteId || ""} onValueChange={(val) => updateReportDraft({ siteId: val })} disabled={!selectedProjectId}>
+                              <SelectTrigger className="bg-black/20 border-primary/20 rounded-xl h-11"><SelectValue placeholder="Selecione o canteiro..." /></SelectTrigger>
+                              <SelectContent className="glass-card">{sites.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent>
+                            </Select>
+                          )}
                         </div>
 
                         <div className="space-y-3">
@@ -1681,7 +2092,7 @@ export default function DailyReport() {
                                )}
                             </div>
                             <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                              {currentDetails.slice(0, 50).map((detail, idx) => {
+                              {currentDetails.slice(0, 250).map((detail, idx) => {
                                 const isInvalid = timeConflicts.invalidIds.has(detail.id);
                                 const isInternalOverlap = timeConflicts.internalOverlapIds.has(detail.id);
                                 const isExternalOverlap = timeConflicts.externalOverlapIds.has(detail.id);
@@ -1883,10 +2294,10 @@ export default function DailyReport() {
                                 );
                               })}
                                
-                               {currentDetails.length > 50 && (
+                               {currentDetails.length > 250 && (
                                  <div className="p-6 bg-amber-500/5 border border-dashed border-amber-500/20 rounded-3xl text-center">
                                     <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest leading-relaxed">
-                                      Exibindo as primeiras 50 localizações de {currentDetails.length}.<br/>
+                                      Exibindo as primeiras 250 localizações de {currentDetails.length}.<br/>
                                       Para melhor performance, edite os itens em blocos menores ou use a propagação automática.
                                     </p>
                                     <Button 
@@ -2418,11 +2829,102 @@ export default function DailyReport() {
                              className="flex items-center justify-between group/header cursor-pointer select-none mb-4"
                              onClick={() => setShowManpower(!showManpower)}
                            >
-                             <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2 group-hover:text-white transition-colors">
-                               <Users className="w-3.5 h-3.5" />
-                               Quadro de Efetivo
-                             </Label>
+                             <div className="flex items-center gap-4">
+                               <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2 group-hover:text-white transition-colors">
+                                 <Users className="w-3.5 h-3.5" />
+                                 Quadro de Efetivo
+                               </Label>
+                               <Badge variant="outline" className="bg-primary/10 border-primary/20 text-primary px-2 py-0.5 rounded-full text-[9px] font-black">
+                                 {(manpower || []).length} TOTAL
+                               </Badge>
+                             </div>
                              <div className="flex items-center gap-2">
+                               {employeeId && teams.some(t => t.supervisorId === employeeId) && (
+                                 <Button 
+                                   type="button" 
+                                   variant="secondary" 
+                                   size="sm" 
+                                   className="h-7 px-3 rounded-full bg-amber-500/10 border-amber-500/20 text-amber-500 text-[9px] font-black hover:bg-amber-500/20"
+                                   onClick={async (e) => {
+                                     e.stopPropagation();
+                                     const leaderTeams = teams.filter(t => t.supervisorId === employeeId);
+                                     if (leaderTeams.length === 0) return;
+
+                                     const currentManpower = Array.isArray(manpower) ? [...manpower] : [];
+                                     const existingRegistrations = new Set(currentManpower.map(m => m.registration?.trim() || ""));
+                                     const existingNames = new Set(currentManpower.map(m => m.name?.trim().toLowerCase() || ""));
+                                     
+                                     let addedCount = 0;
+                                     const addMemberData = (reg: string, name: string, role: string) => {
+                                       reg = (reg || "").trim();
+                                       name = (name || "").trim();
+                                       if (!name) return;
+                                       
+                                       const isDuplicate = (reg && existingRegistrations.has(reg)) || (name && existingNames.has(name.toLowerCase()));
+                                       
+                                       if (!isDuplicate) {
+                                         currentManpower.push({ registration: reg, name, role });
+                                         if (reg) existingRegistrations.add(reg);
+                                         if (name) existingNames.add(name.toLowerCase());
+                                         addedCount++;
+                                       }
+                                     };
+
+                                     const allMemberIds = leaderTeams.flatMap(t => t.members);
+                                     const idsToFetch = Array.from(new Set([employeeId, ...allMemberIds]));
+                                     
+                                     try {
+                                       // Usar sempre todos os usuários do signal filtrados, ou do hook local em Fallback
+                                       const fetchedUsers = employeesSignal.value.filter(e => idsToFetch.includes(e.id));
+                                       
+                                       // Adicionar líder primeiro
+                                       const leaderData = fetchedUsers.find((u: any) => u.id === employeeId);
+                                       const leaderEmp = employees.find(e => e.id === employeeId);
+                                       
+                                       if (leaderData || leaderEmp) {
+                                         const name = leaderData?.fullName || leaderEmp?.fullName || "";
+                                         const reg = leaderData?.registrationNumber || leaderEmp?.registrationNumber || "";
+                                         const role = leaderData?.functionName || leaderEmp?.functionName || "Encarregado";
+                                         addMemberData(reg, name, role);
+                                       }
+
+                                       // Adicionar membros de TODAS as equipes do líder
+                                       allMemberIds.forEach(memberId => {
+                                         const memberData = fetchedUsers.find((u: any) => u.id === memberId);
+                                         const memberEmp = employees.find(e => e.id === memberId);
+                                         
+                                         if (memberData || memberEmp) {
+                                           const name = memberData?.fullName || memberEmp?.fullName || "";
+                                           const reg = memberData?.registrationNumber || memberEmp?.registrationNumber || "";
+                                           const role = memberData?.functionName || memberEmp?.functionName || "Membro de Equipe";
+                                           addMemberData(reg, name, role);
+                                         }
+                                       });
+
+                                       if (addedCount > 0) {
+                                         updateReportDraft({ manpower: currentManpower });
+                                         toast({
+                                           title: "Equipe Alocada",
+                                           description: `${addedCount} colaborador(es) adicionado(s) ao quadro de efetivo.`,
+                                           className: "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"
+                                         });
+                                         setShowManpower(true);
+                                       } else {
+                                         toast({
+                                           title: "Atenção",
+                                           description: "Todos os membros desta equipe já constam no quadro.",
+                                           className: "bg-amber-500/10 border-amber-500/20 text-amber-500"
+                                         });
+                                       }
+                                     } catch (err) {
+                                       console.error("[PullTeam] Erro ao buscar equipe", err);
+                                       toast({ title: "Erro", description: "Falha ao consultar equipe.", variant: "destructive" });
+                                     }
+                                   }}
+                                 >
+                                   <Users className="w-3 h-3 mr-1" /> PUXAR EQUIPE
+                                 </Button>
+                               )}
                                <Button 
                                  type="button" 
                                  variant="outline" 
@@ -2432,6 +2934,7 @@ export default function DailyReport() {
                                    e.stopPropagation();
                                    const newManpower = [...(manpower || []), { registration: '', name: '', role: '' }];
                                    updateReportDraft({ manpower: newManpower });
+                                   setShowManpower(true);
                                  }}
                                >
                                  <Plus className="w-3 h-3 mr-1" /> ADICIONAR
@@ -2644,24 +3147,27 @@ export default function DailyReport() {
                     </div>
                   </div>
                 </form>
+                )}
               </CardContent>
             </Card>
           </div>
         </div>
-      </div>
-      
-      {/* Dialog para Expandir Foto */}
-      <Dialog open={!!selectedPhoto} onOpenChange={(open) => !open && setSelectedPhoto(null)}>
-        <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 border-none bg-transparent shadow-none [&>button]:text-white [&>button]:bg-black/50 [&>button]:hover:bg-black [&>button]:w-10 [&>button]:h-10 [&>button]:rounded-full [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:top-4 [&>button]:right-4">
-          <DialogTitle className="sr-only">Visualização de Foto Expandida</DialogTitle>
-          <DialogDescription className="sr-only">Imagem em alta resolução anexada à atividade</DialogDescription>
-          {selectedPhoto && (
-            <div className="relative w-full h-[85vh] flex items-center justify-center">
-              <img src={selectedPhoto} alt="Foto Expandida" className="max-w-full max-h-full object-contain rounded-xl shadow-2xl" />
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
+      </TabsContent>
+    </Tabs>
+  </div>
+  
+  {/* Dialog para Expandir Foto */}
+  <Dialog open={!!selectedPhoto} onOpenChange={(open) => !open && setSelectedPhoto(null)}>
+    <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 border-none bg-transparent shadow-none [&>button]:text-white [&>button]:bg-black/50 [&>button]:hover:bg-black [&>button]:w-10 [&>button]:h-10 [&>button]:rounded-full [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:top-4 [&>button]:right-4">
+      <DialogTitle className="sr-only">Visualização de Foto Expandida</DialogTitle>
+      <DialogDescription className="sr-only">Imagem em alta resolução anexada à atividade</DialogDescription>
+      {selectedPhoto && (
+        <div className="relative w-full h-[85vh] flex items-center justify-center">
+          <img src={selectedPhoto} alt="Foto Expandida" className="w-full h-full object-contain rounded-xl shadow-2xl" />
+        </div>
+      )}
+    </DialogContent>
+  </Dialog>
+</>
   );
 }

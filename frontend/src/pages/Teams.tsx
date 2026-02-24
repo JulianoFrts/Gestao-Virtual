@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -76,26 +77,26 @@ export default function Teams() {
 
     const activeEmployees = employees.filter(e => e.isActive);
 
-    // Get employees already in other teams
+    // Get employees already in other teams (Map of ID to Team Name)
     const getEmployeesInOtherTeams = () => {
-        const employeesInTeams = new Set<string>();
+        const mapping = new Map<string, string>();
         teams.forEach(team => {
             if (team.id !== editingTeam?.id) { // Exclude current team when editing
-                team.members?.forEach(memberId => employeesInTeams.add(memberId));
+                team.members?.forEach(memberId => mapping.set(memberId, team.name));
             }
         });
-        return employeesInTeams;
+        return mapping;
     };
 
-    // Get supervisors already leading other teams
+    // Get supervisors already leading other teams (Map of ID to Team Name)
     const getSupervisorsInOtherTeams = () => {
-        const supervisorsInTeams = new Set<string>();
+        const mapping = new Map<string, string>();
         teams.forEach(team => {
             if (team.id !== editingTeam?.id && team.supervisorId) {
-                supervisorsInTeams.add(team.supervisorId);
+                mapping.set(team.supervisorId, team.name);
             }
         });
-        return supervisorsInTeams;
+        return mapping;
     };
 
     // Filter employees by selected site
@@ -134,29 +135,42 @@ export default function Teams() {
 
         try {
             const selectedSite = sites.find(s => s.id === formData.siteId);
-            const companyId = formData.companyId || selectedSite?.companyId || companies[0]?.id;
+            
+            // Tenta resolver companyId de várias fontes
+            const companyId = formData.companyId || selectedSite?.companyId || currentUserProfile?.companyId || companies[0]?.id;
+
+            if (!companyId) {
+                toast({ 
+                    title: 'Erro de Contexto', 
+                    description: 'Não foi possível identificar a sua empresa. Tente recarregar a página.', 
+                    variant: 'destructive' 
+                });
+                return;
+            }
 
             if (editingTeam) {
                 const result = await updateTeam(editingTeam.id, {
                     name: formData.name,
-                    supervisorId: formData.supervisorId || undefined,
+                    supervisorId: formData.supervisorId || null,
                     members: formData.members,
-                    siteId: formData.siteId || undefined,
-                    companyId: companyId
+                    siteId: formData.siteId || null,
+                    companyId: companyId || null,
+                    projectId: formData.projectId || null
                 });
                 if (result.success) {
-                    toast({ title: 'Equipe atualizada!' });
+                    toast({ title: 'Equipe atualizada com sucesso!' });
                 }
             } else {
                 const result = await createTeam({
                     name: formData.name,
-                    supervisorId: formData.supervisorId || undefined,
+                    supervisorId: formData.supervisorId || null,
                     members: formData.members,
-                    siteId: formData.siteId || undefined,
-                    companyId: companyId
+                    siteId: formData.siteId || null,
+                    companyId: companyId || null,
+                    projectId: formData.projectId || null
                 });
                 if (result.success) {
-                    toast({ title: 'Equipe criada!' });
+                    toast({ title: 'Equipe criada com sucesso!' });
                 }
             }
             resetForm();
@@ -198,10 +212,11 @@ export default function Teams() {
         const employeesInOtherTeams = getEmployeesInOtherTeams();
 
         // Check if employee is already in another team
-        if (!formData.members.includes(id) && employeesInOtherTeams.has(id)) {
+        const otherTeamName = employeesInOtherTeams.get(id);
+        if (!formData.members.includes(id) && otherTeamName) {
             toast({
                 title: 'Funcionário já está em outra equipe',
-                description: 'Um funcionário não pode estar em múltiplas equipes simultaneamente.',
+                description: `Este funcionário já está na equipe "${otherTeamName}". Um funcionário não pode estar em múltiplas equipes simultaneamente.`,
                 variant: 'destructive'
             });
             return;
@@ -229,9 +244,12 @@ export default function Teams() {
         const matchesSearch = (t.name || '').toLowerCase().includes(searchTerm.toLowerCase());
         const matchesCompany = filterCompany === 'all' || t.companyId === filterCompany;
 
-        // Find project through site if not explicitly labeled (assume schema support or resolve manually)
+        // Find project through site
         const site = sites.find(s => s.id === t.siteId);
-        const matchesProject = filterProject === 'all' || site?.projectId === filterProject;
+        
+        // If site is null, it's an "orphaned" team. 
+        // We show it if site filter is 'all' AND (project filter is 'all' OR we are just filtering by company)
+        const matchesProject = filterProject === 'all' || (site && site.projectId === filterProject);
         const matchesSite = filterSite === 'all' || t.siteId === filterSite;
 
         return matchesSearch && matchesCompany && matchesProject && matchesSite;
@@ -394,17 +412,18 @@ export default function Teams() {
                                                     <CommandGroup heading="Lideranças Disponíveis">
                                                         {availableSupervisors.map((e) => {
                                                             const supervisorsInOtherTeams = getSupervisorsInOtherTeams();
-                                                            const isLeadingOtherTeam = supervisorsInOtherTeams.has(e.id);
+                                                            const otherTeamName = supervisorsInOtherTeams.get(e.id);
                                                             return (
                                                                 <CommandItem
                                                                     key={e.id}
                                                                     value={e.fullName}
                                                                     onSelect={() => {
-                                                                        const supervisorsInOtherTeams = getSupervisorsInOtherTeams();
-                                                                        if (supervisorsInOtherTeams.has(e.id)) {
+                                                                        const mapping = getSupervisorsInOtherTeams();
+                                                                        const tName = mapping.get(e.id);
+                                                                        if (tName) {
                                                                             toast({
                                                                                 title: 'Líder já está em outra equipe',
-                                                                                description: 'Este funcionário já é líder de outra equipe.',
+                                                                                description: `Este funcionário já é líder da equipe "${tName}".`,
                                                                                 variant: 'destructive'
                                                                             });
                                                                             return;
@@ -422,13 +441,15 @@ export default function Teams() {
                                                                 >
                                                                     <div className="flex items-center gap-2">
                                                                         <Crown className="w-3.5 h-3.5 text-yellow-500" />
-                                                                        <span>{e.fullName}</span>
-                                                                        <span className="text-[10px] text-muted-foreground uppercase">{e.functionName}</span>
+                                                                        <div className="flex flex-col">
+                                                                            <span className="text-sm font-medium">{e.fullName}</span>
+                                                                            <span className="text-[10px] text-muted-foreground uppercase">{e.functionName || 'Colaborador'}</span>
+                                                                        </div>
                                                                     </div>
                                                                     <div className="flex items-center gap-2">
-                                                                        {isLeadingOtherTeam && (
-                                                                            <span className="text-[9px] bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded-full border border-amber-500/20">
-                                                                                Líder de outra equipe
+                                                                        {otherTeamName && (
+                                                                            <span className="text-[9px] bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded-full border border-amber-500/20 max-w-[120px] truncate">
+                                                                                Líder de: {otherTeamName}
                                                                             </span>
                                                                         )}
                                                                         <Check
@@ -467,11 +488,9 @@ export default function Teams() {
                                     </div>
                                     <ScrollArea className="h-48 border rounded-lg p-3 bg-muted/10">
                                         <div className="space-y-1">
-                                            {availableEmployees
-                                                .filter(e => e.fullName.toLowerCase().includes(memberSearchTerm.toLowerCase()))
-                                                .map(e => {
-                                                    const employeesInOtherTeams = getEmployeesInOtherTeams();
-                                                    const isInOtherTeam = employeesInOtherTeams.has(e.id);
+                                                {availableEmployees.filter(e => e.fullName.toLowerCase().includes(memberSearchTerm.toLowerCase())).map(e => {
+                                                    const otherTeamNameInside = getEmployeesInOtherTeams().get(e.id);
+                                                    const isInOtherTeam = !!otherTeamNameInside;
                                                     const isDisabled = isInOtherTeam && !formData.members.includes(e.id);
 
                                                     return (
@@ -492,11 +511,19 @@ export default function Teams() {
                                                                 htmlFor={`emp-check-${e.id}`}
                                                                 className="text-sm flex-1 cursor-pointer select-none py-1 flex items-center justify-between"
                                                             >
-                                                                <span>{e.fullName}</span>
-                                                                {isInOtherTeam && !formData.members.includes(e.id) && (
-                                                                    <span className="text-[10px] bg-amber-500/20 text-amber-600 px-2 py-0.5 rounded-full font-medium">
-                                                                        Em outra equipe
+                                                                <div className="flex flex-col">
+                                                                    <span className="font-medium">{e.fullName}</span>
+                                                                    <span className="text-[10px] text-muted-foreground uppercase">{e.functionName || 'Colaborador'}</span>
+                                                                </div>
+                                                                {otherTeamNameInside && (
+                                                                    <span className="text-[9px] bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded-full font-bold border border-amber-500/20 max-w-[120px] truncate">
+                                                                        Equipe: {otherTeamNameInside}
                                                                     </span>
+                                                                )}
+                                                                {formData.members.includes(e.id) && !otherTeamNameInside && (
+                                                                    <Badge variant="secondary" className="text-[8px] h-4">
+                                                                        Selecionado
+                                                                    </Badge>
                                                                 )}
                                                             </label>
                                                         </div>

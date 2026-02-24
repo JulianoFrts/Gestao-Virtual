@@ -4,7 +4,7 @@
 
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { requireAuth, requireAdmin } from "@/lib/auth/session";
+import { requireAuth } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 
@@ -21,6 +21,7 @@ const service = new TeamService(repository);
 const createTeamSchema = z.object({
   companyId: z.string().optional(),
   siteId: z.string().optional(),
+  projectId: z.string().optional(),
   name: z
     .string()
     .min(2, "Nome deve ter no mínimo 2 caracteres")
@@ -35,6 +36,7 @@ import { emptyToUndefined } from "@/lib/utils/validators/schemas";
 const querySchema = paginationQuerySchema.extend({
   companyId: z.preprocess(emptyToUndefined, z.string().optional().nullable()),
   siteId: z.preprocess(emptyToUndefined, z.string().optional().nullable()),
+  projectId: z.preprocess(emptyToUndefined, z.string().optional().nullable()),
   isActive: z.preprocess(
     emptyToUndefined,
     z.enum(["true", "false"]).optional().nullable(),
@@ -61,11 +63,16 @@ export async function GET(request: NextRequest) {
       limit = API.PAGINATION.DEFAULT_LIMIT,
       companyId,
       siteId,
+      projectId,
       isActive,
     } = validation.data as any;
 
     const { isUserAdmin: checkAdmin } = await import("@/lib/auth/session");
-    const isAdmin = checkAdmin(user.role);
+    const isAdmin = checkAdmin(
+      user.role,
+      (user as any).hierarchyLevel,
+      (user as any).permissions,
+    );
 
     // Parametros para o Service
     const serviceParams: any = {
@@ -73,6 +80,7 @@ export async function GET(request: NextRequest) {
       limit,
       companyId: isAdmin ? companyId || undefined : user.companyId || undefined,
       siteId,
+      projectId,
       isActive:
         isActive === "true" ? true : isActive === "false" ? false : undefined,
     };
@@ -87,7 +95,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAdmin();
+    const { can } = await import("@/lib/auth/permissions");
+    if (!(await can("teams.manage"))) {
+      return ApiResponse.forbidden("Sem permissão para gerenciar equipes");
+    }
 
     const body = await request.json();
     const validation = Validator.validate(createTeamSchema, body);

@@ -5,17 +5,12 @@ import {
   cuidSchema,
   validate,
 } from "@/lib/utils/validators/schemas";
-import {
-  requireAdmin,
-  requireOwnerOrAdmin,
-  isUserAdmin,
-} from "@/lib/auth/session";
+import { requireOwnerOrAdmin, requireAdmin } from "@/lib/auth/session";
 import { publicUserSelect } from "@/types/database";
 import { MESSAGES } from "@/lib/constants";
 import { UserService } from "@/modules/users/application/user.service";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
 import { PrismaSystemAuditRepository } from "@/modules/audit/infrastructure/prisma-system-audit.repository";
-
 
 // DI (Manual)
 const userRepository = new PrismaUserRepository();
@@ -66,14 +61,24 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (!idValidation.valid) return idValidation.response;
 
     const currentUser = await requireOwnerOrAdmin(idValidation.id);
-    const isAdmin = isUserAdmin(currentUser.role as string);
+    const { isUserAdmin: checkAdmin } = await import("@/lib/auth/session");
+    const { can } = await import("@/lib/auth/permissions");
+
+    const isAdmin = checkAdmin(
+      currentUser.role as string,
+      (currentUser as any).hierarchyLevel,
+      (currentUser as any).permissions,
+    );
 
     const rawBody = await request.json();
     const body = normalizeUserBody(rawBody);
 
     const validationResult = validate(updateUserSchema, body);
     if (!validationResult.success) {
-      console.warn(`[UserUpdate] Validation failed for user ${idValidation.id}:`, validationResult.errors);
+      console.warn(
+        `[UserUpdate] Validation failed for user ${idValidation.id}:`,
+        validationResult.errors,
+      );
       return ApiResponse.validationError(validationResult.errors);
     }
 
@@ -86,10 +91,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       else if (r === "USER") updateData.role = "USER";
     }
 
-    if (!isAdmin && (updateData.role || updateData.status)) {
-      return ApiResponse.forbidden(
-        "Apenas administradores podem alterar cargo ou status",
-      );
+    // Apenas admins ou quem tem permissão users.manage podem alterar cargo ou status
+    if (updateData.role || updateData.status) {
+      const hasPermission = isAdmin || (await can("users.manage"));
+      if (!hasPermission) {
+        return ApiResponse.forbidden(
+          "Apenas administradores podem alterar cargo ou status",
+        );
+      }
     }
 
     const updatedUser = await userService.updateUser(

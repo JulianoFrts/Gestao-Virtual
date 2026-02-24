@@ -42,7 +42,7 @@ export const coreRoutes: RouteConfig[] = [
   {
     path: "/settings",
     element: SettingsPage,
-    moduleId: "settings.profile",
+    moduleId: "settings.view",
     roles: VIEWER_ROLES,
     layout: "app",
     label: "Configurações",

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useDailyReports, DailyReport, DailyReportStatus, ActivityStatus } from '@/hooks/useDailyReports';
 import { useTeams } from '@/hooks/useTeams';
 import { useUsers } from '@/hooks/useUsers';
+import { useEmployees } from '@/hooks/useEmployees';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,11 +11,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import {
   FileText, Filter, Search, Eye, Calendar, User, Users, 
   Clock, MapPin, CheckCircle2, XCircle, AlertCircle, AlertTriangle,
   X, Loader2, Camera, CloudSun, Truck, Plus, Trash2, Printer,
-  MessageSquare,
+  MessageSquare, Edit, Edit2, FileEdit,
   Info,
   Check,
   ArrowUpDown,
@@ -36,17 +39,23 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { dailyReportService } from '@/services/api/project/DailyReportService';
 import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
+import { cn, safeDate } from '@/lib/utils';
 import { Color } from 'three';
+import { orionApi } from '@/integrations/orion/client';
 
 export default function RDOAudit() {
   const { reports, isLoading, refresh } = useDailyReports();
   const { teams } = useTeams();
-  const { users } = useUsers();
+  const { users } = useUsers({ global: true });
+  const { employees } = useEmployees({ 
+    excludeCorporate: false,
+    roles: ["WORKER", "SUPERVISOR", "MANAGER", "ADMIN", "SUPER_ADMIN", "GESTOR_PROJECT", "GESTOR_CANTEIRO", "TECHNICIAN"] 
+  });
   const { toast } = useToast();
 
-  const [filterDate, setFilterDate] = useState("");
+  const [filterDate, setFilterDate] = useState(new Date(new Date().getTime() - (new Date().getTimezoneOffset() * 60000)).toISOString().split("T")[0]);
   const [filterTeam, setFilterTeam] = useState("all");
+  const [filterUser, setFilterUser] = useState("all");
   const [filterStatus, setFilterStatus] = useState<string>(DailyReportStatus.SENT);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({
@@ -55,6 +64,47 @@ export default function RDOAudit() {
   });
 
   const [selectedReport, setSelectedReport] = useState<DailyReport | null>(null);
+  
+  // States for Edit Programming Dialog
+  const [editProgramReport, setEditProgramReport] = useState<DailyReport | null>(null);
+  const [editProgramTeamId, setEditProgramTeamId] = useState<string>("");
+  const [editProgramEmployeeId, setEditProgramEmployeeId] = useState<string>("");
+  const [editProgramCreatorId, setEditProgramCreatorId] = useState<string>("");
+  const [creatorSearchTerm, setCreatorSearchTerm] = useState("");
+  const [debouncedCreatorSearch, setDebouncedCreatorSearch] = useState("");
+  const [isCreatorPopoverOpen, setIsCreatorPopoverOpen] = useState(false);
+
+  const [leaderSearchTerm, setLeaderSearchTerm] = useState("");
+  const [debouncedLeaderSearch, setDebouncedLeaderSearch] = useState("");
+  const [isLeaderPopoverOpen, setIsLeaderPopoverOpen] = useState(false);
+
+  // Debounce search terms
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedCreatorSearch(creatorSearchTerm);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [creatorSearchTerm]);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedLeaderSearch(leaderSearchTerm);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [leaderSearchTerm]);
+
+  const { users: creatorUsers, isLoading: isSearchingCreators } = useUsers({ 
+    global: true,
+    search: debouncedCreatorSearch 
+  });
+
+  const { users: leaderUsers, isLoading: isSearchingLeaders } = useUsers({ 
+    global: true,
+    search: debouncedLeaderSearch 
+  });
+
+  const [isEditingProgram, setIsEditingProgram] = useState(false);
+
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -66,12 +116,43 @@ export default function RDOAudit() {
   // Helper for safe date formatting
   const safeFormatDate = (date: any, formatStr: string, options?: any) => {
     try {
-      const d = new Date(date);
-      if (isNaN(d.getTime())) return "Data inválida";
+      const d = safeDate(date);
+      if (!d || isNaN(d.getTime())) return "Data inválida";
       return format(d, formatStr, options);
     } catch (e) {
       return "Erro na data";
     }
+  };
+
+  const getReporterName = (userId: string | null) => {
+    if (!userId) return "Desconhecido";
+    
+    // Procura primeiro em funcionários (Líderes/Encarregados - costumam ser a fonte primária de verdade em RDOs)
+    const employee = employees.find((e) => e.id === userId);
+    if (employee) return employee.fullName;
+
+    // Procura em usuários (quem pode ter criado o registro no sistema)
+    const user = users.find((u) => u.id === userId);
+    if (user) return user.fullName;
+
+    // Procura na lista específica de resultados da busca global (se houver)
+    const creatorFromSearch = creatorUsers.find(u => u.id === userId);
+    if (creatorFromSearch) return creatorFromSearch.fullName;
+
+    const leaderFromSearch = leaderUsers.find(u => u.id === userId);
+    if (leaderFromSearch) return leaderFromSearch.fullName;
+
+    // Se estiver carregando, mostra o ID curto como placeholder
+    if (isLoading || isSearchingCreators || isSearchingLeaders) return `Carregando (${userId.substring(0, 4)})...`;
+
+    return "Desconhecido";
+  };
+
+  const getTeamName = (teamId: string | null, teamName?: string) => {
+    if (teamName) return teamName;
+    if (!teamId) return "Geral";
+    const team = teams.find((t) => t.id === teamId);
+    return team ? team.name : "Equipe não encontrada";
   };
 
   // Filter reports based on all criteria
@@ -88,7 +169,8 @@ export default function RDOAudit() {
       let matchesDate = true;
       if (filterDate) {
         try {
-          const reportDateStr = new Date(report.reportDate).toISOString().split("T")[0];
+          // Adjust for timezone differences so we compare strictly the YYYY-MM-DD local
+          const reportDateStr = safeFormatDate(report.reportDate, 'yyyy-MM-dd');
           matchesDate = reportDateStr === filterDate;
         } catch (e) {
           matchesDate = false;
@@ -98,6 +180,9 @@ export default function RDOAudit() {
       // Team filter
       const matchesTeam = filterTeam !== "all" ? report.teamId === filterTeam : true;
 
+      // User filter
+      const matchesUser = filterUser !== "all" ? (report.employeeId === filterUser || report.createdBy === filterUser) : true;
+
       // Search filter
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch = searchTerm
@@ -105,7 +190,7 @@ export default function RDOAudit() {
           (report.observations && report.observations.toLowerCase().includes(searchLower))
         : true;
 
-      return matchesDate && matchesTeam && matchesSearch;
+      return matchesDate && matchesTeam && matchesUser && matchesSearch;
     });
 
     return filtered.sort((a, b) => {
@@ -122,8 +207,8 @@ export default function RDOAudit() {
           valB = b.status;
           break;
         case 'reporter':
-          valA = getReporterName(a.createdBy).toLowerCase();
-          valB = getReporterName(b.createdBy).toLowerCase();
+          valA = getReporterName(a.employeeId || a.createdBy).toLowerCase();
+          valB = getReporterName(b.employeeId || b.createdBy).toLowerCase();
           break;
         case 'team':
           valA = getTeamName(a.teamId, a.teamName).toLowerCase();
@@ -142,22 +227,7 @@ export default function RDOAudit() {
       if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [reports, filterDate, filterTeam, filterStatus, searchTerm, sortConfig, users, teams]);
-
-
-
-  const getReporterName = (userId: string | null) => {
-    if (!userId) return "Desconhecido";
-    const user = users.find((u) => u.id === userId);
-    return user ? user.fullName : "Usuário não encontrado";
-  };
-
-  const getTeamName = (teamId: string | null, teamName?: string) => {
-    if (teamName) return teamName;
-    if (!teamId) return "Geral";
-    const team = teams.find((t) => t.id === teamId);
-    return team ? team.name : "Equipe não encontrada";
-  };
+  }, [reports, filterDate, filterTeam, filterStatus, searchTerm, sortConfig, users, employees, teams]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -239,6 +309,32 @@ export default function RDOAudit() {
         title: "Erro inesperado",
         description: error.message,
         variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSaveProgramed = async () => {
+    if (!editProgramReport) return;
+    setIsProcessing(true);
+    try {
+      const { data, error } = await orionApi.from('daily_reports').update({
+        teamId: editProgramTeamId || null,
+        userId: editProgramEmployeeId || null, // O líder/encarregado é o userId no modelo DailyReport
+        createdBy: editProgramCreatorId || null, // Alteração de quem 'enviou' o relatório
+      }).eq('id', editProgramReport.id);
+
+      if (error) throw error;
+      
+      toast({ title: "Sucesso", description: "Programação atualizada com sucesso." });
+      setIsEditingProgram(false);
+      refresh({ hard: true });
+    } catch (e: any) {
+      toast({
+        title: "Erro",
+        description: e.message || "Erro ao atualizar a programação",
+        variant: "destructive"
       });
     } finally {
       setIsProcessing(false);
@@ -386,6 +482,70 @@ export default function RDOAudit() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Colaborador</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="bg-primary/5 border-primary/20 w-[180px] h-10 rounded-xl justify-between px-3 font-normal"
+                  >
+                    <span className="truncate">
+                      {filterUser === "all" ? "Todos" : (employees.find(e => e.id === filterUser)?.fullName || users.find(u => u.id === filterUser)?.fullName || "Todos")}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="glass-card p-0 border-primary/20 w-[240px]" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar colaborador..." className="h-10" />
+                    <CommandList className="max-h-[200px]">
+                      <CommandEmpty>Nenhum resultado.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="all"
+                          onSelect={() => setFilterUser("all")}
+                          className="hover:bg-primary/10 cursor-pointer text-white data-[selected=true]:bg-primary/20"
+                        >
+                          <Check className={cn("mr-2 h-4 w-4 text-primary", filterUser === "all" ? "opacity-100" : "opacity-0")} />
+                          Todos
+                        </CommandItem>
+                        {employees.map((e) => (
+                          <CommandItem
+                            key={e.id}
+                            value={e.id}
+                            onSelect={() => setFilterUser(e.id)}
+                            className="hover:bg-primary/10 cursor-pointer text-white data-[selected=true]:bg-primary/20"
+                          >
+                            <Check className={cn("mr-2 h-4 w-4 text-primary", filterUser === e.id ? "opacity-100" : "opacity-0")} />
+                            <div className="flex flex-col min-w-0 pr-2">
+                              <span className="font-bold text-xs truncate">{e.fullName}</span>
+                              <span className="text-[9px] text-muted-foreground truncate">{e.registrationNumber}</span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                        {users.filter(u => !employees.find(emp => emp.id === u.id)).map(u => (
+                          <CommandItem
+                            key={u.id}
+                            value={u.id}
+                            onSelect={() => setFilterUser(u.id)}
+                            className="hover:bg-primary/10 cursor-pointer text-white data-[selected=true]:bg-primary/20"
+                          >
+                            <Check className={cn("mr-2 h-4 w-4 text-primary", filterUser === u.id ? "opacity-100" : "opacity-0")} />
+                            <div className="flex flex-col min-w-0 pr-2">
+                              <span className="font-bold text-xs truncate">{u.fullName}</span>
+                              <span className="text-[9px] text-muted-foreground truncate">{u.email}</span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
             <div className="space-y-1.5 flex-1 min-w-[200px]">
               <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Busca</label>
               <div className="relative">
@@ -414,7 +574,73 @@ export default function RDOAudit() {
               </Select>
             </div>
           </div>
-        </div>
+
+             <div className="space-y-2">
+              <div className="flex items-center justify-between ml-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Autor do Relatório (Postado por)</label>
+                <Button
+                  variant="link"
+                  className="h-auto p-0 text-[9px] uppercase font-black text-amber-500/60 hover:text-amber-500"
+                  onClick={() => setEditProgramCreatorId(editProgramEmployeeId)}
+                >
+                  Mesclar com Líder
+                </Button>
+              </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between bg-black/40 border-amber-500/10 text-white hover:bg-black/60 hover:border-amber-500/30 transition-all h-12 rounded-xl font-bold"
+                  >
+                    <span className="truncate">
+                      {editProgramCreatorId
+                        ? users.find(u => u.id === editProgramCreatorId)?.fullName ||
+                          employees.find(e => e.id === editProgramCreatorId)?.fullName ||
+                          "Selecionado"
+                        : "Selecione quem postou"}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[380px] p-0 bg-[#0c0c0e] border-amber-500/20 rounded-xl overflow-hidden" align="start">
+                  <Command className="bg-transparent text-white">
+                    <div className="flex items-center border-b border-amber-500/20 px-3">
+                      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50 text-amber-500" />
+                      <CommandInput
+                        placeholder="Buscar autor..."
+                        className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-white/40 disabled:cursor-not-allowed disabled:opacity-50 text-white border-0 focus:ring-0"
+                      />
+                    </div>
+                    <CommandList className="max-h-[250px] overflow-y-auto custom-scrollbar">
+                      <CommandEmpty className="text-white/40 py-6 text-center text-sm font-medium">
+                        {isSearchingCreators ? "Buscando usuários..." : "Nenhum usuário encontrado."}
+                      </CommandEmpty>
+                      <CommandGroup heading="Usuários Encontrados" className="text-amber-500/60 font-black tracking-widest text-[10px] uppercase p-2">
+                        {creatorUsers.map((u) => (
+                          <CommandItem
+                            key={u.id}
+                            value={`${u.fullName} ${u.email || ""} ${u.id}`}
+                            onSelect={() => {
+                              setEditProgramCreatorId(u.id);
+                              setIsCreatorPopoverOpen(false);
+                            }}
+                            className="hover:bg-amber-500/10 cursor-pointer text-white data-[selected=true]:bg-amber-500/10 data-[selected=true]:text-amber-500 p-3 rounded-lg flex items-center mb-1"
+                          >
+                            <Check className={cn("mr-3 h-4 w-4 text-amber-500 shrink-0", editProgramCreatorId === u.id ? "opacity-100" : "opacity-0")} />
+                            <div className="flex flex-col min-w-0 pr-2">
+                              <span className="font-bold text-sm truncate">{u.fullName || "Sem Nome"}</span>
+                              <span className="text-[10px] text-white/40 truncate">{u.email || "Sem Email"}</span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
 
       {/* Floating Bulk Action Bar - Fixed at Top */}
       {selectedIds.size > 0 && (
@@ -604,41 +830,69 @@ export default function RDOAudit() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center font-black text-primary border border-primary/20">
-                          {getReporterName(report.createdBy).charAt(0)}
+                          {getReporterName(report.employeeId || (report as any).userId || report.createdBy).charAt(0)}
                         </div>
                         <div className="flex flex-col">
-                          <span className="font-bold text-sm tracking-tight">{getReporterName(report.createdBy)}</span>
-                          <span className="text-[10px] uppercase font-black text-primary/60">{getTeamName(report.teamId, report.teamName)}</span>
+                          <span className="font-bold text-sm tracking-tight text-white/90">
+                            {getReporterName(report.employeeId || (report as any).userId || report.createdBy)}
+                          </span>
+                          {/* O de baixo é quem postou (Creator) se diferente do responsável (Leader) */}
+                          {report.createdBy && report.createdBy !== report.employeeId && (
+                            <span className="text-[9px] uppercase font-bold text-blue-400 mt-0.5">
+                              Postado por: {getReporterName(report.createdBy)}
+                            </span>
+                          )}
+                          <span className="text-[10px] uppercase font-black text-primary/60 mt-0.5">{getTeamName(report.teamId, report.teamName)}</span>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="max-w-[400px]">
                       <div className="flex flex-wrap gap-1.5">
-                        {report.selectedActivities?.slice(0, 2).map((act, i) => (
+                        {((report.selectedActivities || report.metadata?.selectedActivities) || [])?.slice(0, 2).map((act: any, i: number) => (
                           <Badge key={i} variant="outline" className="bg-primary/5 border-primary/20 text-[10px] font-bold px-2 py-0.5 whitespace-nowrap">
                             {act.stageName}
                           </Badge>
                         ))}
-                        {(report.selectedActivities?.length || 0) > 2 && (
+                        {(((report.selectedActivities || report.metadata?.selectedActivities) || [])?.length || 0) > 2 && (
                           <Badge variant="outline" className="bg-muted/50 border-muted-foreground/20 text-[10px] font-bold px-2 py-0.5">
-                            +{(report.selectedActivities?.length || 0) - 2}
+                            +^{(((report.selectedActivities || report.metadata?.selectedActivities) || [])?.length || 0) - 2}
                           </Badge>
                         )}
-                        {!report.selectedActivities && <span className="text-xs text-muted-foreground truncate">{report.activities}</span>}
+                        {!(report.selectedActivities || report.metadata?.selectedActivities) && <span className="text-xs text-muted-foreground truncate">{report.activities}</span>}
                       </div>
                     </TableCell>
                     <TableCell className="text-center font-black text-primary/40 text-sm">
-                       {report.selectedActivities?.reduce((acc, act) => acc + (act.details?.length || 0), 0) || 0}
+                       {((report.selectedActivities || report.metadata?.selectedActivities) || [])?.reduce((acc: number, act: any) => acc + (act.details?.length || 1), 0) || 0}
                     </TableCell>
                     <TableCell className="text-right pr-8">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="w-10 h-10 rounded-2xl bg-primary/5 hover:bg-primary text-primary hover:text-white transition-all duration-300"
-                        onClick={() => setSelectedReport(report)}
-                      >
-                        <Eye className="w-5 h-5" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-2">
+                        {report.status === DailyReportStatus.PROGRAMMED && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="w-10 h-10 rounded-2xl bg-blue-500/5 hover:bg-blue-500 text-blue-500 hover:text-white transition-all duration-300"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditProgramReport(report);
+                              setEditProgramTeamId(report.teamId || "");
+                              setEditProgramEmployeeId(report.employeeId || (report as any).userId || "");
+                              setEditProgramCreatorId(report.createdBy || "");
+                              setIsEditingProgram(true);
+                            }}
+                            title="Editar Programação (Alterar Equipe/Encarregado/Autor)"
+                          >
+                            <FileEdit className="w-5 h-5" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="w-10 h-10 rounded-2xl bg-primary/5 hover:bg-primary text-primary hover:text-white transition-all duration-300"
+                          onClick={() => setSelectedReport(report)}
+                        >
+                          <Eye className="w-5 h-5" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -989,12 +1243,14 @@ export default function RDOAudit() {
                                              <TableHead className="font-black uppercase text-[10px] tracking-widest text-primary/80 text-center">Previsto</TableHead>
                                              <TableHead className="font-black uppercase text-[10px] tracking-widest text-primary/80 text-center">Executado</TableHead>
                                              <TableHead className="font-black uppercase text-[10px] tracking-widest text-primary/80 text-center">Acumulado</TableHead>
+                                             <TableHead className="font-black uppercase text-[10px] tracking-widest text-primary/80 text-center">Início</TableHead>
+                                             <TableHead className="font-black uppercase text-[10px] tracking-widest text-primary/80 text-center">Fim</TableHead>
                                              <TableHead className="font-black uppercase text-[10px] tracking-widest text-primary/80 text-center">Progresso</TableHead>
                                              <TableHead className="font-black uppercase text-[10px] tracking-widest text-primary/80 px-6">Observações</TableHead>
                                            </TableRow>
                                          </TableHeader>
                                          <TableBody>
-                                           {act.details.slice(0, 100).map((d: any, di: number) => {
+                                           {act.details.slice(0, 500).map((d: any, di: number) => {
                                              const actualProgress = d.status === ActivityStatus.FINISHED ? 100 : d.status === ActivityStatus.BLOCKED ? 0 : (d.progress || 0);
                                              const executed = (actualProgress / 100).toFixed(1);
                                              const acumulado = ((d.previousProgress || 0) + actualProgress) / 100;
@@ -1008,6 +1264,8 @@ export default function RDOAudit() {
                                                     <span className="font-black text-primary text-base">{executed}</span>
                                                  </TableCell>
                                                  <TableCell className="text-center font-mono text-xs text-primary/40">{acumulado > 0 ? acumulado.toFixed(1) : '---'}</TableCell>
+                                                 <TableCell className="text-center font-mono text-xs text-blue-400">{d.startTime || '---'}</TableCell>
+                                                 <TableCell className="text-center font-mono text-xs text-amber-500">{d.endTime || '---'}</TableCell>
                                                  <TableCell className="text-center">
                                                    <Badge variant="outline" className={cn(
                                                      "font-black text-[10px] px-3 py-1 uppercase tracking-widest shadow-lg",
@@ -1030,12 +1288,12 @@ export default function RDOAudit() {
                                              </TableRow>
                                            );
                                            })}
-                                           {act.details.length > 100 && (
+                                           {act.details.length > 500 && (
                                              <TableRow className="border-white/5 bg-primary/10">
-                                               <TableCell colSpan={7} className="text-center py-6">
+                                               <TableCell colSpan={9} className="text-center py-6">
                                                  <p className="text-[11px] font-black text-primary uppercase tracking-widest flex items-center justify-center gap-2">
                                                    <Info className="w-4 h-4" />
-                                                   Exibindo 100 de {act.details.length} itens limitados no navegador. Baixe o PDF A4 completo para ver todos os dados.
+                                                   Exibindo 500 de {act.details.length} itens limitados no navegador. Baixe o PDF A4 completo para ver todos os dados.
                                                  </p>
                                                </TableCell>
                                              </TableRow>
@@ -1068,6 +1326,9 @@ export default function RDOAudit() {
                         >
                           <h3 className="text-xs font-black uppercase tracking-[0.3em] text-primary/60 flex items-center gap-2 group-hover/header:text-primary transition-colors">
                             <Users className="w-4 h-4" /> Quadro de Efetivo
+                            <Badge variant="outline" className="bg-primary/10 border-primary/20 text-primary px-2 py-0.5 rounded-full text-[9px] font-black ml-2">
+                              {selectedReport.manpower?.length || 0} TOTAL
+                            </Badge>
                           </h3>
                           <Button variant="ghost" size="icon" className="h-6 w-6 text-primary/40 group-hover/header:text-primary">
                             {showManpower ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -1268,11 +1529,262 @@ export default function RDOAudit() {
           <DialogDescription className="sr-only">Imagem em alta resolução anexada ao relatório</DialogDescription>
           {selectedPhoto && (
             <div className="relative w-full h-[85vh] flex items-center justify-center">
-              <img src={selectedPhoto} alt="Foto Expandida" className="max-w-full max-h-full object-contain rounded-xl shadow-2xl" />
+              <img src={selectedPhoto} alt="Foto Expandida" className="w-full h-full object-contain rounded-xl shadow-2xl" />
             </div>
           )}
         </DialogContent>
       </Dialog>
+      
+      {/* DIALOG DE EDITAR PROGRAMAÇÃO */}
+      <Dialog open={isEditingProgram} onOpenChange={setIsEditingProgram}>
+        <DialogContent className="max-w-md bg-[#0a0a0b] border-amber-500/20 rounded-2xl p-8 shadow-2xl shadow-black/80">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black uppercase tracking-tight text-amber-500 flex items-center gap-2">
+              <FileText className="w-6 h-6" /> Editar Programação
+            </DialogTitle>
+            <DialogDescription className="text-white/60 font-medium text-sm mt-2">
+              Altere a equipe ou encarregado responsável por esta programação de RDO.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-6 space-y-6">
+             <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-white/40 ml-1">Equipe</label>
+              <Select value={editProgramTeamId} onValueChange={setEditProgramTeamId}>
+                <SelectTrigger className="bg-black/40 border-amber-500/10 text-white hover:border-amber-500/30 transition-all h-12 rounded-xl focus:ring-amber-500/30 font-bold">
+                  <SelectValue placeholder="Selecione a equipe" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#0c0c0e] border-amber-500/20 text-white rounded-xl">
+                  {teams.map((t) => (
+                    <SelectItem key={t.id} value={t.id} className="focus:bg-amber-500/10 focus:text-amber-500 font-bold p-3">
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+             <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-white/40 ml-1">Encarregado / Líder</label>
+              <Popover open={isLeaderPopoverOpen} onOpenChange={setIsLeaderPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between bg-black/40 border-amber-500/10 text-white hover:bg-black/60 hover:border-amber-500/30 transition-all h-12 rounded-xl font-bold"
+                  >
+                    <span className="truncate">
+                      {editProgramEmployeeId
+                        ? employees.find(e => e.id === editProgramEmployeeId)?.fullName || 
+                          users.find(u => u.id === editProgramEmployeeId)?.fullName || 
+                          leaderUsers.find(u => u.id === editProgramEmployeeId)?.fullName ||
+                          "Selecionado"
+                        : "Selecione o encarregado"}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[380px] p-0 bg-[#0c0c0e] border-amber-500/20 rounded-xl overflow-hidden" align="start">
+                  <Command className="bg-transparent text-white" shouldFilter={false}>
+                    <div className="flex items-center border-b border-amber-500/20 px-3">
+                      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50 text-amber-500" />
+                      <CommandInput 
+                        placeholder="Buscar por nome, email ou matrícula..." 
+                        value={leaderSearchTerm}
+                        onValueChange={setLeaderSearchTerm}
+                        className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-white/40 disabled:cursor-not-allowed disabled:opacity-50 text-white border-0 focus:ring-0" 
+                      />
+                    </div>
+                    <CommandList className="max-h-[250px] overflow-y-auto custom-scrollbar">
+                      <CommandEmpty className="text-white/40 py-6 text-center text-sm font-medium">
+                        {isSearchingLeaders ? (
+                          <div className="flex items-center justify-center p-2">
+                            <Loader2 className="w-4 h-4 animate-spin mr-2 text-amber-500" />
+                            Buscando na base...
+                          </div>
+                        ) : "Nenhum colaborador encontrado."}
+                      </CommandEmpty>
+                      
+                      <CommandGroup heading={leaderSearchTerm ? "Resultado da Busca" : "Sugestões de Colaboradores"} className="text-amber-500/60 font-black tracking-widest text-[10px] uppercase p-2">
+                        {(leaderSearchTerm ? leaderUsers : employees.slice(0, 10)).map((item: any) => (
+                          <CommandItem
+                            key={item.id}
+                            value={item.id}
+                            onSelect={() => {
+                              setEditProgramEmployeeId(item.id);
+                              setIsLeaderPopoverOpen(false);
+                            }}
+                            className="hover:bg-amber-500/10 cursor-pointer text-white data-[selected=true]:bg-amber-500/10 data-[selected=true]:text-amber-500 p-3 rounded-lg flex items-center mb-1"
+                          >
+                            <Check className={cn("mr-3 h-4 w-4 text-amber-500 shrink-0", editProgramEmployeeId === item.id ? "opacity-100" : "opacity-0")} />
+                            <div className="flex flex-col min-w-0 pr-2">
+                              <span className="font-bold text-sm truncate">{item.fullName || item.name || "Sem Nome"}</span>
+                              <span className="text-[10px] text-white/40 truncate">{item.email || "Sem Email"}</span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+
+                      {leaderSearchTerm && leaderUsers.length > 0 && (
+                        <div className="px-3 py-2 border-t border-white/5 bg-primary/10">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-primary">Busca Global (Toda a Empresa)</span>
+                        </div>
+                      )}
+
+                      {!leaderSearchTerm && (
+                        <CommandGroup heading="Usuários (Sugestões)" className="text-amber-500/60 font-black tracking-widest text-[10px] uppercase p-2">
+                          {users.slice(0, 10).map((u) => (
+                            <CommandItem
+                              key={u.id}
+                              value={u.id}
+                              onSelect={() => {
+                                setEditProgramEmployeeId(u.id);
+                                setIsLeaderPopoverOpen(false);
+                              }}
+                              className="hover:bg-amber-500/10 cursor-pointer text-white data-[selected=true]:bg-amber-500/10 data-[selected=true]:text-amber-500 p-3 rounded-lg flex items-center mb-1"
+                            >
+                              <Check className={cn("mr-3 h-4 w-4 text-amber-500 shrink-0", editProgramEmployeeId === u.id ? "opacity-100" : "opacity-0")} />
+                              <div className="flex flex-col min-w-0 pr-2">
+                                <span className="font-bold text-sm truncate">{u.fullName || "Sem Nome"}</span>
+                                <span className="text-[10px] text-white/40 truncate">{u.email || "Sem Email"}</span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+             <div className="space-y-2">
+              <div className="flex items-center justify-between ml-1">
+                <label className="text-[10px] font-black uppercase tracking-widest text-white/40">Autor do Relatório (Postado por)</label>
+                <Button 
+                  variant="link" 
+                  className="h-auto p-0 text-[9px] uppercase font-black text-amber-500/60 hover:text-amber-500"
+                  onClick={() => setEditProgramCreatorId(editProgramEmployeeId)}
+                >
+                  Mesclar com Líder
+                </Button>
+              </div>
+              <Popover open={isCreatorPopoverOpen} onOpenChange={setIsCreatorPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between bg-black/40 border-amber-500/10 text-white hover:bg-black/60 hover:border-amber-500/30 transition-all h-12 rounded-xl font-bold"
+                  >
+                    <span className="truncate">
+                      {editProgramCreatorId
+                        ? users.find(u => u.id === editProgramCreatorId)?.fullName || 
+                          employees.find(e => e.id === editProgramCreatorId)?.fullName || 
+                          creatorUsers.find(u => u.id === editProgramCreatorId)?.fullName ||
+                          "Selecionado"
+                        : "Selecione quem postou"}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[380px] p-0 bg-[#0c0c0e] border-amber-500/20 rounded-xl overflow-hidden" align="start">
+                  <Command className="bg-transparent text-white" shouldFilter={false}>
+                    <div className="flex items-center border-b border-amber-500/20 px-3">
+                      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50 text-amber-500" />
+                      <CommandInput 
+                        placeholder="Buscar por nome, email ou matrícula..." 
+                        value={creatorSearchTerm}
+                        onValueChange={setCreatorSearchTerm}
+                        className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-white/40 disabled:cursor-not-allowed disabled:opacity-50 text-white border-0 focus:ring-0" 
+                      />
+                    </div>
+                    <CommandList className="max-h-[250px] overflow-y-auto custom-scrollbar">
+                      <CommandEmpty className="text-white/40 py-6 text-center text-sm font-medium">
+                        {isSearchingCreators ? (
+                          <div className="flex items-center justify-center p-2">
+                            <Loader2 className="w-4 h-4 animate-spin mr-2 text-amber-500" />
+                            Buscando na base...
+                          </div>
+                        ) : "Nenhum usuário encontrado."}
+                      </CommandEmpty>
+                      
+                      <CommandGroup heading={creatorSearchTerm ? "Resultado da Busca" : "Sugestões de Colaboradores"} className="text-amber-500/60 font-black tracking-widest text-[10px] uppercase p-2">
+                        {(creatorSearchTerm ? creatorUsers : employees.slice(0, 10)).map((item: any) => (
+                          <CommandItem
+                            key={item.id}
+                            value={item.id}
+                            onSelect={() => {
+                              setEditProgramCreatorId(item.id);
+                              setIsCreatorPopoverOpen(false);
+                            }}
+                            className="hover:bg-amber-500/10 cursor-pointer text-white data-[selected=true]:bg-amber-500/10 data-[selected=true]:text-amber-500 p-3 rounded-lg flex items-center mb-1"
+                          >
+                            <Check className={cn("mr-3 h-4 w-4 text-amber-500 shrink-0", editProgramCreatorId === item.id ? "opacity-100" : "opacity-0")} />
+                            <div className="flex flex-col min-w-0 pr-2">
+                              <span className="font-bold text-sm truncate">{item.fullName || item.name || "Sem Nome"}</span>
+                              <span className="text-[10px] text-white/40 truncate">{item.email || "Sem Email"}</span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+
+                      {creatorSearchTerm && creatorUsers.length > 0 && (
+                        <div className="px-3 py-2 border-t border-white/5 bg-primary/10">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-primary">Busca Global (Toda a Empresa)</span>
+                        </div>
+                      )}
+
+                      {!creatorSearchTerm && (
+                        <CommandGroup heading="Usuários (Sugestões)" className="text-amber-500/60 font-black tracking-widest text-[10px] uppercase p-2">
+                          {users.slice(0, 10).map((u) => (
+                            <CommandItem
+                              key={u.id}
+                              value={u.id}
+                              onSelect={() => {
+                                setEditProgramCreatorId(u.id);
+                                setIsCreatorPopoverOpen(false);
+                              }}
+                              className="hover:bg-amber-500/10 cursor-pointer text-white data-[selected=true]:bg-amber-500/10 data-[selected=true]:text-amber-500 p-3 rounded-lg flex items-center mb-1"
+                            >
+                              <Check className={cn("mr-3 h-4 w-4 text-amber-500 shrink-0", editProgramCreatorId === u.id ? "opacity-100" : "opacity-0")} />
+                              <div className="flex flex-col min-w-0 pr-2">
+                                <span className="font-bold text-sm truncate">{u.fullName || "Sem Nome"}</span>
+                                <span className="text-[10px] text-white/40 truncate">{u.email || "Sem Email"}</span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-3 mt-4">
+            <Button
+              variant="ghost"
+              className="px-6 h-12 rounded-xl border border-white/5 bg-black/20 hover:bg-black/40 hover:text-white uppercase font-black text-xs text-white/50 transition-all"
+              onClick={() => setIsEditingProgram(false)}
+              disabled={isProcessing}
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="flex-1 h-12 rounded-xl uppercase font-black text-xs tracking-widest bg-amber-500 hover:bg-amber-600 text-black shadow-[0_0_20px_rgba(245,158,11,0.2)] hover:shadow-[0_0_30px_rgba(245,158,11,0.4)] transition-all border-none"
+              onClick={handleSaveProgramed}
+              disabled={isProcessing || (!editProgramTeamId && !editProgramEmployeeId)}
+            >
+              {isProcessing ? (
+                <Loader2 className="w-4 h-4 animate-spin text-black" />
+              ) : (
+                "Salvar Alterações"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

@@ -22,9 +22,12 @@ export class TowerProductionService {
       companyId,
       siteId,
       towerId: String(item.towerId || item.externalId || index + 1),
+      sequencia: Number(item.objectSeq || item.sequencia || 0),
       metadata: {
         trecho: item.trecho || "",
-        tower_type: item.towerType || "Autoportante",
+        towerType: item.towerType || "Autoportante",
+        tipificacaoEstrutura: item.tipificacaoEstrutura || "",
+        tramoLancamento: item.tramoLancamento || "",
         circuito: item.circuito || "",
         ...item.metadata,
       },

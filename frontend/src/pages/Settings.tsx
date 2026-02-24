@@ -52,7 +52,8 @@ import {
     uiSignal,
     realPermissionsSignal,
     realUiSignal,
-    selectedContextSignal
+    selectedContextSignal,
+    can
 } from "@/signals/authSignals";
 import { useSignals } from "@preact/signals-react/runtime";
 
@@ -596,23 +597,25 @@ export default function Settings() {
               <User className="w-5 h-5" />
               Perfil
             </CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleEditProfile}
-              className="h-8"
-            >
-              <Pencil className="w-3.5 h-3.5 mr-1.5" />
-              Editar
-            </Button>
+            {can("settings.edit") && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleEditProfile}
+                className="h-8"
+              >
+                <Pencil className="w-3.5 h-3.5 mr-1.5" />
+                Editar
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4">
             <div
-              className="relative group cursor-pointer"
-              onClick={handleEditProfile}
-              title="Clique para alterar foto"
+              className={cn("relative group", can("settings.edit") && "cursor-pointer")}
+              onClick={() => can("settings.edit") && handleEditProfile()}
+              title={can("settings.edit") ? "Clique para alterar foto" : undefined}
             >
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-2xl font-bold text-primary overflow-hidden border border-primary/20 transition-all group-hover:border-primary/50 group-hover:shadow-[0_0_15px_-3px_rgba(var(--primary),0.3)]">
                 {profile?.image ? (
@@ -625,9 +628,11 @@ export default function Settings() {
                   displayName.charAt(0).toUpperCase()
                 )}
               </div>
-              <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
-                <Camera className="w-5 h-5 text-white" />
-              </div>
+              {can("settings.edit") && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                  <Camera className="w-5 h-5 text-white" />
+                </div>
+              )}
             </div>
             <div>
               <p className="font-semibold text-lg">{displayName}</p>
@@ -721,92 +726,98 @@ export default function Settings() {
               className={`w-3 h-3 rounded-full ${isOnline ? "bg-green-500" : "bg-red-500"} animate-pulse`}
             />
           </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <Label>Pendentes</Label>
-              <p className="text-sm text-muted-foreground">
-                {pendingChanges} item(s)
-              </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Pendentes</Label>
+                <p className="text-sm text-muted-foreground">
+                  {pendingChanges} item(s)
+                </p>
+              </div>
+              {can("settings.edit") && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={syncNow}
+                  disabled={pendingChanges === 0}
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Sincronizar
+                </Button>
+              )}
             </div>
+        </CardContent>
+      </Card>
+
+      {can("settings.edit") && (
+        <Card className="glass-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="w-5 h-5" />
+              Dados
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <Button
               variant="outline"
-              size="sm"
-              onClick={syncNow}
-              disabled={pendingChanges === 0}
+              onClick={handleClearCache}
+              className="w-full border-amber-500/30 text-amber-500 hover:bg-amber-500/10"
             >
               <RefreshCw className="w-4 h-4 mr-2" />
-              Sincronizar
+              Limpar Cache de Dados
             </Button>
-          </div>
-        </CardContent>
-      </Card>
 
-      <Card className="glass-card">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Database className="w-5 h-5" />
-            Dados
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Button
-            variant="outline"
-            onClick={handleClearCache}
-            className="w-full border-amber-500/30 text-amber-500 hover:bg-amber-500/10"
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Limpar Cache de Dados
-          </Button>
-
-          <Button
-            variant="destructive"
-            onClick={clearAllData}
-            className="w-full"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Limpar Tudo e Sair
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card className="glass-card border-primary/20 bg-primary/5">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-primary" />
-            Segurança (2FA)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            {profile?.mfaEnabled
-              ? "A autenticação de dois fatores está ATIVADA na sua conta."
-              : "Adicione uma camada extra de segurança usando o Microsoft Authenticator."}
-          </p>
-          <div className="space-y-2">
             <Button
-              variant={profile?.mfaEnabled ? "outline" : "default"}
-              className={`w-full ${!profile?.mfaEnabled && "gradient-primary"}`}
-              onClick={() => setIsMfaModalOpen(true)}
+              variant="destructive"
+              onClick={clearAllData}
+              className="w-full"
             >
-              {profile?.mfaEnabled ? "Ver QR Code" : "Ativar 2FA"}
+              <Trash2 className="w-4 h-4 mr-2" />
+              Limpar Tudo e Sair
             </Button>
+          </CardContent>
+        </Card>
+      )}
 
-            {profile?.mfaEnabled && (
+      {can("settings.edit") && (
+        <Card className="glass-card border-primary/20 bg-primary/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-primary" />
+              Segurança (2FA)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {profile?.mfaEnabled
+                ? "A autenticação de dois fatores está ATIVADA na sua conta."
+                : "Adicione uma camada extra de segurança usando o Microsoft Authenticator."}
+            </p>
+            <div className="space-y-2">
               <Button
-                variant="destructive"
-                variant-ghost="true"
-                className="w-full text-xs h-8 border border-destructive/20"
-                onClick={() => {
-                  setDisableMfaCode("");
-                  setIsDisableMfaDialogOpen(true);
-                }}
+                variant={profile?.mfaEnabled ? "outline" : "default"}
+                className={`w-full ${!profile?.mfaEnabled && "gradient-primary"}`}
+                onClick={() => setIsMfaModalOpen(true)}
               >
-                <Lock className="w-3 h-3 mr-2" /> Desativar 2FA
+                {profile?.mfaEnabled ? "Ver QR Code" : "Ativar 2FA"}
               </Button>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+
+              {profile?.mfaEnabled && (
+                <Button
+                  variant="destructive"
+                  variant-ghost="true"
+                  className="w-full text-xs h-8 border border-destructive/20"
+                  onClick={() => {
+                    setDisableMfaCode("");
+                    setIsDisableMfaDialogOpen(true);
+                  }}
+                >
+                  <Lock className="w-3 h-3 mr-2" /> Desativar 2FA
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="glass-card">
         <CardContent className="pt-6">

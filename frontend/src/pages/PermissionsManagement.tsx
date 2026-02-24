@@ -68,7 +68,9 @@ export default function PermissionsManagement() {
         localApi.get('/permission_modules')
       ]);
       
-      const levelsData = Array.isArray(levelsRes.data) ? levelsRes.data : (levelsRes.data as any).data || [];
+      const SYSTEM_ROLES = ["SUPER_ADMIN", "SUPER_ADMIN_GOD", "HELPER_SYSTEM"];
+      const levelsData = (Array.isArray(levelsRes.data) ? levelsRes.data : (levelsRes.data as any).data || [])
+        .filter((l: any) => !SYSTEM_ROLES.includes(l.name.toUpperCase()));
       const modulesData = Array.isArray(modulesRes.data) ? modulesRes.data : (modulesRes.data as any).data || [];
       
       setLevels(levelsData);
@@ -127,14 +129,22 @@ export default function PermissionsManagement() {
         }));
 
       // O backend deve suportar atualização em lote da matriz para o levelId
-      await localApi.post(`/permission_matrix/sync`, {
+      const response = await localApi.post(`/permission_matrix/sync`, {
         levelId: selectedLevelId,
         matrix: matrixToSync
       });
       
+      if (response.error) {
+        throw new Error(response.error.message || "Falha ao salvar permissões.");
+      }
+
       toast({ title: "Sucesso", description: "Permissões atualizadas com sucesso!" });
-    } catch (error) {
-      toast({ title: "Erro", description: "Falha ao salvar permissões.", variant: "destructive" });
+    } catch (error: any) {
+      toast({ 
+        title: "Erro", 
+        description: error.message || "Falha ao salvar permissões.", 
+        variant: "destructive" 
+      });
     } finally {
       setIsSaving(false);
     }

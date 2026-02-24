@@ -14,6 +14,10 @@ const updateWorkStageSchema = z.object({
   description: z.string().optional().nullable(),
   color: z.string().optional().nullable(),
   order: z.number().int().optional(),
+  displayOrder: z.number().int().optional(),
+  weight: z.number().optional(),
+  productionActivityId: z.string().optional().nullable(),
+  metadata: z.record(z.any()).optional().nullable(),
 });
 
 interface Params {
@@ -27,7 +31,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     const { id } = await params;
 
     const stages = await service.findAll({ linkedOnly: false });
-    const stage = stages.find(s => s.id === id);
+    const stage = stages.find((s) => s.id === id);
 
     if (!stage) {
       return ApiResponse.notFound("Stage not found");
@@ -35,7 +39,10 @@ export async function GET(req: NextRequest, { params }: Params) {
 
     return ApiResponse.json(stage);
   } catch (error) {
-    return handleApiError(error, "src/app/api/v1/work_stages/[id]/route.ts#GET");
+    return handleApiError(
+      error,
+      "src/app/api/v1/work_stages/[id]/route.ts#GET",
+    );
   }
 }
 
@@ -47,14 +54,19 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const body = await req.json();
     const validation = updateWorkStageSchema.safeParse(body);
     if (!validation.success) {
-      return ApiResponse.validationError(validation.error.errors.map(e => e.message));
+      return ApiResponse.validationError(
+        validation.error.errors.map((e) => e.message),
+      );
     }
 
     const stage = await service.update(id, validation.data);
 
     return ApiResponse.json(stage);
   } catch (error) {
-    return handleApiError(error, "src/app/api/v1/work_stages/[id]/route.ts#PUT");
+    return handleApiError(
+      error,
+      "src/app/api/v1/work_stages/[id]/route.ts#PUT",
+    );
   }
 }
 
@@ -71,6 +83,9 @@ export async function DELETE(req: NextRequest, { params }: Params) {
 
     return ApiResponse.json({ success: true }, "Etapa removida com sucesso");
   } catch (error) {
-    return handleApiError(error, "src/app/api/v1/work_stages/[id]/route.ts#DELETE");
+    return handleApiError(
+      error,
+      "src/app/api/v1/work_stages/[id]/route.ts#DELETE",
+    );
   }
 }

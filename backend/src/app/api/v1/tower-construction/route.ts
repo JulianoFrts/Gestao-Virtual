@@ -62,3 +62,26 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    await requireAuth();
+    const body = await req.json();
+    const { ids } = body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return ApiResponse.badRequest("ids array is required");
+    }
+
+    for (const id of ids) {
+      await constructionRepo.delete(id);
+    }
+
+    return ApiResponse.json({ deleted: ids.length });
+  } catch (error: any) {
+    return handleApiError(
+      error,
+      "src/app/api/v1/tower-construction/route.ts#DELETE",
+    );
+  }
+}

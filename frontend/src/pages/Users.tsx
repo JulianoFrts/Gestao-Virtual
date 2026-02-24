@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useProjects } from "@/hooks/useProjects";
 import { useSites } from "@/hooks/useSites";
+import { useJobFunctions } from "@/hooks/useJobFunctions";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -52,6 +53,7 @@ import {
   Trash2 as TrashIcon,
   CheckSquare,
   XCircle,
+  Briefcase,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
@@ -186,6 +188,7 @@ export default function Users() {
   const { companies } = useCompanies();
   const { projects } = useProjects();
   const { sites } = useSites();
+  const { functions: jobFunctions } = useJobFunctions();
   const { toast } = useToast();
   const [updatingUserId, setUpdatingUserId] = React.useState<string | null>(
     null,
@@ -320,6 +323,7 @@ export default function Users() {
     // Afiliação Extra
     laborType: "",
     iapName: "",
+    functionId: "",
   });
 
   // Admin Specific States
@@ -368,6 +372,7 @@ export default function Users() {
     // Afiliação Extra
     laborType: "",
     iapName: "",
+    functionId: "",
     permissions: [] as string[],
   });
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -612,6 +617,7 @@ export default function Users() {
       state: user.state || "",
       laborType: user.laborType || "",
       iapName: user.iapName || "",
+      functionId: user.functionId || "",
       permissions: user.permissions || [],
     });
     setErrors({});
@@ -685,6 +691,7 @@ export default function Users() {
         birthDate: editUserForm.birthDate || null,
         laborType: editUserForm.laborType || null,
         iapName: editUserForm.iapName || null,
+        functionId: editUserForm.functionId || null,
       },
       userToEdit,
     ); // Pass user object override
@@ -751,6 +758,7 @@ export default function Users() {
       createForm.phone || undefined,
       createForm.laborType || undefined,
       createForm.iapName || undefined,
+      createForm.functionId || undefined,
     );
 
     setIsCreating(false);
@@ -782,6 +790,7 @@ export default function Users() {
         state: "",
         laborType: "",
         iapName: "",
+        functionId: "",
       });
     } else {
       toast({
@@ -963,6 +972,7 @@ export default function Users() {
                   state: "",
                   laborType: "",
                   iapName: "",
+                  functionId: "",
                 });
                 setIsCreateOpen(true);
               }}
@@ -1549,6 +1559,32 @@ export default function Users() {
                               </Select>
                             </div>
 
+                            <div className="space-y-2">
+                              <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
+                                Função / Cargo
+                              </Label>
+                              <Select
+                                value={createForm.functionId || "none"}
+                                onValueChange={(val) =>
+                                  setCreateForm({ ...createForm, functionId: val === "none" ? "" : val })
+                                }
+                              >
+                                <SelectTrigger className="bg-white/5 border-white/10">
+                                  <SelectValue placeholder="Selecione a função..." />
+                                </SelectTrigger>
+                                <SelectContent className="glass-card border-white/10">
+                                  <SelectItem value="none">
+                                    Nenhuma Função
+                                  </SelectItem>
+                                  {jobFunctions.map((f) => (
+                                    <SelectItem key={f.id} value={f.id}>
+                                      {f.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
                             {/* Separador Visual e Campos Extras de Afiliação */}
                             <div className="relative pt-4 pb-2">
                               <div
@@ -1570,11 +1606,11 @@ export default function Users() {
                                   Mão de Obra
                                 </Label>
                                 <Select
-                                  value={createForm.laborType}
+                                  value={createForm.laborType || "none"}
                                   onValueChange={(val) =>
                                     setCreateForm({
                                       ...createForm,
-                                      laborType: val,
+                                      laborType: val === "none" ? "" : val,
                                     })
                                   }
                                 >
@@ -1582,6 +1618,9 @@ export default function Users() {
                                     <SelectValue placeholder="Selecione..." />
                                   </SelectTrigger>
                                   <SelectContent className="glass-card border-white/10">
+                                    <SelectItem value="none">
+                                      Nenhuma
+                                    </SelectItem>
                                     <SelectItem value="MOD">
                                       Mão de Obra Direta
                                     </SelectItem>
@@ -2226,17 +2265,51 @@ export default function Users() {
                           )}
                         </span>
 
-                        {/* Technical Flags MOD/IAP - Only if BackEnd allows/provides */}
-                        {(user.laborType || user.iapName) && (
+                        {user.jobFunction && (
+                          <span className="text-xs text-primary flex items-center gap-1">
+                            <Briefcase className="w-3.5 h-3.5" />
+                            {user.jobFunction.name}
+                          </span>
+                        )}
+
+                        {/* Technical Flags MOD/IAP - Clickable to change */}
+                        {(user.laborType || user.iapName || canUpdate) && (
                           <div className="flex items-center gap-2">
-                            {user.laborType && (
+                            {canUpdate ? (
+                              <Select
+                                value={user.laborType || "none"}
+                                onValueChange={async (val) => {
+                                  const newLaborType = val === "none" ? "" : val;
+                                  try {
+                                    const { error } = await db
+                                      .from("users")
+                                      .update({ labor_type: newLaborType || null })
+                                      .eq("id", user.id);
+                                    if (error) throw error;
+                                    toast({ title: "Mão de Obra atualizada", description: `${user.fullName}: ${newLaborType || "Nenhuma"}` });
+                                    window.location.reload();
+                                  } catch {
+                                    toast({ title: "Erro ao atualizar", variant: "destructive" });
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="h-5 w-auto min-w-[60px] px-1.5 text-[10px] bg-muted/20 border-white/5 text-muted-foreground hover:bg-primary/10 hover:border-primary/20 transition-all">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="glass-card border-white/10">
+                                  <SelectItem value="none">Nenhuma</SelectItem>
+                                  <SelectItem value="MOD">MOD</SelectItem>
+                                  <SelectItem value="MOI">MOI</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : user.laborType ? (
                               <Badge
                                 variant="outline"
                                 className="text-[10px] h-4 bg-muted/20 border-white/5 text-muted-foreground"
                               >
                                 {user.laborType}
                               </Badge>
-                            )}
+                            ) : null}
                             {user.iapName && (
                               <Badge
                                 variant="outline"
@@ -2941,6 +3014,32 @@ export default function Users() {
                         </Select>
                       </div>
 
+                      <div className="space-y-2 animate-in slide-in-from-top-2">
+                        <Label className="text-[10px] uppercase text-muted-foreground font-black tracking-widest">
+                          Função / Cargo
+                        </Label>
+                        <Select
+                          value={editUserForm.functionId || "none"}
+                          onValueChange={(val) =>
+                            setEditUserForm({ ...editUserForm, functionId: val === "none" ? "" : val })
+                          }
+                        >
+                          <SelectTrigger className="bg-white/5 border-white/10">
+                            <SelectValue placeholder="Selecione a função..." />
+                          </SelectTrigger>
+                          <SelectContent className="glass-card border-white/10">
+                            <SelectItem value="none">
+                              Nenhuma Função
+                            </SelectItem>
+                            {jobFunctions.map((f) => (
+                              <SelectItem key={f.id} value={f.id}>
+                                {f.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
                       {/* Separador Visual e Campos Extras de Afiliação */}
                       <div className="relative pt-4 pb-2">
                         <div
@@ -2962,11 +3061,11 @@ export default function Users() {
                             Mão de Obra
                           </Label>
                           <Select
-                            value={editUserForm.laborType}
+                            value={editUserForm.laborType || "none"}
                             onValueChange={(val) =>
                               setEditUserForm({
                                 ...editUserForm,
-                                laborType: val,
+                                laborType: val === "none" ? "" : val,
                               })
                             }
                           >
@@ -2974,6 +3073,9 @@ export default function Users() {
                               <SelectValue placeholder="Selecione..." />
                             </SelectTrigger>
                             <SelectContent className="glass-card border-white/10">
+                              <SelectItem value="none">
+                                Nenhuma
+                              </SelectItem>
                               <SelectItem value="MOD">
                                 Mão de Obra Direta
                               </SelectItem>

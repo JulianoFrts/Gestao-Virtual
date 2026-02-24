@@ -39,14 +39,14 @@ async function main() {
             email: "sistema@orion.pro",
             password: PASSWORD_HASHES.DEFAULT_SEED,
             status: "ACTIVE",
-            role: "SUPER_ADMIN"
-          }
+            role: "SUPER_ADMIN",
+          },
         },
         affiliation: {
           create: {
-            companyId
-          }
-        }
+            companyId,
+          },
+        },
       },
     });
   }
@@ -114,7 +114,7 @@ async function main() {
 
   // 4. Simular Produção
   const towers = await prisma.mapElementTechnicalData.findMany({
-    where: { projectId: project.id, elementType: 'TOWER' },
+    where: { projectId: project.id, elementType: "TOWER" },
     take: 50,
   });
   const teams = await prisma.team.findMany({
@@ -147,7 +147,7 @@ async function main() {
           plannedStart: pStart,
           plannedEnd: pEnd,
           plannedQuantity: 1,
-          plannedHHH: 8,
+          plannedHhh: 8,
           createdById: systemUser.id,
         },
       });
@@ -160,7 +160,9 @@ async function main() {
         workDate.setDate(workDate.getDate() + Math.floor(Math.random() * 10));
 
         await prisma.mapElementProductionProgress.upsert({
-          where: { elementId_activityId: { elementId: tower.id, activityId: act.id } },
+          where: {
+            elementId_activityId: { elementId: tower.id, activityId: act.id },
+          },
           create: {
             projectId: project.id,
             elementId: tower.id,
@@ -170,17 +172,17 @@ async function main() {
             startDate: pStart,
             endDate: isFinished ? workDate : null,
             dailyProduction: {
-              [workDate.toISOString().split('T')[0]]: {
+              [workDate.toISOString().split("T")[0]]: {
                 date: workDate.toISOString(),
                 teamId: team.id,
                 workersCount: 4,
                 hoursWorked: 8,
                 producedQuantity: isFinished ? 1 : 0.5,
-                leadName: team.supervisor?.name || "Encarregado Geral"
-              }
-            }
+                leadName: team.supervisor?.name || "Encarregado Geral",
+              },
+            },
           },
-          update: {}
+          update: {},
         });
       }
     }

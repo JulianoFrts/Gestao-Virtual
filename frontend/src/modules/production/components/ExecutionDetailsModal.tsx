@@ -115,23 +115,50 @@ export default function ExecutionDetailsModal({
 
                     {/* Comments Section */}
                     <div className="space-y-2">
-                        <Label className="text-xs font-semibold text-slate-400">Comentários / Observações</Label>
+                        <Label className="text-xs font-semibold text-slate-400">Novo Comentário / Observação</Label>
                         <Textarea 
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
-                            placeholder="Adicione informações sobre atrasos, planejamento ou execução..."
-                            className="bg-slate-900 border-slate-800 focus:border-amber-500/50 min-h-[100px] text-sm"
+                            placeholder="Descreva o que foi feito ou o motivo do atraso..."
+                            className="bg-slate-900 border-slate-800 focus:border-amber-500/50 min-h-[80px] text-sm"
                         />
+                    </div>
+
+                    {/* History Log */}
+                    <div className="space-y-2">
+                        <Label className="text-[10px] uppercase text-slate-500 font-bold">Histórico de Alterações</Label>
+                        <div className="max-h-[150px] overflow-y-auto pr-2 custom-scrollbar space-y-2">
+                            {statusData.history && statusData.history.length > 0 ? (
+                                [...statusData.history].reverse().map((log, i) => (
+                                    <div key={i} className="text-[11px] p-2 bg-slate-900/30 border border-slate-800/50 rounded flex flex-col gap-1">
+                                        <div className="flex justify-between items-center opacity-70">
+                                            <span className="font-bold flex items-center gap-1">
+                                                <Badge className="text-[8px] h-3.5 px-1 bg-slate-800">{log.status}</Badge>
+                                                {log.progressPercent}%
+                                            </span>
+                                            <span>{log.timestamp ? format(new Date(log.timestamp), "dd/MM HH:mm") : "-"}</span>
+                                        </div>
+                                        {log.metadata?.notes && (
+                                            <p className="text-slate-300 italic">"{log.metadata.notes}"</p>
+                                        )}
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-[10px] text-slate-600 italic text-center py-4 border border-dashed border-slate-800 rounded">
+                                    Nenhuma alteração registrada
+                                </p>
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                <DialogFooter className="flex justify-between sm:justify-between">
-                     <div className="text-[10px] text-slate-600 self-center">
-                        ID: {statusData.progressId || 'N/A'}
+                <DialogFooter className="flex justify-between sm:justify-between border-t border-slate-800 pt-4">
+                     <div className="text-[9px] text-slate-600 self-center font-mono">
+                        VER: {statusData.progressId || 'N/A'}
                      </div>
                     <div className="flex gap-2">
                         <Button variant="ghost" onClick={onClose} size="sm">Fechar</Button>
-                        <Button onClick={handleSave} disabled={isSaving} size="sm" className="bg-amber-600 hover:bg-amber-700">
+                        <Button onClick={handleSave} disabled={isSaving} size="sm" className="bg-amber-600 hover:bg-amber-700 font-bold border-b-2 border-amber-800">
                             {isSaving ? "Salvando..." : "Salvar Notas"}
                         </Button>
                     </div>

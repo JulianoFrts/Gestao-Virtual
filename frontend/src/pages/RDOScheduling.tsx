@@ -36,9 +36,12 @@ import {
   MapPin,
   CalendarClock,
   Info,
-  X
+  X,
+  Lock
 } from "lucide-react";
 import { useSignals } from "@preact/signals-react/runtime";
+import { Badge } from "@/components/ui/badge";
+import { getRoleStyle, getRoleLabel, STANDARD_ROLES } from "@/utils/roleUtils";
 import {
   rdoSchedulingDraftSignal,
   updateSchedulingDraft,
@@ -61,10 +64,10 @@ import {
 } from "@/components/ui/popover";
 import { useWorkStages } from "@/hooks/useWorkStages";
 import { fetchWorkStages } from "@/signals/workStageSignals";
+import { triggerGlobalReportRefresh } from "@/signals/dailyReportSignals";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useProjects } from "@/hooks/useProjects";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { useSpanTechnicalData } from "@/hooks/useSpanTechnicalData";
 
 // Definir interface de torre para alinhar com o backend (MapElementTechnicalData)
@@ -99,7 +102,8 @@ const fixBrokenEncoding = (str: string) => {
 export default function RDOScheduling() {
   useSignals();
   const { profile } = useAuth();
-  const { teams } = useTeams();
+  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string | undefined>(profile?.companyId || undefined);
+  const { teams } = useTeams(selectedCompanyId);
   const { sites } = useSites();
   const { createReport } = useDailyReports();
   const { toast } = useToast();
@@ -109,32 +113,48 @@ export default function RDOScheduling() {
   const draft = rdoSchedulingDraftSignal.value;
   const isSuperAdmin = !profile?.companyId; // Gestão Global / Super Admin
 
-  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string | undefined>(profile?.companyId || undefined);
   const [selectedProjectId, setSelectedProjectId] = React.useState<string | undefined>(undefined);
   const [isSaving, setIsSaving] = React.useState(false);
 
   const employeesFilter = React.useMemo(() => ({
     companyId: selectedCompanyId,
     excludeCorporate: false,
-    roles: ["WORKER", "SUPERVISOR", "MANAGER", "ADMIN", "SUPER_ADMIN", "GESTOR_PROJECT", "GESTOR_CANTEIRO", "TECHNICIAN"]
+    roles: STANDARD_ROLES.map(r => r.name)
   }), [selectedCompanyId]);
   const { employees } = useEmployees(employeesFilter);
 
   // Componente de Seleção de Funcionário com Busca
   // Componente de Seleção de Funcionário com Busca
+  // Componente de Seleção de Funcionário com Busca
   const EmployeePicker = ({ value, onChange, placeholder }: any) => {
     const [open, setOpen] = React.useState(false);
     const [searchTerm, setSearchTerm] = React.useState("");
+    const [roleFilter, setRoleFilter] = React.useState<string>("all");
 
     const filteredEmployees = React.useMemo(() => {
-      if (!searchTerm) return employees.slice(0, 10);
-      const search = searchTerm.toLowerCase();
-      return employees.filter(e => 
-        e.fullName.toLowerCase().includes(search) || 
-        (e.registrationNumber || "").toLowerCase().includes(search) ||
-        (e.email || "").toLowerCase().includes(search)
-      ).slice(0, 50);
-    }, [employees, searchTerm]);
+      let result = employees;
+
+      if (roleFilter !== "all") {
+        result = result.filter(e => e.role === roleFilter);
+      }
+
+      if (searchTerm) {
+        const search = searchTerm.toLowerCase();
+        result = result.filter(e => 
+          (e.fullName || "").toLowerCase().includes(search) || 
+          (e.registrationNumber || "").toLowerCase().includes(search) ||
+          (e.email || "").toLowerCase().includes(search)
+        );
+      }
+
+      // Ordenar por prioridade de cargo (rank) igual ao Gestão de Usuários
+      return result.sort((a, b) => {
+        const rankA = STANDARD_ROLES.find((r) => r.name === (a.role || "WORKER").toUpperCase())?.rank || 0;
+        const rankB = STANDARD_ROLES.find((r) => r.name === (b.role || "WORKER").toUpperCase())?.rank || 0;
+        if (rankB !== rankA) return rankB - rankA;
+        return (a.fullName || "").localeCompare(b.fullName || "");
+      }).slice(0, 50);
+    }, [employees, searchTerm, roleFilter]);
 
     return (
       <Popover open={open} onOpenChange={setOpen}>
@@ -152,7 +172,24 @@ export default function RDOScheduling() {
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[300px] p-0 glass-card border-blue-500/20" align="start">
+        <PopoverContent className="w-[380px] p-0 glass-card border-blue-500/20" align="start">
+          <div className="flex flex-col gap-2 p-2 border-b border-white/5">
+            <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <SelectTrigger className="h-8 bg-black/40 border-white/10 text-[10px] font-bold uppercase tracking-wider">
+                <SelectValue placeholder="Filtrar por Cargo" />
+              </SelectTrigger>
+              <SelectContent className="glass-card border-white/10 bg-black/95 max-h-[200px]">
+                <SelectItem value="all" className="font-bold text-[10px] uppercase tracking-wider">
+                  TODOS OS CARGOS
+                </SelectItem>
+                {STANDARD_ROLES.map((r) => (
+                  <SelectItem key={r.name} value={r.name.toUpperCase()} className="font-bold text-[10px] uppercase tracking-wider">
+                    {getRoleLabel(r.name)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Command shouldFilter={false} className="bg-transparent text-foreground">
             <CommandInput 
               placeholder="Buscar por nome, email ou matrícula..." 
@@ -160,9 +197,12 @@ export default function RDOScheduling() {
               onValueChange={setSearchTerm}
               className="h-11 border-none focus:ring-0 text-foreground text-xs" 
             />
-            <CommandList>
-              <CommandEmpty className="text-muted-foreground py-4 text-center text-xs">Nenhum colaborador encontrado.</CommandEmpty>
-              <CommandGroup heading={searchTerm ? "Resultados da Busca" : "Sugestões Recentes"}>
+            <CommandList className="max-h-[300px]">
+              <CommandEmpty className="text-muted-foreground py-8 flex flex-col items-center justify-center gap-2 text-xs">
+                <Search className="h-6 w-6 text-muted-foreground/50" />
+                Nenhum colaborador encontrado.
+              </CommandEmpty>
+              <CommandGroup heading={searchTerm || roleFilter !== "all" ? "Resultados da Busca" : "Sugestões Recentes"}>
                 {filteredEmployees.map((e) => (
                   <CommandItem
                     key={e.id}
@@ -172,12 +212,21 @@ export default function RDOScheduling() {
                       setOpen(false);
                       setSearchTerm("");
                     }}
-                    className="hover:bg-blue-500/20 cursor-pointer text-foreground data-[selected=true]:bg-blue-500/20 p-2"
+                    className="hover:bg-blue-500/20 cursor-pointer text-foreground data-[selected=true]:bg-blue-500/20 p-3 mb-1 rounded-lg"
                   >
-                    <Check className={cn("mr-2 h-4 w-4 text-blue-500 shrink-0", value === e.id ? "opacity-100" : "opacity-0")} />
-                    <div className="flex flex-col min-w-0 pr-2">
-                      <span className="font-bold text-sm truncate">{e.fullName}</span>
-                      <span className="text-[10px] text-muted-foreground truncate">{e.registrationNumber || e.email}</span>
+                    <div className="flex flex-col w-full min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-sm truncate pr-2" title={e.fullName}>{e.fullName}</span>
+                        <Badge variant="outline" className={cn("text-[9px] h-4 shrink-0 shadow-sm", getRoleStyle(e.role || "WORKER"))}>
+                          {getRoleLabel(e.role || "WORKER")}
+                        </Badge>
+                      </div>
+                      <div className="flex flex-col opacity-60">
+                        <span className="text-xs truncate">{e.email || "Sem e-mail"}</span>
+                        {e.registrationNumber && (
+                          <span className="text-[10px] font-bold">MAT: {e.registrationNumber}</span>
+                        )}
+                      </div>
                     </div>
                   </CommandItem>
                 ))}
@@ -189,6 +238,7 @@ export default function RDOScheduling() {
     );
   };
 
+
   const { projects } = useProjects();
   const filteredProjects = projects.filter(p => !selectedCompanyId || p.companyId === selectedCompanyId);
   
@@ -196,36 +246,58 @@ export default function RDOScheduling() {
   
   const filteredSites = sites.filter(s => !selectedProjectId || s.projectId === selectedProjectId);
 
-  // Derivar o projectId efetivo
-  const effectiveProjectId = React.useMemo(() => {
-    const fromSite = sites.find((s) => s.id === effectiveSiteId)?.projectId;
-    return fromSite || selectedProjectId || undefined;
-  }, [effectiveSiteId, sites, selectedProjectId]);
+  // Derivar Site ID e Project ID do colaborador selecionado usando hook otimizado
+  const effectiveLocation = React.useMemo(() => {
+    let empSiteId: string | null = null;
+    let empProjectId: string | null = null;
 
-  // Carregar etapas de obra
+    if (draft.employeeId) {
+      const empTeam = teams.find(t => t.supervisorId === draft.employeeId || t.members.includes(draft.employeeId!));
+      if (empTeam?.siteId) {
+         empSiteId = empTeam.siteId;
+         const site = sites.find(s => s.id === empSiteId);
+         if (site) empProjectId = site.projectId;
+      }
+    }
+    
+    // Se o funcionário tem um canteiro atrelado, usamos ele e forçamos o lock
+    if (empSiteId && empProjectId) {
+      return { siteId: empSiteId, projectId: empProjectId, isLocked: true };
+    }
+
+    // Fallback: usar seleções manuais caso o funcionário não tenha canteiro ou não esteja selecionado
+    const projectId = selectedProjectId || (effectiveSiteId ? sites.find(s => s.id === effectiveSiteId)?.projectId : undefined);
+    return { siteId: effectiveSiteId, projectId: projectId || undefined, isLocked: false };
+  }, [draft.employeeId, teams, sites, selectedProjectId, effectiveSiteId]);
+
+  const finalSiteId = effectiveLocation.siteId;
+  const finalProjectId = effectiveLocation.projectId;
+  const isLocationLocked = effectiveLocation.isLocked;
+
+  // Carregar etapas de obra usando os construtores baseados no supervisor (opcional, pode ser globalmente)
   const { stages: workStages, isLoading: isLoadingStages } = useWorkStages(
-    effectiveSiteId || undefined,
-    effectiveProjectId,
+    finalSiteId || undefined,
+    finalProjectId,
     false,
     selectedCompanyId
   );
 
   // Forçar reload das stages
   React.useEffect(() => {
-    if (effectiveProjectId) {
-      fetchWorkStages(true, effectiveSiteId || undefined, effectiveProjectId, selectedCompanyId).catch(console.error);
+    if (finalProjectId) {
+      fetchWorkStages(true, finalSiteId || undefined, finalProjectId, selectedCompanyId).catch(console.error);
     }
-  }, [effectiveProjectId, effectiveSiteId, selectedCompanyId]);
+  }, [finalProjectId, finalSiteId, selectedCompanyId]);
 
   const [projectTowers, setProjectTowers] = React.useState<Tower[]>([]);
   const { spans: projectSpans } = useSpanTechnicalData(
-    sites.find((s) => s.id === effectiveSiteId)?.projectId || undefined,
+    sites.find((s) => s.id === finalSiteId)?.projectId || undefined,
   );
 
   // Buscar torres
   React.useEffect(() => {
     const fetchTowers = async () => {
-      const siteId = effectiveSiteId;
+      const siteId = finalSiteId;
       if (!siteId) return;
 
       const site = sites.find((s) => s.id === siteId);
@@ -254,7 +326,7 @@ export default function RDOScheduling() {
     };
 
     fetchTowers();
-  }, [sites, effectiveSiteId]);
+  }, [sites, finalSiteId]);
 
   // Agrupar atividades (Lógica portada de DailyReport.tsx)
   const workStagesGrouped = React.useMemo(() => {
@@ -357,7 +429,7 @@ export default function RDOScheduling() {
 
   // Preview Metadata
   const fetchPreviewLocal = React.useCallback(async () => {
-    const projectId = effectiveProjectId;
+    const projectId = finalProjectId;
     if (!projectId || currentSubPointType === "GERAL" || !currentSubPoint) {
       setPreviewData({ expandedTowers: [], finalLabel: "" });
       return;
@@ -379,7 +451,7 @@ export default function RDOScheduling() {
     } finally {
       setIsPreviewing(false);
     }
-  }, [effectiveProjectId, currentSubPointType, currentSubPoint, currentSubPointEnd, currentIsMultiSelection]);
+  }, [finalProjectId, currentSubPointType, currentSubPoint, currentSubPointEnd, currentIsMultiSelection]);
 
   React.useEffect(() => {
     fetchPreviewLocal();
@@ -456,6 +528,7 @@ export default function RDOScheduling() {
       if (result.success) {
         toast({ title: "Programação Salva!", description: "A atividade foi agendada com sucesso." });
         resetSchedulingDraft();
+        triggerGlobalReportRefresh();
       }
     } finally {
       setIsSaving(false);
@@ -540,26 +613,40 @@ export default function RDOScheduling() {
                     <Input type="date" className="bg-black/20 border-blue-500/20 rounded-xl h-11" value={draft.reportDate} onChange={(e) => updateSchedulingDraft({ reportDate: e.target.value })} />
                   </div>
                   <div className="space-y-3">
-                    <Label className="text-blue-500/80 font-bold uppercase text-[10px] tracking-widest pl-1">Obra / Projeto</Label>
-                    <Select value={selectedProjectId || ""} onValueChange={(val) => { setSelectedProjectId(val); setEffectiveSiteId(null); updateSchedulingDraft({ siteId: "" }); }}>
-                      <SelectTrigger className="bg-black/20 border-blue-500/20 rounded-xl h-11"><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
-                      <SelectContent className="glass-card">{filteredProjects.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-3">
-                    <Label className="text-blue-500/80 font-bold uppercase text-[10px] tracking-widest pl-1">Canteiro</Label>
-                    <Select value={effectiveSiteId || ""} onValueChange={(val) => { setEffectiveSiteId(val); updateSchedulingDraft({ siteId: val }); }} disabled={!selectedProjectId}>
-                      <SelectTrigger className="bg-black/20 border-blue-500/20 rounded-xl h-11"><SelectValue placeholder="Selecione o canteiro..." /></SelectTrigger>
-                      <SelectContent className="glass-card">{filteredSites.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-3">
                     <Label className="text-blue-500/80 font-bold uppercase text-[10px] tracking-widest pl-1">Responsável pela Equipe</Label>
                     <EmployeePicker 
                       value={draft.employeeId} 
                       onChange={(val: string) => updateSchedulingDraft({ employeeId: val })} 
                       placeholder="Buscar responsável..." 
                     />
+                  </div>
+                  <div className="space-y-3">
+                    <Label className="text-blue-500/80 font-bold uppercase text-[10px] tracking-widest pl-1">Obra / Projeto</Label>
+                    {isLocationLocked || !selectedCompanyId ? (
+                      <div className="bg-black/40 border border-blue-500/10 h-11 flex items-center justify-between px-4 rounded-xl text-xs font-bold text-blue-500/60 cursor-not-allowed">
+                          <span>{filteredProjects.find(p => p.id === finalProjectId)?.name || "Obra Automática"}</span>
+                          <Lock className="w-4 h-4 text-blue-500/40" />
+                      </div>
+                    ) : (
+                      <Select value={selectedProjectId || ""} onValueChange={(val) => { setSelectedProjectId(val); setEffectiveSiteId(null); updateSchedulingDraft({ siteId: "" }); }}>
+                        <SelectTrigger className="bg-black/20 border-blue-500/20 rounded-xl h-11"><SelectValue placeholder="Selecione a obra..." /></SelectTrigger>
+                        <SelectContent className="glass-card">{filteredProjects.map((p) => (<SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>))}</SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    <Label className="text-blue-500/80 font-bold uppercase text-[10px] tracking-widest pl-1">Canteiro</Label>
+                    {isLocationLocked || !finalProjectId ? (
+                      <div className="bg-black/40 border border-blue-500/10 h-11 flex items-center justify-between px-4 rounded-xl text-xs font-bold text-blue-500/60 cursor-not-allowed">
+                          <span>{filteredSites.find(s => s.id === finalSiteId)?.name || "Canteiro Automático"}</span>
+                          <Lock className="w-4 h-4 text-blue-500/40" />
+                      </div>
+                    ) : (
+                      <Select value={effectiveSiteId || ""} onValueChange={(val) => { setEffectiveSiteId(val); updateSchedulingDraft({ siteId: val }); }} disabled={!finalProjectId}>
+                        <SelectTrigger className="bg-black/20 border-blue-500/20 rounded-xl h-11"><SelectValue placeholder="Selecione o canteiro..." /></SelectTrigger>
+                        <SelectContent className="glass-card">{filteredSites.map((s) => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent>
+                      </Select>
+                    )}
                   </div>
                 </div>
 

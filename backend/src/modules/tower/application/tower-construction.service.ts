@@ -7,6 +7,7 @@ import {
   TowerProductionRepository,
 } from "../domain/tower-production.repository";
 import { logger } from "@/lib/utils/logger";
+import { prisma } from "@/lib/prisma/client";
 
 export class TowerConstructionService {
   constructor(
@@ -51,31 +52,53 @@ export class TowerConstructionService {
 
     const saved = await this.repository.saveMany(elements);
 
-    // 2. Auto-provisionar torres na tabela de Produção (se repositório disponível)
+    // 2. Auto-provisionar torres na tabela de Produção APENAS se não existirem
+    // NÃO sobrescrever registros existentes para preservar dados de produção (ex: towerType/TextoTorre)
     if (this.productionRepository) {
-      logger.info(
-        `[TowerConstructionService] Auto-provisioning ${data.length} towers in Production table`,
+      const existingTowers = await prisma.towerProduction.findMany({
+        where: {
+          projectId,
+          towerId: { in: data.map((d: any) => String(d.towerId)) },
+        },
+        select: { towerId: true },
+      });
+      const existingSet = new Set(existingTowers.map((t: any) => t.towerId));
+
+      const newTowers = data.filter(
+        (item: any) => !existingSet.has(String(item.towerId)),
       );
 
-      const productionElements: TowerProductionData[] = data.map((item) => ({
-        projectId,
-        companyId,
-        towerId: String(item.towerId),
-        sequencia: Number(item.sequencia || 0),
-        metadata: {
-          trecho: "",
-          towerType: "Autoportante",
-        },
-      }));
-
-      try {
-        await this.productionRepository.saveMany(productionElements);
+      if (newTowers.length > 0) {
         logger.info(
-          `[TowerConstructionService] Production auto-provision complete`,
+          `[TowerConstructionService] Auto-provisioning ${newTowers.length} NEW towers in Production (skipping ${existingSet.size} existing)`,
         );
-      } catch (err: any) {
-        logger.error(
-          `[TowerConstructionService] Production auto-provision failed: ${err.message}`,
+
+        const productionElements: TowerProductionData[] = newTowers.map(
+          (item: any) => ({
+            projectId,
+            companyId,
+            towerId: String(item.towerId),
+            sequencia: Number(item.sequencia || 0),
+            metadata: {
+              trecho: "",
+              towerType: "Autoportante",
+            },
+          }),
+        );
+
+        try {
+          await this.productionRepository.saveMany(productionElements);
+          logger.info(
+            `[TowerConstructionService] Production auto-provision complete`,
+          );
+        } catch (err: any) {
+          logger.error(
+            `[TowerConstructionService] Production auto-provision failed: ${err.message}`,
+          );
+        }
+      } else {
+        logger.info(
+          `[TowerConstructionService] All ${data.length} towers already exist in Production, skipping auto-provision`,
         );
       }
     }

@@ -38,24 +38,36 @@ export function useSites(projectId?: string, companyId?: string) {
         try {
             if (navigator.onLine) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                let query = (db as any).from('sites').select('*, project(id, companyId)');
+                let query = (db as any).from('sites').select('*, project(id, company_id)');
 
                 // Security/Filtering Logic:
                 const isGod = isGestaoGlobal(profile) || isCorporateRole(profileRole, profile);
                 const effectiveCompanyId = companyId || (isGod ? undefined : profileCompanyId);
 
-                if (projectId) query = query.eq('projectId', projectId);
-                if (effectiveCompanyId) query = query.eq('companyId', effectiveCompanyId);
+                if (projectId) query = query.eq('project_id', projectId);
+                if (effectiveCompanyId) query = query.eq('company_id', effectiveCompanyId);
 
                 const { data, error } = await query.order('name');
 
                 if (error) throw error;
 
+                // Unwrapping robusto para extrair a lista real de itens
+                let rawData: any[] = [];
+                if (Array.isArray(data)) {
+                    if (data.length === 1 && data[0] && Array.isArray((data[0] as any).items)) {
+                        rawData = (data[0] as any).items;
+                    } else {
+                        rawData = data;
+                    }
+                } else if (data && Array.isArray((data as any).items)) {
+                    rawData = (data as any).items;
+                }
+
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const mapped: Site[] = (data || []).map((s: any) => ({
+                const mapped: Site[] = rawData.map((s: any) => ({
                     id: s.id,
                     projectId: s.projectId || s.project_id || s.project?.id,
-                    companyId: s.companyId || s.project?.companyId || s.project?.company_id,
+                    companyId: s.companyId || s.company_id || s.project?.companyId || s.project?.company_id,
                     name: s.name,
                     locationDetails: s.locationDetails || s.location_details,
                     plannedHours: Number(s.plannedHours || s.planned_hours || 0),
@@ -92,12 +104,12 @@ export function useSites(projectId?: string, companyId?: string) {
             const { data: created, error } = await (db as any)
                 .from('sites')
                 .insert({
-                    projectId: data.projectId,
+                    project_id: data.projectId,
                     name: data.name,
-                    locationDetails: data.locationDetails,
-                    plannedHours: data.plannedHours || 0,
-                    xLat: data.xLat || null,
-                    yLa: data.yLa || null
+                    location_details: data.locationDetails,
+                    planned_hours: data.plannedHours || 0,
+                    x_lat: data.xLat || null,
+                    y_la: data.yLa || null
                 })
                 .select()
                 .single();
@@ -130,15 +142,15 @@ export function useSites(projectId?: string, companyId?: string) {
             const { data: updated, error } = await (db as any)
                 .from('sites')
                 .update({
-                    projectId: data.projectId,
+                    project_id: data.projectId,
                     name: data.name,
-                    locationDetails: data.locationDetails,
-                    plannedHours: data.plannedHours !== undefined ? data.plannedHours : undefined,
-                    xLat: data.xLat !== undefined ? data.xLat : undefined,
-                    yLa: data.yLa !== undefined ? data.yLa : undefined
+                    location_details: data.locationDetails,
+                    planned_hours: data.plannedHours !== undefined ? data.plannedHours : undefined,
+                    x_lat: data.xLat !== undefined ? data.xLat : undefined,
+                    y_la: data.yLa !== undefined ? data.yLa : undefined
                 })
                 .eq('id', id)
-                .select('*, projects(company_id)')
+                .select('*, project(company_id)')
                 .single();
 
             if (error) throw error;

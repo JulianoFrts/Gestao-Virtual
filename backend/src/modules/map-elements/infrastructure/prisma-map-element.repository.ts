@@ -35,6 +35,7 @@ export class PrismaMapElementRepository implements MapElementRepository {
         updated.companyId,
         updated.siteId,
         updated.metadata,
+        updated.sequence,
       );
     }
 
@@ -69,6 +70,7 @@ export class PrismaMapElementRepository implements MapElementRepository {
         result.companyId,
         result.siteId,
         result.metadata,
+        result.sequence,
       );
     }
 
@@ -84,51 +86,25 @@ export class PrismaMapElementRepository implements MapElementRepository {
     companyId: string,
     siteId: string | null,
     metadata: any,
+    sequence: number = 0,
   ) {
     const meta = typeof metadata === "string" ? JSON.parse(metadata) : metadata;
 
-    await Promise.all([
-      prisma.towerProduction.upsert({
-        where: { projectId_towerId: { projectId, towerId } },
-        update: { companyId, siteId, metadata: meta },
-        create: { projectId, towerId, companyId, siteId, metadata: meta },
-      }),
-      prisma.towerConstruction.upsert({
-        where: { projectId_towerId: { projectId, towerId } },
-        update: {
-          companyId,
-          siteId,
-          metadata: {
-            lat: meta.latitude || 0,
-            lng: meta.longitude || 0,
-            elevacao: meta.elevation || 0,
-            vao: meta.goForward || 0,
-            pesoEstrutura: meta.pesoEstrutura || 0,
-            pesoConcreto: meta.totalConcreto || 0,
-            pesoAco1: meta.pesoArmacao || 0,
-            tipificacaoEstrutura: meta.tipificacaoEstrutura || "",
-            foundationType: meta.tipoFundacao || meta.foundationType || "",
-          },
-        },
-        create: {
-          projectId,
-          towerId,
-          companyId,
-          siteId,
-          metadata: {
-            lat: meta.latitude || 0,
-            lng: meta.longitude || 0,
-            elevacao: meta.elevation || 0,
-            vao: meta.goForward || 0,
-            pesoEstrutura: meta.pesoEstrutura || 0,
-            pesoConcreto: meta.totalConcreto || 0,
-            pesoAco1: meta.pesoArmacao || 0,
-            tipificacaoEstrutura: meta.tipificacaoEstrutura || "",
-            foundationType: meta.tipoFundacao || meta.foundationType || "",
-          },
-        },
-      }),
-    ]);
+    // Sincronizar APENAS com TowerProduction.
+    // TowerConstruction (dados técnicos) é gerenciado exclusivamente pelo import de Dados Técnicos.
+    // NÃO tocar em TowerConstruction aqui para evitar sobrescrever dados técnicos com zeros.
+    await prisma.towerProduction.upsert({
+      where: { projectId_towerId: { projectId, towerId } },
+      update: { companyId, siteId, metadata: meta, sequencia: sequence },
+      create: {
+        projectId,
+        towerId,
+        companyId,
+        siteId,
+        metadata: meta,
+        sequencia: sequence,
+      },
+    });
   }
 
   async saveMany(
@@ -240,6 +216,7 @@ export class PrismaMapElementRepository implements MapElementRepository {
               el.companyId,
               el.siteId,
               el.metadata,
+              Number(el.sequence) || 0,
             ),
           ),
         );
@@ -345,9 +322,7 @@ export class PrismaMapElementRepository implements MapElementRepository {
       prisma.towerProduction.deleteMany({
         where: { projectId, towerId },
       }),
-      prisma.towerConstruction.deleteMany({
-        where: { projectId, towerId },
-      }),
+      // NÃO deletar TowerConstruction — dados técnicos são independentes
       prisma.towerActivityGoal.deleteMany({
         where: { projectId, towerId },
       }),
@@ -372,8 +347,8 @@ export class PrismaMapElementRepository implements MapElementRepository {
       select: { id: true, projectId: true, towerId: true },
     });
 
-    const legacyIds = legacyElements.map((e) => e.id);
-    const productionIds = productionElements.map((e) => e.id);
+    const legacyIds = legacyElements.map((e: any) => e.id);
+    const productionIds = productionElements.map((e: any) => e.id);
 
     // Group by projectId for efficient deletion in related tables
     const projectsMap = new Map<string, Set<string>>();
@@ -404,9 +379,7 @@ export class PrismaMapElementRepository implements MapElementRepository {
         await tx.towerProduction.deleteMany({
           where: { projectId, towerId: { in: externalIds } },
         });
-        await tx.towerConstruction.deleteMany({
-          where: { projectId, towerId: { in: externalIds } },
-        });
+        // NÃO deletar TowerConstruction — dados técnicos são independentes
         await tx.towerActivityGoal.deleteMany({
           where: { projectId, towerId: { in: externalIds } },
         });
@@ -437,9 +410,7 @@ export class PrismaMapElementRepository implements MapElementRepository {
       prisma.towerProduction.deleteMany({
         where: { projectId },
       }),
-      prisma.towerConstruction.deleteMany({
-        where: { projectId },
-      }),
+      // NÃO deletar TowerConstruction — dados técnicos são independentes
       prisma.towerActivityGoal.deleteMany({
         where: { projectId },
       }),

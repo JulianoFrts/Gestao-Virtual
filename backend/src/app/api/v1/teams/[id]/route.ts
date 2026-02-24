@@ -11,8 +11,15 @@ import { CONSTANTS } from "@/lib/constants";
 const teamService = new TeamService(new PrismaTeamRepository());
 
 const updateTeamSchema = z.object({
-  name: z.string().min(2).max(CONSTANTS.VALIDATION.STRING.MAX_SHORT_TEXT).optional(),
+  name: z
+    .string()
+    .min(2)
+    .max(CONSTANTS.VALIDATION.STRING.MAX_SHORT_TEXT)
+    .optional(),
   supervisorId: z.string().optional().nullable(),
+  companyId: z.string().optional().nullable(),
+  siteId: z.string().optional().nullable(),
+  projectId: z.string().optional().nullable(),
   isActive: z.boolean().optional(),
   displayOrder: z.number().optional(),
   laborType: z.enum(["MOD", "MOI"]).optional(),

@@ -1,25 +1,33 @@
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
-async function main() {
-  const count = await prisma.towerProduction.count();
-  console.log("Total towers in TowerProduction:", count);
+async function debug() {
+  const projectId = "cmlzpj28k0002trjshyaex55o";
+  console.log("Project ID:", projectId);
 
-  if (count > 0) {
-    const samples = await prisma.towerProduction.findMany({ take: 5 });
-    console.log("Samples:", JSON.stringify(samples, null, 2));
+  const mapElements = await prisma.mapElementTechnicalData.count({
+    where: { projectId },
+  });
+  console.log("Map Elements Count:", mapElements);
 
-    const projectIds = await prisma.towerProduction.groupBy({
-      by: ["projectId"],
-      _count: { _all: true },
+  const towerProd = await prisma.towerProduction.count({
+    where: { projectId },
+  });
+  console.log("Tower Production Count:", towerProd);
+
+  const towerConst = await prisma.towerConstruction.count({
+    where: { projectId },
+  });
+  console.log("Tower Construction Count:", towerConst);
+
+  if (mapElements > 0) {
+    const sample = await prisma.mapElementTechnicalData.findFirst({
+      where: { projectId },
     });
-    console.log(
-      "Projects in TowerProduction:",
-      JSON.stringify(projectIds, null, 2),
-    );
+    console.log("Sample Map Element:", JSON.stringify(sample, null, 2));
   }
 }
 
-main()
+debug()
   .catch(console.error)
   .finally(() => prisma.$disconnect());

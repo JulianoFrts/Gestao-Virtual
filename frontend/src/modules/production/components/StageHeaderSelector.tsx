@@ -80,8 +80,20 @@ export const StageHeaderSelector: React.FC<StageHeaderSelectorProps> = ({ stage,
                 let matchId = '';
                 
                 if (categories) {
+                    // Normalize: Remove accents, lowercase, replace multiple spaces with single space
+                    const normalize = (s: string) => (s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
+                    const targetName = normalize(stage.name);
+
                     for (const cat of categories) {
-                        const match = cat.activities.find(a => a.name.trim().toLowerCase() === stage.name.trim().toLowerCase());
+                        // 1. Tenta achar match na raiz da Categoria (Mãe/Pai)
+                        if (normalize(cat.name) === targetName) {
+                            matchId = cat.id;
+                            break;
+                        }
+                        
+                        // 2. Tenta achar match na lista de sub-atividades
+                        if (!cat.activities) continue;
+                        const match = cat.activities.find(a => normalize(a.name) === targetName);
                         if (match) {
                             matchId = match.id;
                             break;
@@ -89,13 +101,14 @@ export const StageHeaderSelector: React.FC<StageHeaderSelectorProps> = ({ stage,
                     }
                 }
 
-                if (matchId) {
+                if (matchId && matchId !== 'none') {
                     await onUpdate(stage.id, { 
                         productionActivityId: matchId,
                         metadata: { ...stage.metadata, mapEnabled: true }
                     });
                     toast.success("Atividade vinculada e visualização ativada");
                 } else {
+                     console.warn(`Tentou vincular "${stage.name}" mas array the categories.activities na Production base não tinha match literal.`);
                      toast.error(`Não foi encontrada uma atividade de produção correspondente para "${stage.name}". Verifique o nome.`);
                 }
             }

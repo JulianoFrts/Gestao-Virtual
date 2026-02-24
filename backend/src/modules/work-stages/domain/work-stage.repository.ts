@@ -19,6 +19,8 @@ export interface WorkStage {
   siteId: string | null;
   projectId: string | null;
   productionActivityId: string | null;
+  parentId?: string | null;
+  displayOrder: number;
   metadata?: any;
   site?: {
     projectId: string;
@@ -444,40 +446,90 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
 
     // Usamos transação para garantir atomicidade e performance
     await prisma.$transaction(async (tx) => {
-      for (const item of data) {
-        // Criar o pai (Meta Mãe)
-        const parent = await tx.workStage.create({
-          data: {
-            name: item.name,
-            description: item.description,
-            weight: item.weight ?? 1.0,
-            displayOrder: item.displayOrder,
-            productionActivityId: item.productionActivityId || null,
-            siteId: siteId || null,
-            projectId: projectId,
-            metadata: item.metadata || {},
-          },
-        });
+      // 1. Buscar etapas existentes para evitar duplicatas por nome
+      const existingStages = await tx.workStage.findMany({
+        where: {
+          projectId,
+          siteId: siteId || null,
+        },
+        select: { id: true, name: true, parentId: true },
+      });
 
-        results.push(this.mapToWorkStage(parent));
+      const existingMap = new Map(
+        existingStages.map((s) => [
+          `${s.name.trim().toUpperCase()}-${s.parentId || "root"}`,
+          s.id,
+        ]),
+      );
+
+      for (const item of data) {
+        const itemKey = `${item.name.trim().toUpperCase()}-root`;
+        let parentId = existingMap.get(itemKey);
+
+        if (!parentId) {
+          // Criar o pai (Meta Mãe) se não existir
+          const parent = await tx.workStage.create({
+            data: {
+              name: item.name,
+              description: item.description,
+              weight: item.weight ?? 1.0,
+              displayOrder: item.displayOrder,
+              productionActivityId: item.productionActivityId || null,
+              siteId: siteId || null,
+              projectId: projectId,
+              metadata: item.metadata || {},
+            },
+          });
+          parentId = parent.id;
+          results.push(this.mapToWorkStage(parent));
+        } else {
+          // Opcional: Atualizar metadata/weight do pai existente
+          const updatedParent = await tx.workStage.update({
+            where: { id: parentId },
+            data: {
+              weight: item.weight ?? 1.0,
+              displayOrder: item.displayOrder,
+              productionActivityId: item.productionActivityId || null,
+              metadata: (item.metadata || {}) as any,
+            },
+          });
+          results.push(this.mapToWorkStage(updatedParent));
+        }
 
         // Se tiver filhos, criar cada um vinculado ao pai
         if (item.children && item.children.length > 0) {
           for (const child of item.children) {
-            const createdChild = await tx.workStage.create({
-              data: {
-                name: child.name,
-                description: child.description,
-                weight: child.weight ?? 1.0,
-                displayOrder: child.displayOrder,
-                productionActivityId: child.productionActivityId || null,
-                siteId: siteId || null,
-                projectId: projectId,
-                parentId: parent.id,
-                metadata: child.metadata || {},
-              },
-            });
-            results.push(this.mapToWorkStage(createdChild));
+            const childKey = `${child.name.trim().toUpperCase()}-${parentId}`;
+            const existingChildId = existingMap.get(childKey);
+
+            if (!existingChildId) {
+              const createdChild = await tx.workStage.create({
+                data: {
+                  name: child.name,
+                  description: child.description,
+                  weight: child.weight ?? 1.0,
+                  displayOrder: child.displayOrder,
+                  productionActivityId: child.productionActivityId || null,
+                  siteId: siteId || null,
+                  projectId: projectId,
+                  parentId: parentId,
+                  metadata: child.metadata || {},
+                },
+              });
+              results.push(this.mapToWorkStage(createdChild));
+            } else {
+              // Atualizar filho existente
+              const updatedChild = await tx.workStage.update({
+                where: { id: existingChildId },
+                data: {
+                  weight: child.weight ?? 1.0,
+                  displayOrder: child.displayOrder,
+                  productionActivityId: child.productionActivityId || null,
+                  metadata: (child.metadata || {}) as any,
+                },
+              });
+              results.push(this.mapToWorkStage(updatedChild));
+            }
           }
         }
       }
@@ -502,6 +554,8 @@ export class PrismaWorkStageRepository implements WorkStageRepository {
       siteId: data.siteId,
       projectId: data.projectId,
       productionActivityId: data.productionActivityId,
+      parentId: data.parentId,
+      displayOrder: data.displayOrder,
       metadata: data.metadata,
       site: data.site,
       progress: data.stageProgress || data.progress || [],

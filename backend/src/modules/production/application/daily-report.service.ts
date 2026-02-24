@@ -8,7 +8,7 @@ export class DailyReportService {
   constructor(
     private readonly repository: DailyReportRepository,
     private readonly progressService: ProductionProgressService,
-    private readonly queueService?: QueueService
+    private readonly queueService?: QueueService,
   ) {}
 
   async listReports(params: any) {
@@ -30,7 +30,7 @@ export class DailyReportService {
     }
     if (teamId) where.teamId = teamId;
     if (userId) where.userId = userId;
-    if (status && status !== 'all') where.status = status;
+    if (status && status !== "all") where.status = status;
     if (startDate || endDate) {
       where.reportDate = {};
       if (startDate) where.reportDate.gte = new Date(startDate);
@@ -62,11 +62,16 @@ export class DailyReportService {
       // Sanitização final para remover campos legados que causam erro no Prisma
       const sanitizedData = { ...data };
       const fieldsToRemove = [
-        'scheduledAt', 'executedAt', 'reviewedAt', 'syncedAt', 
-        'scheduled_at', 'executed_at', 'reviewed_at'
+        "scheduledAt",
+        "executedAt",
+        "reviewedAt",
+        "syncedAt",
+        "scheduled_at",
+        "executed_at",
+        "reviewed_at",
       ];
-      
-      fieldsToRemove.forEach(field => delete sanitizedData[field]);
+
+      fieldsToRemove.forEach((field) => delete sanitizedData[field]);
 
       const result = await this.repository.create({
         ...sanitizedData,
@@ -78,7 +83,7 @@ export class DailyReportService {
         message: error.message,
         code: error.code,
         meta: error.meta,
-        dataPayload: data
+        dataPayload: data,
       });
       throw error;
     }
@@ -88,10 +93,14 @@ export class DailyReportService {
     return this.repository.findById(id);
   }
 
+  async updateReport(id: string, data: any) {
+    return this.repository.update(id, data);
+  }
+
   async approveReport(id: string, approvedById: string) {
     const report = await this.repository.findById(id);
     if (!report) throw new Error("Relatório não encontrado");
-    if (report.status === 'APPROVED') return report;
+    if (report.status === "APPROVED") return report;
 
     // 1. Atualizar status do relatório
     const updatedReport = await this.repository.update(id, {
@@ -114,36 +123,45 @@ export class DailyReportService {
 
   async bulkApproveReports(ids: string[], userId: string) {
     if (this.queueService) {
-      return this.queueService.enqueue("daily_report_bulk_approve", { ids, userId });
+      return this.queueService.enqueue("daily_report_bulk_approve", {
+        ids,
+        userId,
+      });
     }
     return this._executeBulkApprove(ids, userId);
   }
 
   async bulkRejectReports(ids: string[], reason: string) {
     if (this.queueService) {
-      return this.queueService.enqueue("daily_report_bulk_reject", { ids, reason });
+      return this.queueService.enqueue("daily_report_bulk_reject", {
+        ids,
+        reason,
+      });
     }
     return this._executeBulkReject(ids, reason);
   }
 
   async _executeBulkApprove(ids: string[], approvedById: string) {
-    logger.info(`[Worker] Iniciando aprovação em lote de ${ids.length} relatórios`, { approvedById });
+    logger.info(
+      `[Worker] Iniciando aprovação em lote de ${ids.length} relatórios`,
+      { approvedById },
+    );
 
     // 1. Buscar apenas o essencial para processamento rápido (SELECT Minimal!)
     const reports = await this.repository.findAllMinimal(ids);
-    
+
     // Filtrar apenas o que realmente precisa ser processado
-    const pendingReports = reports.filter(r => r.status !== 'APPROVED');
-    const pendingIds = pendingReports.map(r => r.id);
+    const pendingReports = reports.filter((r) => r.status !== "APPROVED");
+    const pendingIds = pendingReports.map((r) => r.id);
 
     if (pendingIds.length === 0) {
       logger.info("[Worker] Nenhum relatório pendente encontrado no lote.");
-      return ids.map(id => ({ id, success: true }));
+      return ids.map((id) => ({ id, success: true }));
     }
 
     // 2. Atualizar todos os relatórios para APPROVED de uma só vez (Performance!)
     await this.repository.updateMany(pendingIds, {
-      status: 'APPROVED',
+      status: "APPROVED",
       approvedById,
     });
 
@@ -154,18 +172,19 @@ export class DailyReportService {
 
     for (const report of pendingReports) {
       try {
-      // Extração robusta do ProjectId
-      const projectId = report.projectId || 
-                        report.metadata?.projectId || 
-                        (report as any).project_id || 
-                        report.team?.site?.projectId;
-      const activities = report.metadata?.selectedActivities || [];
+        // Extração robusta do ProjectId
+        const projectId =
+          report.projectId ||
+          report.metadata?.projectId ||
+          (report as any).project_id ||
+          report.team?.site?.projectId;
+        const activities = report.metadata?.selectedActivities || [];
 
         for (const act of activities) {
           if (!act.details || !Array.isArray(act.details)) continue;
 
           for (const detail of act.details) {
-            if (detail.status === 'BLOCKED') continue;
+            if (detail.status === "BLOCKED") continue;
 
             progressDtos.push({
               elementId: detail.id,
@@ -180,11 +199,14 @@ export class DailyReportService {
                 startTime: detail.startTime,
                 endTime: detail.endTime,
                 comment: detail.comment,
+                leadName: report.user?.name,
+                supervisorName:
+                  report.team?.supervisor?.name || report.team?.name,
               },
               dates: {
                 start: detail.startTime,
-                end: detail.status === 'FINISHED' ? detail.endTime : null,
-              }
+                end: detail.status === "FINISHED" ? detail.endTime : null,
+              },
             });
 
             if (projectId && act.stageId) {
@@ -194,7 +216,9 @@ export class DailyReportService {
         }
         results.push({ id: report.id, success: true });
       } catch (error: any) {
-        logger.error(`[Worker] Falha ao preparar progresso (Report: ${report.id}): ${error.message}`);
+        logger.error(
+          `[Worker] Falha ao preparar progresso (Report: ${report.id}): ${error.message}`,
+        );
         results.push({ id: report.id, success: false, error: error.message });
       }
     }
@@ -205,23 +229,35 @@ export class DailyReportService {
     }
 
     // 4. Disparar sincronização de estágios UMA VEZ por atividade/projeto (Performance O(1) por atividade)
-    logger.info(`[Worker] Iniciando sincronização agregada de ${syncTasks.size} combinações atividade/projeto`);
+    logger.info(
+      `[Worker] Iniciando sincronização agregada de ${syncTasks.size} combinações atividade/projeto`,
+    );
     for (const task of syncTasks) {
-      const [projectId, activityId, elementId] = task.split(':');
+      const [projectId, activityId, elementId] = task.split(":");
       if (projectId && activityId && elementId) {
         try {
-          await this.progressService.triggerStageSync(elementId, activityId, projectId, approvedById);
+          await this.progressService.triggerStageSync(
+            elementId,
+            activityId,
+            projectId,
+            approvedById,
+          );
         } catch (err: any) {
-          logger.warn(`[Worker] Falha na sincronização agregada para ${activityId}:`, { error: err.message });
+          logger.warn(
+            `[Worker] Falha na sincronização agregada para ${activityId}:`,
+            { error: err.message },
+          );
         }
       }
     }
 
     // Adicionar os que já estavam aprovados como sucesso
-    const alreadyApprovedIds = ids.filter(id => !pendingIds.includes(id));
-    alreadyApprovedIds.forEach(id => results.push({ id, success: true }));
+    const alreadyApprovedIds = ids.filter((id) => !pendingIds.includes(id));
+    alreadyApprovedIds.forEach((id) => results.push({ id, success: true }));
 
-    logger.info(`[Worker] Aprovação em lote concluída: ${pendingIds.length} processados.`);
+    logger.info(
+      `[Worker] Aprovação em lote concluída: ${pendingIds.length} processados.`,
+    );
     return results;
   }
 
@@ -232,13 +268,21 @@ export class DailyReportService {
     });
   }
 
-  private async syncProductionProgress(report: any, userId: string, skipSync = false, projectId?: string) {
+  private async syncProductionProgress(
+    report: any,
+    userId: string,
+    skipSync = false,
+    projectId?: string,
+  ) {
     try {
       const metadata = report.metadata || {};
       const activities = metadata.selectedActivities;
 
       if (!Array.isArray(activities)) {
-        logger.warn("Relatório aprovado sem metadados de atividades detalhadas", { reportId: report.id });
+        logger.warn(
+          "Relatório aprovado sem metadados de atividades detalhadas",
+          { reportId: report.id },
+        );
         return;
       }
 
@@ -246,18 +290,19 @@ export class DailyReportService {
         if (!act.details || !Array.isArray(act.details)) continue;
 
         for (const detail of act.details) {
-          if (detail.status === 'BLOCKED') continue; // Não pontua progresso se bloqueado
+          if (detail.status === "BLOCKED") continue; // Não pontua progresso se bloqueado
 
           await this.progressService.updateProgress({
             elementId: detail.id,
             activityId: act.stageId,
             status: detail.status,
             progress: Number(detail.progress),
-            projectId: projectId || 
-                       report.projectId || 
-                       report.metadata?.projectId || 
-                       (report as any).project_id || 
-                       report.team?.site?.projectId,
+            projectId:
+              projectId ||
+              report.projectId ||
+              report.metadata?.projectId ||
+              (report as any).project_id ||
+              report.team?.site?.projectId,
             userId,
             skipSync, // PERFORMANCE: Suprime o AVG pesado para cada detalhe
             metadata: {
@@ -265,18 +310,21 @@ export class DailyReportService {
               startTime: detail.startTime,
               endTime: detail.endTime,
               comment: detail.comment,
+              leadName: report.user?.name,
+              supervisorName:
+                report.team?.supervisor?.name || report.team?.name,
             },
             dates: {
               start: detail.startTime,
-              end: detail.status === 'FINISHED' ? detail.endTime : null,
-            }
+              end: detail.status === "FINISHED" ? detail.endTime : null,
+            },
           });
         }
       }
     } catch (error: any) {
-      logger.error("Erro ao sincronizar progresso do relatório aprovado", { 
-        error: error.message, 
-        reportId: report.id 
+      logger.error("Erro ao sincronizar progresso do relatório aprovado", {
+        error: error.message,
+        reportId: report.id,
       });
     }
   }

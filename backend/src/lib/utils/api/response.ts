@@ -344,6 +344,18 @@ function handleCustomError(error: Error, source?: string): NextResponse {
     return ApiResponse.notFound(message);
   }
 
+  if (
+    message.includes("Incompatibilidade") ||
+    message.includes("inválido") ||
+    message.includes("obrigatório")
+  ) {
+    return ApiResponse.badRequest(message);
+  }
+
+  if (message.includes("já está") || message.includes("duplicado")) {
+    return ApiResponse.conflict(message);
+  }
+
   if (process.env.NODE_ENV === "development") {
     logger.error("API Error", { error, source });
     return ApiResponse.internalError(message);

@@ -12,6 +12,10 @@ export interface ListJobFunctionsParams {
 export class JobFunctionService {
   constructor(private readonly repository: JobFunctionRepository) {}
 
+  async getJobFunctionById(id: string) {
+    return this.repository.findFirst({ id });
+  }
+
   async listJobFunctions(params: ListJobFunctionsParams) {
     const { page, limit, companyId, search, isAdmin, currentUserCompanyId } =
       params;
@@ -20,18 +24,12 @@ export class JobFunctionService {
     const where: Record<string, any> = {};
 
     // Se não for admin, vê as da sua empresa + as globais (templates)
-    // Se for admin e pediu uma empresa específica, vê essa empresa + globais? 
+    // Se for admin e pediu uma empresa específica, vê essa empresa + globais?
     // O usuário disse: "qualquer empresas copiar e usar em sua empresa"
     if (!isAdmin) {
-      where.OR = [
-        { companyId: currentUserCompanyId },
-        { companyId: null }
-      ];
+      where.OR = [{ companyId: currentUserCompanyId }, { companyId: null }];
     } else if (companyId) {
-      where.OR = [
-        { companyId: companyId },
-        { companyId: null }
-      ];
+      where.OR = [{ companyId: companyId }, { companyId: null }];
     } else {
       // Admin sem filtro vê tudo (incluindo modelos)
     }
@@ -86,7 +84,7 @@ export class JobFunctionService {
 
     // Se o ID não for enviado (comum em importações ou criação manual simples), geramos um
     if (!data.id) {
-        data.id = `jf_${Math.random().toString(36).substring(2, 11)}`;
+      data.id = `jf_${Math.random().toString(36).substring(2, 11)}`;
     }
 
     return this.repository.create(data);
@@ -99,5 +97,27 @@ export class JobFunctionService {
     }
 
     return this.repository.delete(id);
+  }
+
+  async updateJobFunction(id: string, data: any) {
+    const existing = await this.repository.findFirst({ id });
+    if (!existing) {
+      throw new Error("JOB_FUNCTION_NOT_FOUND");
+    }
+
+    // Business logic: check for duplicate name within same company if name is being changed
+    if (data.name && data.name !== existing.name) {
+      const duplicate = await this.repository.findFirst({
+        companyId:
+          data.companyId !== undefined ? data.companyId : existing.companyId,
+        name: data.name,
+      });
+
+      if (duplicate && duplicate.id !== id) {
+        throw new Error("DUPLICATE_NAME");
+      }
+    }
+
+    return this.repository.update(id, data);
   }
 }

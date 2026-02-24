@@ -38,8 +38,9 @@ export class PrismaAccessControlRepository implements AccessControlRepository {
     return prisma.permissionLevel.create({ data });
   }
 
-  async findAllMatrix(): Promise<PermissionMatrix[]> {
+  async findAllMatrix(levelId?: string): Promise<PermissionMatrix[]> {
     return prisma.permissionMatrix.findMany({
+      where: levelId ? { levelId } : {},
       orderBy: [{ levelId: "asc" }, { moduleId: "asc" }],
     });
   }

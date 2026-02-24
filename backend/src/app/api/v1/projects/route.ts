@@ -6,7 +6,7 @@
 
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { requireAuth, requireAdmin } from "@/lib/auth/session";
+import { requireAuth } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { Validator } from "@/lib/utils/api/validator";
@@ -111,7 +111,11 @@ export async function GET(request: NextRequest) {
     } = validation.data as any;
 
     const { isUserAdmin: checkAdmin } = await import("@/lib/auth/session");
-    const isAdmin = checkAdmin(user.role, (user as any).hierarchyLevel);
+    const isAdmin = checkAdmin(
+      user.role,
+      (user as any).hierarchyLevel,
+      (user as any).permissions,
+    );
 
     const where = buildProjectFilters(user, isAdmin, {
       companyId,
@@ -137,7 +141,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAdmin();
+    const { can } = await import("@/lib/auth/permissions");
+    if (!(await can("projects.manage"))) {
+      return ApiResponse.forbidden("Sem permissão para gerenciar projetos");
+    }
 
     const body = await request.json();
     const validation = Validator.validate(createProjectSchema, body);

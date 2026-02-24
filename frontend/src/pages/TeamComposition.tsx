@@ -54,9 +54,11 @@ import {
   Trash2,
   Settings,
   Crown,
-  UserX
+  UserX,
+  Plus
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ErrorBoundary } from '@react-three/fiber/dist/declarations/src/core/utils'
 
 // --- Componentes ---
 
@@ -157,6 +159,9 @@ function TeamColumn({
   onDragOver,
   onDrop
 }: TeamColumnProps) {
+  // LOG PARA DIAGNÓSTICO
+  console.log(`[TeamColumn] Rendering team: ${team.name} (${team.id}), members: ${members.length}`);
+
   const isOver = dragOverId === team.id || dragOverId === `leader-${team.id}`
   const isOverLeader = dragOverId === `leader-${team.id}`
 
@@ -178,6 +183,7 @@ function TeamColumn({
       <div className="group/header relative border-b border-white/5 p-4">
         <div className="mb-2 flex items-center justify-between">
           <Badge
+            key={`badge-team-${team.id}`}
             className={cn(
               'bg-primary/10 text-primary border-primary/20',
               !isHealthy &&
@@ -214,6 +220,15 @@ function TeamColumn({
                 <UserX className="h-3.5 w-3.5" />
               </Button>
             )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 transition-opacity hover:bg-emerald-500/20 hover:text-emerald-500 z-10"
+              onClick={() => onEdit(team)}
+              title="Adicionar membros (Editar equipe)"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
             <div className="ml-1 flex items-center gap-1.5">
               <Users className="text-muted-foreground h-3.5 w-3.5" />
               <span className="text-muted-foreground text-xs font-bold">
@@ -268,27 +283,29 @@ function TeamColumn({
       </div>
 
       {/* Members List */}
-      <ScrollArea className="max-h-[50vh] flex-1 p-3">
-        {members.length > 0 ? (
-          <div className="space-y-0">
-            {members.map(emp => (
-              <EmployeeCard
-                key={emp.id}
-                employee={emp}
-                isDragging={draggedId === emp.id}
-                onDragStart={(e) => onDragStart(e, emp.id, team.id)}
-                onDragEnd={onDragEnd}
-                onDragOver={(e) => onDragOver(e, emp.id)}
-                onDrop={(e) => onDrop(e, emp.id)}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="text-muted-foreground/40 rounded-xl border border-dashed border-white/5 py-8 text-center text-xs">
-            Arraste membros para cá
-          </div>
-        )}
-      </ScrollArea>
+      <div className="flex-1 overflow-hidden flex flex-col p-3 pt-0">
+        <ScrollArea className="flex-1 h-full pr-2">
+          {members.length > 0 ? (
+            <div className="space-y-0 pb-4">
+              {members.map(emp => (
+                <EmployeeCard
+                  key={emp.id}
+                  employee={emp}
+                  isDragging={draggedId === emp.id}
+                  onDragStart={(e) => onDragStart(e, emp.id, team.id)}
+                  onDragEnd={onDragEnd}
+                  onDragOver={(e) => onDragOver(e, emp.id)}
+                  onDrop={(e) => onDrop(e, emp.id)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-muted-foreground/40 rounded-xl border border-dashed border-white/5 py-8 text-center text-xs">
+              Arraste membros para cá
+            </div>
+          )}
+        </ScrollArea>
+      </div>
     </div>
   )
 }
@@ -310,8 +327,11 @@ export default function TeamComposition() {
   const { profile } = useAuth()
   const { toast } = useToast()
 
+  console.log('[TeamComposition] Render - Teams count:', teams.length);
+
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all')
   const [selectedSiteId, setSelectedSiteId] = useState<string>('all')
+  const [selectedFunctionSearchId, setSelectedFunctionSearchId] = useState<string>('all')
 
   const { employees, isLoading: loadingEmployees } = useEmployees({
     projectId: selectedProjectId === 'all' ? undefined : selectedProjectId,
@@ -349,70 +369,45 @@ export default function TeamComposition() {
     await updateTeam(teamId, {
       name: team.name,
       members: newMembers,
-      supervisorId: team.supervisorId || undefined,
-      siteId: team.siteId || undefined,
-      companyId: team.companyId || undefined,
-      laborType: team.laborType || undefined
+      supervisorId: team.supervisorId, // Keep as is
+      siteId: team.siteId ?? undefined,
+      companyId: team.companyId ?? undefined,
+      projectId: team.projectId ?? undefined,
+      laborType: team.laborType ?? undefined
     });
   }
 
-  // Filter talent pool (only employees with current Site/Project)
+  // Pure Domain Selector: Talent Pool
   const talentPool = useMemo(() => {
     const assignedIds = new Set([
       ...teams.flatMap(t => t.members),
       ...(teams.map(t => t.supervisorId).filter(Boolean) as string[])
     ])
 
-    return (
-      employees
-        .filter(
-          emp =>
-            !assignedIds.has(emp.id) &&
-            (selectedSiteId === 'all' || emp.siteId === selectedSiteId) &&
-            (selectedProjectId === 'all' ||
-              sites.find(s => s.id === emp.siteId)?.projectId ===
-              selectedProjectId) &&
-            (!searchTerm ||
-              emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()))
-        )
-        .sort((a, b) => {
-          if (b.level !== a.level) return b.level - a.level
-          return b.professionalLevel - a.professionalLevel
-        })
-    )
-  }, [employees, teams, selectedSiteId, selectedProjectId, searchTerm, sites])
-
-  // Filter teams for the site AND deduplicate members
-  const siteTeams = useMemo(() => {
-    const usedEmployeeIds = new Set<string>()
-
-    return teams
-      .filter(t => selectedSiteId === 'all' || t.siteId === selectedSiteId)
-      .filter(
-        t =>
-          selectedProjectId === 'all' ||
-          sites.find(s => s.id === t.siteId)?.projectId === selectedProjectId
+    return employees
+      .filter(emp => 
+        !assignedIds.has(emp.id) &&
+        (selectedSiteId === 'all' || emp.siteId === selectedSiteId) &&
+        (searchTerm === '' || emp.fullName.toLowerCase().includes(searchTerm.toLowerCase())) &&
+        (selectedFunctionSearchId === 'all' || emp.functionId === selectedFunctionSearchId)
       )
-      .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
-      .map(team => {
-        if (team.supervisorId) {
-          usedEmployeeIds.add(team.supervisorId)
-        }
+      .sort((a, b) => (b.level || 0) - (a.level || 0));
+  }, [employees, teams, selectedSiteId, searchTerm, selectedFunctionSearchId]);
 
-        const uniqueMembers = team.members.filter(memberId => {
-          if (usedEmployeeIds.has(memberId)) {
-            return false
-          }
-          usedEmployeeIds.add(memberId)
-          return true
-        })
-
-        return {
-          ...team,
-          members: uniqueMembers
+  // Pure Domain Selector: Filtered Teams
+  const siteTeams = useMemo(() => {
+    return teams
+      .filter(t => {
+        if (selectedProjectId === 'all' && selectedSiteId === 'all') return true;
+        if (selectedSiteId !== 'all') return t.siteId === selectedSiteId;
+        if (selectedProjectId !== 'all') {
+          const site = sites.find(s => s.id === t.siteId);
+          return site?.projectId === selectedProjectId;
         }
+        return true;
       })
-  }, [teams, selectedSiteId, selectedProjectId, sites])
+      .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+  }, [teams, selectedSiteId, selectedProjectId, sites]);
 
   // --- Native DND Handlers ---
 
@@ -437,133 +432,71 @@ export default function TeamComposition() {
     setDragOverId(id)
   }
 
+  /**
+   * Semantic Dropping Logic (DDD Intent)
+   */
   const handleDrop = async (e: React.DragEvent, targetId: string) => {
-    e.preventDefault()
-    e.stopPropagation()
+    e.preventDefault();
+    e.stopPropagation();
 
-    const employeeId = draggedId
-    if (!employeeId) return
+    const employeeId = draggedId;
+    if (!employeeId) return;
 
-    const employeeData = employees.find(emp => emp.id === employeeId)
-    setDragOverId(null)
+    const employeeData = employees.find(emp => emp.id === employeeId);
+    setDragOverId(null);
 
-    // Ação: Retornar para Talent Pool
+    // Intent 1: Move to Talent Pool
     if (targetId === 'talent-pool') {
-      const leaderTeam = teams.find(t => t.supervisorId === employeeId)
-      if (leaderTeam) {
-        await updateTeam(leaderTeam.id, {
-          name: leaderTeam.name,
-          supervisorId: undefined,
-          members: leaderTeam.members,
-          siteId: leaderTeam.siteId || undefined,
-          companyId: leaderTeam.companyId || undefined
-        })
-        toast({
-          title: 'Líder Removido',
-          description: `${employeeData?.fullName || 'Funcionário'} não é mais líder de ${leaderTeam.name}`
-        })
-      } else if (sourceTeamId) {
-        const result = await moveMember(employeeId, sourceTeamId, null)
-        if (result.success && employeeData) {
-          toast({
-            title: 'Removido da Equipe',
-            description: `${employeeData.fullName} voltou para a lista de disponíveis`
-          })
-        }
+      const result = await moveMember(employeeId, sourceTeamId, null);
+      if (result.success && employeeData) {
+        toast({ title: 'Removido da Equipe', description: `${employeeData.fullName} voltou para disponíveis.` });
       }
-      return
+      return;
     }
 
-    // Ação: Definir como Líder
+    // Intent 2: Assign as Team Leader
     if (targetId.startsWith('leader-')) {
-      const teamId = targetId.replace('leader-', '')
-      await handleSetLeader(teamId, employeeId)
-      return
+      const teamId = targetId.replace('leader-', '');
+      const team = teams.find(t => t.id === teamId);
+      if (!team || !employeeData) return;
+
+      const result = await updateTeam(teamId, {
+        name: team.name,
+        supervisorId: employeeId,
+      });
+
+      if (result.success) {
+        toast({ title: 'Líder Atualizado', description: `${employeeData.fullName} agora lidera ${team.name}` });
+      }
+      return;
     }
 
-    // Ação: Mover para Equipe (ou mudar ordem)
-    const targetTeam = teams.find(t => t.id === targetId || t.members.includes(targetId) || t.supervisorId === targetId)
-
+    // Intent 3: Move to Team Membership
+    const targetTeam = teams.find(t => t.id === targetId || t.members.includes(targetId));
     if (targetTeam) {
-      if (sourceTeamId === targetTeam.id) {
-        // Reordenamento interno
-        const oldIndex = targetTeam.members.indexOf(employeeId)
-        let newIndex = targetTeam.members.indexOf(targetId)
+      if (sourceTeamId === targetTeam.id) return; // Ignore internal reorder for now
 
-        if (newIndex === -1 && targetId === targetTeam.id) {
-          newIndex = targetTeam.members.length - 1
-        }
-
-        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-          handleReorderMembers(targetTeam.id, oldIndex, newIndex)
-        }
-      } else {
-        // Movimentação entre equipes ou do pool para equipe
-        const result = await moveMember(
-          employeeId,
-          sourceTeamId,
-          targetTeam.id
-        )
-        if (result.success && employeeData) {
-          toast({
-            title: 'Escala Atualizada',
-            description: `${employeeData.fullName} foi movido para ${targetTeam.name}`,
-            className: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
-          })
-        }
+      const result = await moveMember(employeeId, sourceTeamId, targetTeam.id);
+      if (result.success && employeeData) {
+        toast({ title: 'Membro Alocado', description: `${employeeData.fullName} movido para ${targetTeam.name}` });
+      } else if (!result.success) {
+        toast({ title: 'Erro na Escala', description: result.error, variant: 'destructive' });
       }
     }
   }
 
   const handleClearTeamMembers = async (teamId: string) => {
-    const team = teams.find(t => t.id === teamId)
-    if (!team || team.members.length === 0) return
+    const team = teams.find(t => t.id === teamId);
+    if (!team || !confirm(`Remover todos os membros de "${team.name}"?`)) return;
 
-    const memberCount = team.members.length
-    const teamName = team.name
-    const memberIds = [...team.members]
-
-    if (!confirm(`Tem certeza que deseja remover todos os ${memberCount} membros da equipe "${teamName}"?`)) {
-      return
-    }
-
-    toast({ title: 'Processando...', description: `Removendo ${memberCount} membros de ${teamName}` })
-
-    for (const memberId of memberIds) {
+    for (const memberId of team.members) {
       await moveMember(memberId, teamId, null);
-      await new Promise(resolve => setTimeout(resolve, 100));
     }
-
-    toast({
-      title: 'Equipe Limpa!',
-      description: `${memberCount} membros foram removidos de ${teamName}`,
-      className: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
-    })
+    toast({ title: 'Equipe Limpa' });
   }
 
   const handleSetLeader = async (teamId: string, employeeId: string) => {
-    const team = teams.find(t => t.id === teamId)
-    const employee = employees.find(e => e.id === employeeId)
-    if (!team || !employee) return
-
-    const currentTeam = teams.find(t => t.members.includes(employeeId))
-    if (currentTeam) {
-      await moveMember(employeeId, currentTeam.id, null)
-    }
-
-    await updateTeam(teamId, {
-      name: team.name,
-      supervisorId: employeeId,
-      members: team.members,
-      siteId: team.siteId || undefined,
-      companyId: team.companyId || undefined
-    })
-
-    toast({
-      title: 'Líder Definido!',
-      description: `${employee.fullName} agora lidera a equipe ${team.name}`,
-      className: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
-    })
+    // Deprecated for direct updateTeam call in handleDrop Intent 2
   }
 
   const handleCreateTeam = async () => {
@@ -572,9 +505,42 @@ export default function TeamComposition() {
       return
     }
 
-    if (selectedSiteId === 'all') {
-      toast({ title: 'Selecione um canteiro', variant: 'destructive' })
+    // Auto-vincular canteiro do líder selecionado se não houver um selecionado
+    let teamSiteId = selectedSiteId !== 'all' ? selectedSiteId : undefined
+    if (!teamSiteId && newTeamSupervisorId !== 'none') {
+      const leader = employees.find(e => e.id === newTeamSupervisorId)
+      if (leader?.siteId) {
+        teamSiteId = leader.siteId
+        console.log('[TeamComposition] Auto-resolved siteId from leader:', teamSiteId)
+      }
+    }
+
+    // Resolve companyId: tenta do profile ou do projeto selecionado
+    let teamCompanyId = profile?.companyId
+    if (!teamCompanyId && selectedProjectId !== 'all') {
+      const proj = projects.find(p => p.id === selectedProjectId)
+      if (proj?.companyId) {
+        teamCompanyId = proj.companyId
+        console.log('[TeamComposition] Auto-resolved companyId from project:', teamCompanyId)
+      }
+    }
+
+    if (!teamSiteId) {
+      toast({ 
+          title: 'Canteiro Obrigatório', 
+          description: 'Selecione um canteiro ou um líder que já pertença a um canteiro.', 
+          variant: 'destructive' 
+      })
       return
+    }
+
+    if (!teamCompanyId) {
+       toast({ 
+           title: 'Erro de Contexto', 
+           description: 'Não foi possível identificar a sua empresa. Tente recarregar a página.', 
+           variant: 'destructive' 
+       })
+       return
     }
 
     setIsCreating(true)
@@ -582,17 +548,23 @@ export default function TeamComposition() {
       const result = await createTeam({
         name: newTeamName,
         supervisorId: newTeamSupervisorId === 'none' ? undefined : newTeamSupervisorId,
-        siteId: selectedSiteId,
-        companyId: profile?.companyId || undefined,
-        members: []
+        siteId: teamSiteId,
+        companyId: teamCompanyId,
+        projectId: selectedProjectId !== 'all' ? selectedProjectId : undefined,
       })
 
       if (result.success) {
-        toast({ title: 'Equipe criada!' })
+        toast({ title: 'Equipe criada com sucesso!' })
         setNewTeamName('')
         setSelectedFunctionId('all')
         setNewTeamSupervisorId('none')
         setIsCreateDialogOpen(false)
+      } else {
+          toast({ 
+              title: 'Erro ao criar equipe', 
+              description: result.error, 
+              variant: 'destructive' 
+          })
       }
     } finally {
       setIsCreating(false)
@@ -606,10 +578,10 @@ export default function TeamComposition() {
     try {
       const result = await updateTeam(editingTeam.id, {
         name: editTeamName,
-        supervisorId: editTeamSupervisorId === 'none' ? undefined : editTeamSupervisorId,
-        members: editingTeam.members,
-        siteId: editingTeam.siteId || undefined,
-        companyId: editingTeam.companyId || undefined
+        supervisorId: editTeamSupervisorId === 'none' ? null : editTeamSupervisorId,
+        siteId: editingTeam.siteId ?? undefined,
+        companyId: editingTeam.companyId ?? undefined,
+        projectId: editingTeam.projectId ?? undefined
       })
 
       if (result.success) {
@@ -693,10 +665,28 @@ export default function TeamComposition() {
                 {sites
                   .filter(s => selectedProjectId === 'all' || s.projectId === selectedProjectId)
                   .map(s => (
-                    <SelectItem key={s.id} value={s.id}>
+                    <SelectItem key={`site-opt-${s.id}`} value={s.id}>
                       {s.name}
                     </SelectItem>
                   ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Seletor de Função */}
+          <div className="flex items-center gap-2">
+            <Briefcase className="h-4 w-4 text-sky-500" />
+            <Select value={selectedFunctionSearchId} onValueChange={setSelectedFunctionSearchId}>
+              <SelectTrigger className="industrial-input h-10 w-48">
+                <SelectValue placeholder="Todas as Funções" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as Funções</SelectItem>
+                {functions.map(f => (
+                  <SelectItem key={`func-search-opt-${f.id}`} value={f.id}>
+                    {f.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -767,9 +757,12 @@ export default function TeamComposition() {
         {/* Main Area: Teams Scroller */}
         <div className="custom-scrollbar flex-1 overflow-x-auto pb-4">
           <div className="flex h-full items-start gap-6">
-            {siteTeams.map(team => (
+
+            {siteTeams.map((team, idx) => (
+
               <TeamColumn
-                key={team.id}
+
+                key={team.id || `team-idx-${idx}`}
                 team={team}
                 draggedId={draggedId}
                 dragOverId={dragOverId}
@@ -792,10 +785,11 @@ export default function TeamComposition() {
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
               />
+
             ))}
 
             {/* Criar Equipe */}
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <Dialog key="dialog-create-team" open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
                 <Button
                   variant="outline"

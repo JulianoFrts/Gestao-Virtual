@@ -35,6 +35,14 @@ export class PrismaJobFunctionRepository implements JobFunctionRepository {
     });
   }
 
+  async update(id: string, data: any): Promise<any> {
+    return prisma.jobFunction.update({
+      where: { id },
+      data,
+      include: { company: { select: { id: true, name: true } } },
+    });
+  }
+
   async delete(id: string): Promise<void> {
     await prisma.jobFunction.delete({
       where: { id },

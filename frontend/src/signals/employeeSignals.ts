@@ -67,43 +67,16 @@ const hasInitialFetched = signal<boolean>(false);
 const previousFilters = signal<string>("");
 
 // Computed
+// Computed - backend first, filtering happens at the API level
+// We just do a very fast pass for local text search typing if needed, 
+// though the backend handles most of it, we keep text match for immediate UI feedback until debounce fires.
 export const filteredEmployees = computed(() => {
   const list = employees.value;
-  const {
-    companyId,
-    projectId,
-    siteId,
-    searchTerm,
-    excludeCorporate,
-    status,
-    functionId,
-    biometric,
-    level,
-    cpfOrRegistration,
-  } = employeeFilters.value;
+  const { searchTerm, cpfOrRegistration } = employeeFilters.value;
+
+  if (!searchTerm && !cpfOrRegistration) return list;
 
   return list.filter((e) => {
-    const matchesCompany = !companyId || e.companyId === companyId;
-    const matchesProject = !projectId || e.projectId === projectId;
-    const matchesSite = !siteId || e.siteId === siteId;
-    const isCorporate = e.role !== "WORKER";
-    const matchesExcludeCorporate =
-      !excludeCorporate || !isCorporate;
-
-    const matchesStatus =
-      status === "all" ||
-      (status === "active" && e.isActive) ||
-      (status === "inactive" && !e.isActive);
-
-    const matchesFunction = functionId === "all" || e.functionId === functionId;
-
-    const matchesBiometric =
-      biometric === "all" ||
-      (biometric === "with" && e.faceDescriptor) ||
-      (biometric === "without" && !e.faceDescriptor);
-
-    const matchesLevel = level === "all" || String(e.level) === level;
-
     const lowCpfReg = cpfOrRegistration.toLowerCase();
     const matchesCpfReg =
       !cpfOrRegistration ||
@@ -118,18 +91,7 @@ export const filteredEmployees = computed(() => {
       e.email?.toLowerCase().includes(lowSearch) ||
       e.registrationNumber.toLowerCase().includes(lowSearch);
 
-    return (
-      matchesCompany &&
-      matchesProject &&
-      matchesSite &&
-      matchesExcludeCorporate &&
-      matchesStatus &&
-      matchesFunction &&
-      matchesBiometric &&
-      matchesLevel &&
-      matchesCpfReg &&
-      matchesSearch
-    );
+    return matchesCpfReg && matchesSearch;
   });
 });
 
@@ -182,9 +144,14 @@ export const fetchEmployees = async (force = false) => {
     }
 
     if (companyId) query = query.eq("companyId", companyId);
-    if (projectId) query = query.eq("projectId", projectId);
-    if (siteId) query = query.eq("siteId", siteId);
-    // excludeCorporate agora é tratado client-side no filteredEmployees
+    if (projectId) {
+      query = query.or(`projectId.eq.${projectId},projectId.is.null`);
+    }
+    if (siteId) {
+      query = query.or(`siteId.eq.${siteId},siteId.is.null`);
+    }
+    if (excludeCorporate) query = query.eq("excludeCorporate", true);
+
     if (status && status !== "all")
       query = query.eq("status", status === "active" ? "ACTIVE" : "INACTIVE");
     if (functionId && functionId !== "all")
@@ -193,7 +160,7 @@ export const fetchEmployees = async (force = false) => {
     if (cpfOrRegistration)
       query = query.eq("cpfOrRegistration", cpfOrRegistration);
 
-    const { data, error } = await query;
+    const { data, error } = await query.order("name", { ascending: true }).limit(1000);
     if (error) throw error;
 
     if (data) {
@@ -203,15 +170,15 @@ export const fetchEmployees = async (force = false) => {
         registrationNumber: e.registrationNumber || "",
         functionId: e.functionId,
         functionName: e.jobFunction?.name || "Não definida",
-        role: e.role || "WORKER",
+        role: e.authCredential?.role || e.role || "WORKER",
         phone: e.phone || null,
-        email: e.email || null,
+        email: e.authCredential?.email || e.email || null,
         cpf: e.cpf || null,
         photoUrl: e.image || null,
-        isActive: e.status === "ACTIVE",
-        siteId: e.siteId || null,
-        companyId: e.companyId || null,
-        projectId: e.projectId || null,
+        isActive: (e.authCredential?.status || e.status) === "ACTIVE",
+        siteId: e.affiliation?.siteId || e.siteId || null,
+        companyId: e.affiliation?.companyId || e.companyId || null,
+        projectId: e.affiliation?.projectId || e.projectId || null,
         level: e.hierarchyLevel || 0,
         laborType: e.laborType || "MOD",
         professionalLevel: e.jobFunction?.hierarchyLevel || 0,
@@ -219,11 +186,11 @@ export const fetchEmployees = async (force = false) => {
         gender: e.gender || null,
         birthDate: e.birthDate || null,
         cep: e.address?.cep || "",
-        street: e.address?.street || "",
+        street: e.address?.logradouro || e.address?.street || "",
         number: e.address?.number || "",
-        neighborhood: e.address?.neighborhood || "",
-        city: e.address?.city || "",
-        state: e.address?.stateCode || "",
+        neighborhood: e.address?.bairro || e.address?.neighborhood || "",
+        city: e.address?.localidade || e.address?.city || "",
+        state: e.address?.uf || e.address?.stateCode || "",
         faceDescriptor: e.face_descriptor,
         createdAt: e.createdAt,
       }));

@@ -51,14 +51,18 @@ export function useTeams(companyId?: string) {
 
   const createTeam = async (data: {
     name: string;
-    supervisorId?: string;
-    members: string[];
+    supervisorId?: string | null;
+    members?: string[];
     siteId?: string;
     companyId?: string;
+    projectId?: string;
     laborType?: "MOD" | "MOI";
   }) => {
     try {
-      const resultAction = await dispatch(addTeam(data));
+      const resultAction = await dispatch(addTeam({
+        ...data,
+        members: data.members || []
+      }));
       if (addTeam.fulfilled.match(resultAction)) {
         return { success: true, data: resultAction.payload.team };
       }
@@ -71,12 +75,13 @@ export function useTeams(companyId?: string) {
   const updateTeam = async (
     id: string,
     data: {
-      name: string;
-      supervisorId?: string;
-      members: string[];
-      siteId?: string;
-      companyId?: string;
-      laborType?: "MOD" | "MOI";
+      name?: string;
+      supervisorId?: string | null;
+      members?: string[];
+      siteId?: string | null;
+      companyId?: string | null;
+      projectId?: string | null;
+      laborType?: "MOD" | "MOI" | null;
     }
   ) => {
     try {

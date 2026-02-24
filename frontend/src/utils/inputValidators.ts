@@ -102,6 +102,17 @@ export function maskCurrency(value: string): string {
     return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+/**
+ * Máscara para Números Genéricos: 1.000.000
+ */
+export function maskNumber(value: string | number): string {
+    if (value === undefined || value === null || value === '') return '';
+    const val = typeof value === 'number' ? value.toString() : value;
+    const digits = val.replace(/\D/g, '');
+    if (!digits) return '';
+    return parseInt(digits, 10).toLocaleString('pt-BR');
+}
+
 // ============================================================
 // REMOÇÃO DE MÁSCARAS
 // ============================================================
@@ -132,6 +143,22 @@ export function unmaskPhone(value: string): string {
  */
 export function unmaskDigits(value: string): string {
     return value.replace(/\D/g, '');
+}
+
+/**
+ * Converte string formatada (R$ 1.234,56) em número (1234.56)
+ */
+export function parseCurrency(value: string): number {
+    const digits = value.replace(/\D/g, '');
+    return parseInt(digits || '0', 10) / 100;
+}
+
+/**
+ * Converte string formatada (1.234) em número (1234)
+ */
+export function parseNumber(value: string): number {
+    const digits = value.replace(/\D/g, '');
+    return parseInt(digits || '0', 10);
 }
 
 // ============================================================
@@ -357,7 +384,7 @@ export function validateName(name: string): ValidationResult {
 // HANDLER GENÉRICO PARA INPUTS
 // ============================================================
 
-export type InputType = 'cpf' | 'cnpj' | 'phone' | 'cep' | 'date' | 'currency' | 'registration' | 'text' | 'email' | 'password';
+export type InputType = 'cpf' | 'cnpj' | 'phone' | 'cep' | 'date' | 'currency' | 'number' | 'registration' | 'text' | 'email' | 'password';
 
 /**
  * Aplica máscara automaticamente baseado no tipo
@@ -370,6 +397,7 @@ export function applyMask(value: string, type: InputType): string {
         case 'cep': return maskCEP(value);
         case 'date': return maskDate(value);
         case 'currency': return maskCurrency(value);
+        case 'number': return maskNumber(value);
         case 'registration': return maskRegistrationNumber(value);
         default: return value;
     }

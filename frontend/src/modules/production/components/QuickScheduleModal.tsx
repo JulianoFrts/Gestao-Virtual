@@ -111,8 +111,21 @@ const QuickScheduleModal = ({
         queryFn: async () => {
             if (!selectedTower?.id) return null;
             const res = await orionApi.get(`/production/tower-status?towerId=${selectedTower.id}`);
-            if (res.data && Array.isArray(res.data)) {
-                const found = (res.data as any[]).find((s: any) => s.activityId === activityId);
+            const payloadData = res.data as any;
+            let dataArray: any[] = [];
+            if (Array.isArray(payloadData)) {
+                dataArray = payloadData;
+            } else if (payloadData && typeof payloadData === 'object') {
+                if (Array.isArray(payloadData.data)) {
+                    dataArray = payloadData.data;
+                } else if (payloadData.data && Array.isArray(payloadData.data.data)) {
+                    dataArray = payloadData.data.data;
+                } else if (Array.isArray(payloadData.items)) {
+                    dataArray = payloadData.items;
+                }
+            }
+            if (dataArray.length > 0) {
+                const found = dataArray.find((s: any) => s.activityId === activityId);
                 return found || null;
             }
             return null;
@@ -132,7 +145,7 @@ const QuickScheduleModal = ({
 
             // Always load other metadata to help user
             if (scheduleData.plannedQuantity) setPlannedQuantity(scheduleData.plannedQuantity.toString());
-            if (scheduleData.plannedHHH) setPlannedHours(scheduleData.plannedHHH.toString());
+            if (scheduleData.plannedHhh) setPlannedHours(scheduleData.plannedHhh.toString());
         }
         if (statusData?.metadata?.leadName) {
             setForemanName(statusData.metadata.leadName);
@@ -177,7 +190,7 @@ const QuickScheduleModal = ({
                 plannedStart: toNoonISO(plannedStart),
                 plannedEnd: toNoonISO(plannedEnd),
                 plannedQuantity: parseMeasure(plannedQuantity),
-                plannedHHH: parseMeasure(plannedHours)
+                plannedHhh: parseMeasure(plannedHours)
             });
 
             // 2. Update status metadata (Encarregado) if changed

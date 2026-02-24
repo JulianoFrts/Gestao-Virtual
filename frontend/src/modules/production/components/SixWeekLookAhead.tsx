@@ -301,29 +301,36 @@ export default function SixWeekLookAhead({ towers, categories, startDate, onEdit
         // OR if showAllActivities is true
         const rowsList = Array.from(activityGroups.values())
             .filter(row => showAllActivities || row.days.some((d: { isScheduled: boolean }) => d.isScheduled))
-            .map(row => ({
-                ...row,
-                daySchedules: row.days.map((d: { isScheduled: boolean; towers: TowerProductionData[] }) => {
-                    if (!d.isScheduled) return { isScheduled: false };
+            .map(row => {
+                const activity = categories?.flatMap(c => c.activities).find(a => a.id === row.activityId);
+                const category = categories?.find(c => c.id === activity?.categoryId);
 
-                    const finishedCount = d.towers.filter((t: any) => t.status === 'FINISHED').length;
-                    const inProgressCount = d.towers.filter((t: any) => t.status === 'IN_PROGRESS').length;
-                    const totalProgress = d.towers.reduce((acc: number, t: any) => acc + Number(t.progress || 0), 0);
+                return {
+                    ...row,
+                    categoryOrder: category?.order ?? 0,
+                    activityOrder: activity?.order ?? 0,
+                    daySchedules: row.days.map((d: { isScheduled: boolean; towers: TowerProductionData[] }) => {
+                        if (!d.isScheduled) return { isScheduled: false };
 
-                    let combinedStatus: ActivityStatus = 'PENDING';
-                    if (finishedCount === d.towers.length) combinedStatus = 'FINISHED';
-                    else if (inProgressCount > 0 || finishedCount > 0) combinedStatus = 'IN_PROGRESS';
+                        const finishedCount = d.towers.filter((t: any) => t.status === 'FINISHED').length;
+                        const inProgressCount = d.towers.filter((t: any) => t.status === 'IN_PROGRESS').length;
+                        const totalProgress = d.towers.reduce((acc: number, t: any) => acc + Number(t.progress || 0), 0);
 
-                    return {
-                        isScheduled: true,
-                        towers: d.towers,
-                        combinedStatus,
-                        avgProgress: d.towers.length > 0 ? Math.round(totalProgress / d.towers.length) : 0
-                    };
-                })
-            }));
+                        let combinedStatus: ActivityStatus = 'PENDING';
+                        if (finishedCount === d.towers.length) combinedStatus = 'FINISHED';
+                        else if (inProgressCount > 0 || finishedCount > 0) combinedStatus = 'IN_PROGRESS';
 
-        rowsList.sort((a, b) => a.categoryName.localeCompare(b.categoryName) || a.activityName.localeCompare(b.activityName));
+                        return {
+                            isScheduled: true,
+                            towers: d.towers,
+                            combinedStatus,
+                            avgProgress: d.towers.length > 0 ? Math.round(totalProgress / d.towers.length) : 0
+                        };
+                    })
+                };
+            });
+
+        rowsList.sort((a, b) => (a.categoryOrder - b.categoryOrder) || (a.activityOrder - b.activityOrder));
 
         // Calculate Daily Totals
         const dailyTotals = daysList.map((_, dIdx) => {

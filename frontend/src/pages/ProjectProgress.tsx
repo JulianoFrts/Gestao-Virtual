@@ -11,6 +11,7 @@ import {
   useControl,
   useMap,
   MapRef,
+  Source,
 } from "react-map-gl/mapbox";
 import {
   ScatterplotLayer,
@@ -43,6 +44,7 @@ import {
   Minimize2,
   Search,
   ChevronUp,
+  Workflow,
 } from "lucide-react";
 import { TowerExecutionHistoryModal } from "@/components/map/TowerExecutionHistoryModal";
 import { Input } from "@/components/ui/input";
@@ -96,6 +98,7 @@ export interface Tower {
   };
   type?: string;
   elementType?: string;
+  objectSeq?: string | number;
   metadata?: Record<string, unknown>;
   properties?: Record<string, any>;
   displaySettings?: {
@@ -103,7 +106,19 @@ export interface Tower {
   };
   rotation?: number;
   isLocal?: boolean;
-  activityStatuses?: any[];
+  activityStatuses?: Array<{
+    activityId: string;
+    status: 'PENDING' | 'IN_PROGRESS' | 'FINISHED' | 'BLOCKED';
+    progressPercent: number;
+    plannedStartDate?: string;
+    plannedEndDate?: string;
+    plannedQuantity?: number;
+    plannedHhh?: number;
+    activity?: {
+      name: string;
+      weight: number | string;
+    };
+  }>;
 }
 
 export interface Cable {
@@ -369,71 +384,7 @@ function DeckGLOverlay(props: Record<string, unknown>) {
   return null;
 }
 
-function TerrainManager() {
-  const { current: map } = useMap();
 
-  useEffect(() => {
-    if (!map) return;
-    const m =
-      (map as Record<string, MapRef | any>)?.default?.getMap() ||
-      (map as MapRef).getMap?.() ||
-      null;
-    if (!m) return;
-
-    const applyTerrain = () => {
-      if (!m.getSource("mapbox-dem")) {
-        try {
-          m.addSource("mapbox-dem", {
-            type: "raster-dem",
-            url: "mapbox://mapbox.mapbox-terrain-dem-v1",
-            tileSize: 512,
-            maxzoom: 14,
-          });
-        } catch (e) {
-          console.warn("Failed to add mapbox-dem source:", e);
-        }
-      }
-
-      try {
-        m.setTerrain({ source: "mapbox-dem", exaggeration: 1.0 });
-        // Force a snap after terrain is applied
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent("terrain-ready"));
-        }, 1000);
-        return true;
-      } catch (e) {
-        console.warn("Mapbox terrain application failed:", e);
-        return false;
-      }
-    };
-
-    // Attempt initial apply
-    const onStyleLoad = () => applyTerrain();
-
-    if (m.isStyleLoaded()) {
-      applyTerrain();
-    }
-
-    m.on("style.load", onStyleLoad);
-
-    return () => {
-      m.off("style.load", onStyleLoad);
-
-      try {
-        if (m.getTerrain()) {
-          m.setTerrain(null);
-        }
-        if (m.getSource("mapbox-dem")) {
-          m.removeSource("mapbox-dem");
-        }
-      } catch (e) {
-        console.warn("Mapbox terrain cleanup failed:", e);
-      }
-    };
-  }, [map]);
-
-  return null;
-}
 
 export default function ProjectProgress() {
   // OrioN 3D Map Component
@@ -494,7 +445,6 @@ export default function ProjectProgress() {
     undefined,
     selectedProjectId || undefined,
   );
-  const { reset: resetProduction } = useTowerProduction();
 
   // Manual Connection State
   const [isConnectMode, setIsConnectMode] = useState(false);
@@ -593,16 +543,27 @@ export default function ProjectProgress() {
 
   // Fetch projects on mount
   useEffect(() => {
+    let isMounted = true;
     const fetchProjects = async () => {
       const { data, error } = await orionApi
         .from("projects")
         .select("id, name")
         .order("name");
-      if (!error && data) {
-        setProjects(data as { id: string; name: string }[]);
+      if (!error && data && isMounted) {
+        const sortedProjects = data as { id: string; name: string }[];
+        setProjects(sortedProjects);
+        
+        // Auto-select first project if none is selected
+        setSelectedProjectId((prev) => {
+          if (!prev && sortedProjects.length > 0) {
+            return sortedProjects[0].id;
+          }
+          return prev;
+        });
       }
     };
     fetchProjects();
+    return () => { isMounted = false; };
   }, []);
 
   // Announced on mount
@@ -661,45 +622,76 @@ export default function ProjectProgress() {
           projectId,
         });
 
+        console.log('[DEBUG Cockpit3D API]', { projectId, towerData, towerError });
+
         let mappedTowers: Tower[] = [];
 
         if (!towerError && towerData) {
-          mappedTowers = towerData.map(
-            (t: Record<string, unknown>) =>
-              ({
-                ...t,
-                id: String(t.id),
-                name: String(t.name || t.objectId || t.externalId || ""),
-                coordinates: {
-                  lat: Number(t.latitude),
-                  lng: Number(t.longitude),
-                  altitude: Number(t.elevation || 0),
-                },
-                type: String(t.towerType || t.type || "ESTAIADA"), // Use towerType from root
+          const tryUnwrap = (obj: any): any[] | null => {
+            if (!obj) return null;
+            if (Array.isArray(obj)) return obj;
+            if (obj.preview && Array.isArray(obj.preview)) return obj.preview;
+            if (obj.data) return tryUnwrap(obj.data);
+            return null;
+          };
+
+          const unwrapped = tryUnwrap(towerData);
+          if (unwrapped) {
+            mappedTowers = unwrapped.map((t: any, idx: number) => {
+                const rawName = String(t.name || t.externalId || t.objectId || `T-${idx + 1}`);
+                const name = rawName.replace(/^(Torre|TORRE)\s+/i, "").trim();
+                
+                let rawLat = Number(t.latitude ?? t.lat ?? 0);
+                let rawLng = Number(t.longitude ?? t.lng ?? 0);
+                
+                // Auto-correct swapped LAT/LNG for Brazil
+                // Brazil LAT is roughly +5 to -35. LNG is roughly -34 to -74.
+                // If we see Lat < -35 and Lng > -35, it's very likely swapped!
+                if (rawLat < -35 && rawLng > -35 && rawLng < 0) {
+                  const temp = rawLat;
+                  rawLat = rawLng;
+                  rawLng = temp;
+                  console.warn(`[Cockpit3D] Auto-corrected swapped coords for tower ${name}`);
+                }
+
+                return {
+                  ...t,
+                  id: String(t.id || t.elementId || `virtual-${name}`),
+                  name,
+                  coordinates: {
+                    lat: rawLat,
+                    lng: rawLng,
+                    altitude: Number(t.elevation ?? t.altitude ?? 0),
+                  },
+                type: String(t.towerType || t.type || "ESTAIADA"),
                 elementType: String(t.elementType || "TOWER"),
-                metadata: t as Record<string, unknown>, // All fields are in the root
-                activityStatuses: (t.activityStatuses as any) || [],
-              }) as Tower,
-          );
-          setTowers(mappedTowers);
+                objectSeq: Number(t.metadata?.objectSeq ?? t.objectSeq ?? t.sequence ?? 0),
+                metadata: t,
+                activityStatuses: (t.activityStatuses || t.productionProgress || []) as any[],
+              } as Tower;
+            });
 
-          // Restore individual altitudes from metadata if present
-          const restoredAlts: Record<string, number> = {};
-          towerData.forEach((t: Record<string, unknown>) => {
-            const displaySettings =
-              (t.displaySettings as Record<string, unknown>) || {};
-            if (displaySettings?.groundElevation) {
-              restoredAlts[String(t.name || t.externalId)] =
-                displaySettings.groundElevation as number;
+            setTowers(mappedTowers);
+            console.log("[Cockpit3D] Torres mapeadas:", mappedTowers.length);
+
+            // Restore individual altitudes
+            const restoredAlts: Record<string, number> = {};
+            unwrapped.forEach((t: any) => {
+              const displaySettings = (t.displaySettings as Record<string, any>) || {};
+              if (displaySettings?.groundElevation) {
+                restoredAlts[String(t.name || t.externalId)] = displaySettings.groundElevation;
+              }
+            });
+            setIndividualAltitudes(restoredAlts);
+
+            // Trigger Auto-Zoom
+            if (mappedTowers.length > 0) {
+              setTimeout(() => {
+                handleFitToTowers(mappedTowers);
+              }, 800);
             }
-          });
-          setIndividualAltitudes(restoredAlts);
-
-          // Trigger Auto-Zoom after data is ready
-          if (mappedTowers.length > 0) {
-            setTimeout(() => {
-              handleFitToTowers(mappedTowers);
-            }, 800);
+          } else {
+            console.warn("[Cockpit3D] Payload da API sem array reconhecível.", towerData);
           }
         }
 
@@ -716,6 +708,9 @@ export default function ProjectProgress() {
           const s = settingsData.settings as Record<string, unknown>;
           if (s.scale) setScale(s.scale as number);
           if (s.towerElevation) setTowerElevation(s.towerElevation as number);
+          if (s.hiddenTowerIds && Array.isArray(s.hiddenTowerIds)) {
+              setHiddenTowerIds(new Set(s.hiddenTowerIds));
+          }
 
           if (s.phases) {
             const loadedPhases = s.phases as PhaseConfig[];
@@ -735,8 +730,8 @@ export default function ProjectProgress() {
         // Auto-connect fallback if no connections were loaded
         if (loadedConnections.length === 0 && mappedTowers.length > 1) {
           const sortedTowers = [...mappedTowers].sort((a,b) => {
-             const seqA = Number(a.metadata?.sequence || 0);
-             const seqB = Number(b.metadata?.sequence || 0);
+             const seqA = Number(a.objectSeq ?? a.metadata?.objectSeq ?? a.metadata?.sequence ?? 0);
+             const seqB = Number(b.objectSeq ?? b.metadata?.objectSeq ?? b.metadata?.sequence ?? 0);
              if (seqA !== seqB) return seqA - seqB;
              return a.name.localeCompare(b.name, undefined, { numeric: true });
           });
@@ -782,6 +777,7 @@ export default function ProjectProgress() {
             towerElevation,
             phases,
             connections,
+            hiddenTowerIds: Array.from(hiddenTowerIds), // Persist hidden states
             updatedAt: new Date().toISOString(),
           },
         });
@@ -790,20 +786,24 @@ export default function ProjectProgress() {
         // Ensure no duplicates by externalId (tower name) inside the same batch
         const towersMap = new Map();
 
-        towers.forEach((t, index) => {
-          if (!t.name) return; // Skip invalid towers
+        towers.forEach((t) => {
+          if (!t.name || t.name === "UNKNOWN") return; // Skip invalid towers
+
+          // Normalize name: remove "Torre " or "TORRE " prefix to match technical standards
+          const normalizedName = String(t.name).replace(/^(Torre|TORRE)\s+/i, "").trim();
 
           const groundElevation = individualAltitudes[t.name];
+          const seq = Number(t.objectSeq ?? t.metadata?.objectSeq ?? t.metadata?.sequence ?? 0);
           const entry = {
             projectId: selectedProjectId,
-            externalId: String(t.name),
-            name: t.name,
+            externalId: normalizedName,
+            name: normalizedName,
             elementType: t.elementType || "TOWER",
             type: t.type,
             latitude: t.coordinates.lat,
             longitude: t.coordinates.lng,
             elevation: t.coordinates.altitude,
-            sequence: index,
+            sequence: seq,
             displaySettings: {
               ...(((t.metadata as Record<string, unknown>)
                 ?.displaySettings as Record<string, unknown>) ||
@@ -873,24 +873,34 @@ export default function ProjectProgress() {
     ],
   );
 
-  // Auto-Save Effect
+  // Auto-Cache Effect (Save to localStorage ONLY — DB save happens on PUBLICAR click)
   useEffect(() => {
     if (!selectedProjectId || towers.length === 0) return;
 
     const timer = setTimeout(() => {
-      handleSaveConfig(true);
-    }, 3000); // 3 seconds debounce
+      try {
+        const cacheKey = `orion-tower-cache-${selectedProjectId}`;
+        const cacheData = {
+          scale,
+          towerElevation,
+          connections,
+          individualAltitudes,
+          updatedAt: new Date().toISOString(),
+        };
+        localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+      } catch (e) {
+        // localStorage full or unavailable — silently ignore
+      }
+    }, 2000);
 
     return () => clearTimeout(timer);
   }, [
     scale,
     towerElevation,
-    phases,
     connections,
     individualAltitudes,
     selectedProjectId,
     towers,
-    handleSaveConfig,
   ]);
 
   // Persist phases
@@ -998,13 +1008,13 @@ export default function ProjectProgress() {
 
   const lastSnapTime = useRef<number>(0);
   const handleSnapToTerrain = useCallback(
-    (_silent = false) => {
+    (_silent = false, _forceAll = false) => {
       const mapInstance = mapRef.current?.getMap();
       if (!mapInstance) return;
 
       // Debounce: Don't snap more than once every 3 seconds
       const now = Date.now();
-      if (now - lastSnapTime.current < 3000) return;
+      if (!_forceAll && now - lastSnapTime.current < 3000) return;
       lastSnapTime.current = now;
 
       const newAlts: Record<string, number> = { ...individualAltitudes };
@@ -1013,9 +1023,10 @@ export default function ProjectProgress() {
       let changed = false;
 
       towersRef.current.forEach((tower) => {
-        // Process only towers within the current viewport bounds
-        if (!bounds.contains([tower.coordinates.lng, tower.coordinates.lat]))
+        // Process towers within bounds, or all if forceAll is true
+        if (!_forceAll && !bounds.contains([tower.coordinates.lng, tower.coordinates.lat])) {
           return;
+        }
 
         const elevation = mapInstance.queryTerrainElevation([
           tower.coordinates.lng,
@@ -1040,10 +1051,40 @@ export default function ProjectProgress() {
               "bg-emerald-950/80 border-emerald-500/50 text-emerald-100 backdrop-blur-md",
           });
         }
+      } else if (!_silent) {
+          showToast({
+            title: "Aviso",
+            description: "Nenhuma torre precisou de ajuste ou os dados de elevação ainda não carregaram.",
+            className: "bg-blue-950/80 border-blue-500/50 text-blue-100",
+          });
       }
     },
     [individualAltitudes, showToast],
   );
+
+  const handleAutoConnectSequence = useCallback(() => {
+    if (towers.length <= 1) return;
+
+    // Use absolute numeric sequence for sorting to guarantee engineering order
+    const sortedTowers = [...towers].sort((a,b) => {
+       const seqA = Number(a.objectSeq ?? a.metadata?.objectSeq ?? a.metadata?.sequence ?? 0);
+       const seqB = Number(b.objectSeq ?? b.metadata?.objectSeq ?? b.metadata?.sequence ?? 0);
+       if (seqA !== seqB) return seqA - seqB;
+       return String(a.name).localeCompare(String(b.name), undefined, { numeric: true });
+    });
+    
+    const newConnections = sortedTowers.slice(0, -1).map((t, i) => ({
+      from: t.name,
+      to: sortedTowers[i+1].name
+    }));
+
+    setConnections(newConnections);
+    showToast({
+      title: "Sequência OrioN Aplicada 🔗",
+      description: `${newConnections.length} cabos gerados obedecendo a ordem técnica.`,
+      className: "bg-indigo-950/80 border-indigo-500/50 text-indigo-100",
+    });
+  }, [towers, showToast]);
 
   const handleAutoRotateTowers = useCallback(
     (
@@ -1157,21 +1198,19 @@ export default function ProjectProgress() {
 
     const onSnap = () => {
       // Use Ref to get the freshest data during the idle event
-      if (towersRef.current.length > 0 && viewStateRef.current.zoom >= 14) {
+      if (towersRef.current.length > 0 && viewStateRef.current.zoom >= 5) {
         handleSnapToTerrain(true);
         handleAutoRotateTowers(true);
       }
     };
 
     map.on("idle", onSnap);
-    window.addEventListener("terrain-ready", onSnap);
 
     // Initial check after a short delay
     const timer = setTimeout(onSnap, 2000);
 
     return () => {
       map.off("idle", onSnap);
-      window.removeEventListener("terrain-ready", onSnap);
       clearTimeout(timer);
     };
   }, [
@@ -1564,13 +1603,17 @@ export default function ProjectProgress() {
               // Dedicated Signal Spheres Logic: FIXED 2 OR 3 UNITS PER SPAN
               if (phase.signalSpheresEnabled) {
                 const phaseIndex = phases.findIndex(p => p.id === phase.id);
-                // Rule: if span > 400m use 3 spheres, else 2.
-                const sphereCount = totalSpanDist > 400 ? 3 : 2;
+                // Rule: if span > 400m use 3 spheres, else if span < 259m use 1 sphere, else 2.
+                let sphereCount = 2;
+                if (totalSpanDist > 400) sphereCount = 3;
+                else if (totalSpanDist < 259) sphereCount = 1;
 
                 // Proportional placement factors
                 const basePositions = sphereCount === 3
                   ? [0.25, 0.50, 0.75]
-                  : [0.33, 0.66];
+                  : sphereCount === 2
+                    ? [0.33, 0.66]
+                    : [0.50]; // 1 sphere -> dead center
 
                 const positions = basePositions.map(p => {
                   const jitter = ((phaseIndex % 3) - 1) * 0.05; // -0.05, 0, +0.05 per phase
@@ -1963,10 +2006,7 @@ export default function ProjectProgress() {
           const allFinished = statuses.every((s: any) => s.status === "FINISHED");
           if (allFinished) return [50, 180, 50]; // Green
 
-          const anyInProgress = statuses.some((s: any) => s.status === "IN_PROGRESS");
-          if (anyInProgress) return [0, 120, 255]; // Blue
-
-          // Check for delays
+          // Check for delays - PRIORITIZE DELAY over In Progress
           const today = new Date();
           const isDelayed = statuses.some((s: any) => {
             if (s.status === "FINISHED") return false;
@@ -1976,10 +2016,13 @@ export default function ProjectProgress() {
 
           if (isDelayed) return [255, 80, 0]; // Orange/Red for delay
 
+          // Se tem qualquer status (ESTÁ VINCULADA e não está atrasada), mostrar verde!
+          // Deixa as não-vinculadas (statuses len 0, capturado no inicio da function) 
+          // ou recem geradas como metálicas prata. Se terminou algo, verde ainda mais brilhante.
           const anyFinished = statuses.some((s: any) => s.status === "FINISHED");
-          if (anyFinished) return [0, 200, 255]; // Light Blue for partial finish
-
-          return [200, 200, 210]; // Metallic Silver (Galvanized Steel look) instead of flat white
+          if (anyFinished) return [0, 255, 120]; // Neon Green for partially/fully finished
+          
+          return [50, 180, 50]; // Default Green for Linked/In Progress
         },
       }),
       new PathLayer({
@@ -2389,7 +2432,7 @@ export default function ProjectProgress() {
               {
                 icon: RefreshCw,
                 label: "Snap",
-                onClick: () => handleSnapToTerrain(),
+                onClick: () => handleSnapToTerrain(false, true),
                 color: "text-orange-400",
               },
               {
@@ -2410,6 +2453,13 @@ export default function ProjectProgress() {
                 active: isConnectMode,
                 onClick: () => canEdit && setIsConnectMode(!isConnectMode),
                 color: "text-orange-500",
+                disabled: !canEdit,
+              },
+              {
+                icon: Workflow,
+                label: "Auto-Seq",
+                onClick: () => canEdit && handleAutoConnectSequence(),
+                color: "text-indigo-400",
                 disabled: !canEdit,
               },
             ].map((tool, idx) => (
@@ -2448,7 +2498,7 @@ export default function ProjectProgress() {
               {/* Project Selector - Large Cockpit View */}
               <div className="flex items-center gap-4 pr-8 border-r border-white/10 shrink-0">
                 <Select
-                  value={selectedProjectId || ""}
+                  value={selectedProjectId || undefined}
                   onValueChange={setSelectedProjectId}
                 >
                   <SelectTrigger className="w-[100px] h-12 bg-white/5 border-white/5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-white/10 transition-all text-white">
@@ -2485,7 +2535,6 @@ export default function ProjectProgress() {
 
                 {canManage ? (
                   <>
-                    <ExcelDataUploader onLoad={handleExcelImport} />
                     <Button
                       variant="outline"
                       disabled={
@@ -2564,7 +2613,7 @@ export default function ProjectProgress() {
               <div className="flex items-center gap-2 px-2 shrink-0">
                 <Layers className="w-3.5 h-3.5 text-emerald-500/50" />
                 <Select
-                  value={selectedProjectId || ""}
+                  value={selectedProjectId || undefined}
                   onValueChange={setSelectedProjectId}
                 >
                   <SelectTrigger className="w-[180px] md:w-[240px] h-8 bg-transparent border-none focus:ring-0 rounded-full font-black text-[10px] uppercase tracking-widest hover:text-emerald-400 text-left px-0 shadow-none">
@@ -2589,16 +2638,6 @@ export default function ProjectProgress() {
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2 shrink-0">
-                <ExcelDataUploader onLoad={handleExcelImport} />
-
-                <Button
-                  variant="ghost"
-                  className="text-slate-400 hover:text-destructive hover:bg-destructive/10 rounded-full px-4 h-9 font-black text-[9px] uppercase tracking-widest border border-transparent hover:border-destructive/20"
-                  onClick={resetProduction}
-                >
-                  <Trash2 className="w-3.5 h-3.5 mr-2" />
-                  Limpar Torres
-                </Button>
               </div>
 
               {/* Right Actions */}
@@ -2631,6 +2670,24 @@ export default function ProjectProgress() {
                   )}
                   <span>PUBLICAR</span>
                 </Button>
+
+                {/* Live Camera Position Display */}
+                <div className="flex items-center gap-3 ml-3 px-4 py-1.5 bg-black/60 backdrop-blur-md rounded-full border border-white/10">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[7px] font-black text-emerald-400/70 uppercase tracking-widest">LAT</span>
+                    <span className="text-[10px] font-mono font-black text-white tabular-nums">{(viewState.latitude ?? 0).toFixed(6)}</span>
+                  </div>
+                  <div className="w-px h-3 bg-white/10" />
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[7px] font-black text-emerald-400/70 uppercase tracking-widest">LNG</span>
+                    <span className="text-[10px] font-mono font-black text-white tabular-nums">{(viewState.longitude ?? 0).toFixed(6)}</span>
+                  </div>
+                  <div className="w-px h-3 bg-white/10" />
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[7px] font-black text-emerald-400/70 uppercase tracking-widest">ALT</span>
+                    <span className="text-[10px] font-mono font-black text-white tabular-nums">{(viewState.zoom ?? 0).toFixed(1)}z</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -2646,8 +2703,17 @@ export default function ProjectProgress() {
             reuseMaps
             style={{ width: "100%", height: "100%" }}
             doubleClickZoom={false}
+            maxPitch={85}
+            terrain={{ source: "mapbox-dem", exaggeration: 1.5 }}
           >
-            <TerrainManager />
+            <Source
+              id="mapbox-dem"
+              type="raster-dem"
+              url="mapbox://mapbox.mapbox-terrain-dem-v1"
+              tileSize={512}
+              maxzoom={14}
+            />
+            {/* <TerrainManager /> - Deprecated in favor of native declarative terrain */}
             <DeckGLOverlay
               layers={layers}
               getTooltip={({ object }: { object: Tower | Cable | { path?: any } }) => {
@@ -2793,7 +2859,7 @@ export default function ProjectProgress() {
           </div>
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-200">
             <p className="text-[10px] font-black uppercase text-neutral-500 tracking-widest mb-1">
-              Caboos
+              Cabos
             </p>
             <h3 className="text-4xl font-black text-white italic tracking-tighter leading-none">
               {Number(cables.length).toLocaleString("pt-BR", {
@@ -2919,10 +2985,8 @@ export default function ProjectProgress() {
               <div className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-none">
                 {towers
                   .map((t, i) => ({ tower: t, index: i })) // Keep original index for handlers
-                  .filter(({ tower }) =>
-                    tower.name
-                      .toLowerCase()
-                      .includes(towerSearch.toLowerCase()),
+                  .filter(({ tower }) => 
+                    tower.name && towerSearch ? tower.name.toLowerCase().includes(towerSearch.toLowerCase()) : true
                   )
                   .map(({ tower: t, index: i }) => (
                     <div

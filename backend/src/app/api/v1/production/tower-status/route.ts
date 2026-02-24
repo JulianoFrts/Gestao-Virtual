@@ -119,8 +119,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    console.log("[tower-status] POST Body:", JSON.stringify(body, null, 2));
 
-    const validatedData = updateStatusSchema.parse(body);
+    let validatedData;
+    try {
+      validatedData = updateStatusSchema.parse(body);
+    } catch (zodError: any) {
+      console.error("[tower-status] Validation Error:", zodError.errors);
+      return ApiResponse.badRequest(
+        "Erro de validação dos dados",
+        zodError.errors,
+      );
+    }
 
     const {
       towerId,

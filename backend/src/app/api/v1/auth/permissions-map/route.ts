@@ -102,8 +102,8 @@ const PERMISSIONS_MAP: Record<
       "employees.view": true,
       "employees.edit": false,
       "employees.delete": false,
-      "map.view": true,
-      "viewer_3d.view": true,
+      "map.view": false,
+      "viewer_3d.view": false,
     },
     ui: {
       showAdminMenu: false,

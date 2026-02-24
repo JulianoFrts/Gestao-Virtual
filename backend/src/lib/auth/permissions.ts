@@ -1,11 +1,6 @@
 import { type Session } from "next-auth";
 import { type NextRequest } from "next/server";
 import type { Role } from "@/types/database";
-import {
-  isGodRole,
-  isSystemOwner,
-  SECURITY_RANKS,
-} from "@/lib/constants/security";
 import { getCurrentSession } from "./core";
 import { isUserAdmin } from "./utils";
 
@@ -26,14 +21,10 @@ export async function can(permission: string): Promise<boolean> {
   if (!session?.user) return false;
 
   const { role, hierarchyLevel } = session.user as any;
-  if (
-    isGodRole(role) ||
-    hierarchyLevel >= SECURITY_RANKS.MASTER ||
-    isSystemOwner(role)
-  )
-    return true;
-
   const permissions = (session.user as any).permissions || {};
+
+  if (isUserAdmin(role, hierarchyLevel, permissions)) return true;
+
   return !!permissions[permission] || !!permissions["system.full_access"];
 }
 
@@ -45,8 +36,14 @@ export async function show(flag: string): Promise<boolean> {
   if (!session?.user) return false;
 
   const ui = (session.user as any).ui || {};
-  if (Object.keys(ui).length === 0)
-    return isUserAdmin(session.user.role, (session.user as any).hierarchyLevel);
+  if (Object.keys(ui).length === 0) {
+    const permissions = (session.user as any).permissions || {};
+    return isUserAdmin(
+      session.user.role,
+      (session.user as any).hierarchyLevel,
+      permissions,
+    );
+  }
 
   return !!ui[flag];
 }
@@ -59,9 +56,10 @@ export async function requireRole(
   req?: NextRequest,
 ): Promise<Session["user"]> {
   const user = await requireAuth(req);
+  const permissions = (user as any).permissions || {};
   if (
     user.role !== requiredRole &&
-    !isUserAdmin(user.role, (user as any).hierarchyLevel)
+    !isUserAdmin(user.role, (user as any).hierarchyLevel, permissions)
   ) {
     throw new Error("Sem permissão");
   }
@@ -76,9 +74,10 @@ export async function requireRoles(
   req?: NextRequest,
 ): Promise<Session["user"]> {
   const user = await requireAuth(req);
+  const permissions = (user as any).permissions || {};
   if (
-    !allowedRoles.includes(user.role) &&
-    !isUserAdmin(user.role, (user as any).hierarchyLevel)
+    !allowedRoles.includes(user.role as any) &&
+    !isUserAdmin(user.role, (user as any).hierarchyLevel, permissions)
   ) {
     throw new Error("Sem permissão");
   }
@@ -92,7 +91,8 @@ export async function requireAdmin(
   req?: NextRequest,
 ): Promise<Session["user"]> {
   const user = await requireAuth(req);
-  if (!isUserAdmin(user.role, (user as any).hierarchyLevel))
+  const permissions = (user as any).permissions || {};
+  if (!isUserAdmin(user.role, (user as any).hierarchyLevel, permissions))
     throw new Error("Acesso restrito admin");
   return user;
 }
@@ -105,9 +105,10 @@ export async function requireOwnerOrAdmin(
   req?: NextRequest,
 ): Promise<Session["user"]> {
   const user = await requireAuth(req);
+  const permissions = (user as any).permissions || {};
   if (
     user.id !== resourceOwnerId &&
-    !isUserAdmin(user.role, (user as any).hierarchyLevel)
+    !isUserAdmin(user.role, (user as any).hierarchyLevel, permissions)
   ) {
     throw new Error("Sem permissão recurso");
   }
@@ -143,10 +144,12 @@ export async function checkPermission(
 
   const { role } = session.user;
   const hierarchyLevel = (session.user as any).hierarchyLevel;
+  const permissions = (session.user as any).permissions || {};
 
   if (requiredRoles.length > 0) {
     const hasRole =
-      requiredRoles.includes(role as Role) || isUserAdmin(role, hierarchyLevel);
+      requiredRoles.includes(role as any) ||
+      isUserAdmin(role, hierarchyLevel, permissions);
     if (!hasRole)
       return {
         allowed: false,

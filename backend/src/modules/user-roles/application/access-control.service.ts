@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import {
   AccessControlRepository,
   FindAllLevelsParams,
@@ -36,9 +37,8 @@ export class AccessControlService {
       throw new Error("Nível de permissão com este nome já existe");
     }
 
-    const { randomUUID } = require('crypto');
-    const { permissions, ...sanitizedData } = data;
-    
+    const { permissions: _, ...sanitizedData } = data;
+
     const enrichedData = {
       ...sanitizedData,
       id: randomUUID(),
@@ -47,14 +47,14 @@ export class AccessControlService {
     return this.repository.createLevel(enrichedData);
   }
 
-  async listMatrix() {
-    const matrix = await this.repository.findAllMatrix();
+  async listMatrix(levelId?: string) {
+    const matrix = await this.repository.findAllMatrix(levelId);
 
     // Map to legacy format used by frontend if necessary (matches route.ts)
     return matrix.map((m) => ({
-      level_id: m.levelId,
-      module_id: m.moduleId,
-      is_granted: m.isGranted,
+      levelId: m.levelId,
+      moduleId: m.moduleId,
+      isGranted: m.isGranted,
     }));
   }
 

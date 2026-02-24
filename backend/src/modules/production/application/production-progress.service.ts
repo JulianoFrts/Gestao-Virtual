@@ -65,6 +65,28 @@ export class ProductionProgressService {
 
     const mappedMetadata = this.normalizeTechnicalMetadata(metadata);
 
+    const activityStatuses = (el.productionProgress || []).map((p: any) =>
+      this.mapProgressToDTO(p),
+    );
+
+    // Merge schedule data into statuses
+    const schedules = el.activitySchedules || [];
+    const enrichedStatuses = activityStatuses.map((status: any) => {
+      const schedule = schedules.find(
+        (s: any) => s.activityId === status.activityId,
+      );
+      if (schedule) {
+        return {
+          ...status,
+          plannedStartDate: schedule.plannedStart,
+          plannedEndDate: schedule.plannedEnd,
+          plannedQuantity: schedule.plannedQuantity,
+          plannedHhh: schedule.plannedHhh,
+        };
+      }
+      return status;
+    });
+
     return {
       ...mappedMetadata,
       id: el.id,
@@ -76,10 +98,8 @@ export class ProductionProgressService {
       latitude: el.latitude,
       longitude: el.longitude,
       elevation: el.elevation,
-      activityStatuses: (el.productionProgress || []).map((p: any) =>
-        this.mapProgressToDTO(p),
-      ),
-      activitySchedules: el.activitySchedules || [],
+      activityStatuses: enrichedStatuses,
+      activitySchedules: schedules,
     };
   }
 
@@ -225,17 +245,33 @@ export class ProductionProgressService {
       { ...this.logContext, userId },
     );
 
-    const finalProjectId = await this.resolveProjectId(elementId, projectId);
+    if (
+      !elementId ||
+      elementId === "undefined" ||
+      !activityId ||
+      activityId === "undefined"
+    ) {
+      throw new Error("ID do Elemento ou da Atividade inválido.");
+    }
+
+    if (activityId.startsWith("custom-")) {
+      throw new Error(
+        "Erro de Vínculo: Esta etapa precisa ser vinculada a uma atividade real antes de registrar progresso.",
+      );
+    }
+
+    const { projectId: finalProjectId, effectiveElementId } =
+      await this.resolveProjectId(elementId, projectId);
 
     const { finalStartDate, finalEndDate } = await this.determineEffectiveDates(
-      elementId,
+      effectiveElementId,
       activityId,
       status,
       dates,
     );
 
     const entity = await this.getOrCreateProgressEntity(
-      elementId,
+      effectiveElementId,
       activityId,
       finalProjectId,
       finalStartDate,
@@ -253,7 +289,7 @@ export class ProductionProgressService {
 
     if (!dto.skipSync) {
       await this.syncRepository.syncWorkStages(
-        elementId,
+        effectiveElementId,
         activityId,
         finalProjectId,
         userId,
@@ -425,16 +461,30 @@ export class ProductionProgressService {
   private async resolveProjectId(
     elementId: string,
     projectId?: string | null,
-  ): Promise<string> {
-    const finalProjectId =
-      projectId || (await this.elementRepository.findProjectId(elementId));
+  ): Promise<{ projectId: string; effectiveElementId: string }> {
+    let effectiveElementId = elementId;
+    let finalProjectId = projectId;
+
+    if (elementId.startsWith("virtual-")) {
+      const materializedId =
+        await this.elementRepository.materializeVirtualElement(elementId);
+      if (materializedId) {
+        effectiveElementId = materializedId;
+      }
+    }
+
+    if (!finalProjectId) {
+      finalProjectId =
+        await this.elementRepository.findProjectId(effectiveElementId);
+    }
 
     if (!finalProjectId) {
       throw new Error(
         `ID do projeto não encontrado para o elemento ${elementId}.`,
       );
     }
-    return finalProjectId;
+
+    return { projectId: finalProjectId, effectiveElementId };
   }
 
   private async getOrCreateProgressEntity(

@@ -236,6 +236,22 @@ export function Mapbox3DLayer({
         return simple ? parseInt(simple[0]) + 1000 : 2000;
     };
     const [mapCenter, setMapCenter] = useState(map?.getCenter());
+
+    // CRITICAL: Keep mapCenter in sync with camera so culling updates dynamically
+    useEffect(() => {
+        if (!map) return;
+
+        const onMoveEnd = () => {
+            setMapCenter(map.getCenter());
+        };
+
+        // Set initial value when map is ready
+        setMapCenter(map.getCenter());
+
+        map.on('moveend', onMoveEnd);
+        return () => { map.off('moveend', onMoveEnd); };
+    }, [map]);
+
     const [isAngleDialogOpen, setIsAngleDialogOpen] = useState(false);
     const [editingAngleValue, setEditingAngleValue] = useState('');
     const [editingAngleElement, setEditingAngleElement] = useState<{ docId: string; elementId: string } | null>(null);
@@ -726,11 +742,13 @@ export function Mapbox3DLayer({
     // Filter placemarks - heading will come from database via extendedData
     const enrichedPlacemarks = useEnrichedPlacemarks(kmlDocuments, placemarkOverrides, hiddenPlacemarkIds, projectId);
 
-    // Simplified enriched placemarks with distance filtering + Reference Point Correction
+    // Simplified enriched placemarks with distance filtering + Reference Point Correction + CENTER PRIORITIZATION
     const visibleTowers = useMemo(() => {
         if (!mapCenter) return [];
 
-        const MAX_DISTANCE_METERS = 10000;
+        const MAX_DISTANCE_METERS = 2000; // 2km radius from camera center (user requested)
+        const MAX_STRUCTURES = 80;       // Hard cap for GPU stability
+
         const getDist = (lat1: number, lon1: number, lat2: number, lon2: number) => {
             const R = 6371e3;
             const φ1 = lat1 * Math.PI / 180;
@@ -748,16 +766,24 @@ export function Mapbox3DLayer({
         const referencePoints: any[] = [];
 
         enrichedPlacemarks.forEach(p => {
-            // Check implicit type from useEnrichedPlacemarks
             if ((p as any).isReferencePoint) {
                 referencePoints.push(p);
             } else {
-                potentialTowers.push(p);
+                // Pre-calculate distance from current map center
+                const dist = getDist(mapCenter.lat, mapCenter.lng, p.coordinates.lat, p.coordinates.lng);
+                if (dist <= MAX_DISTANCE_METERS) {
+                    potentialTowers.push({ ...p, distFromCenter: dist });
+                }
             }
         });
 
-        // 2. Map towers and apply correction if a reference point is nearby
-        const correctedTowers = potentialTowers.map(t => {
+        // 2. Sort by distance and apply Hard Cap (Prioritize Center)
+        const prioritizedTowers = potentialTowers
+            .sort((a, b) => a.distFromCenter - b.distFromCenter)
+            .slice(0, MAX_STRUCTURES);
+
+        // 3. Map towers and apply correction if a reference point is nearby
+        const correctedTowers = prioritizedTowers.map(t => {
             let bestAlt = t.elevation;
             let foundRef = false;
 
@@ -768,20 +794,18 @@ export function Mapbox3DLayer({
                 const d = getDist(t.coordinates.lat, t.coordinates.lng, ref.coordinates.lat, ref.coordinates.lng);
                 if (d < minDist) {
                     minDist = d;
-                    // Prefer elevation from metadata, fallback to coordinates
                     bestAlt = ref.elevation !== undefined && ref.elevation !== 0 ? ref.elevation : ref.coordinates.altitude;
                     foundRef = true;
                 }
             }
 
             if (foundRef) {
-                // Return new object with corrected elevation
                 return { ...t, elevation: bestAlt, isCorrected: true };
             }
             return t;
         });
 
-        // 3. Keep all towers (Preserve hidden towers for cable logic)
+        // 4. Return sorted by numeric sequence for logic stability
         return correctedTowers.sort((a, b) => getNumericId(a) - getNumericId(b));
     }, [enrichedPlacemarks, mapCenter, hiddenPlacemarkIds]);
 
@@ -815,8 +839,11 @@ export function Mapbox3DLayer({
 
             const currentHeight = override?.height ?? p.towerHeight;
 
-            // NEW: Calculate professional bearing (using configured method)
-            const currentHeading = TowerPhysics.calculateTowerBearing(idx, visibleTowers, cableSettings.alignmentMethod);
+            // NEW: Calculate professional bearing (using configured method + Suffix branch-aware)
+            const suffixMatch = (p.name || '').toUpperCase().match(/([A-L])$/); // Captures A, B, C, etc.
+            const suffix = suffixMatch ? suffixMatch[1] : undefined;
+
+            const currentHeading = TowerPhysics.calculateTowerBearing(idx, visibleTowers, cableSettings.alignmentMethod, suffix);
 
             return {
                 ...p,
@@ -833,8 +860,8 @@ export function Mapbox3DLayer({
         if (!viewportBounds || towersWithTerrain.length < 50) return towersWithTerrain;
 
         // Buffers de segurança (em graus - aprox 2.2km lat / var lng)
-        const LAT_BUFFER = 0.02;
-        const LNG_BUFFER = 0.03;
+        const LAT_BUFFER = 0.01; // Reduced (0.02 -> 0.01)
+        const LNG_BUFFER = 0.01; // Reduced (0.03 -> 0.01)
 
         const west = viewportBounds.getWest() - LNG_BUFFER;
         const east = viewportBounds.getEast() + LNG_BUFFER;
@@ -998,10 +1025,14 @@ export function Mapbox3DLayer({
             if (mode === 'manual' && manualAngle !== undefined) {
                 alignments.set(tower.id, manualAngle);
             } else {
+                const suffixMatch = (tower.name || '').toUpperCase().match(/([A-L])$/);
+                const suffix = suffixMatch ? suffixMatch[1] : undefined;
+
                 const bearing = TowerPhysics.calculateTowerBearing(
                     index,
                     towersWithTerrain,
-                    mode === 'tangential' ? 'tangential' : 'bisector'
+                    mode === 'tangential' ? 'tangential' : 'bisector',
+                    suffix
                 );
                 alignments.set(tower.id, bearing);
             }

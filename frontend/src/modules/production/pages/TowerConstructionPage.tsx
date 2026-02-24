@@ -7,7 +7,8 @@ import {
     Table as TableIcon, 
     MapPin, 
     Weight,
-    Loader2
+    Loader2,
+    Trash2
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ import { useSignals } from "@preact/signals-react/runtime";
 import { useQueryClient } from "@tanstack/react-query";
 import ConstructionImportModal from "../components/ConstructionImportModal";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useToast } from "@/hooks/use-toast";
 
 const TowerConstructionPage = () => {
     useSignals();
@@ -35,8 +37,10 @@ const TowerConstructionPage = () => {
     const selectedContext = selectedContextSignal.value;
     const projectId = selectedContext?.projectId || 'all';
     
+    const { toast } = useToast();
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [isDeleting, setIsDeleting] = useState(false);
 
     const { data: constructionData = [], isLoading } = useQuery<any[]>({
         queryKey: ["tower-construction", projectId],
@@ -63,6 +67,22 @@ const TowerConstructionPage = () => {
             else next.add(id);
             return next;
         });
+    };
+
+    const handleDeleteSelected = async () => {
+        if (selectedIds.size === 0) return;
+        const count = selectedIds.size;
+        setIsDeleting(true);
+        try {
+            await orionApi.post('/tower-construction/delete', { ids: Array.from(selectedIds) });
+            toast({ title: `${count} registro(s) removido(s)`, variant: 'default' });
+            setSelectedIds(new Set());
+            queryClient.invalidateQueries({ queryKey: ['tower-construction'] });
+        } catch (err) {
+            toast({ title: 'Erro ao remover registros', variant: 'destructive' });
+        } finally {
+            setIsDeleting(false);
+        }
     };
 
     return (
@@ -96,6 +116,24 @@ const TowerConstructionPage = () => {
                     </Button>
                 </div>
             </header>
+
+            {selectedIds.size > 0 && (
+                <div className="shrink-0 flex items-center justify-between px-6 py-3 bg-destructive/10 border-b border-destructive/30">
+                    <span className="text-sm font-bold text-destructive">
+                        {selectedIds.size} torre(s) selecionada(s)
+                    </span>
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        className="gap-2 uppercase text-[10px] font-bold"
+                        disabled={isDeleting}
+                        onClick={handleDeleteSelected}
+                    >
+                        {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        Remover Selecionados
+                    </Button>
+                </div>
+            )}
 
             <main className="flex-1 overflow-auto p-6 bg-black/20">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">

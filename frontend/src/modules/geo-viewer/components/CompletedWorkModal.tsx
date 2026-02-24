@@ -318,6 +318,21 @@ export const CompletedWorkModal: React.FC<CompletedWorkModalProps> = ({
         return allTowersOfStage.find(t => t.objectId === selectedTowerId);
     }, [selectedTowerId, allTowersOfStage]);
 
+    const sortedActivityStatuses = useMemo(() => {
+        if (!selectedTower?.activityStatuses || !stages) return selectedTower?.activityStatuses || [];
+        
+        // Match each activity with its corresponding stage to get the displayOrder
+        return [...selectedTower.activityStatuses].sort((a: any, b: any) => {
+            const stageA = stages.find((s: any) => s.productionActivityId === a.activityId || s.name.trim().toLowerCase() === a.activity?.name?.trim().toLowerCase());
+            const stageB = stages.find((s: any) => s.productionActivityId === b.activityId || s.name.trim().toLowerCase() === b.activity?.name?.trim().toLowerCase());
+            
+            const orderA = stageA?.displayOrder ?? 999;
+            const orderB = stageB?.displayOrder ?? 999;
+            
+            return orderA - orderB;
+        });
+    }, [selectedTower?.activityStatuses, stages]);
+
     // Data for graphs (Derived from selectedTower or Aggregate)
     const analyticsData = useMemo(() => {
         let targetTowers: any[] = [];
@@ -771,16 +786,30 @@ export const CompletedWorkModal: React.FC<CompletedWorkModalProps> = ({
 
                                         <ScrollArea className="flex-1">
                                             <div className="space-y-2 pr-2">
-                                                {analysisLevel === 'TOWER' && selectedTower?.activityStatuses.map((s: any, idx: number) => (
+                                                {analysisLevel === 'TOWER' && sortedActivityStatuses.map((s: any, idx: number) => (
                                                     <div key={idx} className="flex items-center gap-3 p-2 bg-white/2 border border-white/5 rounded hover:bg-white/4 transition-colors group">
                                                         <div className="w-1.5 h-1.5 rounded-full bg-slate-700 group-hover:bg-primary transition-colors" />
-                                                        <div className="flex-1">
-                                                            <p className="text-[9px] font-black text-slate-300 uppercase truncate">
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-[10px] font-black text-white uppercase truncate tracking-tighter italic">
                                                                 {s.activity?.name || 'Atividade'}
                                                             </p>
-                                                            <p className="text-[8px] text-slate-500">
-                                                                Concluído por {s.metadata?.leadName || 'Sistema'}
-                                                            </p>
+                                                            <div className="flex flex-col gap-0.5 mt-0.5">
+                                                                <p className="text-[8px] text-slate-400 font-medium truncate">
+                                                                    <span className="text-emerald-500/70 mr-1 uppercase font-black text-[7px]">Exec</span>
+                                                                    {s.metadata?.leadName || 'Sistema'}
+                                                                </p>
+                                                                {s.metadata?.supervisorName && (
+                                                                    <p className="text-[8px] text-slate-400 font-medium truncate">
+                                                                        <span className="text-emerald-500/70 mr-1 uppercase font-black text-[7px]">Sup</span>
+                                                                        {s.metadata.supervisorName}
+                                                                    </p>
+                                                                )}
+                                                                <p className="text-[7px] text-slate-500 font-bold flex items-center gap-1">
+                                                                    <span className="bg-white/5 px-1 rounded uppercase">
+                                                                        {s.endDate ? new Date(s.endDate).toLocaleDateString('pt-BR') : s.updatedAt ? new Date(s.updatedAt).toLocaleDateString('pt-BR') : 'PENDENTE'}
+                                                                    </span>
+                                                                </p>
+                                                            </div>
                                                         </div>
                                                         <Badge variant="outline" className="text-[8px] text-green-500 border-green-500/20 bg-green-500/5">
                                                             100%

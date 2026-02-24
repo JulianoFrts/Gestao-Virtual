@@ -11,4 +11,5 @@ export interface ProjectElementRepository {
   findLinkedActivityIds(projectId: string, siteId?: string): Promise<string[]>;
   findProjectId(elementId: string): Promise<string | null>;
   findCompanyId(elementId: string): Promise<string | null>;
+  materializeVirtualElement(elementId: string): Promise<string | null>;
 }

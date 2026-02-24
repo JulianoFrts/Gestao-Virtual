@@ -16,6 +16,7 @@ import { isProtectedSignal, can, show } from '@/signals/authSignals';
 import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
 import { DelegationModal } from '@/components/projects/DelegationModal';
 import { useSignals } from "@preact/signals-react/runtime";
+import { applyMask, parseNumber, parseCurrency, maskNumber, maskCurrency } from '@/utils/inputValidators';
 
 
 export default function Projects() {
@@ -35,8 +36,8 @@ export default function Projects() {
         companyId: '',
         address: '',
         status: 'active',
-        plannedHours: 0,
-        estimatedCost: 0,
+        plannedHours: '' as string | number,
+        estimatedCost: '' as string | number,
         startDate: '',
         endDate: '',
     });
@@ -74,8 +75,8 @@ export default function Projects() {
         try {
             const dataToSave: Partial<Project> = {
                 ...formData,
-                plannedHours: Number(formData.plannedHours),
-                estimatedCost: Number(formData.estimatedCost),
+                plannedHours: typeof formData.plannedHours === 'string' ? parseNumber(formData.plannedHours) : formData.plannedHours,
+                estimatedCost: typeof formData.estimatedCost === 'string' ? parseCurrency(formData.estimatedCost) : formData.estimatedCost,
                 startDate: formData.startDate ? new Date(formData.startDate) : null,
                 endDate: formData.endDate ? new Date(formData.endDate) : null,
             };
@@ -103,8 +104,8 @@ export default function Projects() {
             companyId: project.companyId,
             address: project.address || '',
             status: project.status,
-            plannedHours: project.plannedHours || 0,
-            estimatedCost: project.estimatedCost || 0,
+            plannedHours: maskNumber(project.plannedHours || 0),
+            estimatedCost: maskCurrency((project.estimatedCost || 0).toString()),
             startDate: project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : '',
             endDate: project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : '',
         });
@@ -126,7 +127,7 @@ export default function Projects() {
     };
 
     const resetForm = () => {
-        setFormData({ name: '', companyId: '', address: '', status: 'active', plannedHours: 0, estimatedCost: 0, startDate: '', endDate: '' });
+        setFormData({ name: '', companyId: '', address: '', status: 'active', plannedHours: '', estimatedCost: '', startDate: '', endDate: '' });
         setEditingProject(null);
         setIsDialogOpen(false);
     };
@@ -231,9 +232,9 @@ export default function Projects() {
                                         <div className="space-y-2">
                                             <Label className="text-[10px] uppercase text-muted-foreground font-bold italic">HHH Planejado</Label>
                                             <Input
-                                                type="number"
+                                                type="text"
                                                 value={formData.plannedHours}
-                                                onChange={e => setFormData({ ...formData, plannedHours: Number(e.target.value) })}
+                                                onChange={e => setFormData({ ...formData, plannedHours: applyMask(e.target.value, 'number') })}
                                                 className="industrial-input h-10"
                                                 placeholder="Total de Horas"
                                             />
@@ -241,9 +242,9 @@ export default function Projects() {
                                         <div className="space-y-2">
                                             <Label className="text-[10px] uppercase text-muted-foreground font-bold italic">Orçamento (R$)</Label>
                                             <Input
-                                                type="number"
+                                                type="text"
                                                 value={formData.estimatedCost}
-                                                onChange={e => setFormData({ ...formData, estimatedCost: Number(e.target.value) })}
+                                                onChange={e => setFormData({ ...formData, estimatedCost: applyMask(e.target.value, 'currency') })}
                                                 className="industrial-input h-10"
                                                 placeholder="Valor estimado"
                                             />

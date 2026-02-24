@@ -190,8 +190,6 @@ export const ROLE_FLAGS: Record<string, readonly string[]> = {
 
   // --- OPERATIONAL TIER (Campo / Supervisão) ---
   SUPERVISOR: [
-    "projects.view",
-    "sites.view",
     "team_composition",
     "work_progress.view",
     // Worker flags
@@ -201,20 +199,14 @@ export const ROLE_FLAGS: Record<string, readonly string[]> = {
     "settings.profile",
   ],
 
-  TECHNICIAN: [
-    "clock",
-    "daily_reports",
-    "time_records.view",
-    "settings.profile",
-    "projects.view",
-  ],
+  TECHNICIAN: [],
 
-  OPERATOR: ["clock", "daily_reports", "time_records.view", "settings.profile"],
+  OPERATOR: [],
 
   // --- BASE TIER ---
-  WORKER: ["clock", "daily_reports", "time_records.view", "settings.profile"],
+  WORKER: [],
 
-  USER: ["settings.profile"],
+  USER: [],
 
   VIEWER: [],
 } as const;

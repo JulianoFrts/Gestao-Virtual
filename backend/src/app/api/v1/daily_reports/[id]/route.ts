@@ -23,3 +23,36 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return handleApiError(error);
   }
 }
+
+export async function PUT(request: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
+  try {
+    await requireAuth();
+    const body = await request.json();
+
+    const report = await dailyReportService.updateReport(id, body);
+
+    return ApiResponse.json(report);
+  } catch (error) {
+    logger.error("Erro ao atualizar relatório (PUT)", { reportId: id, error });
+    return handleApiError(error);
+  }
+}
+
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  const { id } = await params;
+  try {
+    await requireAuth();
+    const body = await request.json();
+
+    const report = await dailyReportService.updateReport(id, body);
+
+    return ApiResponse.json(report);
+  } catch (error) {
+    logger.error("Erro ao atualizar relatório (PATCH)", {
+      reportId: id,
+      error,
+    });
+    return handleApiError(error);
+  }
+}

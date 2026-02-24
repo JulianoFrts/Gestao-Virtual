@@ -47,6 +47,7 @@ export function parseFilters(searchParams: URLSearchParams) {
     companyId: searchParams.get("companyId") || searchParams.get("company_id"),
     onlyCorporate: searchParams.get("onlyCorporate"),
     excludeCorporate: searchParams.get("excludeCorporate"),
+    or: searchParams.get("or"),
   });
 
   if (!result.success) return { errors: result.errors };

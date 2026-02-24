@@ -14,6 +14,10 @@ export async function POST(request: NextRequest) {
       return ApiResponse.badRequest("levelId e matriz são obrigatórios.");
     }
 
+    console.log(
+      `[PermissionMatrixSync] Level: ${levelId}, Items: ${matrix.length}`,
+    );
+
     // Usar transação para garantir atomicidade
     await prisma.$transaction(async (tx) => {
       for (const item of matrix) {
@@ -36,8 +40,14 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    return ApiResponse.json({ success: true, message: "Permissões sincronizadas com sucesso." });
+    return ApiResponse.json({
+      success: true,
+      message: "Permissões sincronizadas com sucesso.",
+    });
   } catch (error) {
-    return handleApiError(error, "src/app/api/v1/permission_matrix/sync/route.ts#POST");
+    return handleApiError(
+      error,
+      "src/app/api/v1/permission_matrix/sync/route.ts#POST",
+    );
   }
 }

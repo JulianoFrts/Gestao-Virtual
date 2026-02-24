@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
     const isAdmin = authSession.isUserAdmin(
       currentUser.role,
       (currentUser as any).hierarchyLevel,
+      (currentUser as any).permissions,
     );
 
     const searchParams = request.nextUrl.searchParams;
@@ -144,6 +145,7 @@ export async function PUT(request: NextRequest) {
     const isAdmin = authSession.isUserAdmin(
       currentUser.role,
       (currentUser as any).hierarchyLevel,
+      (currentUser as any).permissions,
     );
     const canManage = await authSession.can("users.manage");
     const hasFullAccess = await authSession.can("system.full_access");
@@ -163,6 +165,10 @@ export async function PUT(request: NextRequest) {
     const validation = validate(updateUserSchema, payload);
 
     if (!validation.success) {
+      console.warn(
+        `[UserUpdate] Validation failed:`,
+        JSON.stringify({ payload, errors: validation.errors }, null, 2),
+      );
       return ApiResponse.badRequest("Erro de validação", validation.errors);
     }
 
@@ -260,6 +266,7 @@ export async function PATCH(request: NextRequest) {
     const isAdmin = authSession.isUserAdmin(
       currentUser.role,
       (currentUser as any).hierarchyLevel,
+      (currentUser as any).permissions,
     );
     const canManage = await authSession.can("users.manage");
     const hasFullAccess = await authSession.can("system.full_access");

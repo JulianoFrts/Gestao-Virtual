@@ -15,7 +15,7 @@ export interface AccessControlRepository {
   createLevel(data: any): Promise<PermissionLevel>;
 
   // Matrix
-  findAllMatrix(): Promise<PermissionMatrix[]>;
+  findAllMatrix(levelId?: string): Promise<PermissionMatrix[]>;
   createQueueTask(type: string, payload: any): Promise<any>;
   updateTaskStatus(taskId: string, status: string): Promise<void>;
 }

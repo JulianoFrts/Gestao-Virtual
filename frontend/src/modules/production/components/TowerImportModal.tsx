@@ -441,7 +441,7 @@ const TowerImportModal = ({
                         <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-6 text-center">SEQ</TableHead>
                         <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-6">(Nº Torre)</TableHead>
                         <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-6">TRECHO</TableHead>
-                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-6 text-center">ESTRUTURA / TIPO</TableHead>
+                        <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-6 text-center">TIPO</TableHead>
                         <TableHead className="text-[10px] font-black uppercase tracking-widest text-slate-500 py-6 text-center pr-10">TRAMO</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -470,7 +470,7 @@ const TowerImportModal = ({
                                 <Badge className="bg-white/10 text-white border-white/5 text-[9px] font-black uppercase hover:bg-white/20 whitespace-nowrap px-2.5 py-1">
                                     {item.TextoTorre || 'Autoportante'}
                                 </Badge>
-                                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">{item.Tipificacao || '-'}</span>
+                                <span className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">{item.TextoTorre || '-'}</span>
                             </div>
                           </TableCell>
                           <TableCell className="text-center pr-10">

@@ -300,6 +300,7 @@ export const updateUserSchema = z
     gender: z.string().optional().nullable(),
     birthDate: z.string().optional().nullable(),
     isSystemAdmin: z.boolean().optional(),
+    permissions: z.any().optional().nullable(),
     // Endereço
     zipCode: z.string().optional().nullable(),
     street: z.string().optional().nullable(),
@@ -366,6 +367,7 @@ export const userFiltersSchema = z.object({
     (val) => val === "true" || val === true,
     z.boolean().optional(),
   ),
+  or: z.preprocess(emptyToUndefined, z.string().optional()),
 });
 
 // ======================================================

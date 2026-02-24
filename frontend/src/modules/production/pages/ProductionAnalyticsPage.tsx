@@ -87,7 +87,22 @@ const ProductionAnalyticsPage = () => {
             const siteIdParam = selectedSiteId === 'all' ? '' : selectedSiteId;
             
             const response = await orionApi.get(`/production/tower-status?projectId=${projectId}&companyId=${companyIdParam}&siteId=${siteIdParam}`);
-            return response.data as TowerProductionData[];
+            const payloadData = response.data as any;
+            
+            let dataArray: any[] = [];
+            if (Array.isArray(payloadData)) {
+                dataArray = payloadData;
+            } else if (payloadData && typeof payloadData === 'object') {
+                if (Array.isArray(payloadData.data)) {
+                    dataArray = payloadData.data;
+                } else if (payloadData.data && Array.isArray(payloadData.data.data)) {
+                    dataArray = payloadData.data.data;
+                } else if (Array.isArray(payloadData.items)) {
+                    dataArray = payloadData.items;
+                }
+            }
+            
+            return dataArray as TowerProductionData[];
         },
         enabled: !!profile?.companyId || isGod,
         staleTime: 0,

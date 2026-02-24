@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { requireAuth, requireAdmin } from "@/lib/auth/session";
+import { requireAuth } from "@/lib/auth/session";
+import { can } from "@/lib/auth/permissions";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { TeamService } from "@/modules/teams/application/team.service";
@@ -51,7 +52,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAdmin();
+    if (!(await can("teams.manage"))) {
+      return ApiResponse.forbidden(
+        "Sem permissão para gerenciar membros de equipe",
+      );
+    }
 
     const body = await request.json();
     const items = Array.isArray(body) ? body : [body];
@@ -81,7 +86,11 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    await requireAdmin();
+    if (!(await can("teams.manage"))) {
+      return ApiResponse.forbidden(
+        "Sem permissão para gerenciar membros de equipe",
+      );
+    }
 
     const searchParams = request.nextUrl.searchParams;
     const teamId = searchParams.get("teamId") || searchParams.get("team_id");

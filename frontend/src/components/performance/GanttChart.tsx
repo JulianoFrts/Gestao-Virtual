@@ -19,7 +19,7 @@ interface GanttNode {
   plannedStart: string | null;
   plannedEnd: string | null;
   plannedQuantity: number;
-  plannedHHH: number;
+  plannedHhh: number;
   children: GanttNode[];
 }
 

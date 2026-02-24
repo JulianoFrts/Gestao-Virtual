@@ -34,6 +34,7 @@ interface QueryBuilder<T = any> {
   limit: (count: number) => QueryBuilder<T>;
   single: () => Promise<ApiResponse<T>>;
   maybeSingle: () => Promise<ApiResponse<T | null>>;
+  or: (query: string) => QueryBuilder<T>;
   then: (resolve: (value: ApiResponse<T[]>) => void) => Promise<void>;
 }
 
@@ -323,7 +324,13 @@ export class OrionApiClient {
 
     const buildQueryParams = (): Record<string, string> => {
       const p: Record<string, string> = {};
-      filters.forEach((f) => { p[f.column] = String(f.value); });
+      filters.forEach((f) => {
+        if (f.op === 'or') {
+            p['or'] = String(f.value);
+        } else {
+            p[f.column] = String(f.value);
+        }
+      });
       if (limitCount) p["limit"] = String(limitCount);
       return p;
     };
@@ -333,12 +340,32 @@ export class OrionApiClient {
       if (!id && (method === "PUT" || method === "PATCH") && body && typeof body === "object" && !Array.isArray(body)) {
         id = (body as any).id || (body as any).userId;
       }
+      // If we have an ID and it's a PUT/PATCH, we often want to ENSURE it's NOT in the body 
+      // if the backend uses strict schemas, OR we keep it if the backend needs it.
+      // However, most Next.js routes treat body and path separately. 
+      // To be safe and avoid Zod 'extra field' errors, we'll strip 'id' from body if it's already in the path-bound ID.
       if ((method === "PUT" || method === "PATCH") && id && body && typeof body === "object" && !Array.isArray(body)) {
-        body = { ...body, id };
+          const { id: _, ...bodyWithoutId } = body as any;
+          body = bodyWithoutId;
       }
 
-      const endpoint = `/${activeTable}`;
-      const result = await this.request(endpoint, method, body, (method === "GET" || method === "DELETE") ? buildQueryParams() : undefined);
+      let endpoint = `/${activeTable}`;
+      
+      // REST Pattern: if we have an ID, we append it to the path for PUT, PATCH, DELETE 
+      // and also for GET if we are using .single() or .maybeSingle() logic.
+      // However, to keep it safe, we only do path-based ID for non-GET or if filters specifically have ID.
+      if (id && (method !== "GET" || filters.length === 1)) {
+          endpoint = `/${activeTable}/${id}`;
+      }
+
+      const queryParams = (method === "GET" || method === "DELETE") ? buildQueryParams() : undefined;
+      
+      // If we moved ID to path, remove it from query params to avoid duplication
+      if (id && queryParams && queryParams.id === String(id)) {
+          delete queryParams.id;
+      }
+
+      const result = await this.request(endpoint, method, body, queryParams);
 
       if (result.data && Array.isArray(result.data) && orderBy) {
         result.data.sort((a, b) => {
@@ -366,6 +393,7 @@ export class OrionApiClient {
       neq: (column, value) => { filters.push({ column, op: "neq", value }); return builder; },
       is: (column, value) => { filters.push({ column, op: "is", value }); return builder; },
       in: (column, values) => { filters.push({ column, op: "in", value: values.join(",") }); return builder; },
+      or: (query: string) => { filters.push({ column: 'or', op: 'or', value: query }); return builder; },
       order: (column, options = { ascending: true }) => { orderBy = { column, ascending: options.ascending ?? true }; return builder; },
       limit: (count) => { limitCount = count; return builder; },
       single: async () => {

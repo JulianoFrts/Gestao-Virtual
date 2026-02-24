@@ -68,7 +68,7 @@ export const operationsRoutes: RouteConfig[] = [
   {
     path: "/daily-report",
     element: DailyReport,
-    moduleId: "daily_report.create",
+    moduleId: "daily_reports.create",
     roles: FIELD_ROLES,
     layout: "app",
     label: "RDO",
@@ -77,7 +77,7 @@ export const operationsRoutes: RouteConfig[] = [
   {
     path: "/rdo/scheduling",
     element: RDOScheduling,
-    moduleId: "daily_report.schedule",
+    moduleId: "daily_reports.schedule",
     roles: MANAGEMENT_ROLES,
     layout: "app",
     label: "Programação RDO",
@@ -86,7 +86,7 @@ export const operationsRoutes: RouteConfig[] = [
   {
     path: "/rdo/audit",
     element: RDOAudit,
-    moduleId: "daily_report.audit",
+    moduleId: "daily_reports.audit",
     roles: MANAGEMENT_ROLES,
     layout: "app",
     label: "Auditoria RDO",
@@ -95,7 +95,7 @@ export const operationsRoutes: RouteConfig[] = [
   {
     path: "/rdo/history",
     element: RDOHistory,
-    moduleId: "daily_report.list",
+    moduleId: "daily_reports.list",
     roles: FIELD_ROLES,
     layout: "app",
     label: "Meus RDOs",
@@ -104,7 +104,7 @@ export const operationsRoutes: RouteConfig[] = [
   {
     path: "/reports",
     element: Reports,
-    moduleId: "daily_report.list",
+    moduleId: "daily_reports.list",
     roles: MANAGEMENT_ROLES,
     layout: "app",
     label: "Relatórios",

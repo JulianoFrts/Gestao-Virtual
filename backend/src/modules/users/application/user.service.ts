@@ -287,9 +287,23 @@ export class UserService {
     const existingEmail = (existing as any).authCredential?.email || "";
 
     if (isSystemOwner(existingRole)) {
-      throw new Error(
-        "Não é possível excluir um administrador ou proprietário do sistema via este método.",
-      );
+      // Permitir exclusão se o performer também é System Owner (ex: SuperAdminGod)
+      // Apenas bloquear auto-exclusão por segurança
+      if (!performerId || performerId === id) {
+        throw new Error(
+          "Não é possível excluir a si mesmo como proprietário do sistema.",
+        );
+      }
+      const performer = await this.getUserById(performerId, {
+        id: true,
+        authCredential: { select: { role: true } },
+      });
+      const performerRole = (performer as any).authCredential?.role || "WORKER";
+      if (!isSystemOwner(performerRole)) {
+        throw new Error(
+          "Apenas proprietários do sistema podem excluir outros administradores.",
+        );
+      }
     }
 
     if (performerId) {
@@ -311,7 +325,7 @@ export class UserService {
         where: { createdById: id },
         data: { createdById: null },
       }),
-      prisma.activitySchedule.deleteMany({ where: { createdById: id } }),
+      prisma.activitySchedule.deleteMany({ where: { createdBy: id } }),
       prisma.team.updateMany({
         where: { supervisorId: id },
         data: { supervisorId: null },

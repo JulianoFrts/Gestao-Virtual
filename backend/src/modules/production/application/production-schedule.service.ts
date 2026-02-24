@@ -1,41 +1,82 @@
 import { ProductionProgressRepository } from "../domain/production.repository";
 import { ProductionScheduleRepository } from "../domain/production-schedule.repository";
+import { ProjectElementRepository } from "../domain/project-element.repository";
 
 export class ProductionScheduleService {
   constructor(
     private readonly scheduleRepository: ProductionScheduleRepository,
-    private readonly progressRepository: ProductionProgressRepository
+    private readonly progressRepository: ProductionProgressRepository,
+    private readonly elementRepository: ProjectElementRepository,
   ) {}
 
   async saveSchedule(
     data: any,
-    user: { id: string; role: string; companyId?: string | null },
+    user: {
+      id: string;
+      role: string;
+      companyId?: string | null;
+      hierarchyLevel?: number;
+      permissions?: Record<string, boolean>;
+    },
   ) {
-    const existing = await this.scheduleRepository.findScheduleByElement(
+    if (
+      !data.towerId ||
+      data.towerId === "undefined" ||
+      !data.activityId ||
+      data.activityId === "undefined"
+    ) {
+      throw new Error("ID da Torre ou da Atividade inválido para agendamento.");
+    }
+
+    // Garantir que o elemento existe no repositório (Materialização se for virtual)
+    const effectiveId = await this.elementRepository.materializeVirtualElement(
       data.towerId,
+    );
+    const effectiveElementId = effectiveId || data.towerId;
+
+    const existing = await this.scheduleRepository.findScheduleByElement(
+      effectiveElementId,
       data.activityId,
     );
 
+    if (data.activityId.startsWith("custom-")) {
+      throw new Error(
+        "Agendamento falhou: Esta etapa não está vinculada a uma atividade real do catálogo.",
+      );
+    }
+
     const payload = {
       id: existing?.id,
-      elementId: data.towerId,
+      elementId: effectiveElementId,
       activityId: data.activityId,
       plannedStart: new Date(data.plannedStart),
       plannedEnd: new Date(data.plannedEnd),
       plannedQuantity: data.plannedQuantity,
-      plannedHHH: data.plannedHHH,
-      createdById: existing ? undefined : user.id,
+      plannedHhh: data.plannedHhh,
+      createdBy: existing ? undefined : user.id, // Fixed: createdBy matches Prisma model
     };
+
+    console.log("[saveSchedule] Payload:", JSON.stringify(payload, null, 2));
 
     return this.scheduleRepository.saveSchedule(payload);
   }
 
   async listSchedules(
     params: { elementId?: string; projectId?: string },
-    user: { id: string; role: string; companyId?: string | null },
+    user: {
+      id: string;
+      role: string;
+      companyId?: string | null;
+      hierarchyLevel?: number;
+      permissions?: Record<string, boolean>;
+    },
   ) {
     const { isUserAdmin } = await import("@/lib/auth/session");
-    const isAdmin = isUserAdmin(user.role);
+    const isAdmin = isUserAdmin(
+      user.role,
+      user.hierarchyLevel,
+      user.permissions,
+    );
 
     return this.scheduleRepository.findSchedulesByScope({
       elementId: params.elementId ?? undefined,
@@ -46,7 +87,13 @@ export class ProductionScheduleService {
 
   async removeSchedule(
     scheduleId: string,
-    user: { id: string; role: string; companyId?: string | null },
+    user: {
+      id: string;
+      role: string;
+      companyId?: string | null;
+      hierarchyLevel?: number;
+      permissions?: Record<string, boolean>;
+    },
     options?: { targetDate?: string },
   ) {
     const existing = await this.scheduleRepository.findScheduleById(scheduleId);
@@ -72,10 +119,20 @@ export class ProductionScheduleService {
   async removeSchedulesByScope(
     scope: "project_all" | "batch",
     params: any,
-    user: { id: string; role: string; companyId?: string | null },
+    user: {
+      id: string;
+      role: string;
+      companyId?: string | null;
+      hierarchyLevel?: number;
+      permissions?: Record<string, boolean>;
+    },
   ) {
     const { isUserAdmin } = await import("@/lib/auth/session");
-    const isAdmin = isUserAdmin(user.role);
+    const isAdmin = isUserAdmin(
+      user.role,
+      user.hierarchyLevel,
+      user.permissions,
+    );
 
     const candidates = await this.findRemovalCandidates(
       scope,
@@ -115,10 +172,15 @@ export class ProductionScheduleService {
     return this.scheduleRepository.findSchedulesByScope(queryParams);
   }
 
-  private async filterNonExecutedSchedules(candidates: any[]): Promise<string[]> {
+  private async filterNonExecutedSchedules(
+    candidates: any[],
+  ): Promise<string[]> {
     const validIds: string[] = [];
     for (const sched of candidates) {
-      const hasExec = await this.hasExecution(sched.elementId, sched.activityId);
+      const hasExec = await this.hasExecution(
+        sched.elementId,
+        sched.activityId,
+      );
       if (!hasExec) {
         validIds.push(sched.id);
       }
@@ -128,7 +190,7 @@ export class ProductionScheduleService {
 
   async hasExecution(elementId: string, activityId: string): Promise<boolean> {
     const progress = await this.progressRepository.findByElement(elementId);
-    const specific = progress.find((p) => p.activityId === activityId);
+    const specific = progress.find((p: any) => p.activityId === activityId);
     return !!(
       specific &&
       (specific.currentStatus === "IN_PROGRESS" ||
@@ -155,7 +217,7 @@ export class ProductionScheduleService {
         plannedStart: part2Start,
         plannedEnd: existing.plannedEnd,
         plannedQuantity: existing.plannedQuantity,
-        plannedHHH: existing.plannedHHH,
+        plannedHhh: existing.plannedHhh,
         createdById: existing.createdById,
       },
     );

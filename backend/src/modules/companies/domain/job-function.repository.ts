@@ -3,6 +3,7 @@ export interface JobFunctionRepository {
   count(where: any): Promise<number>;
   findFirst(where: any): Promise<any | null>;
   create(data: any): Promise<any>;
+  update(id: string, data: any): Promise<any>;
   delete(id: string): Promise<void>;
   checkCompanyExists(companyId: string): Promise<boolean>;
 }

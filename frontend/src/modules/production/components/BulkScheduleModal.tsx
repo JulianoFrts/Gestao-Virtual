@@ -110,6 +110,7 @@ export default function BulkScheduleModal({
                         await orionApi.post("/production/tower-status", {
                             towerId,
                             activityId,
+                            status: "PENDING",
                             foremanName,
                             metadata: {
                                 leadName: foremanName,

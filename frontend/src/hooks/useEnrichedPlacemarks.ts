@@ -72,7 +72,7 @@ export function useEnrichedPlacemarks(
                 const isLocal = !skId;
 
                 const extData = p.extendedData as Record<string, string | number | undefined>;
-                const deflectionValue = parseFloat(extData?.['deflection'] || extData?.['DEFLECTION'] || '0');
+                const deflectionValue = parseFloat(String(extData?.['deflection'] || extData?.['DEFLECTION'] || '0'));
 
                 let heading = deflectionValue;
                 if (!heading && p.coordinates.heading) {

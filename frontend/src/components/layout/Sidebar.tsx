@@ -134,31 +134,31 @@ const menuGroups: SidebarGroup[] = [
     title: "Operacional",
     items: [
       {
-        id: "clock",
+        id: "time_records.manage",
         icon: Clock,
         label: "Registro de Ponto",
         path: "/time-clock",
       },
       {
-        id: "daily_report.create",
+        id: "daily_reports.create",
         icon: FileText,
         label: "Novo Relatório",
         path: "/daily-report",
       },
       {
-        id: "daily_report.list",
+        id: "daily_reports.view",
         icon: ClipboardList,
         label: "Relatórios Diários",
         path: "/reports",
       },
       {
-        id: "daily_report.schedule",
+        id: "daily_reports.schedule",
         icon: CalendarClock,
         label: "Programação de RDO",
         path: "/rdo/scheduling",
       },
       {
-        id: "daily_report.audit",
+        id: "daily_reports.audit",
         icon: FileCheck,
         label: "Auditoria de RDO",
         path: "/rdo/audit",
@@ -175,7 +175,7 @@ const menuGroups: SidebarGroup[] = [
     title: "Equipes",
     items: [
       {
-        id: "team_composition",
+        id: "teams.manage",
         icon: UsersRound,
         label: "Equipes",
         path: "/teams",
@@ -193,13 +193,13 @@ const menuGroups: SidebarGroup[] = [
         path: "/functions",
       },
       {
-        id: "team_composition.view",
+        id: "teams.view",
         icon: PieChart,
         label: "Composição",
         path: "/team-composition",
       },
       {
-        id: "team_composition.table",
+        id: "teams.view",
         icon: FileSpreadsheet,
         label: "Tabela Detalhada",
         path: "/team-composition-table",
@@ -249,7 +249,7 @@ const menuGroups: SidebarGroup[] = [
     title: "Geral",
     items: [
       {
-        id: "settings.profile",
+        id: "settings.view",
         icon: Settings,
         label: "Configurações",
         path: "/settings",
@@ -287,7 +287,7 @@ function SidebarGroupItem({
 
     if (isProtected || hasAdminMenu) return true;
     const moduleId = item.id;
-    if (moduleId === "dashboard" || moduleId === "settings.profile")
+    if (moduleId === "dashboard")
       return true;
     if (
       can(moduleId) ||
@@ -296,20 +296,7 @@ function SidebarGroupItem({
       show(moduleId)
     )
       return true;
-    if (
-      moduleId === "clock" ||
-      moduleId === "time_records.view" ||
-      moduleId === "daily_report.create"
-    ) {
-      if (isFieldWorker(profile?.role)) {
-        if (
-          moduleId === "daily_report.create" &&
-          (isTeamLeader || can("daily_report.create"))
-        )
-          return true;
-        return true;
-      }
-    }
+    return false;
     return false;
   });
 

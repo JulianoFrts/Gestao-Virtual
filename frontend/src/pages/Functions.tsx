@@ -51,6 +51,14 @@ export default function Functions() {
         laborType: '',
         isTemplate: false,
     });
+    const [sortConfig, setSortConfig] = useState<{ key: keyof JobFunction; direction: 'asc' | 'desc' } | null>({
+        key: 'hierarchyLevel',
+        direction: 'desc'
+    });
+    const [filters, setFilters] = useState({
+        laborType: 'all',
+        origin: 'all' // 'all', 'global', 'company'
+    });
     const [confirmModal, setConfirmModal] = useState<{
         open: boolean;
         title: string;
@@ -120,7 +128,8 @@ export default function Functions() {
         'HELPER_SYSTEM',
     ];
 
-    const isGlobalManager = profile?.role && GLOBAL_MANAGEMENT_ROLES.includes(profile.role);
+    const userRole = (profile?.role || '').toUpperCase();
+    const isGlobalManager = GLOBAL_MANAGEMENT_ROLES.includes(userRole);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -206,9 +215,33 @@ export default function Functions() {
         setIsDialogOpen(false);
     };
 
-    const filteredFunctions = (functions || []).filter(f =>
-        f?.name?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const handleSort = (key: keyof JobFunction) => {
+        setSortConfig(prev => {
+            if (prev?.key === key) {
+                return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
+            }
+            return { key, direction: 'asc' };
+        });
+    };
+
+    const filteredFunctions = (functions || [])
+        .filter(f => {
+            const matchesSearch = f?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesLabor = filters.laborType === 'all' || f.laborType === filters.laborType;
+            const matchesOrigin = filters.origin === 'all' || 
+                (filters.origin === 'global' ? !f.companyId : !!f.companyId);
+            return matchesSearch && matchesLabor && matchesOrigin;
+        })
+        .sort((a, b) => {
+            if (!sortConfig) return 0;
+            const { key, direction } = sortConfig;
+            const valA = a[key] ?? '';
+            const valB = b[key] ?? '';
+
+            if (valA < valB) return direction === 'asc' ? -1 : 1;
+            if (valA > valB) return direction === 'asc' ? 1 : -1;
+            return 0;
+        });
 
     if (isLoading) {
         return (
@@ -405,15 +438,40 @@ export default function Functions() {
                 </div>
             </div>
 
-            {/* Search */}
-            <div className="relative w-full md:w-1/2 lg:w-[40%] xl:max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                    placeholder="Buscar funções..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 industrial-input w-full"
-                />
+            {/* Search and Filters */}
+            <div className="flex flex-col md:flex-row gap-4">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Buscar funções..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10 industrial-input w-full"
+                    />
+                </div>
+                <div className="flex gap-2">
+                    <Select value={filters.laborType} onValueChange={(val) => setFilters(prev => ({ ...prev, laborType: val }))}>
+                        <SelectTrigger className="w-[160px] industrial-input">
+                            <SelectValue placeholder="Mão de Obra" />
+                        </SelectTrigger>
+                        <SelectContent className="glass-card">
+                            <SelectItem value="all">Todas MO</SelectItem>
+                            <SelectItem value="MOD">MOD - Direta</SelectItem>
+                            <SelectItem value="MOI">MOI - Indireta</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <Select value={filters.origin} onValueChange={(val) => setFilters(prev => ({ ...prev, origin: val }))}>
+                        <SelectTrigger className="w-[160px] industrial-input">
+                            <SelectValue placeholder="Origem" />
+                        </SelectTrigger>
+                        <SelectContent className="glass-card">
+                            <SelectItem value="all">Todas Origens</SelectItem>
+                            <SelectItem value="global">Globais</SelectItem>
+                            <SelectItem value="company">Da Empresa</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
 
             {/* Functions Table */}
@@ -433,18 +491,48 @@ export default function Functions() {
                         <Table>
                             <TableHeader className="sticky top-0 z-10 bg-background/60 backdrop-blur-xl border-b border-white/10">
                                 <TableRow className="hover:bg-transparent border-white/10 border-b-0">
-                                    <TableHead className="w-[80px] text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 py-5 px-6">LVL</TableHead>
-                                    <TableHead className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 py-5 px-6">Função & Atribuições</TableHead>
+                                    <TableHead 
+                                        className="w-[100px] text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 py-5 px-6 cursor-pointer hover:text-primary transition-colors"
+                                        onClick={() => handleSort('hierarchyLevel')}
+                                    >
+                                        <div className="flex items-center gap-1">
+                                            LVL
+                                            {sortConfig?.key === 'hierarchyLevel' && (
+                                                <TrendingUp className={cn("w-3 h-3", sortConfig.direction === 'desc' && "rotate-180")} />
+                                            )}
+                                        </div>
+                                    </TableHead>
+                                    <TableHead 
+                                        className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 py-5 px-6 cursor-pointer hover:text-primary transition-colors"
+                                        onClick={() => handleSort('name')}
+                                    >
+                                        <div className="flex items-center gap-1">
+                                            Função & Atribuições
+                                            {sortConfig?.key === 'name' && (
+                                                <TrendingUp className={cn("w-3 h-3", sortConfig.direction === 'desc' && "rotate-180")} />
+                                            )}
+                                        </div>
+                                    </TableHead>
                                     <TableHead className="hidden md:table-cell text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 py-5 px-6">Descrição Técnica</TableHead>
-                                    <TableHead className="text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 py-5 px-6">Soberania</TableHead>
+                                    <TableHead 
+                                        className="text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 py-5 px-6 cursor-pointer hover:text-primary transition-colors"
+                                        onClick={() => handleSort('canLeadTeam')}
+                                    >
+                                        <div className="flex items-center justify-center gap-1">
+                                            Soberania
+                                            {sortConfig?.key === 'canLeadTeam' && (
+                                                <TrendingUp className={cn("w-3 h-3", sortConfig.direction === 'desc' && "rotate-180")} />
+                                            )}
+                                        </div>
+                                    </TableHead>
                                     <TableHead className="text-right text-[10px] font-black uppercase tracking-widest text-muted-foreground/50 py-5 px-6">Gestão</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {filteredFunctions.map((func) => {
                                     const isTemplate = !func.companyId;
-                                    const canEditFunc = can('functions.update') || (isTemplate && isGlobalManager);
-                                    const canDeleteFunc = can('functions.delete') || (isTemplate && isGlobalManager);
+                                    const canEditFunc = can('functions.update') || isGlobalManager;
+                                    const canDeleteFunc = can('functions.delete') || isGlobalManager;
                                     
                                     return (
                                         <TableRow 
@@ -500,7 +588,7 @@ export default function Functions() {
                                                 )}
                                             </TableCell>
                                             <TableCell className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
-                                                <div className="flex items-center justify-end gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
+                                                <div className="flex items-center justify-end gap-2 transition-opacity duration-200">
                                                     {isTemplate && !isGlobalManager ? (
                                                         <Button
                                                             variant="outline"

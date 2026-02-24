@@ -31,23 +31,26 @@ export async function POST(request: NextRequest) {
     // O multitenancy já é verificado dentro do service se passarmos o contexto,
     // ou podemos delegar a verificação de permissão.
     // Para manter compatibilidade com as regras atuais do controller:
-    const elementCompanyId = await service.getElementCompanyId(
-      data.towerId,
-    );
+    const elementCompanyId = await service.getElementCompanyId(data.towerId);
     if (!elementCompanyId)
       return ApiResponse.notFound("Elemento não encontrado");
 
     const { isUserAdmin } = await import("@/lib/auth/session");
-    if (!isUserAdmin(user.role) && elementCompanyId !== user.companyId) {
+    if (
+      !isUserAdmin(
+        user.role,
+        (user as any).hierarchyLevel,
+        (user as any).permissions,
+      ) &&
+      elementCompanyId !== user.companyId
+    ) {
       return ApiResponse.forbidden(
         "Você não tem permissão para registrar produção deste elemento",
       );
     }
 
     const elementProjectId =
-      body.projectId ||
-      (await service.getElementProjectId(data.towerId)) ||
-      "";
+      body.projectId || (await service.getElementProjectId(data.towerId)) || "";
 
     const updated = await service.recordDailyProduction({
       towerId: data.towerId, // Map to elementId if needed by DTO, wait, DTO expects elementId
@@ -96,6 +99,8 @@ export async function GET(request: NextRequest) {
     const result = await service.listDailyProduction(towerId, activityId, {
       role: user.role,
       companyId: user.companyId,
+      hierarchyLevel: (user as any).hierarchyLevel,
+      permissions: (user as any).permissions,
     });
 
     return ApiResponse.json(result);

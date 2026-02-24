@@ -18,7 +18,7 @@ export const TowerPhysics = {
      * Returns angle in degrees CW from North (Mapbox style).
      * Methods: 'bisector' (default), 'tangential' (forward only)
      */
-    calculateTowerBearing: (index: number, towers: any[], method: 'bisector' | 'tangential' = 'bisector'): number => {
+    calculateTowerBearing: (index: number, towers: any[], method: 'bisector' | 'tangential' = 'bisector', suffix?: string): number => {
         const d = towers[index];
         if (!d) return 0;
 
@@ -27,8 +27,20 @@ export const TowerPhysics = {
             return { lat: t.lat, lng: t.lng };
         };
 
-        const prev = towers[index - 1];
-        const next = towers[index + 1];
+        // Filter neighbors to only those with the same suffix to avoid A<->B<->C side-by-side interference
+        let filteredTowers = towers;
+        let filteredIndex = index;
+
+        if (suffix) {
+            filteredTowers = towers.filter(t => {
+                const name = (t.name || '').toUpperCase();
+                return name.endsWith(suffix.toUpperCase());
+            });
+            filteredIndex = filteredTowers.findIndex(t => t.id === d.id);
+        }
+
+        const prev = filteredTowers[filteredIndex - 1];
+        const next = filteredTowers[filteredIndex + 1];
 
         if (prev && next) {
             const pCoord = getCoord(prev);

@@ -43,6 +43,7 @@ export interface TowerActivityStatus {
     progressPercent: number | null;
     requiresApproval?: boolean;
     approvalStatus?: string;
+    progressId?: string;
     notes: string | null;
     metadata: any | null;
     history?: any[];
@@ -58,7 +59,7 @@ export interface ActivitySchedule {
     plannedStart: string;
     plannedEnd: string;
     plannedQuantity: number | null;
-    plannedHours: number | null;
+    plannedHhh: number | null;
 }
 
 export interface DelayReason {

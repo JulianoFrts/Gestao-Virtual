@@ -669,6 +669,7 @@ model Project {
   towerProductions             TowerProduction[]
   towerConstructions           TowerConstruction[]
   towerActivityGoals           TowerActivityGoal[]
+  teams                        Team[]
 
   @@unique([companyId, code])
   @@index([code])
@@ -881,15 +882,18 @@ model Team {
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
   laborType    String?       @default("MOD") @map("labor_type")
+  projectId    String?       @map("project_id")
   dailyReports DailyReport[]
   teamMembers  TeamMember[]
   company      Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project      Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   site         Site?         @relation(fields: [siteId], references: [id], onDelete: Cascade)
   supervisor   User?         @relation(fields: [supervisorId], references: [id])
   timeRecords  TimeRecord[]
 
   @@index([companyId])
   @@index([siteId])
+  @@index([projectId])
   @@index([supervisorId])
   @@map("teams")
 }
@@ -957,7 +961,7 @@ model UserAffiliation {
   updatedAt DateTime @updatedAt @map("updated_at")
   company   Company? @relation(fields: [companyId], references: [id])
   project   Project? @relation(fields: [projectId], references: [id])
-  site      Site?    @relation(fields: [siteId], references: [id])
+  site      Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
@@ -972,7 +976,7 @@ model User {
   image                  String?
   cpf                    String?                  @unique
   phone                  String?
-  registrationNumber     String?                  @map("registration_number")
+  registrationNumber     String?                  @unique @map("registration_number")
   functionId             String?                  @map("function_id")
   faceDescriptor         Json?                    @map("face_descriptor")
   hierarchyLevel         Int                      @default(0) @map("hierarchy_level")
@@ -1200,7 +1204,7 @@ model TowerActivityGoal {
   company  Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
   project  Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   site     Site?               @relation(fields: [siteId], references: [id])
-  parent   TowerActivityGoal?  @relation("Hierarchy", fields: [parentId], references: [id])
+  parent   TowerActivityGoal?  @relation("Hierarchy", fields: [parentId], references: [id], onDelete: Cascade)
   children TowerActivityGoal[] @relation("Hierarchy")
 
   @@index([towerId])
