@@ -14,16 +14,18 @@ const queueService = new QueueService(taskRepository);
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     await requireAuth();
-    const { id } = params;
+
+    const { id } = await params;
 
     const job = await queueService.getJobStatus(id);
     if (!job) {
       return ApiResponse.notFound("Tarefa não encontrada");
     }
+
     return ApiResponse.json(job);
   } catch (error) {
     return handleApiError(error, "src/app/api/v1/jobs/[id]/route.ts#GET");
@@ -37,13 +39,15 @@ export async function GET(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     await requireAuth();
-    const { id } = params;
+
+    const { id } = await params;
 
     const job = await queueService.cancelJob(id);
+
     return ApiResponse.json(job, "Tarefa cancelada");
   } catch (error) {
     return handleApiError(error, "src/app/api/v1/jobs/[id]/route.ts#DELETE");

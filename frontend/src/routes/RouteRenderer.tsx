@@ -22,6 +22,7 @@ export const RouteRenderer: React.FC = () => {
         moduleId={route.moduleId} 
         requireConnection={route.requireConnection}
         roles={route.roles}
+        isPublic={route.isPublic}
       >
         <Suspense fallback={<LoadingScreen />}>
           <Component />
@@ -40,19 +41,13 @@ export const RouteRenderer: React.FC = () => {
   return (
     <Routes>
       {/* Routes NO LAYOUT */}
-      {noneRoutes.map(route => {
-        const RouteElement = route.element as any;
-        const isComponent = typeof RouteElement === 'function' || (RouteElement && RouteElement.render) || (RouteElement && RouteElement.$$typeof && !RouteElement.props);
-        const Component = isComponent ? RouteElement : () => <>{RouteElement}</>;
-        
-        return (
-          <Route 
-            key={route.path} 
-            path={route.path} 
-            element={<Suspense fallback={<LoadingScreen />}><Component /></Suspense>} 
-          />
-        );
-      })}
+      {noneRoutes.map(route => (
+        <Route 
+          key={route.path} 
+          path={route.path} 
+          element={renderRoute(route)} 
+        />
+      ))}
 
       {/* Routes WITH AppLayout */}
       <Route element={<AppLayout />}>

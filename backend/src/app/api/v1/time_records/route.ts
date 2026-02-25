@@ -1,12 +1,10 @@
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { requireAuth } from "@/lib/auth/session";
+import * as authSession from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { TimeRecordService } from "@/modules/production/application/time-record.service";
 import { PrismaTimeRecordRepository } from "@/modules/production/infrastructure/prisma-time-record.repository";
-
-// DI
 import { API } from "@/lib/constants";
 
 // DI
@@ -33,7 +31,11 @@ const querySchema = z.object({
   ),
   limit: z.preprocess(
     (val) => (val === null || val === "" ? undefined : val),
-    z.coerce.number().min(1).max(API.PAGINATION.MAX_LIMIT).default(API.PAGINATION.DEFAULT_PAGE_SIZE),
+    z.coerce
+      .number()
+      .min(1)
+      .max(API.PAGINATION.MAX_LIMIT)
+      .default(API.PAGINATION.DEFAULT_PAGE_SIZE),
   ),
   userId: z
     .string()
@@ -71,7 +73,7 @@ const querySchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAuth();
+    const user = await authSession.requireAuth();
 
     const searchParams = request.nextUrl.searchParams;
     const query = querySchema.parse({
@@ -84,7 +86,12 @@ export async function GET(request: NextRequest) {
       endDate: searchParams.get("endDate"),
     });
 
-    const result = await timeRecordService.listRecords(query);
+    const result = await timeRecordService.listRecords(query, {
+      role: user.role,
+      companyId: user.companyId,
+      hierarchyLevel: (user as any).hierarchyLevel,
+      permissions: (user as any).permissions,
+    });
 
     return ApiResponse.json(result);
   } catch (error) {
@@ -94,14 +101,22 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth();
+    const user = await authSession.requireAuth();
 
     const body = await request.json();
     const data = createTimeRecordSchema.parse(body);
 
-    const timeRecord = await timeRecordService.createRecord(data);
+    const timeRecord = await timeRecordService.createRecord(data, {
+      role: user.role,
+      companyId: user.companyId,
+      hierarchyLevel: (user as any).hierarchyLevel,
+      permissions: (user as any).permissions,
+    });
 
-    logger.info("Registro de ponto criado", { recordId: timeRecord.id });
+    logger.info("Registro de ponto criado", {
+      recordId: timeRecord.id,
+      userId: user.id,
+    });
 
     return ApiResponse.created(
       timeRecord,
@@ -111,45 +126,80 @@ export async function POST(request: NextRequest) {
     return handleApiError(error, "src/app/api/v1/time_records/route.ts#POST");
   }
 }
+
 export async function PUT(request: NextRequest) {
   try {
-    await requireAuth();
+    const user = await authSession.requirePermission(
+      "production.manage",
+      request,
+    );
 
     const body = await request.json();
     const id = body.id;
 
     if (!id) {
-      return ApiResponse.badRequest("ID do registro é obrigatório para atualização");
+      return ApiResponse.badRequest(
+        "ID do registro é obrigatório para atualização",
+      );
     }
 
-    // Simplificando a validação para o update (reaproveitando o schema se necessário ou usando partial)
-    const timeRecord = await timeRecordService.updateRecord(id, body);
+    const timeRecord = await timeRecordService.updateRecord(id, body, {
+      role: user.role,
+      companyId: user.companyId,
+      hierarchyLevel: (user as any).hierarchyLevel,
+      permissions: (user as any).permissions,
+    });
 
-    logger.info("Registro de ponto atualizado", { recordId: id });
+    logger.info("Registro de ponto atualizado", {
+      recordId: id,
+      userId: user.id,
+    });
 
-    return ApiResponse.json(timeRecord, "Registro de ponto atualizado com sucesso");
+    return ApiResponse.json(
+      timeRecord,
+      "Registro de ponto atualizado com sucesso",
+    );
   } catch (error) {
+    if (error instanceof Error && error.message.includes("Forbidden")) {
+      return ApiResponse.forbidden(error.message);
+    }
     return handleApiError(error, "src/app/api/v1/time_records/route.ts#PUT");
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
-    await requireAuth();
+    const user = await authSession.requirePermission(
+      "production.manage",
+      request,
+    );
 
     const searchParams = request.nextUrl.searchParams;
     const id = searchParams.get("id");
 
     if (!id) {
-      return ApiResponse.badRequest("ID do registro é obrigatório para exclusão");
+      return ApiResponse.badRequest(
+        "ID do registro é obrigatório para exclusão",
+      );
     }
 
-    await timeRecordService.deleteRecord(id);
+    await timeRecordService.deleteRecord(id, {
+      role: user.role,
+      companyId: user.companyId,
+      hierarchyLevel: (user as any).hierarchyLevel,
+      permissions: (user as any).permissions,
+    });
 
-    logger.info("Registro de ponto excluído", { recordId: id });
+    logger.info("Registro de ponto excluído", {
+      recordId: id,
+      userId: user.id,
+    });
 
     return ApiResponse.noContent();
   } catch (error) {
+    if (error instanceof Error && error.message.includes("Forbidden")) {
+      return ApiResponse.forbidden(error.message);
+    }
     return handleApiError(error, "src/app/api/v1/time_records/route.ts#DELETE");
   }
 }

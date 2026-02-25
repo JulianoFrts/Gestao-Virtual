@@ -847,6 +847,7 @@ export default function Settings() {
             <User className="w-4 h-4" />
             Geral
           </TabsTrigger>
+          
           {(profile?.role === 'HELPER_SYSTEM' || profile?.role === 'SUPER_ADMIN_GOD') && (
             <TabsTrigger value="system" className="gap-2 text-purple-400 data-[state=active]:bg-purple-500/10 data-[state=active]:text-purple-300">
                 <Settings2 className="w-4 h-4" />
@@ -880,8 +881,27 @@ export default function Settings() {
                                     }}
                                     onBlur={async (e) => {
                                         if (profile?.companyId) {
-                                            await saveSettings(profile.companyId, null, undefined, e.target.value);
-                                            toast({ title: "Nome do sistema atualizado!" });
+                                            // Validação de Segurança no Frontend (UX)
+                                            if (!can('system.settings.manage')) {
+                                                toast({ 
+                                                    title: "Acesso Negado", 
+                                                    description: "Apenas administradores podem alterar o nome do sistema.",
+                                                    variant: "destructive"
+                                                });
+                                                appNameSignal.value = e.target.defaultValue; // Reverter
+                                                return;
+                                            }
+
+                                            const result = await saveSettings(profile.companyId, null, undefined, e.target.value);
+                                            if (result.success) {
+                                                toast({ title: "Nome do sistema atualizado!" });
+                                            } else {
+                                                toast({ 
+                                                    title: "Falha ao atualizar", 
+                                                    description: result.error,
+                                                    variant: "destructive"
+                                                });
+                                            }
                                         }
                                     }}
                                     className="industrial-input"
@@ -922,11 +942,25 @@ export default function Settings() {
                                             onChange={async (e) => {
                                                 const file = e.target.files?.[0];
                                                 if (file && profile?.companyId) {
-                                                    const res = await saveSettings(profile.companyId, null, undefined, undefined, file);
-                                                    if (res.success) {
-                                                        toast({ title: "Ícone atualizado com sucesso!" });
+                                                    // Validação de Segurança no Frontend (UX)
+                                                    if (!can('system.settings.manage')) {
+                                                        toast({ 
+                                                            title: "Acesso Negado", 
+                                                            description: "Apenas administradores podem alterar o ícone do sistema.",
+                                                            variant: "destructive"
+                                                        });
+                                                        return;
+                                                    }
+
+                                                    const result = await saveSettings(profile.companyId, null, undefined, undefined, file);
+                                                    if (result.success) {
+                                                        toast({ title: "Favicon atualizado!" });
                                                     } else {
-                                                        toast({ title: "Erro ao atualizar ícone", description: res.error, variant: "destructive" });
+                                                        toast({ 
+                                                            title: "Falha ao atualizar ícone", 
+                                                            description: result.error,
+                                                            variant: "destructive"
+                                                        });
                                                     }
                                                 }
                                             }}

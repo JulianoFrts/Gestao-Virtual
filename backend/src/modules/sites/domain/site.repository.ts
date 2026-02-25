@@ -4,7 +4,7 @@ export interface FindAllSitesParams {
   projectId?: string;
   companyId?: string; // Para validação de acesso
   search?: string;
-  isAdmin?: boolean; // Para lógica de filtro
+  isGlobalAccess?: boolean; // Para lógica de filtro
 }
 
 export interface SitesListResult {

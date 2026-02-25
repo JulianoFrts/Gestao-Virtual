@@ -13,15 +13,16 @@ export async function HEAD() {
 
 export async function GET(request: NextRequest) {
   try {
-    const { isUserAdmin } = await import("@/lib/auth/session");
+    const { isGlobalAdmin } = await import("@/lib/auth/session");
     const currentUser = await requireAuth(request);
 
-    const isAdmin = isUserAdmin(
+    const isGlobal = isGlobalAdmin(
       currentUser.role,
       (currentUser as any).hierarchyLevel,
+      (currentUser as any).permissions,
     );
     const { CONSTANTS } = await import("@/lib/constants");
-    const stream = generateAuditLogsStream(currentUser, isAdmin, CONSTANTS);
+    const stream = generateAuditLogsStream(currentUser, isGlobal, CONSTANTS);
 
     return new Response(stream, {
       headers: {
@@ -43,7 +44,8 @@ export async function POST(request: NextRequest) {
 
     // Lógica para Iniciar Stream via POST (Auth via JSON)
     if (body.stream === true || body.token) {
-      const { validateToken, isUserAdmin } = await import("@/lib/auth/session");
+      const { validateToken, isGlobalAdmin } =
+        await import("@/lib/auth/session");
       let currentUser;
 
       const token = body.token;
@@ -56,12 +58,13 @@ export async function POST(request: NextRequest) {
         currentUser = await requireAuth(request);
       }
 
-      const isAdmin = isUserAdmin(
+      const isGlobal = isGlobalAdmin(
         currentUser.role,
         (currentUser as any).hierarchyLevel,
+        (currentUser as any).permissions,
       );
 
-      const stream = generateAuditLogsStream(currentUser, isAdmin, CONSTANTS);
+      const stream = generateAuditLogsStream(currentUser, isGlobal, CONSTANTS);
 
       return new Response(stream, {
         headers: {
@@ -117,7 +120,7 @@ function getClientIp(request: NextRequest): string {
  */
 function generateAuditLogsStream(
   currentUser: any,
-  isAdmin: boolean,
+  isGlobal: boolean,
   CONSTANTS: any,
 ): ReadableStream {
   const encoder = new TextEncoder();
@@ -135,7 +138,7 @@ function generateAuditLogsStream(
 
       try {
         const total = await auditLogService.countLogs({
-          isAdmin,
+          isGlobalAccess: isGlobal,
           companyId: currentUser.companyId,
         });
 
@@ -148,7 +151,7 @@ function generateAuditLogsStream(
           const logs = await auditLogService.listLogs({
             limit: BATCH_SIZE,
             skip: processed,
-            isAdmin,
+            isGlobalAccess: isGlobal,
             companyId: currentUser.companyId,
           });
 

@@ -167,7 +167,10 @@ export class OrionApiClient {
         if (elapsed < this.AUTH_THROTTLE_MS) {
           return {
             data: null,
-            error: { message: "Monitoramento de Segurança: Requisição bloqueada temporariamente (401 recent)", code: "401" },
+            error: { 
+              message: "Monitoramento de Segurança: Requisição bloqueada temporariamente devido a erros de autenticação repetidos.", 
+              code: "401_THROTTLED" 
+            },
           };
         } else {
           this.last401Time = 0;
@@ -256,9 +259,26 @@ export class OrionApiClient {
 
       if (!response.ok) {
         if (response.status === 401) {
+          console.error(`[ORION API] 401 Unauthorized em ${endpoint}. Limpando sessão.`);
           this.last401Time = Date.now();
           this.clearToken();
+          // Redirecionamento forçado via window.location se estivermos no browser
+          if (typeof window !== 'undefined' && !isAuthEndpoint) {
+            window.location.href = '/auth?reason=expired';
+          }
         }
+
+        if (response.status === 403) {
+          console.error(`[ORION API] 403 Forbidden em ${endpoint}. Acesso negado pela política do backend.`);
+          // Notificar erro de permissão (ex: via toast ou redirecionamento de segurança)
+          if (typeof window !== 'undefined') {
+            // Poderíamos disparar um evento customizado aqui
+            window.dispatchEvent(new CustomEvent('orion-security-error', { 
+              detail: { status: 403, message: json.message || "Acesso negado" } 
+            }));
+          }
+        }
+
         return {
           data: null,
           error: { message: json.message || json.error || `Erro ${response.status}`, code: String(response.status) },

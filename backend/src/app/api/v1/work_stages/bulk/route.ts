@@ -10,7 +10,7 @@ const service = new WorkStageService(repository);
 // DELETE: Delete all stages for a site
 export async function DELETE(req: NextRequest) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
     const { searchParams } = new URL(req.url);
     const siteId = searchParams.get("siteId");
 
@@ -18,18 +18,32 @@ export async function DELETE(req: NextRequest) {
       return ApiResponse.badRequest("ID do Canteiro (siteId) é obrigatório");
     }
 
-    await repository.deleteBySite(siteId);
+    await service.deleteBySite(siteId, {
+      role: user.role,
+      companyId: user.companyId,
+      hierarchyLevel: (user as any).hierarchyLevel,
+      permissions: (user as any).permissions,
+    });
 
-    return ApiResponse.json({ success: true }, "Todas as etapas do canteiro foram removidas");
-  } catch (error) {
-    return handleApiError(error, "src/app/api/v1/work_stages/bulk/route.ts#DELETE");
+    return ApiResponse.json(
+      { success: true },
+      "Todas as etapas do canteiro foram removidas",
+    );
+  } catch (error: any) {
+    if (error.message.includes("Forbidden")) {
+      return ApiResponse.forbidden(error.message);
+    }
+    return handleApiError(
+      error,
+      "src/app/api/v1/work_stages/bulk/route.ts#DELETE",
+    );
   }
 }
 
 // POST: Create multiple stages recursively
 export async function POST(req: NextRequest) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
     const body = await req.json();
     const { projectId, siteId, data } = body;
 
@@ -38,13 +52,26 @@ export async function POST(req: NextRequest) {
     }
 
     if (!data || !Array.isArray(data)) {
-      return ApiResponse.badRequest("Os dados de criação (data) devem ser um array");
+      return ApiResponse.badRequest(
+        "Os dados de criação (data) devem ser um array",
+      );
     }
 
-    const result = await service.createBulk(projectId, siteId, data);
+    const result = await service.createBulk(projectId, siteId, data, {
+      role: user.role,
+      companyId: user.companyId,
+      hierarchyLevel: (user as any).hierarchyLevel,
+      permissions: (user as any).permissions,
+    });
 
     return ApiResponse.json(result, "Etapas criadas com sucesso");
-  } catch (error) {
-    return handleApiError(error, "src/app/api/v1/work_stages/bulk/route.ts#POST");
+  } catch (error: any) {
+    if (error.message.includes("Forbidden")) {
+      return ApiResponse.forbidden(error.message);
+    }
+    return handleApiError(
+      error,
+      "src/app/api/v1/work_stages/bulk/route.ts#POST",
+    );
   }
 }

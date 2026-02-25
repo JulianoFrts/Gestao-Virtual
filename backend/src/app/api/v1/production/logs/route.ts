@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { requireAuth, isUserAdmin } from "@/lib/auth/session";
+import { requireAuth, isGlobalAdmin } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { ProductionFactory } from "@/modules/production/application/production.factory";
@@ -23,7 +23,11 @@ export async function GET(request: NextRequest) {
       searchParams.get("towerId") || searchParams.get("elementId");
     const pendingOnly = searchParams.get("pendingOnly") === "true";
 
-    const isAdmin = isUserAdmin(user.role);
+    const isAdmin = isGlobalAdmin(
+      user.role,
+      (user as any).hierarchyLevel,
+      (user as any).permissions,
+    );
 
     // Multitenancy: Filtrar por empresa se não for SuperAdmin
     const companyIdFilter =
@@ -54,6 +58,7 @@ export async function POST(request: NextRequest) {
     const user = await requireAuth();
 
     const body = await request.json();
+
     const validation = approvalSchema.safeParse(body);
 
     if (!validation.success) {

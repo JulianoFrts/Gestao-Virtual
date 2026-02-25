@@ -13,13 +13,15 @@ export interface ProtectedRouteProps {
   requireConnection?: boolean;
   moduleId?: string;
   roles?: string[];
+  isPublic?: boolean;
 }
 
 export function ProtectedRoute({
   children,
   requireConnection = false,
   moduleId,
-  roles
+  roles,
+  isPublic = false
 }: ProtectedRouteProps) {
   useSignals();
   const { user, profile, isLoading } = useAuth();
@@ -31,6 +33,17 @@ export function ProtectedRoute({
     return <LoadingScreen />;
   }
 
+  // Lógica para rotas PÚBLICAS (ex: /auth)
+  if (isPublic) {
+    // Se o usuário já está logado e tenta acessar uma rota pública, redireciona para o home
+    if (user) {
+      return <Navigate to="/dashboard" replace />;
+    }
+    // Se não está logado, permite ver a rota pública
+    return <>{children}</>;
+  }
+
+  // Lógica para rotas PROTEGIDAS
   if (!user) {
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }

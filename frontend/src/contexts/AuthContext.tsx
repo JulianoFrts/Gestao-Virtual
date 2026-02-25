@@ -8,6 +8,7 @@ import React, {
 import { toast } from "@/hooks/use-toast";
 import { storageService } from "@/services/storageService";
 import { logError } from "@/lib/errorHandler";
+import logger from "@/lib/logger";
 import { localApi } from "@/integrations/orion/client";
 import {
   permissionsSignal,
@@ -130,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(data?.error || "Falha ao validar contexto");
       }
     } catch (err: any) {
-        console.error("[AuthContext] Context validation failed:", err);
+        logger.error(err?.message || "Context validation failed", "AuthContext", err);
         throw err;
     }
   };
@@ -138,10 +139,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchProfile = React.useCallback(
     async (userId: string): Promise<Profile | undefined> => {
       if (!userId || userId === "undefined") {
-        console.warn(
-          "[AuthContext] fetchProfile called with invalid userId:",
-          userId,
-        );
+        logger.warn("fetchProfile called with invalid userId", "AuthContext");
         return undefined;
       }
       try {
@@ -158,9 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             userData = response.data;
           } else {
             // Fallback se falhar
-            console.warn(
-              "[AuthContext] /users/me returned empty. Trying fallback DB fetch.",
-            );
+            logger.warn("/users/me returned empty. Trying fallback DB fetch.", "AuthContext");
             const { data: localProfile } = await localApi
               .from("users")
               .eq("id", userId)
@@ -168,7 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (localProfile) userData = localProfile;
           }
         } catch (err) {
-          console.error("[AuthContext] Failed to fetch profile from API:", err);
+          logger.error("Failed to fetch profile from API", "AuthContext", err);
           // Fallback final
           const { data: localProfile } = await localApi
             .from("users")
@@ -178,10 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (!userData) {
-          console.warn(
-            "[AuthContext] No profile data found for userId:",
-            userId,
-          );
+          logger.warn(`No profile data found for userId: ${userId}`, "AuthContext");
           return undefined;
         }
 
@@ -249,7 +242,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 siteId: newProfile.siteId || undefined
             };
             
-            console.log("[AuthContext] Aplicando auto-seleção de contexto:", initialContext);
+            logger.info("Aplicando auto-seleção de contexto", "AuthContext");
             selectedContextSignal.value = initialContext;
             await storageService.setItem("selected_context", initialContext);
         }
@@ -324,12 +317,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // [Dev Persistence] Restaurar simulação se houver papel salvo
         if (simulationRoleSignal.value && window.location.hostname === 'localhost') {
-            console.log("[AuthContext] Restaurando simulação persistente:", simulationRoleSignal.value);
+            logger.info(`Restaurando simulação persistente: ${simulationRoleSignal.value}`, "AuthContext");
             // Pequeno delay para garantir que o perfil real e backups estejam prontos
             setTimeout(() => switchRole(simulationRoleSignal.value), 100);
         }
       } else {
-        console.log("[AuthContext] No active session found. Performing full cleanup.");
+        logger.info("No active session found. Performing full cleanup.", "AuthContext");
         await storageService.clearAll(); // Limpa cache total se não houver token
         setUser(null);
         setProfile(null);
@@ -526,21 +519,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsMfaVerified(false);
       selectedContextSignal.value = null;
       
-      console.log("[AuthContext] Logout estrito finalizado.");
+      logger.info("Logout estrito finalizado.", "AuthContext");
       
       // [STRICT] Force hard refresh to clear all JS memory & React Query cache
       window.location.href = '/auth';
     } catch (err) {
-      console.error("[AuthContext] Erro durante logout:", err);
+      logger.error("Erro durante logout", "AuthContext", err);
     }
   }, [profile]);
 
   /**
    * [DEV ONLY] Bypass de Autenticação para testes locais
    */
-  const bypassAuth = React.useCallback(async () => {
+    const bypassAuth = React.useCallback(async () => {
       if (window.location.hostname !== 'localhost') {
-          console.warn("[AuthContext] Bypass ignorado: Não estamos em localhost");
+          logger.warn("Bypass ignorado: Não estamos em localhost", "AuthContext");
           return;
       }
       

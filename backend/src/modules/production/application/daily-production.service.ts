@@ -40,12 +40,21 @@ export class DailyProductionService {
         progressPercent: 0,
         history: [],
         dailyProduction: {},
+        updatedAt: new Date(),
       });
     }
 
     entity.recordDailyProduction(date, data, userId);
     const saved = await this.progressRepository.save(entity);
     return new ProductionProgress(saved);
+  }
+
+  async getElementCompanyId(elementId: string) {
+    return this.elementRepository.findCompanyId(elementId);
+  }
+
+  async getElementProjectId(elementId: string) {
+    return this.elementRepository.findProjectId(elementId);
   }
 
   async listDailyProduction(
@@ -65,13 +74,13 @@ export class DailyProductionService {
     if (!progress) return [];
 
     if (user) {
-      const { isUserAdmin } = await import("@/lib/auth/session");
-      const isAdmin = isUserAdmin(
+      const { isGlobalAdmin } = await import("@/lib/auth/session");
+      const isGlobal = isGlobalAdmin(
         user.role,
         user.hierarchyLevel,
         user.permissions,
       );
-      if (!isAdmin || !user.role.includes("SUPER_ADMIN")) {
+      if (!isGlobal) {
         const elementCompanyId =
           await this.elementRepository.findCompanyId(towerId);
         if (elementCompanyId !== user.companyId) {

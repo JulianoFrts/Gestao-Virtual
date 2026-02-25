@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { requireAuth, requireAdmin } from "@/lib/auth/session";
+import * as authSession from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { SiteService } from "@/modules/sites/application/site.service";
@@ -45,9 +45,29 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    await requireAuth();
+    const user = await authSession.requireAuth();
 
     const site = await siteService.getSiteById(id);
+    if (!site) return ApiResponse.notFound("Canteiro não encontrado");
+
+    // Validação de Escopo: Canteiro -> Projeto -> Empresa
+    const { prisma } = await import("@/lib/prisma/client");
+    const project = await prisma.project.findUnique({
+      where: { id: (site as any).projectId },
+      select: { companyId: true },
+    });
+
+    if (
+      project &&
+      project.companyId !== (user as any).companyId &&
+      !authSession.isGlobalAdmin(
+        (user as any).role,
+        (user as any).hierarchyLevel,
+        (user as any).permissions,
+      )
+    ) {
+      return ApiResponse.forbidden("Você não tem acesso a este canteiro");
+    }
 
     return ApiResponse.json(site);
   } catch (error) {
@@ -58,7 +78,31 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    await requireAdmin();
+    const user = await authSession.requirePermission("sites.manage", request);
+
+    const existingSite = await siteService.getSiteById(id);
+    if (!existingSite) return ApiResponse.notFound("Canteiro não encontrado");
+
+    // Validação de Escopo
+    const { prisma } = await import("@/lib/prisma/client");
+    const project = await prisma.project.findUnique({
+      where: { id: (existingSite as any).projectId },
+      select: { companyId: true },
+    });
+
+    if (
+      project &&
+      project.companyId !== (user as any).companyId &&
+      !authSession.isGlobalAdmin(
+        (user as any).role,
+        (user as any).hierarchyLevel,
+        (user as any).permissions,
+      )
+    ) {
+      return ApiResponse.forbidden(
+        "Não autorizado a alterar canteiros de outra empresa",
+      );
+    }
 
     const body = await request.json();
     const data = updateSiteSchema.parse(body);
@@ -76,7 +120,31 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    await requireAdmin();
+    const user = await authSession.requirePermission("sites.manage", request);
+
+    const existingSite = await siteService.getSiteById(id);
+    if (!existingSite) return ApiResponse.notFound("Canteiro não encontrado");
+
+    // Validação de Escopo
+    const { prisma } = await import("@/lib/prisma/client");
+    const project = await prisma.project.findUnique({
+      where: { id: (existingSite as any).projectId },
+      select: { companyId: true },
+    });
+
+    if (
+      project &&
+      project.companyId !== (user as any).companyId &&
+      !authSession.isGlobalAdmin(
+        (user as any).role,
+        (user as any).hierarchyLevel,
+        (user as any).permissions,
+      )
+    ) {
+      return ApiResponse.forbidden(
+        "Não autorizado a remover canteiros de outra empresa",
+      );
+    }
 
     await siteService.deleteSite(id);
 

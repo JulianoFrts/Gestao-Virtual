@@ -2,15 +2,75 @@ import { type Session } from "next-auth";
 import { type NextRequest } from "next/server";
 import type { Role } from "@/types/database";
 import { getCurrentSession } from "./core";
-import { isUserAdmin } from "./utils";
+import { isUserAdmin, isGlobalAdmin } from "./utils";
 
 /**
  * Obtém o usuário atual ou lança erro
  */
 export async function requireAuth(req?: NextRequest): Promise<Session["user"]> {
   const session = await getCurrentSession(req);
-  if (!session?.user) throw new Error("Não autenticado");
+  if (!session?.user) {
+    const error = new Error("Não autenticado");
+    (error as any).status = 401;
+    throw error;
+  }
   return session.user;
+}
+
+/**
+ * Exige uma permissão específica
+ */
+export async function requirePermission(
+  permission: string,
+  req?: NextRequest,
+): Promise<Session["user"]> {
+  const user = await requireAuth(req);
+  const hasPermission = await can(permission);
+
+  if (!hasPermission) {
+    const error = new Error(`Permissão negada: ${permission}`);
+    (error as any).status = 403;
+    throw error;
+  }
+
+  return user;
+}
+
+/**
+ * Exige validação de escopo (Tenant Isolation)
+ * Verifica se o usuário pertence à empresa ou projeto solicitado
+ */
+export async function requireScope(
+  targetId: string,
+  type: "COMPANY" | "PROJECT" | "USER" = "COMPANY",
+  req?: NextRequest,
+): Promise<Session["user"]> {
+  const user = await requireAuth(req);
+  const { role, companyId, id: userId } = user as any;
+  const permissions = (user as any).permissions || {};
+
+  // Apenas Administradores Globais (rank 1000+) ignoram travas de escopo.
+  // Administradores de Empresa (rank 900) DEVEM ser validados pelo companyId.
+  if (isGlobalAdmin(role, (user as any).hierarchyLevel, permissions)) {
+    return user;
+  }
+
+  let isAllowed = false;
+
+  if (type === "COMPANY") {
+    isAllowed = companyId === targetId;
+  } else if (type === "USER") {
+    isAllowed = userId === targetId;
+  }
+  // TODO: Implementar lógica de PROJECT se necessário, buscando no banco ou via cache
+
+  if (!isAllowed) {
+    const error = new Error("Acesso restrito: Violação de escopo de dados");
+    (error as any).status = 403;
+    throw error;
+  }
+
+  return user;
 }
 
 /**
@@ -108,7 +168,7 @@ export async function requireOwnerOrAdmin(
   const permissions = (user as any).permissions || {};
   if (
     user.id !== resourceOwnerId &&
-    !isUserAdmin(user.role, (user as any).hierarchyLevel, permissions)
+    !isGlobalAdmin(user.role, (user as any).hierarchyLevel, permissions)
   ) {
     throw new Error("Sem permissão recurso");
   }

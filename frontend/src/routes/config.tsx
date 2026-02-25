@@ -15,6 +15,7 @@ export interface RouteConfig {
   moduleId?: string;
   roles?: string[];
   requireConnection?: boolean;
+  isPublic?: boolean;
   layout?: "app" | "fullscreen" | "desktop" | "none";
   label?: string;
   icon?: React.ElementType;

@@ -26,20 +26,21 @@ export async function GET(req: NextRequest) {
     }
 
     // Multitenancy Check
-    const { isUserAdmin } = await import("@/lib/auth/session");
+    const { isGlobalAdmin } = await import("@/lib/auth/session");
     const userRole = session.user.role;
     const userHierarchy = (session.user as any).hierarchyLevel;
+    const userPermissions = (session.user as any).permissions;
     const userCompanyId = (session.user as any).companyId;
 
-    if (!isUserAdmin(userRole, userHierarchy)) {
-      const { prisma } = await import("@/lib");
+    if (!isGlobalAdmin(userRole, userHierarchy, userPermissions)) {
+      const { prisma } = await import("@/lib/prisma/client");
 
       const whereClause: any = { companyId: userCompanyId };
       if (projectId !== "all") {
         whereClause.id = projectId;
       }
 
-      const project = await (prisma as any).project.findFirst({
+      const project = await prisma.project.findFirst({
         where: whereClause,
       });
 
@@ -77,10 +78,16 @@ export async function POST(req: NextRequest) {
     }
 
     // Multitenancy Check
-    const { isUserAdmin } = await import("@/lib/auth/session");
-    if (!isUserAdmin(session.user.role)) {
-      const { prisma } = await import("@/lib");
-      const project = await (prisma as any).project.findFirst({
+    const { isGlobalAdmin } = await import("@/lib/auth/session");
+    if (
+      !isGlobalAdmin(
+        session.user.role,
+        (session.user as any).hierarchyLevel,
+        (session.user as any).permissions,
+      )
+    ) {
+      const { prisma } = await import("@/lib/prisma/client");
+      const project = await prisma.project.findFirst({
         where: { id: projectId, companyId: (session.user as any).companyId },
       });
       if (!project) {

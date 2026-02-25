@@ -562,7 +562,6 @@ const ProductionPage = () => {
         const hasCompletedJob = towerImportJobs.some(j => j.status === 'completed');
         
         if (hasCompletedJob) {
-            console.log("[ProductionPage] Job de importação detectado como concluído. Revalidando grid...");
             queryClient.invalidateQueries({ queryKey: ["production-towers"] });
             queryClient.invalidateQueries({ queryKey: ['tower-activity-goals'] });
         }
@@ -659,8 +658,7 @@ const ProductionPage = () => {
     };
 
     const unlinkedStagesCount = React.useMemo(() => 
-        stages?.filter(s => !s.productionActivityId).length || 0
-    , [stages]);
+        stages?.filter(s => !s.productionActivityId).length && 0   , [stages]);
 
     // Transform WorkStages into the structure expected by the Grid
     const stageColumns = React.useMemo<ProductionCategory[] | undefined>(() => {

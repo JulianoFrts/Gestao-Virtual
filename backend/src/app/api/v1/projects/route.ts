@@ -6,7 +6,7 @@
 
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { requireAuth } from "@/lib/auth/session";
+import * as authSession from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { Validator } from "@/lib/utils/api/validator";
@@ -94,7 +94,7 @@ export async function HEAD() {
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await requireAuth();
+    const user = await authSession.requireAuth();
 
     const validation = Validator.validateQuery(
       querySchema,
@@ -110,14 +110,14 @@ export async function GET(request: NextRequest) {
       search,
     } = validation.data as any;
 
-    const { isUserAdmin: checkAdmin } = await import("@/lib/auth/session");
-    const isAdmin = checkAdmin(
+    const { isGlobalAdmin } = await import("@/lib/auth/session");
+    const isGlobal = isGlobalAdmin(
       user.role,
       (user as any).hierarchyLevel,
       (user as any).permissions,
     );
 
-    const where = buildProjectFilters(user, isAdmin, {
+    const where = buildProjectFilters(user, isGlobal, {
       companyId,
       status,
       search,
@@ -141,16 +141,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { can } = await import("@/lib/auth/permissions");
-    if (!(await can("projects.manage"))) {
-      return ApiResponse.forbidden("Sem permissão para gerenciar projetos");
-    }
+    await authSession.requirePermission("projects.manage", request);
 
     const body = await request.json();
     const validation = Validator.validate(createProjectSchema, body);
     if (!validation.success) return validation.response;
 
     const data = validation.data as any;
+
+    // Validação de Escopo: Usuário só pode criar projeto para sua própria empresa (se não for admin sistêmico)
+    await authSession.requireScope(data.companyId, "COMPANY", request);
 
     // Verificar se empresa existe
     const company = await companyRepository.findById(data.companyId);
@@ -174,23 +174,21 @@ export async function POST(request: NextRequest) {
 
 function buildProjectFilters(
   user: any,
-  isAdmin: boolean,
+  isGlobal: boolean,
   filters: { companyId?: string; status?: string; search?: string },
 ) {
   const where: Record<string, any> = {};
 
-  // Enforcement de multitenancy
-  if (!isAdmin) {
+  // Enforcement de multitenancy: Apenas Admins Globais (rank 1000+) podem trocar de empresa
+  if (!isGlobal) {
     where.companyId = user.companyId;
   } else if (filters.companyId) {
-    // Admin pode filtrar por uma empresa específica
+    // Admin Global pode filtrar por uma empresa específica
     where.companyId = filters.companyId;
   }
 
   if (filters.status) where.status = filters.status;
-
-  // Hide "Obra Padrão" by default (handle potential nulls)
-  // We use AND to combine with potential search ORs
+  // ... rest remains same but I'll update the whole block to be safe
   where.AND = [{ OR: [{ code: { not: "STD-001" } }, { code: null }] }];
 
   if (filters.search) {

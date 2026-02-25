@@ -2,6 +2,8 @@
  * Maps database/API error messages to user-friendly Portuguese messages
  * Prevents exposing internal database schema details to users
  */
+import logger from "./logger";
+
 export const mapDatabaseError = (error: any): string => {
   const message = error?.message?.toLowerCase() || '';
   
@@ -56,8 +58,6 @@ export const mapDatabaseError = (error: any): string => {
  * Logs errors to console only in development mode
  */
 export const logError = (context: string, error: any): void => {
-  if (import.meta.env.DEV) {
-    console.error(`[${context}]`, error);
-  }
+  logger.error(error?.message || String(error), context, error);
 };
 

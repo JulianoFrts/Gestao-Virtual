@@ -45,13 +45,20 @@ export class PrismaTimeRecordRepository implements TimeRecordRepository {
   async findUserCompanyId(userId: string): Promise<string | null> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { 
+      select: {
         affiliation: {
-          select: { companyId: true }
-        }
+          select: { companyId: true },
+        },
       },
     });
     return user?.affiliation?.companyId || null;
+  }
+
+  async findProjectId(elementId: string): Promise<string | null> {
+    // This might be tricky as TimeRecord doesn't have an elementId directly,
+    // but the service might need it for validation. For now, matching the expected interface.
+    // If elementId refers to a tower/site, we lookup its project.
+    return null;
   }
 
   async update(id: string, data: any): Promise<any> {

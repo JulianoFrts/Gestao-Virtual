@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { requireAuth, requireAdmin } from "@/lib/auth/session";
+import * as authSession from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { TeamService } from "@/modules/teams/application/team.service";
@@ -31,10 +31,14 @@ interface RouteParams {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAuth();
+    await authSession.requireAuth();
     const { id } = await params;
 
     const team = await teamService.getTeamById(id);
+    if (!team) return ApiResponse.notFound("Equipe não encontrada");
+
+    // Validação de Escopo
+    await authSession.requireScope((team as any).companyId, "COMPANY", request);
 
     return ApiResponse.json(team);
   } catch (error) {
@@ -44,8 +48,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAdmin();
+    await authSession.requirePermission("teams.manage", request);
     const { id } = await params;
+
+    const existingTeam = await teamService.getTeamById(id);
+    if (!existingTeam) return ApiResponse.notFound("Equipe não encontrada");
+
+    // Validação de Escopo
+    await authSession.requireScope(
+      (existingTeam as any).companyId,
+      "COMPANY",
+      request,
+    );
 
     const body = await request.json();
     const data = updateTeamSchema.parse(body);
@@ -62,8 +76,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    await requireAdmin();
+    await authSession.requirePermission("teams.manage", request);
     const { id } = await params;
+
+    const existingTeam = await teamService.getTeamById(id);
+    if (!existingTeam) return ApiResponse.notFound("Equipe não encontrada");
+
+    // Validação de Escopo
+    await authSession.requireScope(
+      (existingTeam as any).companyId,
+      "COMPANY",
+      request,
+    );
 
     await teamService.deleteTeam(id);
 

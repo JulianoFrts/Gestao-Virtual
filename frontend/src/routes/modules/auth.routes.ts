@@ -8,5 +8,6 @@ export const authRoutes: RouteConfig[] = [
     path: "/auth",
     element: Auth,
     layout: "desktop",
+    isPublic: true,
   },
 ];

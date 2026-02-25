@@ -1,4 +1,3 @@
-import { logger } from "@/lib/utils/logger";
 import { TowerProductionService } from "./tower-production.service";
 import { TowerConstructionService } from "./tower-construction.service";
 import { TowerActivityService } from "./tower-activity.service";
@@ -60,10 +59,6 @@ export class TowerImportService {
       errors: [],
     };
 
-    logger.info(
-      `[TowerImportService] Iniciando processamento de ${data.length} torres nas 3 tabelas para o projeto ${projectId}`,
-    );
-
     try {
       const siteId =
         defaultSiteId && defaultSiteId !== "none" ? defaultSiteId : null;
@@ -83,6 +78,11 @@ export class TowerImportService {
             towerType: item.towerType || "Autoportante",
             tramoLancamento: item.tramoLancamento || "",
             siteId: item.siteId || siteId,
+            // Campos Técnicos para o Grid de Produção
+            goForward: item.goForward ?? 0,
+            totalConcreto: item.totalConcreto ?? 0,
+            pesoArmacao: item.pesoArmacao ?? 0,
+            pesoEstrutura: item.pesoEstrutura ?? 0,
           },
         };
       });
@@ -138,16 +138,7 @@ export class TowerImportService {
       ]);
 
       results.imported = data.length;
-      logger.info(
-        `[TowerImportService] Sucesso: ${data.length} torres processadas nas 3 tabelas + Skeleton Sync.`,
-      );
     } catch (error: any) {
-      logger.error(
-        `[TowerImportService] Erro fatal no processamento das 3 tabelas`,
-        {
-          error: error.message,
-        },
-      );
       results.failed = data.length;
       results.errors.push({
         item: "3-Table Batch Process",

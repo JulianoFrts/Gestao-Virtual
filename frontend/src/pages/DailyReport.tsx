@@ -1607,7 +1607,7 @@ export default function DailyReport() {
                                       isProgrammed: r.status === DailyReportStatus.PROGRAMMED,
                                       employeeId: r.employeeId || metadata.employeeId || "",
                                       teamIds: r.teamId ? [r.teamId] : [],
-                                      projectId: r.projectId || metadata.projectId,
+                                      projectId: metadata.projectId,
                                       siteId: metadata.siteId,
                                       companyId: r.companyId || undefined,
                                       rdoNumber: r.rdoNumber || undefined,

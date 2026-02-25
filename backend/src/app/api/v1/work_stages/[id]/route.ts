@@ -27,14 +27,23 @@ interface Params {
 // GET: Fetch a single work stage
 export async function GET(req: NextRequest, { params }: Params) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
     const { id } = await params;
 
-    const stages = await service.findAll({ linkedOnly: false });
+    const securityContext = {
+      role: user.role,
+      companyId: user.companyId,
+      hierarchyLevel: (user as any).hierarchyLevel,
+      permissions: (user as any).permissions,
+    };
+
+    // Usando findAll com filtro de id para garantir validação de escopo centralizada (ou poderíamos ler individualmente)
+    // Para simplificar, vou filtrar o findAll que já tem a lógica de companyId
+    const stages = await service.findAll({}, securityContext);
     const stage = stages.find((s) => s.id === id);
 
     if (!stage) {
-      return ApiResponse.notFound("Stage not found");
+      return ApiResponse.notFound("Stage not found or access denied");
     }
 
     return ApiResponse.json(stage);
@@ -49,7 +58,7 @@ export async function GET(req: NextRequest, { params }: Params) {
 // PUT: Update a work stage
 export async function PUT(req: NextRequest, { params }: Params) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
     const { id } = await params;
     const body = await req.json();
     const validation = updateWorkStageSchema.safeParse(body);
@@ -59,10 +68,18 @@ export async function PUT(req: NextRequest, { params }: Params) {
       );
     }
 
-    const stage = await service.update(id, validation.data);
+    const stage = await service.update(id, validation.data, {
+      role: user.role,
+      companyId: user.companyId,
+      hierarchyLevel: (user as any).hierarchyLevel,
+      permissions: (user as any).permissions,
+    });
 
     return ApiResponse.json(stage);
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message.includes("Forbidden")) {
+      return ApiResponse.forbidden(error.message);
+    }
     return handleApiError(
       error,
       "src/app/api/v1/work_stages/[id]/route.ts#PUT",
@@ -73,16 +90,21 @@ export async function PUT(req: NextRequest, { params }: Params) {
 // DELETE: Delete a work stage
 export async function DELETE(req: NextRequest, { params }: Params) {
   try {
-    // Apenas admins podem deletar? (Mantendo lógica original de requireAuth, mas poderia ser requireAdmin)
-    await requireAuth();
+    const user = await requireAuth();
     const { id } = await params;
 
-    // WorkStageService doesn't have a delete method yet, let's create it or use repository
-    // For now using repository as the service is just a thin wrapper for simple CRUD
-    await repository.delete(id);
+    await service.delete(id, {
+      role: user.role,
+      companyId: user.companyId,
+      hierarchyLevel: (user as any).hierarchyLevel,
+      permissions: (user as any).permissions,
+    });
 
     return ApiResponse.json({ success: true }, "Etapa removida com sucesso");
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message.includes("Forbidden")) {
+      return ApiResponse.forbidden(error.message);
+    }
     return handleApiError(
       error,
       "src/app/api/v1/work_stages/[id]/route.ts#DELETE",

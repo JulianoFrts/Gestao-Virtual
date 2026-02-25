@@ -13,7 +13,7 @@ const service = new GanttService(repository);
  */
 export async function GET(req: NextRequest) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get("projectId");
 
@@ -21,13 +21,21 @@ export async function GET(req: NextRequest) {
       return ApiResponse.badRequest("projectId é obrigatório");
     }
 
-    const roots = await service.getGanttData(projectId);
+    const roots = await service.getGanttData(projectId, {
+      role: user.role,
+      companyId: user.companyId,
+      hierarchyLevel: (user as any).hierarchyLevel,
+      permissions: (user as any).permissions,
+    });
 
     return ApiResponse.json({
       projectId,
       stages: roots,
     });
   } catch (error: unknown) {
+    if (error instanceof Error && error.message.includes("Forbidden")) {
+      return ApiResponse.forbidden(error.message);
+    }
     return handleApiError(error, "src/app/api/v1/gantt/route.ts#GET");
   }
 }

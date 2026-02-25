@@ -11,6 +11,18 @@ import { PINO_CONFIG } from "./logger.config";
 
 const pinoInstance = pino(PINO_CONFIG);
 
+// Cores ANSI para o terminal
+const COLORS = {
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  red: "\x1b[31m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  cyan: "\x1b[36m",
+  white: "\x1b[37m",
+  bgRed: "\x1b[41m",
+};
+
 // =============================================
 // API PÚBLICA (Compatibilidade)
 // =============================================
@@ -72,6 +84,50 @@ export const logger = {
       },
       `HTTP ${method} ${path} ${statusCode} (${durationMs}ms)`,
     );
+  },
+
+  /**
+   * Log Padronizado [BACKEND] Status(code) [Method] Path
+   */
+  standard(
+    statusCode: number,
+    method: string,
+    path: string,
+    error?: any,
+    source?: string,
+  ): void {
+    let color = COLORS.white;
+    if (statusCode >= 500) color = COLORS.red;
+    else if (statusCode >= 400) color = COLORS.yellow;
+    else if (statusCode >= 300) color = COLORS.cyan;
+    else if (statusCode >= 200) color = COLORS.green;
+
+    const statusText = `${color}Status(${statusCode})${COLORS.reset}`;
+    const methodText =
+      method !== "N/A" ? `${COLORS.bold}[${method}]${COLORS.reset} ` : "";
+    const pathText = path !== "N/A" ? path : "";
+
+    let logMessage = `${statusText} ${methodText}${pathText}`;
+
+    if (error) {
+      const errorDetail =
+        error instanceof Error ? error.message : String(error);
+      const sourceDetail = source
+        ? ` at ${COLORS.bold}${source}${COLORS.reset}`
+        : "";
+      logMessage += ` | ${COLORS.bgRed}${COLORS.white}${COLORS.bold} ERROR ${COLORS.reset} ${COLORS.red}${errorDetail}${sourceDetail}${COLORS.reset}`;
+    }
+
+    // Usar o console.log diretamente para garantir que as cores apareçam sem interferência do pino-pretty em alguns ambientes
+    // Mas também logar no pino para persistência/auditoria estruturada
+    if (process.env.NODE_ENV === "development") {
+      console.log(logMessage);
+    } else {
+      pinoInstance.info(
+        { statusCode, method, path, source, error },
+        logMessage,
+      );
+    }
   },
 
   /**

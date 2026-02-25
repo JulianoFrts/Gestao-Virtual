@@ -6,13 +6,13 @@ export class AuditLogService {
   async listLogs(params: {
     limit: number;
     skip?: number;
-    isAdmin: boolean;
+    isGlobalAccess: boolean;
     companyId?: string;
   }) {
-    const { limit, skip = 0, isAdmin, companyId } = params;
+    const { limit, skip = 0, isGlobalAccess, companyId } = params;
 
     const where: any = {};
-    if (!isAdmin && companyId) {
+    if (!isGlobalAccess && companyId) {
       where.user = { affiliation: { companyId } };
     }
 
@@ -37,10 +37,10 @@ export class AuditLogService {
     }));
   }
 
-  async countLogs(params: { isAdmin: boolean; companyId?: string }) {
-    const { isAdmin, companyId } = params;
+  async countLogs(params: { isGlobalAccess: boolean; companyId?: string }) {
+    const { isGlobalAccess, companyId } = params;
     const where: any = {};
-    if (!isAdmin && companyId) {
+    if (!isGlobalAccess && companyId) {
       where.user = { affiliation: { companyId } };
     }
     return this.repository.count(where);

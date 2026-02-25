@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { requireAuth, requireAdmin } from "@/lib/auth/session";
+import * as authSession from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { ProjectService } from "@/modules/projects/application/project.service";
@@ -64,9 +64,17 @@ const defaultInclude = {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   try {
-    await requireAuth();
+    await authSession.requireAuth();
 
     const project = await projectService.getProjectById(id, defaultInclude);
+    if (!project) return ApiResponse.notFound("Projeto não encontrado");
+
+    // Validação de Escopo
+    await authSession.requireScope(
+      (project as any).companyId,
+      "COMPANY",
+      request,
+    );
 
     return ApiResponse.json(project);
   } catch (error) {
@@ -78,7 +86,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   try {
-    await requireAdmin();
+    await authSession.requirePermission("projects.manage", request);
+
+    const existingProject = await projectService.getProjectById(id);
+    if (!existingProject) return ApiResponse.notFound("Projeto não encontrado");
+
+    // Validação de Escopo
+    await authSession.requireScope(
+      (existingProject as any).companyId,
+      "COMPANY",
+      request,
+    );
 
     const body = await request.json();
     const data = updateProjectSchema.parse(body);
@@ -115,7 +133,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   try {
-    await requireAdmin();
+    await authSession.requireAdmin(); // Deletar projeto exige admin sistêmico ou alta hierarquia
+
+    const existingProject = await projectService.getProjectById(id);
+    if (!existingProject) return ApiResponse.notFound("Projeto não encontrado");
+
+    // Validação de Escopo (redundante se requireAdmin for GodRole, mas bom para defesa em profundidade)
+    await authSession.requireScope(
+      (existingProject as any).companyId,
+      "COMPANY",
+      request,
+    );
 
     await projectService.deleteProject(id);
 

@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { db } from '@/integrations/database';
+import { orionApi } from '@/integrations/orion/client';
 import { storageService } from '@/services/storageService';
 import { useToast } from '@/hooks/use-toast';
 import { generateId, safeDate } from '@/lib/utils';
@@ -34,33 +34,21 @@ export function useTimeRecords() {
   }) => {
     const localId = generateId();
 
-    // Auth check that works offline
+    // Session check for createdBy
     let userId = null;
     try {
-      const session = await db.auth.getSession();
+      const session = await orionApi.auth.getSession();
       userId = session.data.session?.user?.id || null;
     } catch (e) {
-      console.warn('Network auth check failed, using local fallback');
+      console.warn('Network auth check failed');
     }
 
     if (!userId) {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
-          try {
-            const item = localStorage.getItem(key);
-            if (item) {
-              const parsed = JSON.parse(item);
-              if (parsed.user?.id) {
-                userId = parsed.user.id;
-                break;
-              }
-            }
-          } catch (e) {
-            // ignore
-          }
-        }
-      }
+       // Deep fallback for worker sessions
+       const manualSession = await storageService.getItem('manual_worker_session');
+       if (manualSession) {
+          // Worker session doesn't use the standard user ID in createdBy usually
+       }
     }
 
     const manualSession = await storageService.getItem('manual_worker_session');
@@ -87,28 +75,25 @@ export function useTimeRecords() {
 
     const isOnline = navigator.onLine;
 
-    // Actualiza signal optimista
+    // Signal update (optimistic)
     recordsSignal.value = [newRecord, ...recordsSignal.value];
     await saveToStorage(recordsSignal.value);
 
     if (isOnline) {
       try {
-        const { data: created, error } = await db
+        const { data: created, error } = await orionApi
           .from('time_records')
           .insert({
-            user_id: data.employeeId,
-            team_id: data.teamId || null,
-            company_id: data.companyId || null,
-            record_type: data.recordType,
-            photo_url: data.photoUrl || null,
+            userId: data.employeeId,
+            teamId: data.teamId || null,
+            companyId: data.companyId || null,
+            recordType: data.recordType,
+            photoUrl: data.photoUrl || null,
             latitude: data.latitude ?? null,
             longitude: data.longitude ?? null,
-            recorded_at: (newRecord.recordedAt instanceof Date ? newRecord.recordedAt : new Date(newRecord.recordedAt)).toISOString(),
-            created_by: effectiveUserId,
-            synced_at: new Date().toISOString(),
-            local_id: localId,
+            recordedAt: (newRecord.recordedAt instanceof Date ? newRecord.recordedAt : new Date(newRecord.recordedAt)).toISOString(),
+            localId: localId,
           })
-          .select(`*, user:users!time_records_user_id_fkey(name)`)
           .single();
 
         if (error) throw error;
@@ -117,7 +102,7 @@ export function useTimeRecords() {
           ...newRecord,
           id: created.id,
           employeeName: created.user?.name,
-          syncedAt: new Date(created.synced_at || new Date()),
+          syncedAt: new Date(), // Set as synced
         };
 
         recordsSignal.value = recordsSignal.value.map(r => r.localId === localId ? updatedRecord : r);
@@ -125,11 +110,11 @@ export function useTimeRecords() {
 
         return { success: true, data: updatedRecord };
       } catch (error: any) {
-        console.warn('Online sync failed, falling back to offline mode.');
+        console.warn('Online sync failed, falling back to offline mode.', error);
         await storageService.addToSyncQueue({
           operation: 'insert',
           table: 'time_records',
-          data: { ...data, localId, recordedAt: (newRecord.recordedAt instanceof Date ? newRecord.recordedAt : new Date(newRecord.recordedAt)).toISOString(), createdBy: effectiveUserId },
+          data: { ...data, localId, recordedAt: (newRecord.recordedAt instanceof Date ? newRecord.recordedAt : new Date(newRecord.recordedAt)).toISOString() },
         });
 
         toast({
@@ -143,7 +128,7 @@ export function useTimeRecords() {
       await storageService.addToSyncQueue({
         operation: 'insert',
         table: 'time_records',
-        data: { ...data, localId, recordedAt: (newRecord.recordedAt instanceof Date ? newRecord.recordedAt : new Date(newRecord.recordedAt)).toISOString(), createdBy: effectiveUserId },
+        data: { ...data, localId, recordedAt: (newRecord.recordedAt instanceof Date ? newRecord.recordedAt : new Date(newRecord.recordedAt)).toISOString() },
       });
 
       toast({
@@ -157,18 +142,12 @@ export function useTimeRecords() {
 
   const updateRecord = async (id: string, data: Partial<TimeRecord>) => {
     try {
-      const { error } = await db
+      const { error } = await orionApi
         .from('time_records')
         .update({
-          user_id: data.employeeId,
-          team_id: data.teamId,
-          record_type: data.recordType,
-          photo_url: data.photoUrl,
-          recorded_at: data.recordedAt ? (data.recordedAt instanceof Date ? data.recordedAt : new Date(data.recordedAt)).toISOString() : undefined,
-          latitude: data.latitude,
-          longitude: data.longitude,
-        })
-        .eq('id', id);
+          ...data,
+          id // Ensure ID is passed for the update routing
+        });
 
       if (error) throw error;
 
@@ -201,10 +180,10 @@ export function useTimeRecords() {
 
   const deleteRecord = async (id: string) => {
     try {
-      const { error } = await db
+      const { error } = await orionApi
         .from('time_records')
-        .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .delete();
 
       if (error) throw error;
 
@@ -236,24 +215,14 @@ export function useTimeRecords() {
 
   const bulkUpdateRecords = async (ids: string[], data: Partial<TimeRecord>) => {
     try {
-      const updatePayload: any = {};
-      if (data.photoUrl === null) updatePayload.photo_url = null;
-      if (data.latitude === null) updatePayload.latitude = null;
-      if (data.longitude === null) updatePayload.longitude = null;
-      if (data.recordType) updatePayload.record_type = data.recordType;
-
-      const { error } = await db
-        .from('time_records')
-        .update(updatePayload)
-        .in('id', ids);
-
-      if (error) throw error;
-
-      const updatedRecords = recordsSignal.value.map(r => ids.includes(r.id) ? { ...r, ...data } : r);
-      recordsSignal.value = updatedRecords;
-      await saveToStorage(updatedRecords);
-
-      return { success: true };
+      // orionApi.from().update doesn't natively support bulk by IDs in a single call with standard SDK syntax 
+      // without extra backend support or manual loop. For now, doing sequential or custom RPC if available.
+      // But based on project standards, we usually use orionApi.put directly or bulk endpoint.
+      
+      const results = await Promise.all(ids.map(id => updateRecord(id, data)));
+      const hasError = results.some(r => !r.success);
+      
+      return { success: !hasError };
     } catch (error: any) {
       console.error('Error in bulk update:', error);
       return { success: false, error: error.message };
@@ -262,18 +231,10 @@ export function useTimeRecords() {
 
   const bulkDeleteRecords = async (ids: string[]) => {
     try {
-      const { error } = await db
-        .from('time_records')
-        .delete()
-        .in('id', ids);
-
-      if (error) throw error;
-
-      const updatedRecords = recordsSignal.value.filter(r => !ids.includes(r.id));
-      recordsSignal.value = updatedRecords;
-      await saveToStorage(updatedRecords);
-
-      return { success: true };
+      const results = await Promise.all(ids.map(id => deleteRecord(id)));
+      const hasError = results.some(r => !r.success);
+      
+      return { success: !hasError };
     } catch (error: any) {
       console.error('Error in bulk delete:', error);
       return { success: false, error: error.message };
@@ -285,7 +246,7 @@ export function useTimeRecords() {
     return recordsSignal.value.filter(r => safeDate(r.recordedAt)?.toDateString() === today);
   };
 
-  // Se não tem dados e não está carregando, dispara fetch inicial se ainda não foi feito pelo loader
+  // Initial fetch
   if (recordsSignal.value.length === 0 && !isLoadingRecords.value && !hasTimeRecordsFetchedSignal.value) {
     fetchTimeRecords().catch(console.error);
   }
@@ -302,5 +263,3 @@ export function useTimeRecords() {
     refresh: loadRecords,
   };
 }
-
-

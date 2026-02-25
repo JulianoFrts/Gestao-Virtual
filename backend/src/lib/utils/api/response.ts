@@ -9,6 +9,7 @@ import type {
   ErrorCode,
 } from "@/types/api";
 import { logger } from "@/lib/utils/logger";
+import { RequestContext } from "@/lib/utils/request-context";
 import { ZodError } from "zod";
 import { HTTP_STATUS } from "@/lib/constants";
 
@@ -53,13 +54,12 @@ export class ApiResponse {
       data !== null &&
       (data as any).status === "ok";
 
-    if (!isHealthCheck) {
-      const logData = this.summarizeForLog(data);
-      logger.info(`Response JSON ${status}`, {
+    if (!isHealthCheck && status >= 400) {
+      logger.standard(
         status,
-        message,
-        data: logData,
-      });
+        RequestContext.getMethod(),
+        RequestContext.getPath(),
+      );
     }
 
     return NextResponse.json(responseData, { status });
@@ -73,12 +73,13 @@ export class ApiResponse {
   ): NextResponse {
     const errorData = this.error(message, errors, code);
 
-    // Erros geralmente são pequenos, mas vamos summarizar por segurança
-    const logData = this.summarizeForLog(errorData);
-    logger.warn(`Response Error JSON ${status}`, {
+    logger.standard(
       status,
-      data: logData,
-    });
+      RequestContext.getMethod(),
+      RequestContext.getPath(),
+      message,
+      code,
+    );
 
     return NextResponse.json(errorData, { status });
   }

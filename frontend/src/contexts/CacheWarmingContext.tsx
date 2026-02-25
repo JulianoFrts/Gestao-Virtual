@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, ReactNode } from '
 import { useAuth } from '@/contexts/AuthContext';
 import { useCacheWarming } from '@/hooks/useCacheWarming';
 import { cacheService } from '@/services/cacheService';
+import logger from '@/lib/logger';
 
 interface CacheWarmingContextType {
     warmCache: (force?: boolean) => Promise<void>;
@@ -18,7 +19,7 @@ const CacheWarmingContext = createContext<CacheWarmingContextType | undefined>(u
  * Este provider deve ser usado DENTRO do AuthProvider para ter acesso ao contexto de auth.
  * Automaticamente inicia o cache warming quando detecta um login bem-sucedido.
  */
-export function CacheWarmingProvider({ children }: { children: ReactNode }) {
+export default function CacheWarmingProvider({ children }: { children: ReactNode }) {
     const { user, profile, isLoading } = useAuth();
     const { warmCache, getCacheStatus, clearAllCaches, isWarming } = useCacheWarming();
 
@@ -43,7 +44,7 @@ export function CacheWarmingProvider({ children }: { children: ReactNode }) {
 
             // Executar de forma assíncrona sem bloquear
             warmCache(false).catch(err => {
-                console.error('[CacheWarmingProvider] Cache warming error:', err);
+                logger.error(err?.message || 'Cache warming error', 'CacheWarmingProvider', err);
             });
         } else {
             // Resetar flags quando não há usuário

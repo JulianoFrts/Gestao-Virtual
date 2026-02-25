@@ -45,12 +45,14 @@ export class PrismaSiteRepository implements SiteRepository {
     const where: any = {};
 
     if (params.projectId) {
-      if (!params.isAdmin && params.companyId) {
+      if (!params.isGlobalAccess && params.companyId) {
         where.projectId = params.projectId;
+        // Forçar vínculo com a empresa mesmo se passar projectId
+        where.project = { companyId: params.companyId };
       } else {
         where.projectId = params.projectId;
       }
-    } else if (!params.isAdmin && params.companyId) {
+    } else if (!params.isGlobalAccess && params.companyId) {
       where.project = {
         companyId: params.companyId,
       };
@@ -72,13 +74,14 @@ export class PrismaSiteRepository implements SiteRepository {
     return prisma.site.create({
       data: {
         ...siteData,
-        ...(responsibleIds && responsibleIds.length > 0 && {
-          responsibles: {
-            createMany: {
-              data: responsibleIds.map((userId: string) => ({ userId })),
+        ...(responsibleIds &&
+          responsibleIds.length > 0 && {
+            responsibles: {
+              createMany: {
+                data: responsibleIds.map((userId: string) => ({ userId })),
+              },
             },
-          },
-        }),
+          }),
       },
       include: {
         project: { select: { id: true, name: true } },
@@ -120,7 +123,10 @@ export class PrismaSiteRepository implements SiteRepository {
 
       if (responsibleIds.length > 0) {
         await prisma.siteResponsible.createMany({
-          data: responsibleIds.map((userId: string) => ({ siteId: id, userId })),
+          data: responsibleIds.map((userId: string) => ({
+            siteId: id,
+            userId,
+          })),
           skipDuplicates: true,
         });
       }

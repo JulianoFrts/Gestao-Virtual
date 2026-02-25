@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { requireAuth } from "@/lib/auth/session";
+import * as authSession from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { ProductionFactory } from "@/modules/production/application/production.factory";
@@ -81,7 +81,9 @@ const querySchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const currentUser = await requireAuth();
+    const currentUser = await authSession.requirePermission(
+      "daily_reports.create",
+    );
 
     const searchParams = request.nextUrl.searchParams;
     const query = querySchema.parse({
@@ -116,7 +118,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireAuth();
+    const user = await authSession.requirePermission("daily_reports.create");
+    const { companyId: userCompanyId } = user as any;
 
     const body = await request.json();
     logger.info("[daily_reports POST] Body received", {
@@ -173,11 +176,17 @@ export async function POST(request: NextRequest) {
     if (userIdStr) cleanData.user = { connect: { id: userIdStr } };
 
     const companyIdStr =
-      (user as any).companyId ||
-      rawData.companyId ||
-      rawData.company_id ||
-      (user as any).company_id;
+      userCompanyId || rawData.companyId || rawData.company_id;
+
+    // Validação de Escopo: Usuário comum só pode criar RDO para sua própria empresa
+    await authSession.requireScope(companyIdStr, "COMPANY", request);
+
     if (companyIdStr) cleanData.company = { connect: { id: companyIdStr } };
+
+    // Associar o usuário da sessão como o criador se não especificado
+    if (!cleanData.createdBy) {
+      cleanData.createdBy = (user as any).id;
+    }
 
     // Helper function to remove undefined and null values
     const finalData = Object.fromEntries(

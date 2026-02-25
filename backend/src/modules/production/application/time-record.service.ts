@@ -3,7 +3,7 @@ import { TimeRecordRepository } from "../domain/time-record.repository";
 export class TimeRecordService {
   constructor(private readonly repository: TimeRecordRepository) {}
 
-  async listRecords(params: any) {
+  async listRecords(params: any, securityContext?: any) {
     const {
       page = 1,
       limit = 20,
@@ -18,7 +18,25 @@ export class TimeRecordService {
     const where: Record<string, any> = {};
     if (userId) where.userId = userId;
     if (teamId) where.teamId = teamId;
-    if (companyId) where.companyId = companyId;
+
+    // Multi-tenancy: Se não for Global Admin, forçar empresa do usuário
+    if (securityContext) {
+      const { isGlobalAdmin } = await import("@/lib/auth/session");
+      const isGlobal = isGlobalAdmin(
+        securityContext.role,
+        securityContext.hierarchyLevel,
+        securityContext.permissions,
+      );
+
+      if (!isGlobal) {
+        where.companyId = securityContext.companyId;
+      } else if (companyId) {
+        where.companyId = companyId;
+      }
+    } else if (companyId) {
+      where.companyId = companyId;
+    }
+
     if (startDate || endDate) {
       where.recordedAt = {};
       if (startDate) where.recordedAt.gte = new Date(startDate);
@@ -45,8 +63,23 @@ export class TimeRecordService {
     };
   }
 
-  async createRecord(data: any) {
+  async createRecord(data: any, securityContext?: any) {
     let finalCompanyId = data.companyId;
+
+    // Se vier do segurança de contexto e não for global admin, forçar a própria empresa
+    if (securityContext) {
+      const { isGlobalAdmin } = await import("@/lib/auth/session");
+      const isGlobal = isGlobalAdmin(
+        securityContext.role,
+        securityContext.hierarchyLevel,
+        securityContext.permissions,
+      );
+
+      if (!isGlobal || !finalCompanyId) {
+        finalCompanyId = securityContext.companyId;
+      }
+    }
+
     if (!finalCompanyId) {
       finalCompanyId = await this.repository.findUserCompanyId(data.userId);
     }
@@ -58,12 +91,26 @@ export class TimeRecordService {
     });
   }
 
-  async updateRecord(id: string, data: any) {
-    // Validação básica se o registro existe
+  async updateRecord(id: string, data: any, securityContext?: any) {
     const existing = await this.repository.findById(id);
     if (!existing) throw new Error("Registro de ponto não encontrado");
 
-    // Formatação de data se vier no payload
+    // Validação de Escopo
+    if (securityContext) {
+      const { isGlobalAdmin } = await import("@/lib/auth/session");
+      const isGlobal = isGlobalAdmin(
+        securityContext.role,
+        securityContext.hierarchyLevel,
+        securityContext.permissions,
+      );
+
+      if (!isGlobal && existing.companyId !== securityContext.companyId) {
+        throw new Error(
+          "Forbidden: Não autorizado a alterar registros de outra empresa",
+        );
+      }
+    }
+
     const updateData = { ...data };
     if (updateData.recordedAt) {
       updateData.recordedAt = new Date(updateData.recordedAt);
@@ -72,9 +119,25 @@ export class TimeRecordService {
     return this.repository.update(id, updateData);
   }
 
-  async deleteRecord(id: string) {
+  async deleteRecord(id: string, securityContext?: any) {
     const existing = await this.repository.findById(id);
     if (!existing) throw new Error("Registro de ponto não encontrado");
+
+    // Validação de Escopo
+    if (securityContext) {
+      const { isGlobalAdmin } = await import("@/lib/auth/session");
+      const isGlobal = isGlobalAdmin(
+        securityContext.role,
+        securityContext.hierarchyLevel,
+        securityContext.permissions,
+      );
+
+      if (!isGlobal && existing.companyId !== securityContext.companyId) {
+        throw new Error(
+          "Forbidden: Não autorizado a excluir registros de outra empresa",
+        );
+      }
+    }
 
     return this.repository.delete(id);
   }

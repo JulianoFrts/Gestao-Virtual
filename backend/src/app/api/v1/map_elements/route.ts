@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { requireAuth, isUserAdmin } from "@/lib/auth/session";
+import { requireAuth, isGlobalAdmin } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { Validator } from "@/lib/utils/api/validator";
@@ -48,10 +48,15 @@ export async function GET(request: NextRequest) {
     }
 
     const { projectId, companyId, type } = validation.data as any;
-    const isSystemAdmin = isUserAdmin(user.role);
+    const { isGlobalAdmin } = await import("@/lib/auth/session");
+    const isGlobal = isGlobalAdmin(
+      user.role,
+      (user as any).hierarchyLevel,
+      (user as any).permissions,
+    );
 
     logger.info(
-      `GET /api/v1/map_elements: Session companyId=${user.companyId}, Requested companyId=${companyId}, projectId=${projectId}, Admin=${isSystemAdmin}`,
+      `GET /api/v1/map_elements: Session companyId=${user.companyId}, Requested companyId=${companyId}, projectId=${projectId}, GlobalAdmin=${isGlobal}`,
     );
 
     // If projectId is provided, filter by project (and optionally company)
@@ -66,7 +71,7 @@ export async function GET(request: NextRequest) {
     // Security: For non-admins, require their own company
     const effectiveCompanyId = companyId || user.companyId;
 
-    if (!isSystemAdmin && effectiveCompanyId !== user.companyId) {
+    if (!isGlobal && effectiveCompanyId !== user.companyId) {
       return ApiResponse.forbidden("Acesso negado a dados de outra empresa.");
     }
 
@@ -83,10 +88,10 @@ export async function GET(request: NextRequest) {
     }
 
     // System admins without companyId can get all elements (with limit)
-    if (isSystemAdmin) {
+    if (isGlobal) {
       const elements = await service.getAllElements(type, API.BATCH.LARGE);
       logger.info(
-        `GET /api/v1/map_elements: Admin fetched ${elements.length} elements globally`,
+        `GET /api/v1/map_elements: Global Admin fetched ${elements.length} elements globally`,
       );
       return ApiResponse.json(elements);
     }
@@ -151,9 +156,16 @@ export async function DELETE(request: NextRequest) {
     const id = request.nextUrl.searchParams.get("id");
     const projectId = request.nextUrl.searchParams.get("projectId");
 
-    if (!isUserAdmin(user.role)) {
+    const { isGlobalAdmin } = await import("@/lib/auth/session");
+    const isGlobal = isGlobalAdmin(
+      user.role,
+      (user as any).hierarchyLevel,
+      (user as any).permissions,
+    );
+
+    if (!isGlobal) {
       return ApiResponse.forbidden(
-        "Apenas administradores podem remover elementos.",
+        "Apenas administradores globais podem remover elementos diretamente via API genérica.",
       );
     }
 

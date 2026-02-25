@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { ProductionFactory } from "@/modules/production/application/production.factory";
-import { HTTP_STATUS } from "@/lib/constants";
+import { API, CONSTANTS } from "@/lib/constants";
 
 const service = ProductionFactory.create();
 
@@ -35,9 +35,9 @@ export async function POST(request: NextRequest) {
     if (!elementCompanyId)
       return ApiResponse.notFound("Elemento não encontrado");
 
-    const { isUserAdmin } = await import("@/lib/auth/session");
+    const { isGlobalAdmin } = await import("@/lib/auth/session");
     if (
-      !isUserAdmin(
+      !isGlobalAdmin(
         user.role,
         (user as any).hierarchyLevel,
         (user as any).permissions,
@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
       companyId: user.companyId,
       hierarchyLevel: (user as any).hierarchyLevel,
       permissions: (user as any).permissions,
-    });
+    } as any);
 
     return ApiResponse.json(result);
   } catch (error: any) {

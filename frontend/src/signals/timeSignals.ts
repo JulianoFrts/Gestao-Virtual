@@ -1,5 +1,5 @@
 import { signal } from "@preact/signals-react";
-import { db } from "@/integrations/database";
+import { orionApi } from "@/integrations/orion/client";
 import { storageService } from "@/services/storageService";
 import { safeDate } from "@/lib/utils";
 
@@ -39,13 +39,13 @@ export const fetchTimeRecords = async (force = false) => {
       return;
     }
 
-    const { data, error } = await db
+    const { data, error } = await orionApi
       .from("time_records")
       .select(`
         *,
         user:users!time_records_user_id_fkey(name)
       `)
-      .order('recorded_at', { ascending: false })
+      .order('recordedAt', { ascending: false })
       .limit(100);
 
     if (error) throw error;
@@ -53,21 +53,21 @@ export const fetchTimeRecords = async (force = false) => {
     if (data) {
       const mapped = (data || []).map(r => ({
         id: r.id,
-        employeeId: r.user_id,
-        userId: r.user_id,
+        employeeId: r.userId || r.user_id,
+        userId: r.userId || r.user_id,
         employeeName: r.user?.name,
-        teamId: r.team_id,
-        companyId: (r as any).company_id,
-        recordType: r.record_type as 'entry' | 'exit',
-        type: r.record_type === 'entry' ? 'IN' : 'OUT',
-        photoUrl: r.photo_url,
-        location: r.latitude ? `${r.latitude},${r.longitude}` : 'N/A',
-        latitude: r.latitude,
-        longitude: r.longitude,
-        recordedAt: safeDate(r.recorded_at) || new Date(),
-        createdBy: r.created_by,
-        syncedAt: safeDate(r.synced_at),
-        localId: r.local_id,
+        teamId: r.teamId || r.team_id,
+        companyId: r.companyId || (r as any).company_id,
+        recordType: (r.recordType || r.record_type) as 'entry' | 'exit',
+        type: (r.recordType || r.record_type) === 'entry' ? 'IN' : 'OUT',
+        photoUrl: r.photoUrl || r.photo_url,
+        location: (r.latitude || (r as any).latitude) ? `${r.latitude || (r as any).latitude},${r.longitude || (r as any).longitude}` : 'N/A',
+        latitude: r.latitude || (r as any).latitude,
+        longitude: r.longitude || (r as any).longitude,
+        recordedAt: safeDate(r.recordedAt || r.recorded_at) || new Date(),
+        createdBy: r.createdBy || r.created_by,
+        syncedAt: safeDate(r.syncedAt || r.synced_at) || new Date(),
+        localId: r.localId || r.local_id,
       }) as TimeRecord);
 
       // Merge com não sincronizados locais

@@ -170,6 +170,7 @@ model Company {
   isActive                Boolean                   @default(true) @map("is_active")
   createdAt               DateTime                  @default(now()) @map("created_at")
   updatedAt               DateTime                  @updatedAt @map("updated_at")
+  metadata                Json?                     @default("{}")
   model3DAnchors          Model3DAnchor[]
   constructionDocuments   ConstructionDocument[]
   dailyReports            DailyReport[]
@@ -194,7 +195,7 @@ model Company {
 }
 
 model Conductor {
-  id        String   @id
+  id        String   @id @default(cuid())
   segmentId String   @map("segment_id")
   phase     String
   createdAt DateTime @default(now()) @map("created_at")

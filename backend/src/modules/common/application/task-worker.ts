@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma/client";
 import { TaskStatus } from "@prisma/client";
 import { ITaskHandler } from "../domain/task-handler.interface";
-import { logger } from "@/lib/utils/logger";
 
 export class TaskWorker {
   private handlers: Map<string, ITaskHandler> = new Map();
@@ -14,7 +13,6 @@ export class TaskWorker {
    */
   registerHandler(type: string, handler: ITaskHandler): this {
     this.handlers.set(type, handler);
-    logger.info(`[Worker] Handler registrado para: ${type}`);
     return this;
   }
 
@@ -25,14 +23,11 @@ export class TaskWorker {
     if (this.isRunning) return;
     this.isRunning = true;
 
-    logger.info("🚀 Worker ORION: Iniciando orquestrador DDD...");
-    logger.info(`[Worker] Prisma models available: ${Object.keys(prisma).filter(k => !k.startsWith('$')).join(', ')}`);
-
     while (this.isRunning) {
       try {
         // Tenta capturar uma tarefa atômica mudando de 'pending' para 'processing' em um único passo
         // Isso evita que dois Workers capturem a mesma tarefa simultaneamente
-        const tasks = await prisma.$queryRaw`
+        const tasks = (await prisma.$queryRaw`
           UPDATE "task_queue" 
           SET status = ${TaskStatus.processing}::"TaskStatus", "updated_at" = NOW()
           WHERE id = (
@@ -43,7 +38,7 @@ export class TaskWorker {
             FOR UPDATE SKIP LOCKED
           )
           RETURNING *
-        ` as any[];
+        `) as any[];
 
         const task = tasks && tasks.length > 0 ? tasks[0] : null;
 
@@ -56,7 +51,6 @@ export class TaskWorker {
 
         await this.handleTaskWithStatus(task);
       } catch (error) {
-        logger.error("Critical error in worker loop", { error });
         await new Promise((resolve) =>
           setTimeout(resolve, this.pollInterval * 2),
         );
@@ -69,16 +63,12 @@ export class TaskWorker {
    */
   stop(): void {
     this.isRunning = false;
-    logger.info("[Worker] Parando orquestrador...");
   }
 
   private async handleTaskWithStatus(task: any): Promise<void> {
     const handler = this.handlers.get(task.type);
 
     if (!handler) {
-      logger.warn(
-        `[Worker] Nenhum handler registrado para o tipo: ${task.type}`,
-      );
       await this.markAsFailed(
         task.id,
         `No handler found for type: ${task.type}`,
@@ -87,8 +77,6 @@ export class TaskWorker {
     }
 
     try {
-      logger.info(`[Worker] Executando ${task.type} (${task.id})...`);
-
       // Executa o handler
       await handler.handle(task.payload);
 
@@ -102,12 +90,7 @@ export class TaskWorker {
       } else {
         await prisma.$executeRaw`UPDATE "task_queue" SET status = ${TaskStatus.completed}::"TaskStatus", "updated_at" = NOW() WHERE id = ${task.id}`;
       }
-
-      logger.info(`✅ [Worker] Tarefa ${task.id} concluída.`);
     } catch (error: any) {
-      logger.error(`❌ [Worker] Falha na tarefa ${task.id}`, {
-        error: error.message,
-      });
       await this.markAsFailed(task.id, error.message);
     }
   }
@@ -128,7 +111,7 @@ export class TaskWorker {
         await prisma.$executeRaw`UPDATE "task_queue" SET status = ${TaskStatus.failed}::"TaskStatus", error = ${errorMessage}, "updated_at" = NOW() WHERE id = ${id}`;
       }
     } catch (err) {
-      console.error("Failed to update task status to failed", err);
+      // Silencioso
     }
   }
 }

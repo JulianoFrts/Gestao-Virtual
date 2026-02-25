@@ -6,7 +6,7 @@ export class SiteService {
 
   async listSites(params: FindAllSitesParams) {
     // Validação de acesso ao projeto específico (Regra de Negócio)
-    if (params.projectId && !params.isAdmin && params.companyId) {
+    if (params.projectId && !params.isGlobalAccess && params.companyId) {
       const project = await prisma.project.findFirst({
         where: { id: params.projectId, companyId: params.companyId },
       });

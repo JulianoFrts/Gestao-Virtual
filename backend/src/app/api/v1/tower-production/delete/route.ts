@@ -15,9 +15,16 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { ids, projectId } = body;
 
-    if (!isUserAdmin(user.role)) {
+    const { isGlobalAdmin } = await import("@/lib/auth/session");
+    const isGlobal = isGlobalAdmin(
+      user.role,
+      (user as any).hierarchyLevel,
+      (user as any).permissions,
+    );
+
+    if (!isGlobal) {
       return ApiResponse.forbidden(
-        "Apenas administradores podem remover torres.",
+        "Apenas administradores globais podem remover dados de produção.",
       );
     }
 

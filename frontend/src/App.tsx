@@ -6,13 +6,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { SyncProvider } from "@/contexts/SyncContext";
-import { CacheWarmingProvider } from "@/contexts/CacheWarmingContext";
+import CacheWarmingProvider from "@/contexts/CacheWarmingContext";
 import { ThemeProvider } from "@/components/theme-provider";
 import { useSignals } from "@preact/signals-react/runtime";
 import { LoadingScreen } from "./components/shared/LoadingScreen";
 import { isAppReadySignal } from "./signals/appInitSignals";
 import { GlobalInitializer } from "./components/GlobalInitializer";
 import { RouteRenderer } from "./routes/RouteRenderer";
+import { SecurityInterceptor } from "./components/SecurityInterceptor";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +53,7 @@ const App = () => {
               <SyncProvider>
                 <Toaster />
                 <Sonner />
+                <SecurityInterceptor />
                 <BrowserRouter>
                   <AppRoutes />
                 </BrowserRouter>

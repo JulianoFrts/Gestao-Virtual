@@ -4,7 +4,7 @@
 
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { requireAuth } from "@/lib/auth/session";
+import * as authSession from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { Validator } from "@/lib/utils/api/validator";
 import { paginationQuerySchema } from "@/modules/common/domain/common.schema";
@@ -58,7 +58,7 @@ const querySchema = paginationQuerySchema.extend({
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await requireAuth();
+    const user = await authSession.requireAuth();
 
     const validation = Validator.validateQuery(
       querySchema,
@@ -73,8 +73,8 @@ export async function GET(request: NextRequest) {
       search,
     } = validation.data as any;
 
-    const { isUserAdmin: checkAdmin } = await import("@/lib/auth/session");
-    const isAdmin = checkAdmin(
+    const { isGlobalAdmin } = await import("@/lib/auth/session");
+    const isGlobal = isGlobalAdmin(
       user.role,
       (user as any).hierarchyLevel,
       (user as any).permissions,
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
       limit,
       projectId,
       search,
-      isAdmin,
+      isGlobalAccess: isGlobal,
       companyId: user.companyId || undefined,
     });
 
@@ -100,16 +100,37 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { can } = await import("@/lib/auth/permissions");
-    if (!(await can("sites.manage"))) {
-      return ApiResponse.forbidden("Sem permissão para gerenciar canteiros");
-    }
+    const user = await authSession.requirePermission("sites.manage", request);
 
     const body = await request.json();
     const validation = Validator.validate(createSiteSchema, body);
     if (!validation.success) return validation.response;
 
-    const site = await service.createSite(validation.data);
+    const data = validation.data as any;
+
+    // Validação de Escopo: Verificar se o projeto alvo pertence à mesma empresa do usuário
+    // Se o usuário não for admin sistêmico, forçamos o filtro pela empresa dele no service
+    if (
+      !authSession.isUserAdmin(
+        (user as any).role,
+        (user as any).hierarchyLevel,
+        (user as any).permissions,
+      )
+    ) {
+      // O service já faz validação de projeto dentro do listSites, mas no createSite
+      // precisamos garantir que o projectId fornecido pertença à empresa do usuário logado.
+      const { prisma } = await import("@/lib/prisma/client");
+      const project = await prisma.project.findFirst({
+        where: { id: data.projectId, companyId: (user as any).companyId },
+      });
+      if (!project) {
+        return ApiResponse.forbidden(
+          "Projeto não encontrado ou você não tem permissão para adicionar canteiros neste projeto.",
+        );
+      }
+    }
+
+    const site = await service.createSite(data);
 
     logger.info("Site criado", { siteId: site.id });
 

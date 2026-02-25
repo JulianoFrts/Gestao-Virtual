@@ -1,3 +1,4 @@
+import { prisma } from "@/lib/prisma/client";
 import { GanttRepository } from "../domain/gantt.repository";
 
 export type GanttNode = {
@@ -17,7 +18,28 @@ export type GanttNode = {
 export class GanttService {
   constructor(private readonly repository: GanttRepository) {}
 
-  public async getGanttData(projectId: string): Promise<GanttNode[]> {
+  public async getGanttData(
+    projectId: string,
+    securityContext?: any,
+  ): Promise<GanttNode[]> {
+    // Validação de Escopo
+    if (securityContext) {
+      const { isGlobalAdmin } = await import("@/lib/auth/session");
+      const isGlobal = isGlobalAdmin(
+        securityContext.role,
+        securityContext.hierarchyLevel,
+        securityContext.permissions,
+      );
+
+      if (!isGlobal) {
+        const project = await prisma.project.findFirst({
+          where: { id: projectId, companyId: securityContext.companyId },
+        });
+        if (!project)
+          throw new Error("Forbidden: Projeto não pertence à sua empresa");
+      }
+    }
+
     const [stages, schedules] = await Promise.all([
       this.repository.listWorkStagesByProject(projectId),
       this.repository.listSchedulesByProject(projectId),
@@ -29,7 +51,7 @@ export class GanttService {
 
     // Build flat map of nodes
     for (const stage of stages) {
-      const latestProgress = stage.progress?.[0];
+      const latestProgress = stage.stageProgress?.[0]; // Corrigido de .progress para .stageProgress conforme repositório
       const activityId = stage.productionActivityId;
       const schedule = activityId ? scheduleMap.get(activityId) : undefined;
 
@@ -37,7 +59,7 @@ export class GanttService {
         id: stage.id,
         name: stage.name,
         parentId: stage.parentId,
-        categoryName: stage.productionActivity?.category?.name || null,
+        categoryName: stage.activity?.productionCategory?.name || null, // Corrigido caminho do include
         weight: Number(stage.weight || 1),
         progress: Number(latestProgress?.actualPercentage || 0),
         plannedStart: schedule?.start?.toISOString() || null,

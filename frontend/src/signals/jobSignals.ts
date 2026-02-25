@@ -50,7 +50,12 @@ export const removeJob = (jobId: string) => {
 /**
  * Monitora um job específico via polling e atualiza os sinais
  */
+const activeMonitors = new Map<string, NodeJS.Timeout>();
+
 export const monitorJob = async (jobId: string) => {
+  // 🔒 Se já está monitorando, não cria outro
+  if (activeMonitors.has(jobId)) return;
+
   const checkStatus = async () => {
     try {
       const { data: job, error } = await db
@@ -59,17 +64,15 @@ export const monitorJob = async (jobId: string) => {
         .eq("id", jobId)
         .single();
 
-      if (error) {
-        console.error("[Signals] Error fetching job status:", error);
-        return false;
-      }
+      if (error || !job) return false;
 
-      if (!job) return false;
       updateJobState(jobId, job);
 
       if (job.status === "completed") {
         const batchInfo = job.payload?.batchInfo;
-        const isLastBatch = batchInfo ? batchInfo.current === batchInfo.total : true;
+        const isLastBatch = batchInfo
+          ? batchInfo.current === batchInfo.total
+          : true;
 
         if (isLastBatch) {
           toast({
@@ -78,7 +81,9 @@ export const monitorJob = async (jobId: string) => {
           });
         }
 
-        // Remove do monitor após 5 segundos
+        clearInterval(activeMonitors.get(jobId)!);
+        activeMonitors.delete(jobId);
+
         setTimeout(() => removeJob(jobId), 5000);
         return true;
       }
@@ -90,7 +95,9 @@ export const monitorJob = async (jobId: string) => {
           variant: "destructive",
         });
 
-        // Mantém um pouco mais para o usuário ver o erro
+        clearInterval(activeMonitors.get(jobId)!);
+        activeMonitors.delete(jobId);
+
         setTimeout(() => removeJob(jobId), 10000);
         return true;
       }
@@ -102,13 +109,17 @@ export const monitorJob = async (jobId: string) => {
     }
   };
 
-  // Executa a primeira checagem imediatamente
+  // Primeira checagem
   const finished = await checkStatus();
   if (finished) return;
 
-  // Inicia o polling
   const interval = setInterval(async () => {
-    const isDone = await checkStatus();
-    if (isDone) clearInterval(interval);
+    const done = await checkStatus();
+    if (done) {
+      clearInterval(interval);
+      activeMonitors.delete(jobId);
+    }
   }, 3000);
+
+  activeMonitors.set(jobId, interval);
 };

@@ -13,7 +13,7 @@ const workStageService = new WorkStageService(new PrismaWorkStageRepository());
  */
 export async function GET(req: NextRequest) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
 
     const { searchParams } = new URL(req.url);
     const siteId = searchParams.get("siteId");
@@ -21,12 +21,20 @@ export async function GET(req: NextRequest) {
     const companyId = searchParams.get("companyId");
     const linkedOnly = searchParams.get("linkedOnly") === "true";
 
-    const stages = await workStageService.findAll({
-      siteId,
-      projectId,
-      companyId,
-      linkedOnly
-    });
+    const stages = await workStageService.findAll(
+      {
+        siteId,
+        projectId,
+        companyId,
+        linkedOnly,
+      },
+      {
+        role: user.role,
+        companyId: user.companyId,
+        hierarchyLevel: (user as any).hierarchyLevel,
+        permissions: (user as any).permissions,
+      },
+    );
 
     return ApiResponse.json(stages);
   } catch (error) {
@@ -40,16 +48,25 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    await requireAuth();
+    const user = await requireAuth();
     const body = await req.json();
 
-    // O Service agora cuida da normalização, validação de UUID e existência
-    const stage = await workStageService.createStage(body);
+    const stage = await workStageService.createStage(body, {
+      role: user.role,
+      companyId: user.companyId,
+      hierarchyLevel: (user as any).hierarchyLevel,
+      permissions: (user as any).permissions,
+    });
 
     return ApiResponse.created(stage, "Etapa criada com sucesso");
   } catch (error: any) {
-    // Tratamento de mensagens específicas lançadas pelo Service
-    if (error.message === "Name is required" || error.message === "Site ID or Project ID is required") {
+    if (error.message.includes("Forbidden")) {
+      return ApiResponse.forbidden(error.message);
+    }
+    if (
+      error.message === "Name is required" ||
+      error.message === "Site ID or Project ID is required"
+    ) {
       return ApiResponse.badRequest(error.message);
     }
     return handleApiError(error, "src/app/api/v1/work_stages/route.ts#POST");

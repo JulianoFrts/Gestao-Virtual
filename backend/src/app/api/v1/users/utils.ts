@@ -4,7 +4,8 @@ import {
   userFiltersSchema,
 } from "@/lib/utils/validators/schemas";
 import { CONSTANTS } from "@/lib/constants";
-import { isGodRole, SECURITY_RANKS } from "@/lib/constants/security";
+import { isGlobalAdmin } from "@/lib/auth/utils";
+import { SECURITY_RANKS } from "@/lib/constants/security";
 import { ApiResponse } from "@/lib/utils/api/response";
 import { UserService } from "@/modules/users/application/user.service";
 
@@ -103,24 +104,29 @@ export function applyHierarchySecurity(
   currentUser: any,
   isAdmin: boolean,
 ) {
-  if (!isAdmin) {
+  // 1. Verificamos se o usuário é Global (pode ver tudo)
+  const isGlobal = isGlobalAdmin(
+    currentUser.role,
+    (currentUser as any).hierarchyLevel,
+    (currentUser as any).permissions,
+  );
+
+  // 2. Se não for Global, forçamos o isolamento por Company ou Project
+  if (!isGlobal) {
     if (currentUser.companyId) {
       where.affiliation = { companyId: currentUser.companyId };
     } else if (currentUser.projectId) {
       where.affiliation = { projectId: currentUser.projectId };
-    } else {
+    } else if (!isAdmin) {
+      // Usuário comum sem empresa/projeto fixo só vê a si mesmo
       where.id = currentUser.id;
     }
-  } else {
-    const isGod =
-      isGodRole(currentUser.role || "") ||
-      (currentUser as any).hierarchyLevel >= SECURITY_RANKS.MASTER;
+  }
 
-    if (!isGod) {
-      const myLevel =
-        (currentUser as any).hierarchyLevel || SECURITY_RANKS.ADMIN;
-      where.hierarchyLevel = { lte: myLevel };
-    }
+  // 3. Restrição de Hierarquia (Admins não vêem ranks superiores a eles)
+  if (isAdmin && !isGlobal) {
+    const myLevel = (currentUser as any).hierarchyLevel || SECURITY_RANKS.ADMIN;
+    where.hierarchyLevel = { lte: myLevel };
   }
 }
 

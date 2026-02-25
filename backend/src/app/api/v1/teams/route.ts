@@ -4,7 +4,7 @@
 
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { requireAuth } from "@/lib/auth/session";
+import * as authSession from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 
@@ -50,7 +50,7 @@ export async function HEAD() {
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await requireAuth();
+    const user = await authSession.requireAuth();
 
     const validation = Validator.validateQuery(
       querySchema,
@@ -67,8 +67,8 @@ export async function GET(request: NextRequest) {
       isActive,
     } = validation.data as any;
 
-    const { isUserAdmin: checkAdmin } = await import("@/lib/auth/session");
-    const isAdmin = checkAdmin(
+    const { isGlobalAdmin } = await import("@/lib/auth/session");
+    const isGlobal = isGlobalAdmin(
       user.role,
       (user as any).hierarchyLevel,
       (user as any).permissions,
@@ -78,7 +78,9 @@ export async function GET(request: NextRequest) {
     const serviceParams: any = {
       page,
       limit,
-      companyId: isAdmin ? companyId || undefined : user.companyId || undefined,
+      companyId: isGlobal
+        ? companyId || undefined
+        : user.companyId || undefined,
       siteId,
       projectId,
       isActive:
@@ -95,16 +97,19 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { can } = await import("@/lib/auth/permissions");
-    if (!(await can("teams.manage"))) {
-      return ApiResponse.forbidden("Sem permissão para gerenciar equipes");
-    }
-
+    const user = await authSession.requirePermission("teams.manage", request);
     const body = await request.json();
     const validation = Validator.validate(createTeamSchema, body);
     if (!validation.success) return validation.response;
 
     const data = validation.data as any;
+
+    // Validação de Escopo: Usuário só pode criar equipe para sua própria empresa (se não for admin sistêmico)
+    const targetCompanyId = data.companyId || (user as any).companyId;
+    await authSession.requireScope(targetCompanyId, "COMPANY", request);
+
+    // Garantir que a equipe seja criada vinculada à empresa correta
+    data.companyId = targetCompanyId;
 
     const team = await service.createTeam(data);
 
