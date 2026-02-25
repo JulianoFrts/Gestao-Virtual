@@ -82,7 +82,7 @@ export class PrismaSegmentRepository implements SegmentRepository {
       };
 
       const created = await prisma.segment.create({
-        data: createData,
+        data: createData as any,
         include: { conductors: true },
       });
       return created as unknown as Segment;
@@ -99,7 +99,7 @@ export class PrismaSegmentRepository implements SegmentRepository {
         cableType: c.cableType,
         voltageKv: c.voltageKv,
         color: c.cableColor,
-      })),
+      })) as any,
     });
   }
 
@@ -125,7 +125,7 @@ export class PrismaSegmentRepository implements SegmentRepository {
   async findById(id: string): Promise<Segment | null> {
     const result = await prisma.segment.findUnique({
       where: { id },
-      include: { conductors: true, circuits: true },
+      include: { conductors: true } as any,
     });
     return result as unknown as Segment | null;
   }

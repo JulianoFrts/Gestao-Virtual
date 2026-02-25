@@ -2,8 +2,7 @@ import React from 'react';
 import { usePermissions, UserPermission } from '@/hooks/usePermissions';
 import { toast } from '@/hooks/use-toast';
 import { Lock } from 'lucide-react';
-import { simulationRoleSignal, isMapperModeActiveSignal } from '@/signals/authSignals';
-import { useSignals } from '@preact/signals-react/runtime';
+import { useAuth } from '@/contexts/AuthContext';
 
 export type AccessMode = 'hide' | 'lock' | 'read-only' | 'mask' | 'disabled';
 
@@ -34,9 +33,8 @@ export const Access: React.FC<AccessProps> = ({
     fallback = null,
     rules = []
 }) => {
-    useSignals();
+    const { isMapperActive } = useAuth();
     const { canAll, canAny } = usePermissions();
-    const isMapperActive = isMapperModeActiveSignal.value;
 
     // Normalização: Se auth/mode forem passados via props legadas, transformamos em regra
     const effectiveRules: AccessRule[] = rules.length > 0 

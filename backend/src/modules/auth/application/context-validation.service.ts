@@ -10,16 +10,12 @@ export interface SelectionContext {
 
 export class ContextValidationService {
   /**
-   * Define quais níveis de acesso são considerados "Gestão Global"
+   * Define quais níveis de acesso são considerados "Gestão Global" (Novas Roles Técnicas)
    */
   private readonly GLOBAL_MANAGEMENT_ROLES: Role[] = [
-    "HELPER_SYSTEM",
     "SUPER_ADMIN_GOD",
-    "SOCIO_DIRETOR",
-    "ADMIN",
-    "TI_SOFTWARE",
-    "MANAGER",
-    "MODERATOR",
+    "SYSTEM_ADMIN",
+    "COMPANY_ADMIN",
   ];
 
   /**
@@ -48,15 +44,15 @@ export class ContextValidationService {
       return { isValid: true };
     }
 
-    // 2. GESTOR_PROJECT: Deve escolher dentro da sua Empresa (ou a empresa vinculada)
-    if (role === "GESTOR_PROJECT") {
+    // 2. PROJECT_MANAGER: Deve escolher dentro da sua Empresa
+    if (role === "PROJECT_MANAGER") {
       if (!context.projectId)
         return {
           isValid: false,
           error: "Projeto é obrigatório para Gestor de Projeto.",
         };
 
-      // Se já tem afiliação, valida se o projeto pertence à empresa/projeto dele
+      // Se já tem afiliação, valida se o projeto pertence à empresa dele
       if (
         user.affiliation?.companyId &&
         context.companyId &&
@@ -70,16 +66,11 @@ export class ContextValidationService {
       return { isValid: true };
     }
 
-    // 3. GESTOR_CANTEIRO e SUPERVISOR: Escolhem o Canteiro
-    if (role === "GESTOR_CANTEIRO" || role === "SUPERVISOR") {
-      if (!context.siteId)
-        return {
-          isValid: false,
-          error: "Canteiro é obrigatório para seu nível de acesso.",
-        };
-
-      // Valida se o canteiro pertence ao projeto dele
+    // 3. SITE_MANAGER e SUPERVISOR: Escolhem o Canteiro
+    if (role === "SITE_MANAGER" || role === "SUPERVISOR") {
+      // Valida se o canteiro (se enviado) pertence ao projeto dele
       if (
+        context.siteId &&
         user.affiliation?.projectId &&
         context.projectId &&
         user.affiliation.projectId !== context.projectId
@@ -183,7 +174,7 @@ export class ContextValidationService {
     }
 
     // Gestor de Projeto: Projetos da sua empresa
-    if (role === "GESTOR_PROJECT" && aff?.companyId) {
+    if (role === "PROJECT_MANAGER" && aff?.companyId) {
       const projects = await prisma.project.findMany({
         where: { companyId: aff.companyId, status: "active" },
         select: { id: true, name: true, companyId: true },
@@ -193,7 +184,7 @@ export class ContextValidationService {
 
     // Gestor de Canteiro/Supervisor: Canteiros do seu projeto
     if (
-      (role === "GESTOR_CANTEIRO" || role === "SUPERVISOR") &&
+      (role === "SITE_MANAGER" || role === "SUPERVISOR") &&
       aff?.projectId
     ) {
       const sites = await prisma.site.findMany({

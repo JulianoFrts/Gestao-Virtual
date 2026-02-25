@@ -98,7 +98,7 @@ export async function DELETE(request: NextRequest) {
           ...user,
           hierarchyLevel: (user as any).hierarchyLevel,
           permissions: (user as any).permissions,
-        },
+        } as any,
       );
       return ApiResponse.json(result);
     }
@@ -124,7 +124,7 @@ export async function DELETE(request: NextRequest) {
           ...user,
           hierarchyLevel: (user as any).hierarchyLevel,
           permissions: (user as any).permissions,
-        },
+        } as any,
       );
 
       return ApiResponse.json(result);

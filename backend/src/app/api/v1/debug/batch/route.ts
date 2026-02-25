@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       select: { externalId: true, sequence: true },
     });
 
-    const externalIds = legacyElements.map((e) => e.externalId);
+    const externalIds = legacyElements.map((e: any) => e.externalId);
 
     const towers = await prisma.towerProduction.findMany({
       where: { towerId: { in: externalIds } },
@@ -34,10 +34,10 @@ export async function GET(request: NextRequest) {
 
     // Check what is missing
     const towerMissing = externalIds.filter(
-      (id) => !towers.some((t) => t.towerId === id),
+      (id: string) => !towers.some((t: any) => t.towerId === id),
     );
     const tcMissing = externalIds.filter(
-      (id) => !constructions.some((t) => t.towerId === id),
+      (id: string) => !constructions.some((t: any) => t.towerId === id),
     );
 
     return ApiResponse.json({

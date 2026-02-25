@@ -42,7 +42,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { dailyReportDraftSignal, initReportDraft, updateReportDraft } from "@/signals/dailyReportSignals";
+import { useDailyReportContext } from "@/contexts/DailyReportContext";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -52,18 +52,19 @@ export default function RDOHistory() {
   const { user } = useAuth();
   const { reports, isLoading, refresh } = useDailyReports();
   const { toast } = useToast();
+  const dailyReport = useDailyReportContext();
   const [searchTerm, setSearchTerm] = React.useState("");
   const [activeTab, setActiveTab] = React.useState("all");
 
   React.useEffect(() => {
-    initReportDraft();
+    // We can potentially call a refresh if needed, but context handles its own init
   }, []);
 
   const handleCorrect = (report: any) => {
     const metadata = report.metadata || {};
     
     // Mapear o relatório do backend para o formato do Draft
-    updateReportDraft({
+    dailyReport.updateReportDraft({
       editingReportId: report.id,
       isCorrection: true,
       employeeId: report.employeeId,
@@ -92,8 +93,8 @@ export default function RDOHistory() {
   // Filter real reports from server
   const myReports = reports.filter(r => r.employeeId === user?.id || (r as any).userId === user?.id);
   
-  // Get draft from signal
-  const draft = dailyReportDraftSignal.value;
+  // Get draft from context
+  const { draft } = dailyReport;
   const hasDraft = draft && draft.updatedAt > 0 && draft.selectedActivities.length > 0;
 
   const filteredReports = myReports.filter(r => {
@@ -227,8 +228,7 @@ export default function RDOHistory() {
                            className="rounded-xl h-12 w-12 text-white/40 hover:text-white hover:bg-white/5"
                            onClick={() => {
                              if (confirm("Deseja realmente excluir este rascunho?")) {
-                               // Simular deleção limpando sinal
-                               dailyReportDraftSignal.value = { ...dailyReportDraftSignal.value, selectedActivities: [] };
+                               dailyReport.resetReportDraft();
                              }
                            }}
                          >

@@ -1,8 +1,18 @@
-import { ProductionProgressRepository } from "../domain/production.repository";
+import {
+  ProductionProgressRepository,
+  DailyProductionRecord,
+} from "../domain/production.repository";
 import { ProjectElementRepository } from "../domain/project-element.repository";
 import { ProductionProgress } from "../domain/production-progress.entity";
 import { logger } from "@/lib/utils/logger";
+import { TimeProvider } from "@/lib/utils/time-provider";
 import { RecordDailyProductionDTO } from "./dtos/record-daily-production.dto";
+
+export interface DailyProductionListItem extends DailyProductionRecord {
+  workDate: string;
+  elementId: string;
+  activityId: string;
+}
 
 export class DailyProductionService {
   private readonly logContext = {
@@ -12,6 +22,7 @@ export class DailyProductionService {
   constructor(
     private readonly progressRepository: ProductionProgressRepository,
     private readonly elementRepository: ProjectElementRepository,
+    private readonly timeProvider: TimeProvider,
   ) {}
 
   async recordDailyProduction(
@@ -49,11 +60,11 @@ export class DailyProductionService {
     return new ProductionProgress(saved);
   }
 
-  async getElementCompanyId(elementId: string) {
+  async getElementCompanyId(elementId: string): Promise<string | null> {
     return this.elementRepository.findCompanyId(elementId);
   }
 
-  async getElementProjectId(elementId: string) {
+  async getElementProjectId(elementId: string): Promise<string | null> {
     return this.elementRepository.findProjectId(elementId);
   }
 
@@ -66,7 +77,7 @@ export class DailyProductionService {
       hierarchyLevel?: number;
       permissions?: Record<string, boolean>;
     },
-  ) {
+  ): Promise<DailyProductionListItem[]> {
     const progress = await this.progressRepository.findProgress(
       towerId,
       activityId,
@@ -91,11 +102,13 @@ export class DailyProductionService {
 
     const daily = progress.dailyProduction || {};
 
-    return Object.entries(daily).map(([date, data]: [string, any]) => ({
-      workDate: date,
-      ...data,
-      elementId: progress.elementId,
-      activityId: progress.activityId,
-    }));
+    return Object.entries(daily).map(
+      ([date, data]: [string, DailyProductionRecord]) => ({
+        workDate: date,
+        ...data,
+        elementId: progress.elementId,
+        activityId: progress.activityId,
+      }),
+    );
   }
 }

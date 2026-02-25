@@ -1,9 +1,21 @@
+import {
+  DailyReportEntity,
+  CreateDailyReportDTO,
+  UpdateDailyReportDTO,
+  DailyReportFiltersDTO,
+} from "./daily-report.dto";
+
 export interface DailyReportRepository {
-  findAll(where: any, skip: number, take: number, orderBy: any): Promise<any[]>;
-  count(where: any): Promise<number>;
-  findById(id: string): Promise<any | null>;
-  create(data: any): Promise<any>;
-  update(id: string, data: any): Promise<any>;
-  updateMany(ids: string[], data: any): Promise<any>;
-  findAllMinimal(ids: string[]): Promise<any[]>;
+  findAll(params: {
+    where?: DailyReportFiltersDTO;
+    skip?: number;
+    take?: number;
+    orderBy?: Record<string, "asc" | "desc">;
+  }): Promise<DailyReportEntity[]>;
+  count(where: Record<string, any>): Promise<number>;
+  findById(id: string): Promise<DailyReportEntity | null>;
+  create(data: CreateDailyReportDTO): Promise<DailyReportEntity>;
+  update(id: string, data: UpdateDailyReportDTO): Promise<DailyReportEntity>;
+  updateMany(ids: string[], data: UpdateDailyReportDTO): Promise<any>;
+  findAllMinimal(ids: string[]): Promise<DailyReportEntity[]>;
 }

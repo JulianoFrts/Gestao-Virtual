@@ -1,29 +1,33 @@
 import { prisma } from "@/lib/prisma/client";
-import { TaskQueue, TaskStatus } from "@prisma/client";
+import { TaskStatus, Prisma } from "@prisma/client";
 import { ITaskRepository } from "../domain/task.repository";
+import { TaskEntity } from "../domain/task.dto";
 
 export class PrismaTaskRepository implements ITaskRepository {
-  async create(type: string, payload: any): Promise<TaskQueue> {
+  async create(
+    type: string,
+    payload: Record<string, unknown> | unknown[],
+  ): Promise<TaskEntity> {
     return prisma.taskQueue.create({
       data: {
         type,
-        payload: payload || {},
+        payload: (payload || {}) as unknown as Prisma.InputJsonValue,
         status: "pending" as TaskStatus,
       },
-    });
+    }) as Promise<TaskEntity>;
   }
 
-  async findById(id: string): Promise<TaskQueue | null> {
+  async findById(id: string): Promise<TaskEntity | null> {
     return prisma.taskQueue.findUnique({
       where: { id },
-    });
+    }) as Promise<TaskEntity | null>;
   }
 
   async updateStatus(
     id: string,
     status: string,
     error?: string,
-  ): Promise<TaskQueue> {
+  ): Promise<TaskEntity> {
     return prisma.taskQueue.update({
       where: { id },
       data: {
@@ -31,20 +35,20 @@ export class PrismaTaskRepository implements ITaskRepository {
         error: error || null,
         updatedAt: new Date(),
       },
-    });
+    }) as Promise<TaskEntity>;
   }
 
-  async findPending(): Promise<TaskQueue | null> {
+  async findPending(): Promise<TaskEntity | null> {
     return prisma.taskQueue.findFirst({
       where: { status: "pending" },
       orderBy: { createdAt: "asc" },
-    });
+    }) as Promise<TaskEntity | null>;
   }
 
-  async listRecent(limit: number): Promise<TaskQueue[]> {
+  async listRecent(limit: number): Promise<TaskEntity[]> {
     return prisma.taskQueue.findMany({
       take: limit,
       orderBy: { createdAt: "desc" },
-    });
+    }) as Promise<TaskEntity[]>;
   }
 }

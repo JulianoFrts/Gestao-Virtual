@@ -45,28 +45,8 @@ import {
   Briefcase,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-    isProtectedSignal, 
-    simulationRoleSignal,
-    permissionsSignal, 
-    uiSignal,
-    realPermissionsSignal,
-    realUiSignal,
-    selectedContextSignal,
-    can
-} from "@/signals/authSignals";
-import { useSignals } from "@preact/signals-react/runtime";
-
-import { 
-    logoUrlSignal, 
-    logoWidthSignal, 
-    initSettings, 
-    saveSettings, 
-    isLoadingSettingsSignal,
-    appNameSignal,
-    appIconUrlSignal
-} from "@/signals/settingsSignals";
-import { loaderConcurrencySignal } from "@/signals/loaderSignals";
+import { useSettings } from "@/contexts/SettingsContext";
+import { useLoader } from "@/contexts/LoaderContext";
 import { getRoleStyle, getRoleLabel, STANDARD_ROLES } from "@/utils/roleUtils";
 import { cn } from "@/lib/utils";
 import { Users, Eye, LogOut as LogOutIcon } from 'lucide-react';
@@ -89,15 +69,23 @@ import {
 import { MoreVertical } from "lucide-react";
 
 export default function Settings() {
-  useSignals();
-  const { user, profile, logout, disableMfa, refreshProfile, selectContext } = useAuth();
+  const { 
+    user, profile, logout, disableMfa, refreshProfile, selectContext, changePassword,
+    simulationRole, startSimulation, stopSimulation, can, isProtected, selectedContext
+  } = useAuth();
+  const { 
+    logoUrl, logoWidth, appName, appIconUrl, isLoading: isLoadingSettings, saveSettings 
+  } = useSettings();
+  const { concurrency, setConcurrency } = useLoader();
+
   const queryClient = useQueryClient();
   const { isOnline, pendingChanges, syncNow } = useSync();
   const { companies } = useCompanies();
   const { updateUser } = useUsers();
   const { toast } = useToast();
-  const [localConcurrency, setLocalConcurrency] = React.useState(loaderConcurrencySignal.value);
-  const [localLogoWidth, setLocalLogoWidth] = React.useState(logoWidthSignal.value);
+  
+  const [localConcurrency, setLocalConcurrency] = React.useState(concurrency);
+  const [localLogoWidth, setLocalLogoWidth] = React.useState(logoWidth);
   const { sendMessage, checkPasswordPermission, consumePasswordPermission } =
     useMessages();
 
@@ -146,11 +134,9 @@ export default function Settings() {
     variant: "default",
   });
 
-  const { changePassword } = useAuth();
-
   const displayName =
     profile?.fullName || user?.email?.split("@")[0] || "Usuário";
-  const isSuper = isProtectedSignal.value;
+  const isSuper = isProtected;
   console.log(isSuper);
 
   // Verificar permissão de alteração de senha ao abrir o dialog
@@ -181,88 +167,12 @@ export default function Settings() {
     };
   }, [showCountdown, countdown, logout]);
   
-  const handleStartSimulation = async (role: string) => {
-      try {
-          // Backup permissões reais se ainda não houver backup
-          if (!realPermissionsSignal.value) {
-              realPermissionsSignal.value = { ...permissionsSignal.value };
-              realUiSignal.value = { ...uiSignal.value };
-          }
-
-          // Se for um God Role simulado, damos wildcard total
-          const GodRoles = ['SUPER_ADMIN_GOD', 'HELPER_SYSTEM'];
-          if (GodRoles.includes(role.toUpperCase())) {
-              permissionsSignal.value = { '*': true, 'system.full_access': true, 'system.is_protected': true };
-              uiSignal.value = { showAdminMenu: true, showSettings: true };
-          } else {
-              // Caso contrário, BUSCAMOS NO BACKEND (No Bypass!)
-              toast({ title: 'Simulando...', description: `Carregando permissões do papel ${getRoleLabel(role)}...` });
-              
-              const [levelsRes, modulesRes, matrixRes] = await Promise.all([
-                  localApi.from('permission_levels').select('*'),
-                  localApi.from('permission_modules').select('*'),
-                  localApi.from('permission_matrix').select('*').eq('is_granted', true)
-              ]);
-
-              if (levelsRes.data && modulesRes.data && matrixRes.data) {
-                  const targetLevel = levelsRes.data.find((l: any) => l.name.toUpperCase() === role.toUpperCase());
-                  
-                  if (targetLevel) {
-                      const simulatedPerms: Record<string, boolean> = {};
-                      const simulatedUi: Record<string, boolean> = {};
-
-                      const relevantMatrix = (matrixRes.data as any[]).filter(m => m.level_id === targetLevel.id && m.is_granted === true);
-                      
-                      relevantMatrix.forEach(item => {
-                          const mod = (modulesRes.data as any[]).find(m => m.id === item.module_id);
-                          if (mod) {
-                              simulatedPerms[mod.code] = true;
-                              // Se for permissão de UI, jogamos no UI signal também
-                              if (mod.code.startsWith('ui.') || mod.code.endsWith('.view') || mod.code.includes('access')) {
-                                  simulatedUi[mod.code] = true;
-                                  if (mod.code === 'ui.admin_access') simulatedUi['showAdminMenu'] = true;
-                              }
-                          }
-                      });
-
-
-                      permissionsSignal.value = simulatedPerms;
-                      uiSignal.value = simulatedUi;
-                  } else {
-                      // Se não achar o nível no banco, deixa sem permissão nenhuma (Backend decide!)
-                      permissionsSignal.value = {};
-                      uiSignal.value = {};
-                  }
-              }
-          }
-
-          simulationRoleSignal.value = role;
-          setIsRoleSimulationModalOpen(false);
-          
-          toast({
-              title: "Modo Simulação Ativo",
-              description: `Você agora está visualizando o sistema como ${getRoleLabel(role)}.`,
-          });
-      } catch (error) {
-          console.error('[Settings] Falha ao iniciar simulação:', error);
-          toast({
-              title: "Erro na Simulação",
-              description: "Não foi possível carregar as permissões do papel selecionado.",
-              variant: "destructive"
-          });
-      }
-  };
+  // Simulation Handlers - No longer needed, using start/stopSimulation from useAuth
+  // The logic for fetching permissions is now encapsulated within the startSimulation function in AuthContext.
+  // This simplifies the component and centralizes permission management.
 
   const handleStopSimulation = () => {
-      // Restaurar permissões reais se houver backup
-      if (realPermissionsSignal.value) {
-          permissionsSignal.value = { ...realPermissionsSignal.value };
-          uiSignal.value = { ...realUiSignal.value || {} };
-          realPermissionsSignal.value = null;
-          realUiSignal.value = null;
-      }
-
-      simulationRoleSignal.value = null;
+      stopSimulation();
       toast({
           title: "Simulação Encerrada",
           description: "Seu nível de acesso real foi restaurado.",
@@ -554,9 +464,9 @@ export default function Settings() {
                         <Building2 className="w-3 h-3" /> Empresa Selecionada
                     </Label>
                     <Select 
-                        value={selectedContextSignal.value?.companyId || 'all'} 
+                        value={selectedContext?.companyId || 'all'} 
                         onValueChange={(val) => {
-                            const current = selectedContextSignal.value || {};
+                            const current = selectedContext || {};
                             selectContext({ ...current, companyId: val, projectId: 'all' });
                         }}
                     >
@@ -577,12 +487,12 @@ export default function Settings() {
                         <HardHat className="w-3 h-3" /> Obra Selecionada
                     </Label>
                     <ProjectSelector 
-                        value={selectedContextSignal.value?.projectId || 'all'}
+                        value={selectedContext?.projectId || 'all'}
                         onValueChange={(val) => {
-                            const current = selectedContextSignal.value || {};
+                            const current = selectedContext || {};
                             selectContext({ ...current, projectId: val });
                         }}
-                        companyId={selectedContextSignal.value?.companyId}
+                        companyId={selectedContext?.companyId}
                         className="w-full"
                     />
                 </div>
@@ -653,7 +563,7 @@ export default function Settings() {
                         <ShieldCheck className="w-3 h-3 text-indigo-400" />
                         Modo Simulação
                     </Label>
-                    {!simulationRoleSignal.value ? (
+                    {!simulationRole ? (
                         <Button 
                             variant="outline" 
                             size="sm" 
@@ -667,7 +577,7 @@ export default function Settings() {
                         <div className="flex items-center justify-between gap-2 bg-indigo-500/10 border border-indigo-500/20 rounded-md p-2">
                             <div className="flex flex-col">
                                 <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-tighter">Simulando como:</span>
-                                <span className="text-[11px] text-indigo-200 font-mono font-bold leading-none">{getRoleLabel(simulationRoleSignal.value)}</span>
+                                <span className="text-[11px] text-indigo-200 font-mono font-bold leading-none">{getRoleLabel(simulationRole)}</span>
                             </div>
                             <Button 
                                 variant="ghost" 
@@ -875,9 +785,11 @@ export default function Settings() {
                             <div className="space-y-2">
                                 <Label>Nome do Sistema</Label>
                                 <Input 
-                                    value={appNameSignal.value}
+                                    value={appName}
                                     onChange={(e) => {
-                                        appNameSignal.value = e.target.value;
+                                        // For immediate visual feedback, update a local state or directly call saveSettings
+                                        // For now, we'll assume saveSettings handles the state update in context
+                                        // If appName is from context, it should be updated via saveSettings
                                     }}
                                     onBlur={async (e) => {
                                         if (profile?.companyId) {
@@ -888,7 +800,7 @@ export default function Settings() {
                                                     description: "Apenas administradores podem alterar o nome do sistema.",
                                                     variant: "destructive"
                                                 });
-                                                appNameSignal.value = e.target.defaultValue; // Reverter
+                                                // appNameSignal.value = e.target.defaultValue; // Reverter - not needed if appName is from context
                                                 return;
                                             }
 
@@ -912,9 +824,9 @@ export default function Settings() {
 
                             <div className="flex items-center gap-4">
                                 <div className="w-16 h-16 bg-black/40 rounded-xl border border-white/10 flex items-center justify-center overflow-hidden relative group">
-                                    {appIconUrlSignal.value ? (
+                                    {appIconUrl ? (
                                         <img 
-                                            src={appIconUrlSignal.value} 
+                                            src={appIconUrl} 
                                             className="object-contain w-full h-full p-2" 
                                             alt="Favicon Atual"
                                         />
@@ -929,10 +841,10 @@ export default function Settings() {
                                             variant="outline" 
                                             className="h-9 text-xs"
                                             onClick={() => document.getElementById('app-icon-upload')?.click()}
-                                            disabled={isLoadingSettingsSignal.value}
+                                            disabled={isLoadingSettings}
                                         >
                                             <UploadCloud className="w-3.5 h-3.5 mr-2" />
-                                            {isLoadingSettingsSignal.value ? "Enviando..." : "Subir Ícone"}
+                                            {isLoadingSettings ? "Enviando..." : "Subir Ícone"}
                                         </Button>
                                         <input 
                                             type="file" 
@@ -975,9 +887,9 @@ export default function Settings() {
                             <Label>Logo do Sistema (NavBar)</Label>
                             <div className="flex items-center gap-4">
                                 <div className="w-24 h-24 bg-black/40 rounded-xl border border-white/10 flex items-center justify-center overflow-hidden relative group">
-                                    {logoUrlSignal.value ? (
+                                    {logoUrl ? (
                                         <img 
-                                            src={logoUrlSignal.value} 
+                                            src={logoUrl} 
                                             className="object-contain w-full h-full p-2" 
                                             alt="Logo Atual"
                                         />
@@ -991,10 +903,10 @@ export default function Settings() {
                                             variant="outline" 
                                             className="h-9 text-xs"
                                             onClick={() => document.getElementById('org-logo-upload')?.click()}
-                                            disabled={isLoadingSettingsSignal.value}
+                                            disabled={isLoadingSettings}
                                         >
                                             <UploadCloud className="w-3.5 h-3.5 mr-2" />
-                                            {isLoadingSettingsSignal.value ? "Enviando..." : "Subir Nova Logo"}
+                                            {isLoadingSettings ? "Enviando..." : "Subir Nova Logo"}
                                         </Button>
                                         <input 
                                             type="file" 
@@ -1033,7 +945,7 @@ export default function Settings() {
                                 step={5}
                                 onValueChange={(val) => {
                                     setLocalLogoWidth(val[0]);
-                                    logoWidthSignal.value = val[0]; // Realtime preview
+                                    // logoWidthSignal.value = val[0]; // Realtime preview - not needed if logoWidth is from context
                                 }}
                                 onValueCommit={async (val) => {
                                     if (profile?.companyId) {
@@ -1077,7 +989,7 @@ export default function Settings() {
                             step={1}
                             onValueChange={(val) => {
                                 setLocalConcurrency(val[0]);
-                                loaderConcurrencySignal.value = val[0];
+                                setConcurrency(val[0]); // Update context directly
                             }}
                             className="w-full"
                         />
@@ -1685,10 +1597,13 @@ export default function Settings() {
             {STANDARD_ROLES.map((role) => (
               <button
                 key={role.name}
-                onClick={() => handleStartSimulation(role.name)}
+                onClick={() => {
+                  startSimulation(role.name);
+                  setIsRoleSimulationModalOpen(false);
+                }}
                 className={cn(
                   "flex items-center justify-between p-3 rounded-lg border transition-all text-left group",
-                  simulationRoleSignal.value === role.name 
+                  simulationRole === role.name 
                     ? "bg-indigo-500/10 border-indigo-500/40" 
                     : "bg-white/5 border-white/5 hover:border-white/20 hover:bg-white/10"
                 )}

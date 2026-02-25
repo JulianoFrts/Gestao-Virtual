@@ -1,17 +1,15 @@
 import React, { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Loader2, CheckCircle2, CircleCheck, FileText, Clock, ChevronUp, ChevronDown } from 'lucide-react';
-import { useSignals } from "@preact/signals-react/runtime";
-import { appProgressSignal, loadingModulesSignal } from '@/signals/appInitSignals';
-import { logoUrlSignal } from '@/signals/settingsSignals';
+import { useInit } from '@/contexts/InitContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from "@/components/ui/button";
 
 export function LoadingScreen() {
-  useSignals();
-
-  const progress = appProgressSignal.value;
-  const modules = loadingModulesSignal.value;
+  const { progress, modules } = useInit();
   const [isExpanded, setIsExpanded] = useState(false);
+  // Temporary: use a placeholder or check if logo is in another context
+  const logoUrl = null; 
 
   return (
     <div className="fixed inset-0 z-9999 flex items-center justify-center bg-[#030712] overflow-hidden select-none">
@@ -91,9 +89,9 @@ export function LoadingScreen() {
           {/* Brand Identity - Responsive text sizes */}
           <div className="text-center space-y-1 pointer-events-none select-none">
             <div className="space-y-0 flex flex-col items-center">
-                {logoUrlSignal.value ? (
+                {logoUrl ? (
                     <img 
-                        src={logoUrlSignal.value} 
+                        src={logoUrl} 
                         alt="Logo" 
                         className="animate-in zoom-in-50 duration-700 drop-shadow-glow object-contain"
                         style={{ 

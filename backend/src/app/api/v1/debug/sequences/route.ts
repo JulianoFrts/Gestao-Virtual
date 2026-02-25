@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     });
 
     const missing = [];
-    const seqs = data.map((d) => d.sequence);
+    const seqs = data.map((d: any) => d.sequence);
 
     if (seqs.length > 0) {
       let last = seqs[0] - 1;

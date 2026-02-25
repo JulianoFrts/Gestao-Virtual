@@ -59,4 +59,57 @@ export class PrismaTowerProductionRepository implements TowerProductionRepositor
     await prisma.towerProduction.delete({ where: { id } });
     return true;
   }
+
+  /**
+   * Sincroniza dados técnicos de projeto para torres já existentes na Produção.
+   * Faz merge seguro de metadata — NÃO sobrescreve campos de produção existentes.
+   */
+  async syncTechnicalData(
+    projectId: string,
+    updates: Array<{ towerId: string; technicalMetadata: Record<string, any> }>,
+  ): Promise<number> {
+    if (updates.length === 0) return 0;
+
+    let syncedCount = 0;
+
+    // Usar transação para garantir atomicidade
+    await prisma.$transaction(async (tx) => {
+      for (const update of updates) {
+        const existing = await tx.towerProduction.findUnique({
+          where: { projectId_towerId: { projectId, towerId: update.towerId } },
+        });
+
+        if (!existing) continue;
+
+        // Merge seguro: campos técnicos não sobrescrevem dados de produção
+        const existingMeta = (existing.metadata as Record<string, any>) || {};
+        const mergedMeta = {
+          ...existingMeta,
+          // Campos técnicos (só atualiza se valor existe e o campo não foi preenchido manualmente)
+          goForward:
+            update.technicalMetadata.distancia_vao ?? existingMeta.goForward,
+          pesoEstrutura:
+            update.technicalMetadata.peso_estrutura ??
+            existingMeta.pesoEstrutura,
+          totalConcreto:
+            update.technicalMetadata.peso_concreto ??
+            existingMeta.totalConcreto,
+          pesoArmacao:
+            update.technicalMetadata.peso_aco_1 ?? existingMeta.pesoArmacao,
+          // Manter campos de produção inalterados
+          trecho: existingMeta.trecho,
+          towerType: existingMeta.towerType,
+        };
+
+        await tx.towerProduction.update({
+          where: { id: existing.id },
+          data: { metadata: mergedMeta },
+        });
+
+        syncedCount++;
+      }
+    });
+
+    return syncedCount;
+  }
 }

@@ -102,8 +102,10 @@ model AuthCredential {
   login         String?       @unique
   password      String
   emailVerified DateTime?     @map("email_verified")
-  role          Role          @default(USER)
+  role          Role          @default(OPERATIONAL)
   status        AccountStatus @default(PENDING_VERIFICATION)
+  isSystemAdmin Boolean       @default(false) @map("is_system_admin")
+  permissions   Json?         @default("{}")
   lastLoginAt   DateTime?     @map("last_login_at")
   mfaEnabled    Boolean       @default(false) @map("mfa_enabled")
   mfaSecret     String?       @map("mfa_secret")
@@ -231,8 +233,8 @@ model ConstructionDocument {
   updatedAt               DateTime                  @updatedAt @map("updated_at")
   company                 Company?                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdBy               User?                     @relation(fields: [createdById], references: [id])
-  project                 Project?                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  site                    Site?                     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  project                 Project?                  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  site                    Site?                     @relation(fields: [siteId], references: [id], onDelete: SetNull)
   mapElementTechnicalData MapElementTechnicalData[]
   mapElementVisibility    MapElementVisibility[]
 
@@ -368,6 +370,7 @@ model JobFunction {
   companyId                    String?                       @map("company_id")
   name                         String
   description                  String?
+  category                     JobCategory                   @default(PRODUCTION)
   canLeadTeam                  Boolean                       @default(false) @map("can_lead_team")
   hierarchyLevel               Int                           @default(0) @map("hierarchy_level")
   laborType                    String?                       @default("MOD") @map("labor_type")
@@ -375,10 +378,21 @@ model JobFunction {
   updatedAt                    DateTime                      @updatedAt @map("updated_at")
   company                      Company?                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   projectPermissionDelegations ProjectPermissionDelegation[]
-  users                        User[]
+  userAffiliations             UserAffiliation[]
 
   @@unique([companyId, name])
   @@map("job_functions")
+}
+
+enum JobCategory {
+  MANAGEMENT
+  ENGINEERING
+  PRODUCTION
+  ADMINISTRATIVE
+  LOGISTICS
+  SAFETY
+  QUALITY
+  OTHER
 }
 
 model ListIap {
@@ -398,7 +412,7 @@ model ListIap {
 
 model MapElementProductionProgress {
   id                      String                  @id @default(cuid())
-  projectId               String                  @map("project_id")
+  projectId               String?                 @map("project_id")
   elementId               String                  @map("element_id")
   activityId              String                  @map("activity_id")
   currentStatus           ActivityStatus          @default(PENDING) @map("current_status")
@@ -413,7 +427,7 @@ model MapElementProductionProgress {
   createdAt               DateTime                @default(now()) @map("created_at")
   productionActivity      ProductionActivity      @relation(fields: [activityId], references: [id], onDelete: Cascade)
   mapElementTechnicalData MapElementTechnicalData @relation(fields: [elementId], references: [id], onDelete: Cascade)
-  project                 Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project                 Project?                @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@unique([elementId, activityId])
   @@map("map_element_production_progress")
@@ -422,7 +436,7 @@ model MapElementProductionProgress {
 model MapElementTechnicalData {
   id                           String                         @id @default(cuid())
   companyId                    String                         @map("company_id")
-  projectId                    String                         @map("project_id")
+  projectId                    String?                        @map("project_id")
   elementType                  String                         @map("element_type")
   externalId                   String                         @map("external_id")
   sequence                     Int                            @default(0)
@@ -443,8 +457,8 @@ model MapElementTechnicalData {
   mapElementProductionProgress MapElementProductionProgress[]
   company                      Company                        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   constructionDocument         ConstructionDocument?          @relation(fields: [documentId], references: [id])
-  project                      Project                        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  site                         Site?                          @relation(fields: [siteId], references: [id])
+  project                      Project?                       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  site                         Site?                          @relation(fields: [siteId], references: [id], onDelete: SetNull)
   mapElementVisibility         MapElementVisibility[]
 
   @@unique([projectId, externalId])
@@ -611,8 +625,8 @@ model ProjectMonthlyTarget {
   createdAt                 DateTime @default(now()) @map("created_at")
   updatedAt                 DateTime @updatedAt @map("updated_at")
   company                   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project                   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  site                      Site?    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  project                   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  site                      Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
 
   @@unique([projectId, siteId, targetMonth])
   @@map("project_monthly_targets")
@@ -887,8 +901,8 @@ model Team {
   dailyReports DailyReport[]
   teamMembers  TeamMember[]
   company      Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project      Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  site         Site?         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  project      Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  site         Site?         @relation(fields: [siteId], references: [id], onDelete: SetNull)
   supervisor   User?         @relation(fields: [supervisorId], references: [id])
   timeRecords  TimeRecord[]
 
@@ -953,17 +967,27 @@ model TimeRecord {
 }
 
 model UserAffiliation {
-  id        String   @id @default(cuid())
-  userId    String   @unique @map("user_id")
-  companyId String?  @map("company_id")
-  projectId String?  @map("project_id")
-  siteId    String?  @map("site_id")
+  id                 String   @id @default(cuid())
+  userId             String   @unique @map("user_id")
+  companyId          String?  @map("company_id")
+  projectId          String?  @map("project_id")
+  siteId             String?  @map("site_id")
+  
+  // Dados de Obra / Regra de Negócio
+  registrationNumber String?  @unique @map("registration_number")
+  hierarchyLevel     Int      @default(0) @map("hierarchy_level")
+  laborType          String?  @default("MOD") @map("labor_type")
+  iapName            String?  @map("iap_name")
+  functionId         String?  @map("function_id")
+  
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
-  company   Company? @relation(fields: [companyId], references: [id])
-  project   Project? @relation(fields: [projectId], references: [id])
-  site      Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  company     Company?     @relation(fields: [companyId], references: [id])
+  project     Project?     @relation(fields: [projectId], references: [id])
+  site        Site?        @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobFunction JobFunction? @relation(fields: [functionId], references: [id])
 
   @@index([companyId])
   @@index([projectId])
@@ -977,18 +1001,12 @@ model User {
   image                  String?
   cpf                    String?                  @unique
   phone                  String?
-  registrationNumber     String?                  @unique @map("registration_number")
-  functionId             String?                  @map("function_id")
-  faceDescriptor         Json?                    @map("face_descriptor")
-  hierarchyLevel         Int                      @default(0) @map("hierarchy_level")
-  laborType              String?                  @default("MOD") @map("labor_type")
-  createdAt              DateTime                 @default(now()) @map("created_at")
-  updatedAt              DateTime                 @updatedAt @map("updated_at")
-  iapName                String?                  @map("iap_name")
   birthDate              String?                  @map("birth_date")
   gender                 String?
-  isSystemAdmin          Boolean                  @default(false) @map("is_system_admin")
-  permissions            Json?
+  createdAt              DateTime                 @default(now()) @map("created_at")
+  updatedAt              DateTime                 @updatedAt @map("updated_at")
+  faceDescriptor         Json?                    @map("face_descriptor")
+  
   accounts               Account[]
   activitySchedule       ActivitySchedule[]       @relation("activity_schedule")
   auditLogs              AuditLog[]
@@ -1009,10 +1027,8 @@ model User {
   timeRecordsAsUser      TimeRecord[]             @relation("time_records_user_idTousers")
   address                UserAddress?
   affiliation            UserAffiliation?
-  jobFunction            JobFunction?             @relation(fields: [functionId], references: [id])
 
   @@index([cpf])
-  @@index([registrationNumber])
   @@map("users")
 }
 
@@ -1042,8 +1058,8 @@ model WorkStage {
   parentStage          WorkStage?          @relation("work_stagesTowork_stages", fields: [parentId], references: [id], onDelete: Cascade)
   subStages            WorkStage[]         @relation("work_stagesTowork_stages")
   activity             ProductionActivity? @relation(fields: [productionActivityId], references: [id])
-  project              Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  site                 Site?               @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  project              Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  site                 Site?               @relation(fields: [siteId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
   @@map("work_stages")
@@ -1109,23 +1125,14 @@ enum RecordType {
 }
 
 enum Role {
-  USER
-  ADMIN
-  MODERATOR
-  MANAGER
-  SUPERVISOR
-  TECHNICIAN
-  OPERATOR
-  SUPER_ADMIN
-  SUPER_ADMIN_GOD
-  SOCIO_DIRETOR
-  HELPER_SYSTEM
-  WORKER
-  TI_SOFTWARE
-  GESTOR_PROJECT
-  GESTOR_CANTEIRO
-  VIEWER
-  GUEST
+  SUPER_ADMIN_GOD // Suporte total / Desenvolvedor
+  SYSTEM_ADMIN    // Administrador Global do Software
+  COMPANY_ADMIN   // Gestor Principal da Empresa (Dono/Diretor)
+  PROJECT_MANAGER // Gestor de Obra (Acesso total ao projeto)
+  SITE_MANAGER    // Gestor de Canteiro
+  SUPERVISOR      // Supervisor de Equipes / Encarregado
+  OPERATIONAL     // Usuário de Campo (Lança produção/RDO)
+  VIEWER          // Apenas Visualização
 }
 
 enum SyncOperation {
@@ -1154,15 +1161,15 @@ model TowerProduction {
   towerId   String   @map("tower_id")
   sequencia Int      @default(0)
   companyId String   @map("company_id")
-  projectId String   @map("project_id")
+  projectId String?  @map("project_id")
   siteId    String?  @map("site_id")
   metadata  Json     @default("{}")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  site    Site?   @relation(fields: [siteId], references: [id])
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  site    Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
 
   @@unique([projectId, towerId])
   @@map("tower_production")
@@ -1173,15 +1180,15 @@ model TowerConstruction {
   towerId   String   @map("tower_id")
   sequencia Int      @default(0)
   companyId String   @map("company_id")
-  projectId String   @map("project_id")
+  projectId String?  @map("project_id")
   siteId    String?  @map("site_id")
   metadata  Json     @default("{}")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  site    Site?   @relation(fields: [siteId], references: [id])
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  site    Site?    @relation(fields: [siteId], references: [id], onDelete: SetNull)
 
   @@unique([projectId, towerId])
   @@map("tower_construction")
@@ -1191,7 +1198,7 @@ model TowerActivityGoal {
   id          String   @id @default(cuid())
   towerId     String?  @map("tower_id")
   companyId   String   @map("company_id")
-  projectId   String   @map("project_id")
+  projectId   String?  @map("project_id")
   siteId      String?  @map("site_id")
   parentId    String?  @map("parent_id")
   name        String
@@ -1203,8 +1210,8 @@ model TowerActivityGoal {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   company  Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  project  Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  site     Site?               @relation(fields: [siteId], references: [id])
+  project  Project?            @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  site     Site?               @relation(fields: [siteId], references: [id], onDelete: SetNull)
   parent   TowerActivityGoal?  @relation("Hierarchy", fields: [parentId], references: [id], onDelete: Cascade)
   children TowerActivityGoal[] @relation("Hierarchy")
 

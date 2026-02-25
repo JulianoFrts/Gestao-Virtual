@@ -2,25 +2,33 @@ import {
   ProductionProgressRepository,
   ActivityStatus,
   ProductionProgress as IProductionProgress,
-} from "../domain/production.repository";
-import { ProjectElementRepository } from "../domain/project-element.repository";
-import { ProductionSyncRepository } from "../domain/production-sync.repository";
-import { ProductionScheduleRepository } from "../domain/production-schedule.repository";
-import { ProductionProgress } from "../domain/production-progress.entity";
+  ProgressHistoryEntry,
+} from "@/modules/production/domain/production.repository";
+import { ProjectElementRepository } from "@/modules/production/domain/project-element.repository";
+import { ProductionSyncRepository } from "@/modules/production/domain/production-sync.repository";
+import { ProductionScheduleRepository } from "@/modules/production/domain/production-schedule.repository";
+import { ProductionProgress } from "@/modules/production/domain/production-progress.entity";
+import { ProductionMapper } from "@/modules/production/infrastructure/prisma-production.mapper";
 import { logger } from "@/lib/utils/logger";
+import { TimeProvider } from "@/lib/utils/time-provider";
 import { PRODUCTION_STATUS } from "@/lib/constants";
-
-export interface UpdateProductionProgressDTO {
-  elementId: string;
-  activityId: string;
-  projectId?: string | null;
-  status: ActivityStatus;
-  progress: number;
-  metadata?: any;
-  userId: string;
-  dates?: { start?: string | null; end?: string | null };
-  skipSync?: boolean;
-}
+import {
+  MapElementTechnicalData,
+  ActivitySchedule,
+  MapElementProductionProgress,
+} from "@prisma/client";
+import {
+  UpdateProductionProgressDTO,
+  ElementProgressResponse,
+  ActivityStatusDTO,
+  ProductionLogDTO,
+} from "./dtos/production-progress.dto";
+export type {
+  UpdateProductionProgressDTO,
+  ElementProgressResponse,
+  ActivityStatusDTO,
+  ProductionLogDTO,
+};
 
 export class ProductionProgressService {
   private readonly logContext = {
@@ -32,11 +40,12 @@ export class ProductionProgressService {
     private readonly elementRepository: ProjectElementRepository,
     private readonly syncRepository: ProductionSyncRepository,
     private readonly scheduleRepository: ProductionScheduleRepository,
+    private readonly timeProvider: TimeProvider,
   ) {}
 
   async getElementProgress(elementId: string): Promise<ProductionProgress[]> {
     const results = await this.progressRepository.findByElement(elementId);
-    return results.map((r) => new ProductionProgress(r));
+    return results.map((r: IProductionProgress) => new ProductionProgress(r));
   }
 
   async listProjectProgress(
@@ -45,7 +54,7 @@ export class ProductionProgressService {
     siteId?: string,
     skip?: number,
     take?: number,
-  ): Promise<any[]> {
+  ): Promise<ElementProgressResponse[]> {
     const elements = await this.elementRepository.findByProjectId(
       projectId,
       companyId,
@@ -57,64 +66,68 @@ export class ProductionProgressService {
     return elements.map((el) => this.mapElementToProgressResponse(el));
   }
 
-  private mapElementToProgressResponse(el: any) {
-    const metadata =
+  private mapElementToProgressResponse(
+    el: MapElementTechnicalData & {
+      productionProgress?: MapElementProductionProgress[];
+      activitySchedules?: ActivitySchedule[];
+    },
+  ): ElementProgressResponse {
+    const metadata = (
       typeof el.metadata === "string"
         ? JSON.parse(el.metadata)
-        : el.metadata || {};
+        : el.metadata || {}
+    ) as Record<string, unknown>;
 
     const mappedMetadata = this.normalizeTechnicalMetadata(metadata);
 
-    const activityStatuses = (el.productionProgress || []).map((p: any) =>
-      this.mapProgressToDTO(p),
+    const activityStatuses = (el.productionProgress || []).map(
+      (p: MapElementProductionProgress) => this.mapProgressToDTO(p),
     );
 
-    // Merge schedule data into statuses
+    // [O(n) Optimization] Map schedules by activityId for fast lookup
     const schedules = el.activitySchedules || [];
-    const enrichedStatuses = activityStatuses.map((status: any) => {
-      const schedule = schedules.find(
-        (s: any) => s.activityId === status.activityId,
-      );
-      if (schedule) {
-        return {
-          ...status,
-          plannedStartDate: schedule.plannedStart,
-          plannedEndDate: schedule.plannedEnd,
-          plannedQuantity: schedule.plannedQuantity,
-          plannedHhh: schedule.plannedHhh,
-        };
-      }
-      return status;
-    });
+    const scheduleMap = new Map(
+      schedules.map((s: ActivitySchedule) => [s.activityId, s]),
+    );
+
+    const enrichedStatuses = activityStatuses.map(
+      (status: ActivityStatusDTO) => {
+        const schedule = scheduleMap.get(status.activityId);
+        if (schedule) {
+          return {
+            ...status,
+            plannedStartDate: schedule.plannedStart,
+            plannedEndDate: schedule.plannedEnd,
+            plannedQuantity: Number(schedule.plannedQuantity),
+            plannedHhh: Number(schedule.plannedHhh),
+          };
+        }
+        return status;
+      },
+    );
 
     return {
       ...mappedMetadata,
       id: el.id,
       elementId: el.id,
-      objectId: el.externalId,
-      objectSeq: el.sequence,
+      objectId: el.externalId || null,
+      objectSeq: el.sequence ? Number(el.sequence) : null,
       elementType: el.elementType,
       name: el.name,
-      latitude: el.latitude,
-      longitude: el.longitude,
-      elevation: el.elevation,
+      latitude: el.latitude ? Number(el.latitude) : null,
+      longitude: el.longitude ? Number(el.longitude) : null,
+      elevation: el.elevation ? Number(el.elevation) : null,
       activityStatuses: enrichedStatuses,
       activitySchedules: schedules,
     };
   }
 
-  private mapProgressToDTO(p: any) {
-    const entity = new ProductionProgress(p);
-    return {
-      ...entity,
-      activityId: p.activityId,
-      activity: p.activity,
-      status: entity.currentStatus,
-      progressPercent: Number(entity.progressPercent),
-    };
+  private mapProgressToDTO(p: MapElementProductionProgress): ActivityStatusDTO {
+    const entity = ProductionMapper.toDomain(p);
+    return ProductionMapper.toDTO(entity);
   }
 
-  private normalizeTechnicalMetadata(metadata: any) {
+  private normalizeTechnicalMetadata(metadata: Record<string, unknown>) {
     const technicalMapping: Record<string, string> = {
       tower_type: "towerType",
       tipo_fundacao: "tipoFundacao",
@@ -144,7 +157,7 @@ export class ProductionProgressService {
       "PESO TORRE": "pesoEstrutura",
     };
 
-    const mappedMetadata = { ...metadata };
+    const mappedMetadata: Record<string, unknown> = { ...metadata };
     const metadataKeys = Object.keys(metadata);
 
     Object.entries(technicalMapping).forEach(([sourceKey, targetKey]) => {
@@ -166,63 +179,68 @@ export class ProductionProgressService {
     return mappedMetadata;
   }
 
-  async getLogsByElement(
-    elementId: string,
-    companyId?: string | null,
-  ): Promise<any[]> {
+  async getLogsByElement(elementId: string): Promise<ProductionLogDTO[]> {
     const records = await this.progressRepository.findByElement(elementId);
 
-    const results: any[] = [];
+    const results: ProductionLogDTO[] = [];
     for (const record of records) {
-      if (
-        companyId &&
-        (record as any).companyId &&
-        (record as any).companyId !== companyId
-      )
-        continue;
-
-      const history = Array.isArray(record.history) ? record.history : [];
-      history.forEach((h: any) => {
+      const history = record.history || [];
+      history.forEach((h: ProgressHistoryEntry) => {
         results.push({
           ...h,
-          progressId: record.id,
+          progressId: record.id ?? "",
           elementId: record.elementId,
           activityId: record.activityId,
+          progress: h.progressPercent ?? 0,
+          userId: h.changedBy ?? "system",
+          status: h.status as ActivityStatus,
+          timestamp: h.timestamp ?? this.timeProvider.toISOString(),
         });
       });
     }
 
     return results.sort(
       (a, b) =>
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+        new Date(b.timestamp as string).getTime() -
+        new Date(a.timestamp as string).getTime(),
     );
   }
 
-  async getPendingLogs(companyId?: string | null): Promise<any[]> {
+  async getPendingLogs(companyId?: string | null): Promise<ProductionLogDTO[]> {
     const records = await this.progressRepository.findPendingLogs(companyId);
 
     return records.map((record) => {
       const history = Array.isArray(record.history) ? record.history : [];
-      const latestLog = history.length > 0 ? history[history.length - 1] : {};
+      const latestLog =
+        history.length > 0
+          ? (history[history.length - 1] as ProgressHistoryEntry)
+          : ({} as ProgressHistoryEntry);
 
       return {
         ...latestLog,
         id: record.id,
-        progressId: record.id,
+        progressId: record.id ?? "",
         elementId: record.elementId,
         activityId: record.activityId,
         progressPercent: Number(record.progressPercent),
+        progress: Number(record.progressPercent),
+        userId: latestLog.changedBy ?? "system",
         createdAt: record.createdAt,
-        requiresApproval: (record as any).requiresApproval,
+        requiresApproval: record.requiresApproval,
         tower: {
           objectId:
-            (record as any).element?.externalId ||
-            (record as any).element?.name ||
+            (record.element?.externalId as string) ||
+            (record.element?.name as string) ||
             "N/A",
-          name: (record as any).element?.name,
+          name: record.element?.name as string,
         },
-        activity: (record as any).activity,
-        project: (record as any).project,
+        activity: record.activity,
+        project: record.project,
+        status: (latestLog.status as ActivityStatus) || record.currentStatus,
+        timestamp:
+          latestLog.timestamp ??
+          record.createdAt?.toISOString() ??
+          this.timeProvider.toISOString(),
       };
     });
   }
@@ -320,11 +338,11 @@ export class ProductionProgressService {
       this.progressRepository.findByElementsBatch(elementIds), // Precisa implementar
     ]);
 
-    const elementsMap = new Map<string, any>(
-      elements.map((e: any) => [e.id, e]),
+    const elementsMap = new Map<string, MapElementTechnicalData>(
+      elements.map((e) => [e.id, e]),
     );
-    const schedulesMap = new Map<string, any>(
-      schedules.map((s: any) => [`${s.elementId}:${s.activityId}`, s]),
+    const schedulesMap = new Map<string, ActivitySchedule>(
+      schedules.map((s) => [`${s.elementId}:${s.activityId}`, s as any]),
     );
 
     // Agrupar progressos existentes por elementId:activityId
@@ -368,7 +386,7 @@ export class ProductionProgressService {
         (!finalEndDate && status === PRODUCTION_STATUS.FINISHED)
       ) {
         const schedule = schedulesMap.get(key);
-        const now = new Date().toISOString();
+        const now = this.timeProvider.toISOString();
 
         if (
           !finalStartDate &&
@@ -449,7 +467,7 @@ export class ProductionProgressService {
     activityId: string,
     projectId: string,
     userId: string,
-  ) {
+  ): Promise<void> {
     return this.syncRepository.syncWorkStages(
       elementId,
       activityId,
@@ -495,7 +513,9 @@ export class ProductionProgressService {
     endDate?: string | null,
   ): Promise<ProductionProgress> {
     const existing = await this.progressRepository.findByElement(elementId);
-    const record = existing.find((p) => p.activityId === activityId);
+    const record = existing.find(
+      (p: IProductionProgress) => p.activityId === activityId,
+    );
 
     if (record) {
       const entity = new ProductionProgress(record);
@@ -553,7 +573,7 @@ export class ProductionProgressService {
         elementId,
         activityId,
       );
-      const now = new Date();
+      const now = this.timeProvider.now();
 
       if (
         !finalStartDate &&

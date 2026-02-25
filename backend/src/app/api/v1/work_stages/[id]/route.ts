@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth/session";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { WorkStageService } from "@/modules/work-stages/application/work-stage.service";
-import { PrismaWorkStageRepository } from "@/modules/work-stages/domain/work-stage.repository";
+import { PrismaWorkStageRepository } from "@/modules/work-stages/infrastructure/prisma-work-stage.repository";
 import { z } from "zod";
 import { VALIDATION } from "@/lib/constants";
 
@@ -68,7 +68,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       );
     }
 
-    const stage = await service.update(id, validation.data, {
+    const stage = await service.update(id, validation.data as any, {
       role: user.role,
       companyId: user.companyId,
       hierarchyLevel: (user as any).hierarchyLevel,

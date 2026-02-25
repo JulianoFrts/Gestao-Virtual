@@ -73,9 +73,9 @@ export async function GET(request: NextRequest) {
     const { page, limit, sortBy, sortOrder } = pagination as any;
 
     if (limit > CONSTANTS.API.STREAM.THRESHOLD) {
-      const total = await userRepository.count(where);
+      const total = await userRepository.count(where as any);
       const stream = generateUsersStream({
-        where,
+        where: where as any,
         page,
         limit,
         total,
@@ -94,12 +94,12 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await userService.listUsers({
-      where,
+      where: where as any,
       page,
       limit,
       sortBy,
       sortOrder,
-      select: publicUserSelect,
+      select: publicUserSelect as any,
     });
 
     return ApiResponse.json(result);
@@ -123,8 +123,8 @@ export async function POST(request: NextRequest) {
     }
 
     const user = await userService.createUser(
-      validationResult.data,
-      publicUserSelect,
+      validationResult.data as any,
+      publicUserSelect as any,
       currentUser.id,
     );
     return ApiResponse.created(user, CONSTANTS.HTTP.MESSAGES.SUCCESS.CREATED);
@@ -174,8 +174,8 @@ export async function PUT(request: NextRequest) {
 
     const updatedUser = await userService.updateUser(
       targetUserId,
-      validation.data,
-      publicUserSelect,
+      validation.data as any,
+      publicUserSelect as any,
       currentUser.id,
     );
 

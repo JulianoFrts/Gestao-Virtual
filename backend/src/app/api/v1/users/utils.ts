@@ -98,32 +98,51 @@ export async function handleSingleUserFetch(
 
 /**
  * Aplica restrições de hierarquia e segurança na cláusula WHERE
+ * Segue a hierarquia: Empresa > Obra (Projeto) > Canteiro (Site)
  */
 export function applyHierarchySecurity(
   where: any,
   currentUser: any,
   isAdmin: boolean,
 ) {
-  // 1. Verificamos se o usuário é Global (pode ver tudo)
+  // 1. Verificamos se o usuário é Global (pode ver tudo de todas as empresas)
   const isGlobal = isGlobalAdmin(
     currentUser.role,
     (currentUser as any).hierarchyLevel,
     (currentUser as any).permissions,
   );
 
-  // 2. Se não for Global, forçamos o isolamento por Company ou Project
+  // 2. Se não for Global, forçamos o isolamento progressivo
   if (!isGlobal) {
+    const affiliation: any = {};
+
+    // Isolamento por Empresa (Base)
     if (currentUser.companyId) {
-      where.affiliation = { companyId: currentUser.companyId };
-    } else if (currentUser.projectId) {
-      where.affiliation = { projectId: currentUser.projectId };
+      affiliation.companyId = currentUser.companyId;
+    }
+
+    // Isolamento por Projeto (Obra)
+    if (currentUser.projectId) {
+      affiliation.projectId = currentUser.projectId;
+    }
+
+    // Isolamento por Canteiro (Opcional)
+    // Se o usuário tiver um siteId ativo na sessão, restringimos a este canteiro.
+    // Se for nulo, ele tem visão geral do Projeto/Empresa.
+    if (currentUser.siteId) {
+      affiliation.siteId = currentUser.siteId;
+    }
+
+    // Se houver qualquer critério de afiliação, aplicamos ao WHERE
+    if (Object.keys(affiliation).length > 0) {
+      where.affiliation = affiliation;
     } else if (!isAdmin) {
-      // Usuário comum sem empresa/projeto fixo só vê a si mesmo
+      // Segurança extra: Usuário comum sem vínculos só vê a si mesmo
       where.id = currentUser.id;
     }
   }
 
-  // 3. Restrição de Hierarquia (Admins não vêem ranks superiores a eles)
+  // 3. Restrição de Ranks (Admins não vêem quem está acima deles na hierarquia)
   if (isAdmin && !isGlobal) {
     const myLevel = (currentUser as any).hierarchyLevel || SECURITY_RANKS.ADMIN;
     where.hierarchyLevel = { lte: myLevel };

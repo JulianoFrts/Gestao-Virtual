@@ -1,9 +1,10 @@
 import { UserRepository } from "../domain/user.repository";
+import { UserEntity } from "../domain/user.dto";
 
 export class UserLegacyService {
   constructor(private readonly repository: UserRepository) {}
 
-  async listLegacyEmployees() {
+  async listLegacyEmployees(): Promise<Record<string, unknown>[]> {
     const users = await this.repository.findAll({
       where: {},
       skip: 0,
@@ -31,7 +32,7 @@ export class UserLegacyService {
       },
     });
 
-    return users.map((user: any) => ({
+    return users.map((user: UserEntity) => ({
       id: user.id,
       full_name: user.name,
       email: user.authCredential?.email || "",
@@ -58,7 +59,10 @@ export class UserLegacyService {
     }));
   }
 
-  async listLegacyProfiles(params: { page: number; limit: number }) {
+  async listLegacyProfiles(params: {
+    page: number;
+    limit: number;
+  }): Promise<Record<string, unknown>[]> {
     const skip = (params.page - 1) * params.limit;
     const users = await this.repository.findAll({
       where: {},
@@ -87,7 +91,7 @@ export class UserLegacyService {
     // Import dinâmico para evitar dependência circular se necessário
     const { Role: LegacyRole } = await import("@/types/database");
 
-    return users.map((user: any) => ({
+    return users.map((user: UserEntity) => ({
       id: user.id,
       full_name: user.name,
       email: user.authCredential?.email || "",

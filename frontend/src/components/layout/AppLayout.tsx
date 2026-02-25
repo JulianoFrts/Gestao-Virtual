@@ -5,17 +5,14 @@ import { Sidebar } from './Sidebar';
 import { BackgroundMonitor } from '../shared/BackgroundMonitor';
 import { PermissionsModal } from '../shared/PermissionsModal';
 import { ConnectionBanner } from '../shared/ConnectionBanner';
-import { isSidebarOpenSignal, isFocusModeSignal } from '@/signals/uiSignals';
-import { useSignals } from '@preact/signals-react/runtime';
+import { useLayout } from '@/contexts/LayoutContext';
 import { cn } from '@/lib/utils';
 import { DevTopBanner } from '../dev/DevTopBanner';
 
 
 export function AppLayout() {
-  useSignals();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const desktopSidebarOpen = isSidebarOpenSignal.value;
-  const isFocusMode = isFocusModeSignal.value;
+  const { isSidebarOpen: desktopSidebarOpen, isFocusMode } = useLayout();
 
   return (
     <div className="h-screen bg-background flex overflow-hidden">

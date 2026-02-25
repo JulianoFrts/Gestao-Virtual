@@ -1,14 +1,18 @@
 import bcrypt from "bcryptjs";
 import { CONSTANTS } from "@/lib/constants";
-import { UserRepository, UserWithRelations } from "../domain/user.repository";
+import { UserRepository } from "../domain/user.repository";
 import { SystemAuditRepository } from "../../audit/domain/system-audit.repository";
-import { isGodRole, isSystemOwner, SECURITY_RANKS } from "@/lib/constants/security";
+import {
+  isGodRole,
+  isSystemOwner,
+  SECURITY_RANKS,
+} from "@/lib/constants/security";
 
 export class UserSecurityService {
   constructor(
     private readonly repository: UserRepository,
     private readonly auditRepository?: SystemAuditRepository,
-  ) { }
+  ) {}
 
   async hashPassword(password: string): Promise<string> {
     return bcrypt.hash(password, CONSTANTS.AUTH.PASSWORD.BCRYPT_ROUNDS);
@@ -18,11 +22,12 @@ export class UserSecurityService {
     userId: string,
     data: { currentPassword?: string; newPassword?: string; password?: string },
     performerId?: string,
-  ) {
-    const user = (await this.repository.findById(userId, {
+  ): Promise<void> {
+    const user = await this.repository.findById(userId, {
       id: true,
       authCredential: { select: { password: true } },
-    })) as UserWithRelations | null;
+    });
+
     if (!user) throw new Error("User not found");
 
     let newPasswordToHash: string;
@@ -30,7 +35,8 @@ export class UserSecurityService {
     if (data.password && !data.currentPassword) {
       newPasswordToHash = data.password;
     } else if (data.currentPassword && data.newPassword) {
-      if (!user.authCredential?.password) throw new Error("User has no password set");
+      if (!user.authCredential?.password)
+        throw new Error("User has no password set");
       const isValidPassword = await bcrypt.compare(
         data.currentPassword,
         user.authCredential.password,
@@ -42,8 +48,9 @@ export class UserSecurityService {
     }
 
     const hashedPassword = await this.hashPassword(newPasswordToHash);
-    // Nota: O método repository.update pode precisar de adequação para aceitar password diretamente se não estiver no modelo base
-    await this.repository.update(userId, { password: hashedPassword } as any);
+
+    // Agora usando o DTO tipado, sem necessidade de 'as any'
+    await this.repository.update(userId, { password: hashedPassword });
 
     if (this.auditRepository) {
       await this.auditRepository.log({
@@ -56,54 +63,74 @@ export class UserSecurityService {
     }
   }
 
-  async validateHierarchySovereignty(performerId: string, targetId: string, targetLevel: number) {
+  async validateHierarchySovereignty(
+    performerId: string,
+    targetId: string,
+    targetLevel: number,
+  ): Promise<void> {
     if (performerId === targetId) return;
 
-    const performer = (await this.repository.findById(performerId, {
+    const performer = await this.repository.findById(performerId, {
       hierarchyLevel: true,
       authCredential: { select: { role: true } },
-    })) as UserWithRelations | null;
+    });
 
     if (!performer) return;
 
     const performerRole = performer.authCredential?.role || "";
     const performerLevel = performer.hierarchyLevel || 0;
-    const isGod = isGodRole(performerRole) || performerLevel >= SECURITY_RANKS.MASTER;
+    const isGod =
+      isGodRole(performerRole) || performerLevel >= SECURITY_RANKS.MASTER;
 
     if (!isGod && performerLevel <= targetLevel) {
-      throw new Error("Soberania de Hierarquia: Você não pode modificar um usuário de nível igual ou superior ao seu.");
+      throw new Error(
+        "Soberania de Hierarquia: Você não pode modificar um usuário de nível igual ou superior ao seu.",
+      );
     }
   }
 
-  async validatePromotionPermission(performerId: string, newRole: string, newLevel: number) {
-    const performer = (await this.repository.findById(performerId, {
+  async validatePromotionPermission(
+    performerId: string,
+    newRole: string,
+    newLevel: number,
+  ): Promise<void> {
+    const performer = await this.repository.findById(performerId, {
       hierarchyLevel: true,
       authCredential: { select: { role: true } },
-    })) as UserWithRelations | null;
+    });
 
     if (!performer) return;
 
     const performerRole = performer.authCredential?.role || "";
     const performerLevel = performer.hierarchyLevel || 0;
-    const isGod = isGodRole(performerRole) || performerLevel >= SECURITY_RANKS.MASTER;
+    const isGod =
+      isGodRole(performerRole) || performerLevel >= SECURITY_RANKS.MASTER;
 
     if (!isGod && newLevel > performerLevel) {
-      throw new Error(`Segurança: Você (Nível ${performerLevel}) não tem permissão para promover um usuário ao cargo de ${newRole} (Nível ${newLevel}).`);
+      throw new Error(
+        `Segurança: Você (Nível ${performerLevel}) não tem permissão para promover um usuário ao cargo de ${newRole} (Nível ${newLevel}).`,
+      );
     }
   }
 
-  async validateSystemAdminFlag(performerId: string, isSystemAdmin: boolean, currentIsSystemAdmin: boolean) {
+  async validateSystemAdminFlag(
+    performerId: string,
+    isSystemAdmin: boolean,
+    currentIsSystemAdmin: boolean,
+  ): Promise<void> {
     if (isSystemAdmin === currentIsSystemAdmin) return;
 
-    const performer = (await this.repository.findById(performerId, {
+    const performer = await this.repository.findById(performerId, {
       authCredential: { select: { role: true } },
-    })) as UserWithRelations | null;
+    });
 
     if (!performer) return;
 
     const performerRole = performer.authCredential?.role || "";
     if (!isSystemOwner(performerRole)) {
-      throw new Error("Segurança Crítica: Apenas Super Administradores podem conceder ou revogar status de System Admin.");
+      throw new Error(
+        "Segurança Crítica: Apenas Super Administradores podem conceder ou revogar status de System Admin.",
+      );
     }
   }
 }

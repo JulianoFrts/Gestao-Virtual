@@ -77,18 +77,30 @@ async function reconstructSessionFromPayload(
     select: {
       id: true,
       name: true,
-      authCredential: { select: { email: true, role: true, status: true } },
-      affiliation: {
-        select: { companyId: true, projectId: true, siteId: true },
+      authCredential: {
+        select: {
+          email: true,
+          role: true,
+          status: true,
+          permissions: true,
+          isSystemAdmin: true,
+        },
       },
-      hierarchyLevel: true,
-      permissions: true,
+      affiliation: {
+        select: {
+          companyId: true,
+          projectId: true,
+          siteId: true,
+          hierarchyLevel: true,
+        },
+      },
     },
   });
 
-  if (!user) return null;
+  if (!user || !user.authCredential) return null;
 
-  const userRole = user.authCredential?.role || "WORKER";
+  const userRole = user.authCredential.role || "OPERATIONAL";
+  const hierarchyLevel = user.affiliation?.hierarchyLevel || 0;
 
   // Fetch role-based permissions from Matrix
   const grantedModules = await prisma.permissionMatrix.findMany({
@@ -110,8 +122,8 @@ async function reconstructSessionFromPayload(
     }
   });
 
-  // Merge with user direct permissions
-  const directPermissions = (user.permissions as any) || {};
+  // Merge with user direct permissions (Now in AuthCredential)
+  const directPermissions = (user.authCredential.permissions as any) || {};
   const mergedPermissions = { ...matrixPermissions, ...directPermissions };
 
   const { getTokenExpiration } = await import("./validators");
@@ -120,14 +132,15 @@ async function reconstructSessionFromPayload(
     user: {
       id: user.id,
       name: user.name,
-      email: user.authCredential?.email,
+      email: user.authCredential.email,
       role: userRole,
-      status: user.authCredential?.status || "INACTIVE",
+      status: user.authCredential.status || "INACTIVE",
       companyId: user.affiliation?.companyId,
       projectId: user.affiliation?.projectId,
       siteId: user.affiliation?.siteId,
-      hierarchyLevel: user.hierarchyLevel,
+      hierarchyLevel: hierarchyLevel,
       permissions: mergedPermissions,
+      isSystemAdmin: !!user.authCredential.isSystemAdmin,
     } as any,
     expires: getTokenExpiration(payload),
   };

@@ -11,13 +11,10 @@ import { Separator } from '@/components/ui/separator';
 import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { isProtectedSignal, can } from '@/signals/authSignals';
-import { useSignals } from "@preact/signals-react/runtime";
 
 export default function Companies() {
-    useSignals();
     const { companies, isLoading, createCompany, updateCompany, deleteCompany } = useCompanies();
-    const { profile } = useAuth();
+    const { profile, isProtected, can } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingCompany, setEditingCompany] = useState<Company | null>(null);
@@ -43,7 +40,7 @@ export default function Companies() {
     });
     const { toast } = useToast();
 
-    const isSA = profile?.role === 'SUPER_ADMIN';
+    const isSA = isProtected;
     const profileCompanyId = profile?.companyId;
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -137,7 +134,7 @@ export default function Companies() {
                         <DialogContent className="max-w-md glass-card border-white/10 shadow-2xl overflow-hidden p-0">
                             <div className="absolute top-0 inset-x-0 h-1 gradient-primary shadow-[0_0_15px_rgba(var(--primary),0.5)]" />
                             <DialogHeader className="p-6">
-                                <DialogTitle className="flex items-center gap-3 text-2xl font-black italic tracking-tighter uppercase italic">
+                                <DialogTitle className="flex items-center gap-3 text-2xl font-black italic tracking-tighter uppercase">
                                     <div className="w-12 h-12 rounded-2xl gradient-primary flex items-center justify-center shadow-glow">
                                         <Building2 className="text-white w-7 h-7" />
                                     </div>

@@ -1,3 +1,11 @@
+import {
+  MapElementTechnicalData,
+  ActivitySchedule,
+  MapElementProductionProgress,
+  ProductionCategory,
+  ActivityUnitCost,
+  Team,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma/client";
 import {
   format,
@@ -20,21 +28,24 @@ import {
   addWeeks,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-
-export interface AnalyticsParams {
-  projectId: string;
-  granularity: "weekly" | "monthly";
-  startDate?: string;
-  endDate?: string;
-  activityId?: string;
-}
+import {
+  AnalyticsParams,
+  PhysicalCurveItem,
+  FinancialAnalyticsResponse,
+  PerformanceMetrics,
+  TeamPerformance,
+  CostDistributionItem,
+} from "./dtos/production-analytics.dto";
+import { ProgressHistoryEntry } from "../domain/production.repository";
 
 export class ProductionAnalyticsService {
   /**
    * Gera a Curva S Física baseada em peso unitário (Bottom-up)
    * Migrado de ProductionDashboard.tsx logic
    */
-  async getPhysicalProgressCurve(params: AnalyticsParams) {
+  async getPhysicalProgressCurve(
+    params: AnalyticsParams,
+  ): Promise<PhysicalCurveItem[]> {
     const { projectId, granularity, startDate, endDate, activityId } = params;
 
     // 1. Busca de Dados
@@ -54,48 +65,63 @@ export class ProductionAnalyticsService {
       history: { date: Date; percent: number }[];
     }[] = [];
 
-    towers.forEach((t) => {
-      const schedules =
-        activityId && activityId !== "all"
-          ? t.activitySchedules.filter((s) => s.activityId === activityId)
-          : t.activitySchedules;
+    towers.forEach(
+      (
+        t: MapElementTechnicalData & {
+          activitySchedules: ActivitySchedule[];
+          mapElementProductionProgress: MapElementProductionProgress[];
+        },
+      ) => {
+        const schedules =
+          activityId && activityId !== "all"
+            ? t.activitySchedules.filter(
+                (s: ActivitySchedule) => s.activityId === activityId,
+              )
+            : t.activitySchedules;
 
-      const progresses =
-        activityId && activityId !== "all"
-          ? t.mapElementProductionProgress.filter(
-              (p) => p.activityId === activityId,
-            )
-          : t.mapElementProductionProgress;
+        const progresses =
+          activityId && activityId !== "all"
+            ? t.mapElementProductionProgress.filter(
+                (p: MapElementProductionProgress) =>
+                  p.activityId === activityId,
+              )
+            : t.mapElementProductionProgress;
 
-      schedules.forEach((sched) => {
-        const status = progresses.find(
-          (p) => p.activityId === sched.activityId,
-        );
-        const history: { date: Date; percent: number }[] = [];
+        schedules.forEach((sched: ActivitySchedule) => {
+          const status = progresses.find(
+            (p: MapElementProductionProgress) =>
+              p.activityId === sched.activityId,
+          );
+          const history: { date: Date; percent: number }[] = [];
 
-        if (status?.history && Array.isArray(status.history)) {
-          (status.history as any[]).forEach((h) => {
-            const date = h.changedAt || h.timestamp;
-            if (date) {
-              history.push({
-                date: new Date(date),
-                percent: h.progressPercent || h.progress || 0,
-              });
-            }
+          if (status?.history && Array.isArray(status.history)) {
+            (status.history as unknown as ProgressHistoryEntry[]).forEach(
+              (h: ProgressHistoryEntry) => {
+                const date = (h.changedAt || h.timestamp) as string;
+                if (date) {
+                  history.push({
+                    date: new Date(date),
+                    percent: Number(h.progressPercent || h.progress || 0),
+                  });
+                }
+              },
+            );
+          } else if (status?.currentStatus === "FINISHED" && status.endDate) {
+            history.push({
+              date: new Date(status.endDate),
+              percent: 100,
+            });
+          }
+
+          relevantActivities.push({
+            plannedEnd: sched.plannedEnd
+              ? new Date(sched.plannedEnd)
+              : undefined,
+            history,
           });
-        } else if (status?.status === "FINISHED" && status.endDate) {
-          history.push({
-            date: new Date(status.endDate),
-            percent: 100,
-          });
-        }
-
-        relevantActivities.push({
-          plannedEnd: sched.plannedEnd ? new Date(sched.plannedEnd) : undefined,
-          history,
         });
-      });
-    });
+      },
+    );
 
     if (relevantActivities.length === 0) return [];
 
@@ -103,7 +129,7 @@ export class ProductionAnalyticsService {
     const allDates = [
       ...relevantActivities.map((i) => i.plannedEnd),
       ...relevantActivities.flatMap((i) => i.history.map((h) => h.date)),
-    ].filter(Boolean) as Date[];
+    ].filter((d): d is Date => d !== undefined) as Date[];
 
     if (allDates.length === 0) return [];
 
@@ -177,7 +203,7 @@ export class ProductionAnalyticsService {
     granularity: "weekly" | "monthly" | "quarterly" | "annual" | "total";
     startDate?: string;
     endDate?: string;
-  }) {
+  }): Promise<FinancialAnalyticsResponse> {
     const { projectId, granularity, startDate, endDate } = params;
 
     // 1. Busca de Dados
@@ -196,7 +222,7 @@ export class ProductionAnalyticsService {
     ]);
 
     const costMap = new Map<string, number>();
-    unitCosts.forEach((uc) =>
+    unitCosts.forEach((uc: ActivityUnitCost) =>
       costMap.set(uc.activityId, Number(uc.unitPrice || 0)),
     );
 
@@ -209,33 +235,48 @@ export class ProductionAnalyticsService {
       isFinished: boolean;
     }[] = [];
 
-    towers.forEach((t) => {
-      categories.forEach((cat) => {
-        cat.productionActivities.forEach((act) => {
-          const price = costMap.get(act.id) || 0;
-          if (price <= 0) return;
+    towers.forEach(
+      (
+        t: MapElementTechnicalData & {
+          activitySchedules: ActivitySchedule[];
+          mapElementProductionProgress: MapElementProductionProgress[];
+        },
+      ) => {
+        categories.forEach(
+          (
+            cat: ProductionCategory & {
+              productionActivities: { id: string; name: string }[];
+            },
+          ) => {
+            cat.productionActivities.forEach(
+              (act: { id: string; name: string }) => {
+                const price = costMap.get(act.id) || 0;
+                if (price <= 0) return;
 
-          const schedule = t.activitySchedules?.find(
-            (s) => s.activityId === act.id,
-          );
-          const status = t.mapElementProductionProgress?.find(
-            (s) => s.activityId === act.id,
-          );
+                const schedule = t.activitySchedules?.find(
+                  (s: ActivitySchedule) => s.activityId === act.id,
+                );
+                const status = t.mapElementProductionProgress?.find(
+                  (s: MapElementProductionProgress) => s.activityId === act.id,
+                );
 
-          if (schedule?.plannedEnd) {
-            items.push({
-              name: act.name,
-              plannedEnd: startOfDay(new Date(schedule.plannedEnd)),
-              actualEnd: status?.endDate
-                ? startOfDay(new Date(status.endDate))
-                : undefined,
-              cost: Number(schedule.plannedQuantity || 1) * price,
-              isFinished: status?.status === "FINISHED",
-            });
-          }
-        });
-      });
-    });
+                if (schedule?.plannedEnd) {
+                  items.push({
+                    name: act.name,
+                    plannedEnd: startOfDay(new Date(schedule.plannedEnd)),
+                    actualEnd: status?.endDate
+                      ? startOfDay(new Date(status.endDate))
+                      : undefined,
+                    cost: Number(schedule.plannedQuantity || 1) * price,
+                    isFinished: status?.currentStatus === "FINISHED",
+                  });
+                }
+              },
+            );
+          },
+        );
+      },
+    );
 
     if (items.length === 0) {
       return { curve: [], stats: { budget: 0, earned: 0 }, pareto: [] };
@@ -243,10 +284,11 @@ export class ProductionAnalyticsService {
 
     // 3. Determinação do Intervalo e Filtros
     const allDates = items.flatMap(
-      (i) => [i.plannedEnd, i.actualEnd].filter(Boolean) as Date[],
+      (i: { plannedEnd: Date; actualEnd?: Date }) =>
+        [i.plannedEnd, i.actualEnd].filter((d): d is Date => d !== undefined),
     );
-    const minDateFound = allDates.reduce((a, b) => (a < b ? a : b));
-    const maxDateFound = allDates.reduce((a, b) => (a > b ? a : b));
+    const minDateFound = allDates.reduce((a: Date, b: Date) => (a < b ? a : b));
+    const maxDateFound = allDates.reduce((a: Date, b: Date) => (a > b ? a : b));
 
     const filterStart = startDate
       ? startOfDay(new Date(startDate))
@@ -346,7 +388,7 @@ export class ProductionAnalyticsService {
    * Obtém as métricas gerais de performance (SPI, CPI, HH)
    * Migrada de PerformanceAnalyticsService.ts
    */
-  async getPerformanceMetrics(projectId: string) {
+  async getPerformanceMetrics(projectId: string): Promise<PerformanceMetrics> {
     const [schedules, unitCosts, productionProgress, timeRecords] =
       await Promise.all([
         prisma.activitySchedule.findMany({
@@ -360,7 +402,7 @@ export class ProductionAnalyticsService {
       ]);
 
     const costMap = new Map<string, number>();
-    unitCosts.forEach((uc) =>
+    unitCosts.forEach((uc: ActivityUnitCost) =>
       costMap.set(uc.activityId, Number(uc.unitPrice || 0)),
     );
 
@@ -369,19 +411,20 @@ export class ProductionAnalyticsService {
     let totalEV = 0;
     let totalPlannedHH = 0;
 
-    schedules.forEach((sched) => {
+    schedules.forEach((sched: ActivitySchedule) => {
       const unitPrice = costMap.get(sched.activityId) || 0;
       const plannedQty = Number(sched.plannedQuantity || 0);
       const plannedHH = Number(sched.plannedHhh || 0);
 
-      if (isBefore(new Date(sched.plannedEnd), now)) {
+      const pS = sched.plannedStart as unknown as string | Date;
+      const pE = sched.plannedEnd as unknown as string | Date;
+
+      if (isBefore(new Date(pE), now)) {
         totalPV += plannedQty * unitPrice;
         totalPlannedHH += plannedHH;
-      } else if (isBefore(new Date(sched.plannedStart), now)) {
-        const totalDuration =
-          new Date(sched.plannedEnd).getTime() -
-          new Date(sched.plannedStart).getTime();
-        const elapsed = now.getTime() - new Date(sched.plannedStart).getTime();
+      } else if (isBefore(new Date(pS), now)) {
+        const totalDuration = new Date(pE).getTime() - new Date(pS).getTime();
+        const elapsed = now.getTime() - new Date(pS).getTime();
         const factor = Math.min(1, elapsed / totalDuration);
         totalPV += plannedQty * unitPrice * factor;
         totalPlannedHH += plannedHH * factor;
@@ -389,14 +432,14 @@ export class ProductionAnalyticsService {
     });
 
     const progressMap = new Map<string, number>();
-    productionProgress.forEach((pp) => {
+    productionProgress.forEach((pp: MapElementProductionProgress) => {
       progressMap.set(
         `${pp.elementId}-${pp.activityId}`,
         Number(pp.progressPercent || 0) / 100,
       );
     });
 
-    schedules.forEach((sched) => {
+    schedules.forEach((sched: ActivitySchedule) => {
       const progress =
         progressMap.get(`${sched.elementId}-${sched.activityId}`) || 0;
       const unitPrice = costMap.get(sched.activityId) || 0;
@@ -423,42 +466,50 @@ export class ProductionAnalyticsService {
   /**
    * Obtém desempenho detalhado por equipe
    */
-  async getTeamPerformance(projectId: string) {
-    const teams = await prisma.team.findMany({
-      where: { site: { projectId } },
-      include: {
-        _count: { select: { timeRecords: true } },
-      },
-    });
+  async getTeamPerformance(projectId: string): Promise<TeamPerformance[]> {
+    const [teams, production] = await Promise.all([
+      prisma.team.findMany({
+        where: { site: { projectId } },
+        include: {
+          _count: { select: { timeRecords: true } },
+        },
+      }),
+      prisma.mapElementProductionProgress.findMany({
+        where: { projectId },
+      }),
+    ]);
 
-    const production = await prisma.mapElementProductionProgress.findMany({
-      where: { projectId },
-    });
-
-    return teams.map((team) => {
-      const teamProduction = production.filter((p) => {
-        const history = p.history as any[];
-        return (
-          Array.isArray(history) && history.some((h) => h.teamId === team.id)
+    return (teams as (Team & { _count: { timeRecords: number } })[]).map(
+      (team) => {
+        const teamProduction = production.filter(
+          (p: MapElementProductionProgress) => {
+            const history = p.history as unknown as ProgressHistoryEntry[];
+            return (
+              Array.isArray(history) &&
+              history.some((h: ProgressHistoryEntry) => h.teamId === team.id)
+            );
+          },
         );
-      });
 
-      const executedQty = teamProduction.length;
-      const hhReal = (team._count.timeRecords || 0) * 8;
+        const executedQty = teamProduction.length;
+        const hhReal = (team._count.timeRecords || 0) * 8;
 
-      return {
-        teamId: team.id,
-        teamName: team.name,
-        efficiency: hhReal > 0 ? (executedQty / hhReal) * 100 : 0,
-        executedQuantity: executedQty,
-      };
-    });
+        return {
+          teamId: team.id,
+          teamName: team.name,
+          efficiency: hhReal > 0 ? (executedQty / hhReal) * 100 : 0,
+          executedQuantity: executedQty,
+        };
+      },
+    );
   }
 
   /**
    * Obtém a distribuição de custos por categoria (Handcrafted Mock Logic)
    */
-  async getCostDistribution(projectId: string) {
+  async getCostDistribution(
+    projectId: string,
+  ): Promise<CostDistributionItem[]> {
     const unitCosts = await prisma.activityUnitCost.findMany({
       where: { projectId },
     });
@@ -470,7 +521,7 @@ export class ProductionAnalyticsService {
       Indiretos: 0,
     };
 
-    unitCosts.forEach((uc) => {
+    unitCosts.forEach((uc: ActivityUnitCost) => {
       const price = Number(uc.unitPrice || 0);
       categoryMap["Mão de Obra"] += price * 0.45;
       categoryMap["Materiais"] += price * 0.3;

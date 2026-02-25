@@ -21,6 +21,14 @@ import { HardcodedEnvironmentRule } from "../domain/rules/hardcoded-env.rule";
 import { PrimitiveObsessionRule } from "../domain/rules/primitive-obsession.rule";
 import { VisualConsistencyRule } from "../domain/rules/visual-consistency.rule";
 
+// Novas Regras Expandidas (Auditoria Completa)
+import { HardcodedSecretsRule } from "../domain/rules/security-hardcoded-secrets.rule";
+import { SecurityVulnerabilitiesRule } from "../domain/rules/security-vulnerabilities.rule";
+import { TypeSafetyRule } from "../domain/rules/type-safety.rule";
+import { SOLIDViolationsRule } from "../domain/rules/solid-violations.rule";
+import { CleanCodeRule } from "../domain/rules/clean-code.rule";
+import { TestabilityPerformanceRule } from "../domain/rules/testability-performance.rule";
+
 /**
  * ArchitecturalAuditor - Realiza auditoria estática do código
  * v3.1: SRP Refactoring & Constant Cleanup
@@ -65,6 +73,13 @@ export class ArchitecturalAuditor {
       new HardcodedEnvironmentRule(),
       new PrimitiveObsessionRule(),
       new VisualConsistencyRule(),
+      // Auditoria Expandida v4.0
+      new HardcodedSecretsRule(),
+      new SecurityVulnerabilitiesRule(),
+      new TypeSafetyRule(),
+      new SOLIDViolationsRule(),
+      new CleanCodeRule(),
+      new TestabilityPerformanceRule(),
     ];
 
     this.rules = availableRules;

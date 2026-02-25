@@ -1,19 +1,21 @@
 import { prisma } from "@/lib/prisma/client";
+import { MapElementProductionProgress } from "@prisma/client";
 import {
   ProductionProgressRepository,
   ActivityStatus,
 } from "../domain/production.repository";
 import { ProductionProgress } from "../domain/production-progress.entity";
+import { ProductionMapper } from "./prisma-production.mapper";
 
 export class PrismaProductionProgressRepository implements ProductionProgressRepository {
   async save(progress: ProductionProgress): Promise<ProductionProgress> {
-    const dataToSave: any = {
+    const dataToSave = {
       currentStatus: progress.currentStatus,
       progressPercent: progress.progressPercent,
       startDate: progress.startDate,
       endDate: progress.endDate,
-      history: progress.history,
-      dailyProduction: progress.dailyProduction,
+      history: progress.history as any, // Prisma expects JsonValue, compatible with our ProgressHistoryEntry[]
+      dailyProduction: progress.dailyProduction as any,
       requiresApproval: progress.requiresApproval,
       approvalReason: progress.approvalReason,
     };
@@ -22,8 +24,9 @@ export class PrismaProductionProgressRepository implements ProductionProgressRep
       const res = await prisma.mapElementProductionProgress.update({
         where: { id: progress.id },
         data: dataToSave,
+        include: { productionActivity: true },
       });
-      return new ProductionProgress(res as any);
+      return ProductionMapper.toDomain(res);
     }
 
     return this.performUpsert(progress.elementId, progress.activityId, {
@@ -38,13 +41,13 @@ export class PrismaProductionProgressRepository implements ProductionProgressRep
     if (progresses.length === 0) return;
 
     const transactions = progresses.map((progress) => {
-      const dataToSave: any = {
+      const dataToSave = {
         currentStatus: progress.currentStatus,
         progressPercent: progress.progressPercent,
         startDate: progress.startDate,
         endDate: progress.endDate,
-        history: progress.history,
-        dailyProduction: progress.dailyProduction,
+        history: progress.history as any,
+        dailyProduction: progress.dailyProduction as any,
         requiresApproval: progress.requiresApproval,
         approvalReason: progress.approvalReason,
         projectId: progress.projectId,
@@ -70,69 +73,64 @@ export class PrismaProductionProgressRepository implements ProductionProgressRep
   private async performUpsert(
     elementId: string,
     activityId: string,
-    data: any,
+    data: Record<string, unknown>,
   ): Promise<ProductionProgress> {
     const existing = await prisma.mapElementProductionProgress.findUnique({
       where: { elementId_activityId: { elementId, activityId } },
+      include: { productionActivity: true },
     });
 
     if (existing) {
-      const { projectId, elementId: elId, activityId: actId, ...updateData } = data;
+      const updateData = { ...data };
+      delete updateData["projectId"];
+      delete updateData["elementId"];
+      delete updateData["activityId"];
+
       const res = await prisma.mapElementProductionProgress.update({
         where: { id: existing.id },
-        data: updateData,
+        data: updateData as any,
+        include: { productionActivity: true },
       });
-      return new ProductionProgress(res as any);
+      return ProductionMapper.toDomain(res);
     }
 
     const res = await prisma.mapElementProductionProgress.create({
-      data: data,
+      data: data as any,
+      include: { productionActivity: true },
     });
-    return new ProductionProgress(res as any);
+    return ProductionMapper.toDomain(res);
   }
 
   async findById(id: string): Promise<ProductionProgress | null> {
     const res = await prisma.mapElementProductionProgress.findUnique({
       where: { id },
+      include: { productionActivity: true },
     });
     if (!res) return null;
-    return new ProductionProgress({
-      ...res,
-      currentStatus: res.currentStatus as ActivityStatus,
-      progressPercent: Number(res.progressPercent),
-      history: res.history as any[],
-      dailyProduction: res.dailyProduction as any,
-    } as any);
+    return ProductionMapper.toDomain(res);
   }
 
   async findByElement(elementId: string): Promise<ProductionProgress[]> {
     const results = await prisma.mapElementProductionProgress.findMany({
       where: { elementId },
-      include: { productionActivity: true }
+      include: { productionActivity: true },
     });
-    return results.map((res: any) => new ProductionProgress({
-      ...res,
-      activity: res.productionActivity,
-      projectId: (res as any).projectId,
-      currentStatus: res.currentStatus as ActivityStatus,
-      progressPercent: Number(res.progressPercent),
-      history: res.history as any[],
-      dailyProduction: res.dailyProduction as any,
-    } as any));
+    return results.map((res: MapElementProductionProgress) =>
+      ProductionMapper.toDomain(res),
+    );
   }
 
-  async findByElementsBatch(elementIds: string[]): Promise<ProductionProgress[]> {
+  async findByElementsBatch(
+    elementIds: string[],
+  ): Promise<ProductionProgress[]> {
     const results = await prisma.mapElementProductionProgress.findMany({
       where: { elementId: { in: elementIds } },
+      include: { productionActivity: true },
     });
 
-    return results.map((res: any) => new ProductionProgress({
-      ...res,
-      currentStatus: res.currentStatus as ActivityStatus,
-      progressPercent: Number(res.progressPercent),
-      history: res.history as any[],
-      dailyProduction: res.dailyProduction as any,
-    } as any));
+    return results.map((res: MapElementProductionProgress) =>
+      ProductionMapper.toDomain(res),
+    );
   }
 
   async findByActivity(
@@ -141,15 +139,18 @@ export class PrismaProductionProgressRepository implements ProductionProgressRep
   ): Promise<ProductionProgress[]> {
     const results = await prisma.mapElementProductionProgress.findMany({
       where: { projectId, activityId },
+      include: { productionActivity: true },
     });
-    return results.map((res: any) => new ProductionProgress(res as any));
+    return results.map((res: MapElementProductionProgress) =>
+      ProductionMapper.toDomain(res),
+    );
   }
 
   async findPendingLogs(
     companyId?: string | null,
   ): Promise<ProductionProgress[]> {
-    const where: any = { currentStatus: 'PENDING' };
-    if (companyId) where.project = { companyId };
+    const where: Record<string, unknown> = { currentStatus: "PENDING" };
+    if (companyId) where["project"] = { companyId };
 
     const results = await prisma.mapElementProductionProgress.findMany({
       where,
@@ -165,15 +166,17 @@ export class PrismaProductionProgressRepository implements ProductionProgressRep
       orderBy: { createdAt: "desc" },
     });
 
-    return results.map((res: any) => new ProductionProgress(res as any));
+    return results.map((res: MapElementProductionProgress) =>
+      ProductionMapper.toDomain(res),
+    );
   }
 
   async findProgress(
     elementId: string,
     activityId?: string,
   ): Promise<ProductionProgress | null> {
-    const where: any = { elementId };
-    if (activityId) where.activityId = activityId;
+    const where: Record<string, unknown> = { elementId };
+    if (activityId) where["activityId"] = activityId;
 
     const res = await prisma.mapElementProductionProgress.findFirst({
       where,
@@ -185,13 +188,9 @@ export class PrismaProductionProgressRepository implements ProductionProgressRep
 
     if (!res) return null;
 
-    return new ProductionProgress({
+    return ProductionMapper.toDomain({
       ...res,
-      projectId: res.mapElementTechnicalData?.projectId,
-      currentStatus: res.currentStatus as ActivityStatus,
-      progressPercent: Number(res.progressPercent),
-      history: res.history as any[],
-      dailyProduction: res.dailyProduction as any,
+      projectId: res.mapElementTechnicalData?.projectId || res.projectId,
     } as any);
   }
 }

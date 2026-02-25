@@ -26,7 +26,7 @@ async function run() {
   console.log("Running createReport with data:", JSON.stringify(mockData, null, 2));
 
   try {
-    const report = await service.createReport(mockData);
+    const report = await service.createReport(mockData as any);
     console.log("Success:", report);
   } catch (error: any) {
     console.error("Integration Test Error caught:", error.message);

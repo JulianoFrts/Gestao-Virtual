@@ -1,32 +1,12 @@
-import { User, Prisma } from "@prisma/client";
-
-export interface UserWithRelations extends Partial<User> {
-  authCredential?: {
-    email?: string;
-    role?: string;
-    status?: string;
-    mfaEnabled?: boolean;
-    password?: string;
-  };
-  affiliation?: {
-    companyId?: string | null;
-    projectId?: string | null;
-    siteId?: string | null;
-  };
-  hierarchyLevel?: number;
-  isSystemAdmin?: boolean;
-  address?: {
-    cep?: string;
-    logradouro?: string;
-    bairro?: string;
-    localidade?: string;
-    uf?: string;
-    number?: string | null;
-  } | null;
-}
+import {
+  UserEntity,
+  UserFiltersDTO,
+  CreateUserDTO,
+  UpdateUserDTO,
+} from "./user.dto";
 
 export interface UserListResult {
-  items: Partial<User>[];
+  items: UserEntity[];
   pagination: {
     page: number;
     limit: number;
@@ -39,43 +19,45 @@ export interface UserListResult {
 
 export interface UserRepository {
   findAll(params: {
-    where: Prisma.UserWhereInput;
+    where: UserFiltersDTO;
     skip: number;
     take: number;
-    orderBy?: Prisma.UserOrderByWithRelationInput;
-    select?: Prisma.UserSelect;
-  }): Promise<Partial<User>[]>;
+    orderBy?: Record<string, unknown>; // To be structured properly later
+    select?: Record<string, unknown>; // To be structured properly later
+  }): Promise<UserEntity[]>;
 
-  count(where: Prisma.UserWhereInput): Promise<number>;
+  count(where: UserFiltersDTO): Promise<number>;
 
   findById(
     id: string,
-    select?: Prisma.UserSelect,
-  ): Promise<Partial<User> | null>;
+    select?: Record<string, unknown>,
+  ): Promise<UserEntity | null>;
 
-  findByEmail(email: string): Promise<Partial<User> | null>;
+  findByEmail(email: string): Promise<UserEntity | null>;
 
   create(
-    data: Prisma.UserCreateInput,
-    select?: Prisma.UserSelect,
-  ): Promise<Partial<User>>;
+    data: CreateUserDTO,
+    select?: Record<string, unknown>,
+  ): Promise<UserEntity>;
 
   update(
     id: string,
-    data: Prisma.UserUpdateInput,
-    select?: Prisma.UserSelect,
-  ): Promise<Partial<User>>;
+    data: UpdateUserDTO,
+    select?: Record<string, unknown>,
+  ): Promise<UserEntity>;
 
-  updateMany(
-    ids: string[],
-    data: Prisma.UserUpdateInput,
-  ): Promise<{ count: number }>;
+  updateMany(ids: string[], data: UpdateUserDTO): Promise<{ count: number }>;
 
   delete(id: string): Promise<void>;
+
   findByIdentifier(
     identifier: string,
-    select?: Prisma.UserSelect,
-  ): Promise<Partial<User> | null>;
+    select?: Record<string, unknown>,
+  ): Promise<UserEntity | null>;
+
   deduplicateCPFs(): Promise<number>;
-  upsertAddress(userId: string, data: any): Promise<any>;
+  upsertAddress(
+    userId: string,
+    data: Record<string, unknown>,
+  ): Promise<Record<string, unknown>>;
 }

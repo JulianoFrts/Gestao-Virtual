@@ -1,4 +1,4 @@
-import { PermissionLevel, PermissionMatrix } from "@prisma/client";
+import { PermissionLevelDTO, PermissionMatrixDTO } from "./access-control.dto";
 
 export interface FindAllLevelsParams {
   page: number;
@@ -10,12 +10,15 @@ export interface AccessControlRepository {
   // Levels
   findAllLevels(
     params: FindAllLevelsParams,
-  ): Promise<{ items: PermissionLevel[]; total: number }>;
-  findLevelByName(name: string): Promise<PermissionLevel | null>;
-  createLevel(data: any): Promise<PermissionLevel>;
+  ): Promise<{ items: PermissionLevelDTO[]; total: number }>;
+  findLevelByName(name: string): Promise<PermissionLevelDTO | null>;
+  createLevel(data: Record<string, unknown>): Promise<PermissionLevelDTO>;
 
   // Matrix
-  findAllMatrix(levelId?: string): Promise<PermissionMatrix[]>;
-  createQueueTask(type: string, payload: any): Promise<any>;
+  findAllMatrix(levelId?: string): Promise<PermissionMatrixDTO[]>;
+  createQueueTask(
+    type: string,
+    payload: Record<string, unknown> | unknown[],
+  ): Promise<Record<string, unknown>>;
   updateTaskStatus(taskId: string, status: string): Promise<void>;
 }

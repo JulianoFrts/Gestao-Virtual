@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { requireAuth } from "@/lib/auth/session";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { PrismaWorkStageRepository } from "@/modules/work-stages/domain/work-stage.repository";
+import { PrismaWorkStageRepository } from "@/modules/work-stages/infrastructure/prisma-work-stage.repository";
 import { WorkStageService } from "@/modules/work-stages/application/work-stage.service";
 
 const repository = new PrismaWorkStageRepository();

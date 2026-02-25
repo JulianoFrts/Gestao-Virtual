@@ -1,6 +1,11 @@
 import { UserRepository } from "../domain/user.repository";
 import { SystemAuditRepository } from "../../audit/domain/system-audit.repository";
-import { type Prisma } from "@prisma/client";
+import {
+  UserEntity,
+  UserFiltersDTO,
+  CreateUserDTO,
+  UpdateUserDTO,
+} from "../domain/user.dto";
 import { isSystemOwner } from "@/lib/constants/security";
 import { prisma } from "@/lib/prisma/client";
 import { UserPermissionService } from "./user-permission.service";
@@ -14,8 +19,8 @@ interface LogAuditParams {
   action: string;
   entity: string;
   entityId: string;
-  newValues?: any;
-  oldValues?: any;
+  newValues?: Record<string, unknown> | null;
+  oldValues?: Record<string, unknown> | null;
   performerId?: string;
 }
 
@@ -39,22 +44,22 @@ export class UserService {
   // =============================================
 
   async listUsers(params: {
-    where: Prisma.UserWhereInput;
+    where: UserFiltersDTO;
     page: number;
     limit: number;
     sortBy?: string;
     sortOrder?: string;
-    select?: Prisma.UserSelect;
-  }) {
+    select?: Record<string, unknown>;
+  }): Promise<Record<string, unknown>> {
     const skip = (params.page - 1) * params.limit;
     const [items, total] = await Promise.all([
       this.repository.findAll({
         where: params.where,
         skip,
         take: params.limit,
-        orderBy: (params.sortBy
+        orderBy: params.sortBy
           ? { [params.sortBy]: params.sortOrder || "asc" }
-          : [{ hierarchyLevel: "desc" }, { name: "asc" }]) as any,
+          : { affiliation: { hierarchyLevel: "desc" } },
         select: params.select,
       }),
       this.repository.count(params.where),
@@ -63,39 +68,44 @@ export class UserService {
     return UserMapper.toPaginatedDTO(items, total, params.page, params.limit);
   }
 
-  async getUserById(id: string, select?: Prisma.UserSelect) {
+  async getUserById(
+    id: string,
+    select?: Record<string, unknown>,
+  ): Promise<UserEntity> {
     const user = await this.repository.findById(id, select);
     if (!user) throw new Error("User not found");
     return user;
   }
 
-  async findByEmail(email: string) {
+  async findByEmail(email: string): Promise<UserEntity | null> {
     return this.repository.findByEmail(email);
   }
 
   async createUser(
-    data: any,
-    select?: Prisma.UserSelect,
+    data: CreateUserDTO,
+    select?: Record<string, unknown>,
     performerId?: string,
-  ) {
-    const existing = await this.repository.findByEmail(data.email);
+  ): Promise<UserEntity> {
+    const normalizedEmail = data.email.toLowerCase().trim();
+    const existing = await this.repository.findByEmail(normalizedEmail);
     if (existing) throw new Error("Email already exists");
 
-    const hashedPassword = await this.securityService.hashPassword(
-      data.password,
-    );
-    const hierarchyLevel = await this.permissionService.getRankByRole(
-      data.role,
-    );
+    const passwordToHash =
+      data.password || Math.random().toString(36).slice(-10);
+    const hashedPassword =
+      await this.securityService.hashPassword(passwordToHash);
+
+    const role = data.role || "OPERATIONAL";
+    const hierarchyLevel = await this.permissionService.getRankByRole(role);
 
     const newUser = await this.repository.create(
       {
         ...data,
+        email: normalizedEmail,
         password: hashedPassword,
-        hierarchyLevel,
+        hierarchyLevel: data.hierarchyLevel || hierarchyLevel,
         permissions: data.permissions || {},
-        status: "ACTIVE",
-        emailVerified: new Date(),
+        status: data.status || "ACTIVE",
       },
       select,
     );
@@ -103,8 +113,8 @@ export class UserService {
     await this.logAudit({
       action: "CREATE",
       entity: "User",
-      entityId: newUser.id!,
-      newValues: data,
+      entityId: newUser.id,
+      newValues: data as any,
       performerId,
     });
     return newUser;
@@ -112,18 +122,22 @@ export class UserService {
 
   async updateUser(
     id: string,
-    data: any,
-    select?: Prisma.UserSelect,
+    data: UpdateUserDTO,
+    select?: Record<string, unknown>,
     performerId?: string,
-  ) {
-    // 1. Verificar existência e dados atuais para o log de auditoria
+  ): Promise<Record<string, unknown>> {
+    // 1. Verificar existência e dados atuais
     const existing = await this.repository.findById(id, {
       id: true,
       name: true,
-      hierarchyLevel: true,
-      authCredential: { select: { email: true, role: true } },
+      authCredential: { select: { email: true, role: true, isSystemAdmin: true } },
       affiliation: {
-        select: { companyId: true, projectId: true, siteId: true },
+        select: {
+          companyId: true,
+          projectId: true,
+          siteId: true,
+          hierarchyLevel: true,
+        },
       },
     });
     if (!existing) throw new Error("User not found");
@@ -132,15 +146,16 @@ export class UserService {
 
     // 2. Segurança de Hierarquia e Regras Críticas
     if (performerId) {
+      const existingLevel = existing.affiliation?.hierarchyLevel || 0;
       await this.securityService.validateHierarchySovereignty(
         performerId,
         id,
-        existing.hierarchyLevel || 0,
+        existingLevel,
       );
 
       if (
         updateData.role &&
-        updateData.role !== (existing as any).authCredential?.role
+        updateData.role !== existing.authCredential?.role
       ) {
         const newLevel = await this.permissionService.getRankByRole(
           updateData.role,
@@ -157,7 +172,7 @@ export class UserService {
         await this.securityService.validateSystemAdminFlag(
           performerId,
           updateData.isSystemAdmin,
-          (existing as any).isSystemAdmin || false,
+          !!existing.authCredential?.isSystemAdmin,
         );
       }
     }
@@ -178,8 +193,8 @@ export class UserService {
       action: "UPDATE",
       entity: "User",
       entityId: id,
-      newValues: data,
-      oldValues: existing,
+      newValues: data as any,
+      oldValues: existing as any,
       performerId,
     });
 
@@ -192,9 +207,12 @@ export class UserService {
 
   private async processGranularUpdates(
     id: string,
-    existing: any,
-    updateData: any,
-  ) {
+    existing: UserEntity,
+    updateData: UpdateUserDTO,
+  ): Promise<{
+    success: string[];
+    failed: { field: string; error: string }[];
+  }> {
     const report: {
       success: string[];
       failed: { field: string; error: string }[];
@@ -203,7 +221,7 @@ export class UserService {
       failed: [],
     };
 
-    const fieldsToProcess = Object.keys(updateData);
+    const fieldsToProcess = Object.keys(updateData) as (keyof UpdateUserDTO)[];
 
     for (const field of fieldsToProcess) {
       try {
@@ -220,7 +238,8 @@ export class UserService {
         // Validação de email único
         if (
           field === "email" &&
-          value !== (existing as any).authCredential?.email
+          typeof value === "string" &&
+          value !== existing.authCredential?.email
         ) {
           const emailExists = await this.repository.findByEmail(value);
           if (emailExists)
@@ -229,8 +248,9 @@ export class UserService {
 
         await this.repository.update(id, { [field]: value });
         report.success.push(field);
-      } catch (error: any) {
-        const errorMsg = error.message || "Erro desconhecido";
+      } catch (error: unknown) {
+        const err = error as Error;
+        const errorMsg = err.message || "Erro desconhecido";
         console.error(`[GranularUpdate] Falha no campo ${field}:`, errorMsg);
         report.failed.push({ field, error: errorMsg });
 
@@ -248,14 +268,14 @@ export class UserService {
   }
 
   /**
-   * Atualização em massa de usuários.
-   * Itera sobre os IDs e aplica o updateUser para cada um, garantindo auditoria e segurança.
-   */
-  /**
    * Atualização em massa de usuários otimizada.
    * Utiliza transação única no banco de dados para garantir performance e atomicidade.
    */
-  async bulkUpdateUsers(ids: string[], data: any, performerId: string) {
+  async bulkUpdateUsers(
+    ids: string[],
+    data: UpdateUserDTO,
+    performerId: string,
+  ): Promise<{ count: number }> {
     if (!ids.length) return { count: 0 };
 
     // 1. Auditoria da Ação em Massa
@@ -263,7 +283,7 @@ export class UserService {
       action: "BULK_UPDATE",
       entity: "User",
       entityId: `BATCH_${ids.length}`,
-      newValues: { ids, data },
+      newValues: data as any,
       performerId,
     });
 
@@ -276,19 +296,18 @@ export class UserService {
     return result;
   }
 
-  async deleteUser(id: string, performerId?: string) {
+  async deleteUser(id: string, performerId?: string): Promise<void> {
     const existing = await this.getUserById(id, {
       id: true,
       name: true,
       hierarchyLevel: true,
       authCredential: { select: { role: true, email: true } },
     });
-    const existingRole = (existing as any).authCredential?.role || "WORKER";
-    const existingEmail = (existing as any).authCredential?.email || "";
+
+    const existingRole = existing.authCredential?.role || "WORKER";
+    const existingEmail = existing.authCredential?.email || "";
 
     if (isSystemOwner(existingRole)) {
-      // Permitir exclusão se o performer também é System Owner (ex: SuperAdminGod)
-      // Apenas bloquear auto-exclusão por segurança
       if (!performerId || performerId === id) {
         throw new Error(
           "Não é possível excluir a si mesmo como proprietário do sistema.",
@@ -298,7 +317,7 @@ export class UserService {
         id: true,
         authCredential: { select: { role: true } },
       });
-      const performerRole = (performer as any).authCredential?.role || "WORKER";
+      const performerRole = performer.authCredential?.role || "WORKER";
       if (!isSystemOwner(performerRole)) {
         throw new Error(
           "Apenas proprietários do sistema podem excluir outros administradores.",
@@ -310,10 +329,12 @@ export class UserService {
       await this.securityService.validateHierarchySovereignty(
         performerId,
         id,
-        (existing as any).hierarchyLevel || 0,
+        existing.hierarchyLevel || 0,
       );
     }
 
+    // Usando prisma client diretamente para deleções complexas por enquanto
+    // TODO: Mover para repositórios específicos se necessário
     await prisma.$transaction([
       prisma.account.deleteMany({ where: { userId: id } }),
       prisma.session.deleteMany({ where: { userId: id } }),
@@ -333,6 +354,7 @@ export class UserService {
     ]);
 
     await this.repository.delete(id);
+
     if (performerId) {
       await this.logAudit({
         action: "DELETE",
@@ -341,7 +363,7 @@ export class UserService {
         newValues: null,
         oldValues: {
           email: existingEmail,
-          name: existing.name,
+          name: existing.name || "",
           role: existingRole,
         },
         performerId,
@@ -353,91 +375,79 @@ export class UserService {
   // ORQUESTRAÇÃO DE PERFIL E DELEGAÇÃO
   // =============================================
 
-  async getProfile(userId: string) {
-    let user;
+  async getProfile(userId: string): Promise<Record<string, unknown>> {
+    let user: UserEntity;
+    const selectConfig = {
+      id: true,
+      name: true,
+      image: true,
+      authCredential: {
+        select: {
+          email: true,
+          role: true,
+          status: true,
+          isSystemAdmin: true,
+        },
+      },
+      affiliation: {
+        select: {
+          companyId: true,
+          projectId: true,
+          siteId: true,
+          hierarchyLevel: true,
+        },
+      },
+    };
+
     try {
-      user = await this.repository.findById(userId, {
-        id: true,
-        name: true,
-        image: true,
-        hierarchyLevel: true,
-        ...({ isSystemAdmin: true } as any),
-        authCredential: {
-          select: {
-            email: true,
-            role: true,
-            status: true,
-          },
-        },
-        affiliation: {
-          select: {
-            companyId: true,
-            projectId: true,
-            siteId: true,
-          },
-        },
-      });
+      user = (await this.repository.findById(userId, selectConfig)) as UserEntity;
     } catch (error) {
-      console.error(
-        "[UserService] Error fetching user with isSystemAdmin, falling back...",
-        error,
-      );
-      // Fallback without isSystemAdmin
-      user = await this.repository.findById(userId, {
-        id: true,
-        name: true,
-        image: true,
-        hierarchyLevel: true,
-        authCredential: {
-          select: {
-            email: true,
-            role: true,
-            status: true,
-          },
-        },
-        affiliation: {
-          select: {
-            companyId: true,
-            projectId: true,
-            siteId: true,
-          },
-        },
-      });
+      console.error("[UserService] Error fetching user profile:", error);
+      throw error;
     }
 
     if (!user) throw new Error("User not found");
 
-    const userRole = (user as any).authCredential?.role || "WORKER";
-    const projectId = (user as any).affiliation?.projectId;
+    const userRole = user.authCredential?.role || "OPERATIONAL";
+    const hierarchyLevel = user.affiliation?.hierarchyLevel || 0;
+    const projectId = user.affiliation?.projectId;
 
     const permissions = await this.permissionService.getPermissionsMap(
       userRole,
-      user.id as string,
-      (projectId as string) || undefined,
+      user.id,
+      projectId || undefined,
     );
     const ui = await this.permissionService.getUIFlagsMap(
       userRole,
-      (user as any).hierarchyLevel || 0,
+      hierarchyLevel,
       permissions,
     );
 
-    // Check both: Role-based (Centralized) OR Explicit Flag in DB
+    // Soberania de Admin: Role Centralizada OU Flag em AuthCredential
     const isSystemAdmin =
-      isSystemOwner(userRole) || (user as any).isSystemAdmin === true;
+      isSystemOwner(userRole) || user.authCredential?.isSystemAdmin === true;
 
     return {
       ...UserMapper.toDTO(user),
       permissions,
       ui,
       isSystemAdmin,
+      hierarchyLevel, // Retorna no topo para retrocompatibilidade básica
     };
   }
 
-  async updateProfile(userId: string, data: any) {
+  async updateProfile(
+    userId: string,
+    data: UpdateUserDTO,
+  ): Promise<Record<string, unknown>> {
     return this.updateUser(userId, data, undefined, userId);
   }
 
-  async changePassword(userId: string, data: any, performerId?: string) {
+  async changePassword(
+    userId: string,
+    data: { currentPassword?: string; newPassword?: string; password?: string },
+    performerId?: string,
+  ): Promise<void> {
     return this.securityService.changePassword(userId, data, performerId);
   }
 
@@ -445,7 +455,7 @@ export class UserService {
     userId: string,
     newEmail: string,
     performerId: string,
-  ) {
+  ): Promise<UserEntity> {
     const existing = await this.repository.findById(userId);
     if (!existing) throw new Error("Usuário não encontrado");
     if (await this.repository.findByEmail(newEmail))
@@ -453,27 +463,31 @@ export class UserService {
 
     const updatedUser = await this.repository.update(userId, {
       email: newEmail,
-    } as any);
+    });
+
     await this.logAudit({
       action: "UPDATE_EMAIL",
       entity: "User",
       entityId: userId,
       newValues: { email: newEmail },
       oldValues: {
-        email:
-          (existing as any).authCredential?.email || (existing as any).email,
+        email: existing.authCredential?.email || existing.cpf || "",
       },
       performerId,
     });
     return updatedUser;
   }
 
-  async deduplicateCPFs() {
+  async deduplicateCPFs(): Promise<number> {
     return this.repository.deduplicateCPFs();
   }
 
   // Proxy para permissões e UI flags (para uso externo se necessário)
-  async getPermissionsMap(role: string, userId: string, projectId?: string) {
+  async getPermissionsMap(
+    role: string,
+    userId: string,
+    projectId?: string,
+  ): Promise<Record<string, boolean>> {
     return this.permissionService.getPermissionsMap(role, userId, projectId);
   }
 
@@ -481,7 +495,7 @@ export class UserService {
     role: string,
     hierarchyLevel?: number,
     permissions?: Record<string, boolean>,
-  ) {
+  ): Promise<Record<string, boolean>> {
     return this.permissionService.getUIFlagsMap(
       role,
       hierarchyLevel,
@@ -489,7 +503,10 @@ export class UserService {
     );
   }
 
-  async upsertAddress(userId: string, data: any) {
+  async upsertAddress(
+    userId: string,
+    data: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
     return this.repository.upsertAddress(userId, data);
   }
 
@@ -497,11 +514,14 @@ export class UserService {
   // LEGACY PROXIES
   // =============================================
 
-  async listLegacyEmployees() {
+  async listLegacyEmployees(): Promise<any[]> {
     return this.legacyService.listLegacyEmployees();
   }
 
-  async listLegacyProfiles(params: { page: number; limit: number }) {
+  async listLegacyProfiles(params: {
+    page: number;
+    limit: number;
+  }): Promise<any[]> {
     return this.legacyService.listLegacyProfiles(params);
   }
 
@@ -509,15 +529,15 @@ export class UserService {
   // AUDITORIA INTERNA
   // =============================================
 
-  private async logAudit(params: LogAuditParams) {
+  private async logAudit(params: LogAuditParams): Promise<void> {
     if (this.auditRepository && params.performerId) {
       await this.auditRepository.log({
         userId: params.performerId,
         action: params.action,
         entity: params.entity,
         entityId: params.entityId,
-        newValues: params.newValues,
-        oldValues: params.oldValues,
+        newValues: params.newValues || undefined,
+        oldValues: params.oldValues || undefined,
       });
     }
   }

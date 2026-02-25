@@ -90,26 +90,42 @@ export function ContextSelectorModal({ open, onSuccess }: ContextSelectorModalPr
   };
 
   const handleSubmit = async () => {
-    if (!selection.companyId && options?.type === 'GLOBAL') {
-        toast({ title: "Atenção", description: "Selecione uma empresa." });
-        return;
+    if (!selection.companyId && options?.type === "GLOBAL") {
+      toast({ title: "Atenção", description: "Selecione uma empresa." });
+      return;
     }
-    if (!selection.projectId && (options?.type === 'GLOBAL' || options?.type === 'PROJECT_MANAGER')) {
-        toast({ title: "Atenção", description: "Selecione uma obra." });
-        return;
+    if (
+      !selection.projectId &&
+      (options?.type === "GLOBAL" || options?.type === "PROJECT_MANAGER")
+    ) {
+      toast({ title: "Atenção", description: "Selecione uma obra." });
+      return;
     }
-    if (!selection.siteId) {
-        toast({ title: "Atenção", description: "Selecione um canteiro." });
-        return;
+
+    // Canteiro opcional para Gestores de Nível Superior
+    const canSkipSite =
+      options?.type === "GLOBAL" || options?.type === "PROJECT_MANAGER";
+    if (!selection.siteId && !canSkipSite) {
+      toast({ title: "Atenção", description: "Selecione um canteiro." });
+      return;
     }
 
     setIsSubmitting(true);
     try {
-      await selectContext(selection);
+      // Normaliza 'all' para vazio antes de enviar
+      const finalSelection = {
+        ...selection,
+        siteId: selection.siteId === "all" ? "" : selection.siteId,
+      };
+      await selectContext(finalSelection);
       toast({ title: "Sucesso", description: "Contexto de trabalho definido!" });
       onSuccess();
     } catch (error: any) {
-      toast({ title: "Erro de Validação", description: error.message, variant: "destructive" });
+      toast({
+        title: "Erro de Validação",
+        description: error.message,
+        variant: "destructive",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -201,13 +217,36 @@ export function ContextSelectorModal({ open, onSuccess }: ContextSelectorModalPr
                   <SelectValue placeholder="Selecione o Canteiro" />
                 </SelectTrigger>
                 <SelectContent className="bg-[#0c0c0e] border-white/10 rounded-2xl">
-                  {options.sites?.filter((s: any) => (options.type !== 'GLOBAL' && options.type !== 'PROJECT_MANAGER') || s.projectId === selection.projectId).map((s: any) => (
-                    <SelectItem key={s.id} value={s.id} className="text-white hover:bg-primary/20">{s.name}</SelectItem>
-                  ))}
+                  <SelectItem value="all" className="text-emerald-400 font-black uppercase tracking-tighter hover:bg-emerald-500/10">
+                    -- TODOS OS CANTEIROS --
+                  </SelectItem>
+                  {options.sites
+                    ?.filter(
+                      (s: any) =>
+                        (options.type !== "GLOBAL" &&
+                          options.type !== "PROJECT_MANAGER") ||
+                        s.projectId === selection.projectId,
+                    )
+                    .map((s: any) => (
+                      <SelectItem
+                        key={s.id}
+                        value={s.id}
+                        className="text-white hover:bg-primary/20"
+                      >
+                        {s.name}
+                      </SelectItem>
+                    ))}
                   {/* Se for SITE_MANAGER, as opções vêm direto no options.sites */}
-                  {options.type === 'SITE_MANAGER' && options.sites.map((s: any) => (
-                      <SelectItem key={s.id} value={s.id} className="text-white hover:bg-primary/20">{s.name}</SelectItem>
-                  ))}
+                  {options.type === "SITE_MANAGER" &&
+                    options.sites.map((s: any) => (
+                      <SelectItem
+                        key={s.id}
+                        value={s.id}
+                        className="text-white hover:bg-primary/20"
+                      >
+                        {s.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>

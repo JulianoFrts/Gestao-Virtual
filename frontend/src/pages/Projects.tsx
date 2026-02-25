@@ -11,21 +11,18 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
-import { Plus, HardHat, Search, Loader2, MapPin, Building2, BadgeCheck, Pencil, Trash2, UserCircle, Briefcase, TrendingUp, Clock, Lock, Shield } from 'lucide-react';
-import { isProtectedSignal, can, show } from '@/signals/authSignals';
+import { Plus, HardHat, Search, Loader2, MapPin, Building2, BadgeCheck, Pencil, Trash2, UserCircle, Briefcase, TrendingUp, Clock, Shield } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/shared/ConfirmationDialog';
 import { DelegationModal } from '@/components/projects/DelegationModal';
-import { useSignals } from "@preact/signals-react/runtime";
+import { useAuth } from '@/contexts/AuthContext';
 import { applyMask, parseNumber, parseCurrency, maskNumber, maskCurrency } from '@/utils/inputValidators';
 
-
 export default function Projects() {
-    useSignals();
+    const { can, show } = useAuth();
     const { projects, isLoading: projectsLoading, createProject, updateProject, deleteProject } = useProjects();
     const { companies, isLoading: companiesLoading } = useCompanies();
     const { users, isLoading: usersLoading } = useUsers();
     const isLoading = projectsLoading || companiesLoading || usersLoading;
-
 
     const [searchTerm, setSearchTerm] = useState('');
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -141,7 +138,6 @@ export default function Projects() {
     const getProjectManagers = (projectId: string) => {
         return users.filter(u => u.role === 'GESTOR_PROJECT' && u.projectId === projectId);
     };
-
 
     return (
         <div className="space-y-6 animate-fade-in view-adaptive-container pb-10">
@@ -287,8 +283,6 @@ export default function Projects() {
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Nota: Delegação de Poderes foi movida para um modal próprio, acessível via botão no card da obra */}
 
                             <div className="pt-4 flex gap-3">
                                 <Button type="button" variant="outline" onClick={resetForm} className="flex-1 h-11 border-white/10">

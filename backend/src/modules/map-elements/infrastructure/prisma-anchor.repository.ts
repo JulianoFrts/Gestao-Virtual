@@ -43,17 +43,17 @@ export class PrismaAnchorRepository implements AnchorRepository {
 
   // Legacy support
   async findLegacyMany(where: any): Promise<any[]> {
-    return prisma.modelAnchor.findMany({
+    return (prisma as any).modelAnchors.findMany({
       where,
       orderBy: { createdAt: "desc" },
     });
   }
 
   async createLegacy(data: any): Promise<any> {
-    return prisma.modelAnchor.create({ data });
+    return (prisma as any).modelAnchors.create({ data });
   }
 
   async deleteLegacy(id: string): Promise<void> {
-    await prisma.modelAnchor.delete({ where: { id } });
+    await (prisma as any).modelAnchors.delete({ where: { id } });
   }
 }

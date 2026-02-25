@@ -58,19 +58,15 @@ import {
   AlertCircle,
   Lock
 } from "lucide-react";
-import { isProtectedSignal, can } from "@/signals/authSignals";
-import { useSignals } from "@preact/signals-react/runtime";
-import { getRoleStyle, getRoleLabel, STANDARD_ROLES } from "@/utils/roleUtils";
+import { useLayout } from "@/contexts/LayoutContext";
+import { useInit } from "@/contexts/InitContext";
 import {
-  dailyReportDraftSignal,
-  updateReportDraft,
-  resetReportDraft,
-  initReportDraft,
+  useDailyReportContext,
   type DailyReportActivity,
   type DailyReportSubPointDetail,
   type DailyReportPhoto,
-} from "@/signals/dailyReportSignals";
-import { toggleSidebar, isSidebarOpenSignal } from "@/signals/uiSignals";
+} from "@/contexts/DailyReportContext";
+import { getRoleStyle, getRoleLabel, STANDARD_ROLES } from "@/utils/roleUtils";
 import { cn, formatNameForLGPD } from "@/lib/utils";
 import { useSpanTechnicalData } from "@/hooks/useSpanTechnicalData";
 import {
@@ -96,7 +92,7 @@ import {
 } from "@/components/ui/dialog";
 
 import { useWorkStages } from "@/hooks/useWorkStages";
-import { fetchWorkStages, hasWorkStagesFetchedSignal } from "@/signals/workStageSignals";
+import { fetchWorkStages } from "@/signals/workStageSignals";
 import { Progress } from "@/components/ui/progress";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useProjects } from "@/hooks/useProjects";
@@ -413,12 +409,14 @@ const PhotoUploadZone = ({
 };
 
 export default function DailyReport() {
-  useSignals();
-  const isSidebarOpen = isSidebarOpenSignal.value;
-  const { profile } = useAuth();
+  const layout = useLayout();
+  const { profile, isProtected, can } = useAuth();
+  const dailyReport = useDailyReportContext();
+  const { draft, updateReportDraft } = dailyReport;
+  const { hasWorkStagesFetched } = useInit();
   const { toast } = useToast();
 
-  const isWorker = !isProtectedSignal.value && !can("daily_reports.manage");
+  const isWorker = !isProtected && !can("daily_reports.manage");
   const isSuperAdmin = !profile?.companyId; // Gestão Global / Super Admin
 
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string | undefined>(profile?.companyId);
@@ -446,7 +444,6 @@ export default function DailyReport() {
     return projects.filter(p => p.companyId === selectedCompanyId);
   }, [projects, selectedCompanyId]);
 
-  const draft = dailyReportDraftSignal.value;
   const {
     employeeId,
     teamIds,
@@ -1149,9 +1146,9 @@ export default function DailyReport() {
     fetchPreviewLocal();
   }, [fetchPreviewLocal]);
 
-  // Inicializar rascunho
+  // No longer needed as context handles init
   React.useEffect(() => {
-    initReportDraft();
+    // initReportDraft(); // logic moved to context
   }, []);
 
   // Buscar torres quando o site for selecionado ou deduzido
@@ -1384,7 +1381,7 @@ export default function DailyReport() {
       }
 
       if (result.success) {
-        resetReportDraft();
+        dailyReport.resetReportDraft();
         toast({
           title: "Relatório enviado!",
           description: `O rdo com ${selectedActivities.length} atividades foi salvo com sucesso.`,
@@ -1508,7 +1505,7 @@ export default function DailyReport() {
           {activeTab === 'meus-rdos' && (
             <Button 
               onClick={() => {
-                resetReportDraft();
+                dailyReport.resetReportDraft();
                 setActiveTab('novo-rdo');
               }}
               className="bg-primary hover:bg-primary/90 text-black font-black uppercase text-xs tracking-widest h-14 px-8 rounded-2xl shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95"
@@ -1764,11 +1761,11 @@ export default function DailyReport() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={toggleSidebar}
+                        onClick={() => layout.toggleSidebar()}
                         className="h-8 w-8 text-primary hover:bg-primary/10 rounded-lg transition-colors hidden lg:flex"
-                        title={isSidebarOpen ? "Ocultar Menu" : "Expandir Menu"}
+                        title={layout.isSidebarOpen ? "Ocultar Menu" : "Expandir Menu"}
                       >
-                        {isSidebarOpen ? (
+                        {layout.isSidebarOpen ? (
                           <PanelLeftClose className="w-5 h-5" />
                         ) : (
                           <PanelLeftOpen className="w-5 h-5" />
@@ -2394,7 +2391,7 @@ export default function DailyReport() {
                                         <PhotoUploadZone 
                                           photos={act.photos || []} 
                                           onChange={(photos) => {
-                                            const draft = dailyReportDraftSignal.value;
+                                            
                                             const updatedActs = draft.selectedActivities.map(a => {
                                               if (a.id === act.id) return { ...a, photos };
                                               return a;
@@ -2498,7 +2495,7 @@ export default function DailyReport() {
                                                             className="w-full bg-black/40 border-white/5 rounded-2xl text-sm text-amber-500 font-bold p-3 focus:ring-primary/20 color-scheme-dark"
                                                             onChange={(e) => {
                                                               const val = e.target.value;
-                                                              const draft = dailyReportDraftSignal.value;
+                                                              
                                                               const updatedActs = draft.selectedActivities.map(a => {
                                                                 if (a.id === act.id) {
                                                                   return {
@@ -2532,7 +2529,7 @@ export default function DailyReport() {
                                                             className="w-full bg-black/40 border-white/5 rounded-2xl text-sm text-primary font-bold p-3 focus:ring-primary/20 color-scheme-dark"
                                                             onChange={(e) => {
                                                               const val = e.target.value;
-                                                              const draft = dailyReportDraftSignal.value;
+                                                              
                                                               const updatedActs = draft.selectedActivities.map(a => {
                                                                 if (a.id === act.id) {
                                                                   return {
@@ -2562,7 +2559,7 @@ export default function DailyReport() {
                                                           <Select
                                                             value={d.status || ActivityStatus.IN_PROGRESS}
                                                             onValueChange={(val: ActivityStatus) => {
-                                                              const draft = dailyReportDraftSignal.value;
+                                                              
                                                               const updatedActs = draft.selectedActivities.map(a => {
                                                                 if (a.id === act.id) {
                                                                   return {
@@ -2608,7 +2605,7 @@ export default function DailyReport() {
                                                             className={cn("w-full accent-primary", (d.status === ActivityStatus.FINISHED || d.status === ActivityStatus.BLOCKED) ? "opacity-50" : "")}
                                                             onChange={(e) => {
                                                               const progressVal = parseInt(e.target.value);
-                                                              const draft = dailyReportDraftSignal.value;
+                                                              
                                                               const updatedActs = draft.selectedActivities.map(a => {
                                                                 if (a.id === act.id) {
                                                                   return {
@@ -2634,7 +2631,7 @@ export default function DailyReport() {
                                                           className="bg-black/40 border-white/5 rounded-2xl text-sm min-h-[120px] text-white/90 placeholder:text-white/20 italic p-4 focus:ring-primary/20"
                                                           value={d.comment || ""}
                                                           onChange={(e) => {
-                                                            const draft = dailyReportDraftSignal.value;
+                                                            
                                                             const updatedActs = draft.selectedActivities.map(a => {
                                                               if (a.id === act.id) {
                                                                 return {
@@ -2657,7 +2654,7 @@ export default function DailyReport() {
                                                         <PhotoUploadZone 
                                                           photos={d.photos || []} 
                                                           onChange={(photos) => {
-                                                            const draft = dailyReportDraftSignal.value;
+                                                            
                                                             const updatedActs = draft.selectedActivities.map(a => {
                                                               if (a.id === act.id) {
                                                                 return {

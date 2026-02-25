@@ -1,0 +1,1110 @@
+# Relatório de Auditoria GESTÃO VIRTUAL e demandas de refatorações e melhorias!
+
+| N° | Severidade | Arquivo | Descrição do Problema | Plano de Refatoração |
+| :--- | :--- | :--- | :--- | :--- |
+| 1 | HIGH | src/app/api/v1/users/route.ts | **SQL Injection Risk**: Interpolação de string em query SQL/raw detectada. | Use queries parametrizadas ($1, $2) ou Prisma para prevenir SQL injection. |
+| 2 | HIGH | src/modules/audit/domain/rules/security-vulnerabilities.rule.ts | **XSS Risk**: Uso de dangerouslySetInnerHTML detectado (3x). Risco de XSS. | Use textContent ou bibliotecas de sanitização (DOMPurify). |
+| 3 | HIGH | src/modules/common/application/task-worker.ts | **SQL Injection Risk**: Interpolação de string em query SQL/raw detectada. | Use queries parametrizadas ($1, $2) ou Prisma para prevenir SQL injection. |
+| 4 | HIGH | src/modules/production/domain/daily-report.dto.ts | **Violação de Boundary (DDD)**: Domínio importando diretamente da infraestrutura. | Domínio NUNCA deve conhecer infraestrutura. Use interfaces/ports no domínio. |
+| 5 | HIGH | src/modules/users/application/user-security.service.ts | **Secret Hardcoded**: Senha hardcoded detectado (1x). | Mova para variáveis de ambiente (.env) e use process.env. |
+| 6 | MEDIUM | src/app/api/v1/anchors/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 7 | MEDIUM | src/app/api/v1/audit/architectural/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (11x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 8 | MEDIUM | src/app/api/v1/audit_logs/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (9x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 9 | MEDIUM | src/app/api/v1/auth/login/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (5x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 10 | MEDIUM | src/app/api/v1/auth/check-mfa-status/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 11 | MEDIUM | src/app/api/v1/construction_documents/[id]/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 12 | MEDIUM | src/app/api/v1/companies/[id]/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (8x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 13 | MEDIUM | src/app/api/v1/daily_reports/bulk/approve/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 14 | MEDIUM | src/app/api/v1/daily_reports/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (11x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 15 | MEDIUM | src/app/api/v1/daily_reports/bulk/reject/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 16 | MEDIUM | src/app/api/v1/db/diagrams/[id]/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 17 | MEDIUM | src/app/api/v1/daily_reports/[id]/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 18 | MEDIUM | src/app/api/v1/debug/prisma/route.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: NextResponse.json({
+      version: "v82-diagnostic",
+      connection: connectionStatus,
+      prismaState: state,
+      timestamp: new Date().toISOString(),
+    }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 19 | MEDIUM | src/app/api/v1/db/diagrams/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 20 | MEDIUM | src/app/api/v1/db/query/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 21 | MEDIUM | src/app/api/v1/debug/batch/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (4x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 22 | MEDIUM | src/app/api/v1/debug/prisma/route.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: new Date().toISOString(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 23 | MEDIUM | src/app/api/v1/daily_reports/[id]/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (15x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 24 | MEDIUM | src/app/api/v1/debug/scan-files/route.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 25 | MEDIUM | src/app/api/v1/jobs/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 26 | MEDIUM | src/app/api/v1/health/route.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: ApiResponse.json({
+      status: "healthy",
+      database: "connected",
+      timestamp: new Date().toISOString(),
+    }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 27 | MEDIUM | src/app/api/v1/debug/scan-files/route.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 28 | MEDIUM | src/app/api/v1/health/route.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: new Date().toISOString(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 29 | MEDIUM | src/app/api/v1/jobs/route.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: new Date().toISOString(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 30 | MEDIUM | src/app/api/v1/map_element_visibility/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 31 | MEDIUM | src/app/api/v1/permission_matrix/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 32 | MEDIUM | src/app/api/v1/permission_matrix/sync/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 33 | MEDIUM | src/app/api/v1/permission_modules/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 34 | MEDIUM | src/app/api/v1/job_functions/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (5x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 35 | MEDIUM | src/app/api/v1/map_elements/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (7x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 36 | MEDIUM | src/app/api/v1/job_functions/route.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (1x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 37 | MEDIUM | src/app/api/v1/map_element_visibility/route.ts | **Complexidade O(n²) evitável**: Loop aninhado detectado (Risco O(n²)). | Considere usar um Map ou Set para buscas ou otimize o algoritmo. |
+| 38 | MEDIUM | src/app/api/v1/production/daily/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (8x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 39 | MEDIUM | src/app/api/v1/production/costs/config/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 40 | MEDIUM | src/app/api/v1/production/schedule/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (19x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 41 | MEDIUM | src/app/api/v1/production/costs/config/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (7x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 42 | MEDIUM | src/app/api/v1/profiles/[id]/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (8x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 43 | MEDIUM | src/app/api/v1/projects/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (6x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 44 | MEDIUM | src/app/api/v1/projects/[id]/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (4x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 45 | MEDIUM | src/app/api/v1/sites/[id]/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (15x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 46 | MEDIUM | src/app/api/v1/stage_progress/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 47 | MEDIUM | src/app/api/v1/rpc/login_funcionario/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (9x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 48 | MEDIUM | src/app/api/v1/sites/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (10x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 49 | MEDIUM | src/app/api/v1/storage/3d-models/remove/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 50 | MEDIUM | src/app/api/v1/storage/photos/route.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: withErrorHandler(async () => {
+    await requireAuth();
+    const formData = await request.formData();
+    const file = formData.get("file") as File;
+
+    if (!file) {
+      return ApiResponse.badRequest("Arquivo não enviado");
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const filename = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+    const relativePath = path.join("photos", filename);
+    const absolutePath = path.join(STORAGE_PATH, relativePath);
+
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+    await fs.writeFile(absolutePath, buffer);
+
+    return ApiResponse.created({
+      path: relativePath,
+      url: `${CONSTANTS.API.PREFIX}/storage/photos?path=${relativePath}`,
+    });
+  }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 51 | MEDIUM | src/app/api/v1/storage/documents/route.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: withErrorHandler(async () => {
+    await requireAuth();
+    const formData = await request.formData();
+    const file = formData.get("file") as File;
+
+    if (!file) {
+      return ApiResponse.badRequest("Arquivo não enviado");
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const filename = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+    const relativePath = path.join("documents", filename);
+    const absolutePath = path.join(STORAGE_PATH, relativePath);
+
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+    await fs.writeFile(absolutePath, buffer);
+
+    return ApiResponse.created({
+      path: relativePath,
+      url: `${CONSTANTS.API.PREFIX}/storage/documents?path=${relativePath}`,
+    });
+  }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 52 | MEDIUM | src/app/api/v1/storage/documents/route.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 53 | MEDIUM | src/app/api/v1/storage/photos/route.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 54 | MEDIUM | src/app/api/v1/storage/gcs/route.ts | **Ambiente Hardcoded**: URL localhost hardcoded. | Use variáveis de ambiente (APP_URL=https://orion.gestaovirtual.com). |
+| 55 | MEDIUM | src/app/api/v1/teams/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (6x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 56 | MEDIUM | src/app/api/v1/time_records/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (8x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 57 | MEDIUM | src/app/api/v1/tower-construction/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 58 | MEDIUM | src/app/api/v1/tower-construction/delete/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 59 | MEDIUM | src/app/api/v1/tower-production/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 60 | MEDIUM | src/app/api/v1/tower-production/delete/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 61 | MEDIUM | src/app/api/v1/tower-construction/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (6x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 62 | MEDIUM | src/app/api/v1/tower-production/delete/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (4x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 63 | MEDIUM | src/app/api/v1/tower-activity-goals/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 64 | MEDIUM | src/app/api/v1/tower-activity-goals/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (5x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 65 | MEDIUM | src/app/api/v1/users/profile/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (4x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 66 | MEDIUM | src/app/api/v1/user_addresses/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 67 | MEDIUM | src/app/api/v1/users/utils.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (9x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 68 | MEDIUM | src/app/api/v1/users/[id]/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (9x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 69 | MEDIUM | src/app/api/v1/users/stream.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (5x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 70 | MEDIUM | src/app/api/v1/work_stages/bulk/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 71 | MEDIUM | src/app/api/v1/user_roles/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 72 | MEDIUM | src/app/api/v1/work_stages/bulk/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (6x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 73 | MEDIUM | src/app/api/v1/users/stream.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: controller.enqueue(
+          encoder.encode(`],"pagination":${paginationJson}},"timestamp":"${new Date().toISOString()}"}`)
+        ). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 74 | MEDIUM | src/app/api/v1/users/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (18x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 75 | MEDIUM | src/app/api/v1/users/utils.ts | **If aninhado profundo**: If aninhado com profundidade 4. | Use 'Guard Clauses' ou extraia para funções auxiliares. |
+| 76 | MEDIUM | src/app/api/v1/users/stream.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: encoder.encode(`],"pagination":${paginationJson}},"timestamp":"${new Date().toISOString()}"}`). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 77 | MEDIUM | src/app/api/v1/users/stream.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: new Date().toISOString(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 78 | MEDIUM | src/app/api/v1/work_stages/sync/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 79 | MEDIUM | src/app/api/v1/work_stages/[id]/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (9x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 80 | MEDIUM | src/app/api/v1/work_stages/reorder/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 81 | MEDIUM | src/app/api/v1/work_stages/route.ts | **Falta de Validação de Input**: Rota acessa body sem validação de schema visível. | Use Zod, Joi ou class-validator para validar inputs antes de processar. |
+| 82 | MEDIUM | src/app/api/v1/work_stages/route.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (5x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 83 | MEDIUM | src/core/span/application/span.service.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (8x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 84 | MEDIUM | src/core/tower/domain/tower.repository.ts | **Interface Segregation Violation**: Interface 'Tower' com 21 membros. Viola Interface Segregation. | Divida em interfaces menores e mais focadas (ISP). |
+| 85 | MEDIUM | src/core/span/domain/span.repository.ts | **Interface Segregation Violation**: Interface 'Span' com 28 membros. Viola Interface Segregation. | Divida em interfaces menores e mais focadas (ISP). |
+| 86 | MEDIUM | src/infrastructure/repositories/prisma-span.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (6x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 87 | MEDIUM | src/lib/auth/config.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (5x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 88 | MEDIUM | src/infrastructure/repositories/prisma-segment.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (9x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 89 | MEDIUM | src/infrastructure/repositories/prisma-circuit.repository.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (4x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 90 | MEDIUM | src/infrastructure/repositories/prisma-segment.repository.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (6x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 91 | MEDIUM | src/lib/auth/core.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (5x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 92 | MEDIUM | src/lib/auth/core.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: cache(
+  async (req?: NextRequest): Promise<Session | null> => {
+    try {
+      let session = await auth();
+
+      // 2. Fallback: Se não houver sessão via cookie, tentar extrair token (Bearer ou Query)
+      if (!session) {
+        // [DEV ONLY] Bypass para testes locais
+        if (process.env.NODE_ENV === "development" && req) {
+          const bypass = req.nextUrl.searchParams.get("bypass") === "true";
+          const isLocal =
+            req.nextUrl.hostname === "localhost" ||
+            req.nextUrl.hostname === "127.0.0.1";
+
+          if (bypass && isLocal) {
+            logger.warn(
+              "[AUTH] Bypass de segurança ativado para desenvolvimento local (Localhost Only)",
+            );
+            return {
+              user: {
+                id: "dev-god-user",
+                name: "God Developer",
+                email: "god@agente.internal",
+                role: "SUPER_ADMIN_GOD",
+                status: "ACTIVE",
+                isSystemAdmin: true,
+                hierarchyLevel: 2500,
+                permissions: { "*": true },
+              } as any,
+              expires: new Date(Date.now() + 3600000).toISOString(),
+            };
+          }
+        }
+
+        const token = await getAuthToken(req);
+        if (token) {
+          const { validateToken } = await import("./validators");
+          const payload = await validateToken(token);
+          if (payload) {
+            session = await reconstructSessionFromPayload(payload);
+          }
+        }
+      }
+
+      return session;
+    } catch (error) {
+      logger.error("Erro ao obter sessão", { error });
+      return null;
+    }
+  },
+). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 93 | MEDIUM | src/lib/auth/core.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: new Date(Date.now() + 3600000).toISOString(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 94 | MEDIUM | src/lib/auth/core.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 95 | MEDIUM | src/lib/auth/validators.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (5x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 96 | MEDIUM | src/lib/docs/openapi.ts | **Single Responsibility Principle warning**: Arquivo grande (525 linhas). Risco de SRP. | Considere refatorar para manter coesão. |
+| 97 | MEDIUM | src/lib/auth/permissions.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (23x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 98 | MEDIUM | src/lib/auth/validators.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: new Date(Date.now() + CONSTANTS.TIME.MS_IN_DAY).toISOString(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 99 | MEDIUM | src/lib/auth/validators.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 100 | MEDIUM | src/lib/prisma/client.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (21x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 101 | MEDIUM | src/lib/prisma/client.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (1x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 102 | MEDIUM | src/lib/prisma/client.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 103 | MEDIUM | src/lib/prisma/client.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 104 | MEDIUM | src/lib/utils/api/response.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (6x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 105 | MEDIUM | src/lib/utils/api/response.ts | **Switch Excessivo (OCP)**: Switch com 10 cases. Viola Open/Closed Principle. | Substitua por Strategy Pattern, Map de funções, ou polimorfismo. |
+| 106 | MEDIUM | src/lib/utils/logger.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (15x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 107 | MEDIUM | src/lib/utils/validators/schemas.ts | **Single Responsibility Principle warning**: Arquivo grande (413 linhas). Risco de SRP. | Considere refatorar para manter coesão. |
+| 108 | MEDIUM | src/lib/utils/logger.ts | **If aninhado profundo**: If aninhado com profundidade 4. | Use 'Guard Clauses' ou extraia para funções auxiliares. |
+| 109 | MEDIUM | src/middleware.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: res.headers.set(
+      "Retry-After",
+      String(Math.ceil((result.resetAt - Date.now()) / 1000)),
+    ). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 110 | MEDIUM | src/middleware.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: String(Math.ceil((result.resetAt - Date.now()) / 1000)). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 111 | MEDIUM | src/middleware.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Math.ceil((result.resetAt - Date.now()) / 1000). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 112 | MEDIUM | src/middleware.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 113 | MEDIUM | src/middleware.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: RequestContext.run(
+    {
+      requestId,
+      method: request.method,
+      path: pathname,
+      startTime: Date.now(),
+    },
+    async () => {
+      // 1. Security & Controls
+      const securityResponse = handleSecurityCheck(request);
+      if (securityResponse) {
+        handleCors(request, securityResponse);
+        applySecurityHeaders(securityResponse);
+        return securityResponse;
+      }
+
+      if (request.method === "OPTIONS") {
+        const res = new NextResponse(null, { status: HTTP_STATUS.NO_CONTENT });
+        handleCors(request, res);
+        applySecurityHeaders(res);
+        return res;
+      }
+
+      const rateLimitResponse = handleRateLimit(request);
+      if (rateLimitResponse) {
+        handleCors(request, rateLimitResponse);
+        return rateLimitResponse;
+      }
+
+      // 2. Authentication
+      if (pathname.startsWith("/api/v1/") && !isPublicRoute(pathname)) {
+        const authError = await handleApiAuth(request, pathname);
+        if (authError) {
+          handleCors(request, authError);
+          applySecurityHeaders(authError);
+          return authError;
+        }
+      }
+
+      // 3. Continue
+      const response = NextResponse.next();
+
+      // Injetar contexto no Response para que o cliente saiba qual RequestID foi gerado (Auditabilidade)
+      response.headers.set("x-request-id", requestId);
+
+      handleCors(request, response);
+      applySecurityHeaders(response);
+      return response;
+    },
+  ). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 114 | MEDIUM | src/middleware.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 115 | MEDIUM | src/modules/audit/application/governance.service.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (5x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 116 | MEDIUM | src/modules/audit/application/architectural-auditor.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: this.governanceService.updateViolation(existing.id, {
+          lastDetectedAt: new Date(),
+          performerId: userId || existing.performerId,
+          message: sanitizedMessage,
+          companyId,
+        }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 117 | MEDIUM | src/modules/audit/application/architectural-auditor.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: this.governanceService.updateViolation(violation.id, {
+            status: "RESOLVED",
+            resolvedAt: new Date(),
+          }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 118 | MEDIUM | src/modules/audit/domain/rules/hardcoded-env.rule.ts | **Ambiente Hardcoded**: URL localhost hardcoded. | Use variáveis de ambiente (APP_URL=https://orion.gestaovirtual.com). |
+| 119 | MEDIUM | src/modules/audit/domain/audit-log.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (6x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 120 | MEDIUM | src/modules/audit/domain/governance.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (8x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 121 | MEDIUM | src/modules/audit/application/security-audit.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: new Date().toISOString(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 122 | MEDIUM | src/modules/audit/domain/rules/magic-numbers.rule.ts | **If aninhado profundo**: If aninhado com profundidade 4. | Use 'Guard Clauses' ou extraia para funções auxiliares. |
+| 123 | MEDIUM | src/modules/audit/domain/rules/testability-performance.rule.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: text.includes("Date.now()"). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 124 | MEDIUM | src/modules/audit/domain/rules/magic-numbers.rule.ts | **If aninhado profundo**: If aninhado com profundidade 4. | Use 'Guard Clauses' ou extraia para funções auxiliares. |
+| 125 | MEDIUM | src/modules/audit/domain/rules/testability-performance.rule.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: text.includes("new Date()"). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 126 | MEDIUM | src/modules/audit/domain/rules/testability-performance.rule.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: text.includes("Math.random()"). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 127 | MEDIUM | src/modules/audit/infrastructure/config/audit-config.service.ts | **Acesso direto a IO**: Uso direto de Filesystem em um Serviço. | Use uma abstração (Provedor/StorageService) para facilitar testes unitários. |
+| 128 | MEDIUM | src/modules/audit/infrastructure/prisma-audit-log.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (6x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 129 | MEDIUM | src/modules/audit/infrastructure/cache/hash-cache.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: this.cache.set(filePath, {
+            hash,
+            lastAudit: Date.now(),
+            violations: violationCount
+        }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 130 | MEDIUM | src/modules/audit/infrastructure/prisma-governance.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (18x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 131 | MEDIUM | src/modules/audit/infrastructure/cache/hash-cache.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 132 | MEDIUM | src/modules/auth/application/auth.service.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (6x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 133 | MEDIUM | src/modules/auth/application/auth.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Math.floor(Date.now() / 1000 / TOTP_WINDOW). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 134 | MEDIUM | src/modules/auth/application/auth.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 135 | MEDIUM | src/modules/auth/infrastructure/prisma-auth-credential.repository.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: this.client.authCredential.update({
+      where: { userId },
+      data: { lastLoginAt: new Date() },
+      include: { user: true },
+    }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 136 | MEDIUM | src/modules/common/application/task-worker.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (7x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 137 | MEDIUM | src/modules/common/application/task-worker.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: queue.update({
+          where: { id: task.id },
+          data: { status: TaskStatus.completed, updatedAt: new Date() },
+        }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 138 | MEDIUM | src/modules/common/application/task-worker.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: queue.update({
+          where: { id },
+          data: {
+            status: TaskStatus.failed,
+            error: errorMessage,
+            updatedAt: new Date(),
+          },
+        }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 139 | MEDIUM | src/modules/common/domain/system-message.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (6x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 140 | MEDIUM | src/modules/common/infrastructure/prisma-database-diagram.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (7x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 141 | MEDIUM | src/modules/common/domain/database-diagram.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (7x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 142 | MEDIUM | src/modules/common/infrastructure/prisma-task.repository.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (1x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 143 | MEDIUM | src/modules/common/infrastructure/prisma-system-message.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (6x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 144 | MEDIUM | src/modules/common/infrastructure/prisma-task.repository.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: prisma.taskQueue.update({
+      where: { id },
+      data: {
+        status: status as TaskStatus,
+        error: error || null,
+        updatedAt: new Date(),
+      },
+    }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 145 | MEDIUM | src/modules/companies/infrastructure/prisma-company.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (4x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 146 | MEDIUM | src/modules/companies/domain/job-function.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (10x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 147 | MEDIUM | src/modules/companies/infrastructure/prisma-job-function.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (10x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 148 | MEDIUM | src/modules/companies/infrastructure/prisma-company.repository.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (1x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 149 | MEDIUM | src/modules/companies/application/job-function.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Math.random().toString(36).substring(2, 11). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 150 | MEDIUM | src/modules/companies/application/job-function.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Math.random().toString(36). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 151 | MEDIUM | src/modules/companies/application/job-function.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Math.random(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 152 | MEDIUM | src/modules/documents/infrastructure/prisma-document.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (8x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 153 | MEDIUM | src/modules/documents/domain/document.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (7x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 154 | MEDIUM | src/modules/map-elements/application/anchor.service.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (5x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 155 | MEDIUM | src/modules/map-elements/application/map-element.service.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (4x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 156 | MEDIUM | src/modules/map-elements/application/map-element.service.ts | **If aninhado profundo**: If aninhado com profundidade 4. | Use 'Guard Clauses' ou extraia para funções auxiliares. |
+| 157 | MEDIUM | src/modules/map-elements/domain/map-element.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (4x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 158 | MEDIUM | src/modules/production/application/daily-report.service.ts | **Single Responsibility Principle warning**: Arquivo grande (421 linhas). Risco de SRP. | Considere refatorar para manter coesão. |
+| 159 | MEDIUM | src/modules/map-elements/domain/anchor.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (19x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 160 | MEDIUM | src/modules/map-elements/infrastructure/prisma-anchor.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (22x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 161 | MEDIUM | src/modules/map-elements/infrastructure/prisma-map-visibility.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (10x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 162 | MEDIUM | src/modules/map-elements/domain/map-visibility.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (10x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 163 | MEDIUM | src/modules/map-elements/infrastructure/prisma-map-element.repository.ts | **Single Responsibility Principle warning**: Arquivo grande (436 linhas). Risco de SRP. | Considere refatorar para manter coesão. |
+| 164 | MEDIUM | src/modules/map-elements/domain/map-element.repository.ts | **Interface Segregation Violation**: Interface 'MapElementTechnicalData' com 19 membros. Viola Interface Segregation. | Divida em interfaces menores e mais focadas (ISP). |
+| 165 | MEDIUM | src/modules/production/application/daily-report.service.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (4x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 166 | MEDIUM | src/modules/map-elements/infrastructure/prisma-map-element.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (16x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 167 | MEDIUM | src/modules/production/application/daily-report.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: this.repository.create({
+        ...(sanitizedData as CreateDailyReportDTO),
+        reportDate: new Date(data.reportDate || new Date()),
+      }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 168 | MEDIUM | src/modules/map-elements/infrastructure/prisma-map-element.repository.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (8x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 169 | MEDIUM | src/modules/production/application/daily-report.service.ts | **Complexidade O(n²) evitável**: Loop aninhado detectado (Risco O(n²)). | Considere usar um Map ou Set para buscas ou otimize o algoritmo. |
+| 170 | MEDIUM | src/modules/production/application/daily-report.service.ts | **Complexidade O(n²) evitável**: Loop aninhado detectado (Risco O(n²)). | Considere usar um Map ou Set para buscas ou otimize o algoritmo. |
+| 171 | MEDIUM | src/modules/production/application/production-progress.service.ts | **Single Responsibility Principle warning**: Arquivo grande (596 linhas). Risco de SRP. | Considere refatorar para manter coesão. |
+| 172 | MEDIUM | src/modules/production/application/production-analytics.service.ts | **Single Responsibility Principle warning**: Arquivo grande (537 linhas). Risco de SRP. | Considere refatorar para manter coesão. |
+| 173 | MEDIUM | src/modules/production/application/production.factory.ts | **Dependency Inversion Violation**: Instanciação direta de dependência: PrismaProductionProgressRepository, PrismaProjectElementRepository, PrismaProductionSyncRepository. | Injete dependências via construtor seguindo DIP. Use interfaces para desacoplar. |
+| 174 | MEDIUM | src/modules/production/application/time-record.service.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (8x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 175 | MEDIUM | src/modules/production/application/production-analytics.service.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (4x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 176 | MEDIUM | src/modules/production/application/production-analytics.service.ts | **If aninhado profundo**: If aninhado com profundidade 4. | Use 'Guard Clauses' ou extraia para funções auxiliares. |
+| 177 | MEDIUM | src/modules/production/application/production-analytics.service.ts | **If aninhado profundo**: If aninhado com profundidade 4. | Use 'Guard Clauses' ou extraia para funções auxiliares. |
+| 178 | MEDIUM | src/modules/production/application/production-analytics.service.ts | **If aninhado profundo**: If aninhado com profundidade 4. | Use 'Guard Clauses' ou extraia para funções auxiliares. |
+| 179 | MEDIUM | src/modules/production/domain/production-progress.entity.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: new Date().toISOString(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 180 | MEDIUM | src/modules/production/domain/production.repository.ts | **Interface Segregation Violation**: Interface 'ProductionProgress' com 17 membros. Viola Interface Segregation. | Divida em interfaces menores e mais focadas (ISP). |
+| 181 | MEDIUM | src/modules/production/domain/production-config.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (4x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 182 | MEDIUM | src/modules/production/domain/production-progress.entity.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: new Date().toISOString(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 183 | MEDIUM | src/modules/production/domain/production-progress.entity.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: new Date().toISOString(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 184 | MEDIUM | src/modules/production/infrastructure/prisma-daily-report.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (12x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 185 | MEDIUM | src/modules/production/infrastructure/prisma-production.mapper.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (2x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 186 | MEDIUM | src/modules/production/domain/time-record.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (9x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 187 | MEDIUM | src/modules/production/infrastructure/prisma-production-config.repository.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (2x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 188 | MEDIUM | src/modules/production/infrastructure/prisma-production-schedule.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (10x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 189 | MEDIUM | src/modules/production/infrastructure/prisma-production-catalogue.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (8x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 190 | MEDIUM | src/modules/production/infrastructure/prisma-production-progress.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (7x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 191 | MEDIUM | src/modules/production/infrastructure/prisma-production-catalogue.repository.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (1x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 192 | MEDIUM | src/modules/production/infrastructure/prisma-time-record.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (9x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 193 | MEDIUM | src/modules/projects/infrastructure/prisma-project.repository.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (2x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 194 | MEDIUM | src/modules/production/infrastructure/prisma-project-element.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (22x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 195 | MEDIUM | src/modules/sites/domain/site.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (7x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 196 | MEDIUM | src/modules/segment/infrastructure/prisma-segment.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (8x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 197 | MEDIUM | src/modules/sites/infrastructure/prisma-site.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (10x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 198 | MEDIUM | src/modules/span/application/span.service.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (8x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 199 | MEDIUM | src/modules/segment/infrastructure/prisma-segment.repository.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (2x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 200 | MEDIUM | src/modules/teams/domain/team.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (15x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 201 | MEDIUM | src/modules/system-testing/application/system-testing.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 202 | MEDIUM | src/modules/tower/application/tower-import.service.ts | **Interface Segregation Violation**: Interface 'TowerImportItem' com 21 membros. Viola Interface Segregation. | Divida em interfaces menores e mais focadas (ISP). |
+| 203 | MEDIUM | src/modules/tower/application/tower-construction.service.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (1x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 204 | MEDIUM | src/modules/teams/infrastructure/prisma-team.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (20x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 205 | MEDIUM | src/modules/system-testing/application/system-testing.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 206 | MEDIUM | src/modules/tower/application/tower-import.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: data.map((item, index) => {
+        const id = String(
+          item.externalId || item.number || item.objectSeq || index + 1,
+        );
+        return {
+          projectId,
+          companyId,
+          siteId: item.siteId || siteId,
+          externalId: id,
+          name: `Torre ${id}`,
+          elementType: "TOWER" as any,
+          sequence: item.objectSeq ?? item.sequence ?? index + 1,
+          metadata: {
+            trecho: item.trecho || "",
+            towerType: item.towerType || "Autoportante",
+            tramoLancamento: item.tramoLancamento || "",
+            tipoFundacao: item.foundationType || "",
+            totalConcreto: item.totalConcreto ?? item.concreteVolume ?? 0,
+            pesoArmacao: item.steelWeight ?? 0,
+            pesoEstrutura: item.pesoEstrutura ?? 0,
+            goForward: item.goForward ?? item.spanLength ?? 0,
+            latitude: item.lat || 0,
+            longitude: item.lng || 0,
+            elevation: item.alt || 0,
+            _legacy: true,
+            importedAt: new Date().toISOString(),
+          },
+        };
+      }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 207 | MEDIUM | src/modules/system-testing/application/system-testing.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 208 | MEDIUM | src/modules/tower/application/tower-import.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: new Date().toISOString(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 209 | MEDIUM | src/modules/tower/infrastructure/prisma-tower-construction.repository.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (5x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 210 | MEDIUM | src/modules/tower/infrastructure/prisma-tower-activity.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (4x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 211 | MEDIUM | src/modules/tower/infrastructure/prisma-tower.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (7x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 212 | MEDIUM | src/modules/tower/infrastructure/prisma-tower-production.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (5x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 213 | MEDIUM | src/modules/tower/infrastructure/prisma-tower-activity.repository.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (4x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 214 | MEDIUM | src/modules/tower/infrastructure/prisma-tower-production.repository.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (5x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 215 | MEDIUM | src/modules/user-roles/domain/user-role.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (5x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 216 | MEDIUM | src/modules/users/application/import.service.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (4x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 217 | MEDIUM | src/modules/user-roles/infrastructure/prisma-user-role.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (8x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 218 | MEDIUM | src/modules/users/application/import.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Math.random().toString(36).substring(2, 15). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 219 | MEDIUM | src/modules/users/application/import.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Math.random().toString(36). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 220 | MEDIUM | src/modules/users/application/import.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Math.random(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 221 | MEDIUM | src/modules/users/infrastructure/prisma-user.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (4x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 222 | MEDIUM | src/modules/users/application/user.service.ts | **Single Responsibility Principle warning**: Arquivo grande (558 linhas). Risco de SRP. | Considere refatorar para manter coesão. |
+| 223 | MEDIUM | src/modules/users/domain/user.dto.ts | **Interface Segregation Violation**: Interface 'UserEntity' com 20 membros. Viola Interface Segregation. | Divida em interfaces menores e mais focadas (ISP). |
+| 224 | MEDIUM | src/modules/users/application/user-permission.service.ts | **If aninhado profundo**: If aninhado com profundidade 4. | Use 'Guard Clauses' ou extraia para funções auxiliares. |
+| 225 | MEDIUM | src/modules/users/infrastructure/prisma-user.repository.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (4x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 226 | MEDIUM | src/modules/users/application/user-permission.service.ts | **If aninhado profundo**: If aninhado com profundidade 4. | Use 'Guard Clauses' ou extraia para funções auxiliares. |
+| 227 | MEDIUM | src/modules/users/application/user.service.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (6x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 228 | MEDIUM | src/modules/users/application/user.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Math.random().toString(36).slice(-10). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 229 | MEDIUM | src/modules/users/application/user.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Math.random().toString(36). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 230 | MEDIUM | src/modules/users/application/user.service.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Math.random(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 231 | MEDIUM | src/modules/work-stages/application/work-stage.service.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (9x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 232 | MEDIUM | src/modules/work-stages/application/work-stage-sync.manager.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: new Date().toISOString(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 233 | MEDIUM | src/modules/work-stages/infrastructure/prisma-work-stage-progress.repository.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: prisma.stageProgress.create({
+        data: {
+          stageId: progress.stageId,
+          actualPercentage: progress.actualPercentage ?? 0,
+          recordedDate: progress.recordedDate || new Date(),
+          notes: progress.notes,
+        },
+      }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 234 | MEDIUM | src/modules/work-stages/application/work-stage-reorder.service.ts | **Complexidade O(n²) evitável**: Loop aninhado detectado (Risco O(n²)). | Considere usar um Map ou Set para buscas ou otimize o algoritmo. |
+| 235 | MEDIUM | src/modules/work-stages/application/work-stage-security.service.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (4x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 236 | MEDIUM | src/modules/work-stages/domain/work-stage.repository.ts | **Interface Segregation Violation**: Interface 'WorkStageReadRepository' com 17 membros. Viola Interface Segregation. | Divida em interfaces menores e mais focadas (ISP). |
+| 237 | MEDIUM | src/modules/work-stages/infrastructure/prisma-work-stage-read.repository.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (7x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 238 | MEDIUM | src/modules/work-stages/infrastructure/prisma-work-stage-bulk.repository.ts | **Complexidade O(n²) evitável**: Loop aninhado detectado (Risco O(n²)). | Considere usar um Map ou Set para buscas ou otimize o algoritmo. |
+| 239 | MEDIUM | src/modules/work-stages/infrastructure/prisma-work-stage-read.repository.ts | **Cast Inseguro (as unknown as)**: Double cast inseguro 'as unknown as' detectado (1x). | Corrija a tipagem na origem ao invés de forçar casts duplos. |
+| 240 | MEDIUM | src/scripts/debug-permissions.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (4x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 241 | MEDIUM | src/scripts/master-seed.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 242 | MEDIUM | src/scripts/master-seed.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: ((Date.now() - start) / 1000).toFixed(2). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 243 | MEDIUM | src/scripts/master-seed.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 244 | MEDIUM | src/scripts/seed-permission-matrix.ts | **Complexidade O(n²) evitável**: Loop aninhado detectado (Risco O(n²)). | Considere usar um Map ou Set para buscas ou otimize o algoritmo. |
+| 245 | MEDIUM | src/scripts/seed-permissions-full.ts | **Complexidade O(n²) evitável**: Loop aninhado detectado (Risco O(n²)). | Considere usar um Map ou Set para buscas ou otimize o algoritmo. |
+| 246 | MEDIUM | src/scripts/seed-initial-data.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: prisma.user.create({
+        data: {
+          name: admin.name,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          authCredential: {
+            create: {
+              email: admin.email,
+              password: hashedPassword,
+              role: admin.role,
+              status: "ACTIVE",
+              systemUse: true,
+            },
+          },
+          affiliation: {
+            create: {},
+          },
+        },
+      }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 247 | MEDIUM | src/scripts/full-sync-permissions.ts | **Complexidade O(n²) evitável**: Loop aninhado detectado (Risco O(n²)). | Considere usar um Map ou Set para buscas ou otimize o algoritmo. |
+| 248 | MEDIUM | src/scripts/seed-initial-data.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: prisma.user.create({
+        data: {
+          name: fullName,
+          cpf: cpf,
+          birthDate: faker.date
+            .birthdate({ min: 18, max: 65, mode: "age" })
+            .toISOString()
+            .split("T")[0],
+          registrationNumber: faker.string.numeric(6),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          authCredential: {
+            create: {
+              email: email,
+              password: hashedPassword,
+              role: "WORKER",
+              status: "ACTIVE",
+              systemUse: true,
+            },
+          },
+          affiliation: {
+            create: {},
+          },
+          // O endereço agora é uma tabela separada (UserAddress)
+          address: {
+            create: {
+              cep: "12345-678",
+              logradouro: faker.location.streetAddress(),
+              bairro: "Centro",
+              localidade: faker.location.city(),
+              uf: "SP",
+              estado: "São Paulo",
+            },
+          },
+        },
+      }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 249 | MEDIUM | src/scripts/seed-initial-data.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Math.random(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 250 | MEDIUM | src/scripts/seed-initial-data.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: prisma.dailyReport.create({
+        data: {
+          teamId: team.id,
+          companyId,
+          reportDate: date,
+          activities: faker.lorem.paragraph(),
+          observations: Math.random() > 0.7 ? faker.lorem.sentence() : null,
+          createdBy: "System Seed",
+          metadata: {
+            weather: "Sunny",
+            temperature: "25C",
+          },
+        },
+      }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 251 | MEDIUM | src/scripts/seed-initial-data.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Math.random(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 252 | MEDIUM | src/scripts/seed-initial-data.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 253 | MEDIUM | src/scripts/seed-initial-data.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: ((Date.now() - startTime) / 1000).toFixed(2). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 254 | MEDIUM | src/scripts/seed-initial-data.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 255 | MEDIUM | src/scripts/seed-initial-data.ts | **Complexidade O(n²) evitável**: Loop aninhado detectado (Risco O(n²)). | Considere usar um Map ou Set para buscas ou otimize o algoritmo. |
+| 256 | MEDIUM | src/scripts/seed-initial-data.ts | **Complexidade O(n²) evitável**: Loop aninhado detectado (Risco O(n²)). | Considere usar um Map ou Set para buscas ou otimize o algoritmo. |
+| 257 | MEDIUM | src/tests/debug-daily-report.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: new Date().toISOString(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 258 | MEDIUM | src/services/cacheService.ts | **Dependency Inversion Violation**: Instanciação direta de dependência: CacheService. | Injete dependências via construtor seguindo DIP. Use interfaces para desacoplar. |
+| 259 | MEDIUM | src/services/cacheService.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 260 | MEDIUM | src/services/cacheService.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 261 | MEDIUM | src/services/cacheService.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 262 | MEDIUM | src/scripts/seed-production-categories.ts | **Complexidade O(n²) evitável**: Loop aninhado detectado (Risco O(n²)). | Considere usar um Map ou Set para buscas ou otimize o algoritmo. |
+| 263 | MEDIUM | src/scripts/seed-production.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (5x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 264 | MEDIUM | src/scripts/seed-production.ts | **Complexidade O(n²) evitável**: Loop aninhado detectado (Risco O(n²)). | Considere usar um Map ou Set para buscas ou otimize o algoritmo. |
+| 265 | MEDIUM | src/tests/unit/audit/infrastructure/config/audit-config.service.test.ts | **Acesso direto a IO**: Uso direto de Filesystem em um Serviço. | Use uma abstração (Provedor/StorageService) para facilitar testes unitários. |
+| 266 | MEDIUM | src/tests/setup.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: prisma.user.create({
+    data: {
+      name: data?.name ?? "Test User",
+      authCredential: {
+        create: {
+          email: data?.email ?? `test-${Date.now()}@test.com`,
+          password: await bcrypt.hash(data?.password ?? "TestPassword123", 10),
+          role: data?.role ?? Role.USER,
+          status: "ACTIVE",
+          emailVerified: new Date(),
+          systemUse: true,
+        },
+      },
+    },
+  }). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 267 | MEDIUM | src/tests/setup.ts | **Dificuldade de Teste (Mock)**: Chamada não determinística detectada: Date.now(). | Injete um provedor de tempo ou use um wrapper que possa ser mockado. |
+| 268 | MEDIUM | src/types/database.ts | **Uso Excessivo de any**: Uso excessivo de 'any' (4x). Fragiliza o type system. | Substitua 'any' por tipos explícitos, Record<string, unknown>, ou generics. |
+| 269 | LOW | src/app/api/upload/route.ts | **Magic Numbers**: Magic Number detectado: 400 | Defina uma constante nomeada para este valor. |
+| 270 | LOW | src/app/api/upload/route.ts | **Magic Numbers**: Magic Number detectado: 400 | Defina uma constante nomeada para este valor. |
+| 271 | LOW | src/app/api/v1/anchors/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 272 | LOW | src/app/api/v1/audit/architectural/route.ts | **Falta de Tipagem Explícita**: 4 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 273 | LOW | src/app/api/upload/route.ts | **Magic Numbers**: Magic Number detectado: 500 | Defina uma constante nomeada para este valor. |
+| 274 | LOW | src/app/api/v1/audit/scan-stream/route.ts | **Falta de Tipagem Explícita**: 5 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 275 | LOW | src/app/api/v1/auth/permissions-map/route.ts | **Magic Numbers**: Magic Number detectado: 403 | Defina uma constante nomeada para este valor. |
+| 276 | LOW | src/app/api/v1/auth/login/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 277 | LOW | src/app/api/v1/audit_logs/route.ts | **Falta de Tipagem Explícita**: 4 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 278 | LOW | src/app/api/v1/auth/permissions-map/route.ts | **Magic Numbers**: Magic Number detectado: 404 | Defina uma constante nomeada para este valor. |
+| 279 | LOW | src/app/api/v1/circuits/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 280 | LOW | src/app/api/v1/daily_reports/bulk/approve/route.ts | **Magic Numbers**: Magic Number detectado: 400 | Defina uma constante nomeada para este valor. |
+| 281 | LOW | src/app/api/v1/daily_reports/bulk/reject/route.ts | **Magic Numbers**: Magic Number detectado: 400 | Defina uma constante nomeada para este valor. |
+| 282 | LOW | src/app/api/v1/construction_documents/route.ts | **Falta de Tipagem Explícita**: 4 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 283 | LOW | src/app/api/v1/daily_reports/route.ts | **Long Method**: Função/Método na linha 119 possui 103 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 284 | LOW | src/app/api/v1/daily_reports/bulk/reject/route.ts | **Magic Numbers**: Magic Number detectado: 400 | Defina uma constante nomeada para este valor. |
+| 285 | LOW | src/app/api/v1/construction_documents/route.ts | **Nome de variável genérico**: Uso de nomes genéricos: val. | Use nomes descritivos que revelem a intenção da variável. |
+| 286 | LOW | src/app/api/v1/companies/[id]/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 287 | LOW | src/app/api/v1/construction_documents/[id]/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 288 | LOW | src/app/api/v1/daily_reports/route.ts | **Nome de variável genérico**: Uso de nomes genéricos: val. | Use nomes descritivos que revelem a intenção da variável. |
+| 289 | LOW | src/app/api/v1/daily_reports/[id]/reject/route.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 290 | LOW | src/app/api/v1/db/query/route.ts | **Long Method**: Função/Método na linha 14 possui 72 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 291 | LOW | src/app/api/v1/debug/batch/route.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 292 | LOW | src/app/api/v1/debug/route.ts | **Magic Numbers**: Magic Number detectado: 500 | Defina uma constante nomeada para este valor. |
+| 293 | LOW | src/app/api/v1/db/diagrams/[id]/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 294 | LOW | src/app/api/v1/daily_reports/[id]/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 295 | LOW | src/app/api/v1/jobs/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 296 | LOW | src/app/api/v1/map_elements/route.ts | **Long Method**: Função/Método na linha 33 possui 71 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 297 | LOW | src/app/api/v1/permission_levels/route.ts | **Nome de variável genérico**: Uso de nomes genéricos: val, item, data. | Use nomes descritivos que revelem a intenção da variável. |
+| 298 | LOW | src/app/api/v1/map_element_visibility/route.ts | **Falta de Tipagem Explícita**: 6 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 299 | LOW | src/app/api/v1/permission_modules/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 300 | LOW | src/app/api/v1/map_elements/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 301 | LOW | src/app/api/v1/job_functions/route.ts | **Falta de Tipagem Explícita**: 5 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 302 | LOW | src/app/api/v1/job_functions/route.ts | **Nome de variável genérico**: Uso de nomes genéricos: val, data. | Use nomes descritivos que revelem a intenção da variável. |
+| 303 | LOW | src/app/api/v1/production/schedule/route.ts | **Long Method**: Função/Método na linha 61 possui 84 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 304 | LOW | src/app/api/v1/production/delay-reasons/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 305 | LOW | src/app/api/v1/production/tower-status/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 306 | LOW | src/app/api/v1/production/schedule/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 307 | LOW | src/app/api/v1/profiles/[id]/route.ts | **Falta de Tipagem Explícita**: 5 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 308 | LOW | src/app/api/v1/projects/route.ts | **Falta de Tipagem Explícita**: 4 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 309 | LOW | src/app/api/v1/projects/[id]/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 310 | LOW | src/app/api/v1/projects/route.ts | **Nome de variável genérico**: Uso de nomes genéricos: val, data. | Use nomes descritivos que revelem a intenção da variável. |
+| 311 | LOW | src/app/api/v1/projects/[id]/route.ts | **Nome de variável genérico**: Uso de nomes genéricos: val, data. | Use nomes descritivos que revelem a intenção da variável. |
+| 312 | LOW | src/app/api/v1/segments/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 313 | LOW | src/app/api/v1/sites/[id]/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 314 | LOW | src/app/api/v1/rpc/login_funcionario/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 315 | LOW | src/app/api/v1/sites/route.ts | **Nome de variável genérico**: Uso de nomes genéricos: val, data. | Use nomes descritivos que revelem a intenção da variável. |
+| 316 | LOW | src/app/api/v1/sites/[id]/route.ts | **Nome de variável genérico**: Uso de nomes genéricos: val, data. | Use nomes descritivos que revelem a intenção da variável. |
+| 317 | LOW | src/app/api/v1/storage/3d-models/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 318 | LOW | src/app/api/v1/storage/gcs/route.ts | **Magic Numbers**: Magic Number detectado: 400 | Defina uma constante nomeada para este valor. |
+| 319 | LOW | src/app/api/v1/system_messages/route.ts | **Nome de variável genérico**: Uso de nomes genéricos: val, data. | Use nomes descritivos que revelem a intenção da variável. |
+| 320 | LOW | src/app/api/v1/storage/gcs/route.ts | **Magic Numbers**: Magic Number detectado: 404 | Defina uma constante nomeada para este valor. |
+| 321 | LOW | src/app/api/v1/storage/gcs/route.ts | **Magic Numbers**: Magic Number detectado: 302 | Defina uma constante nomeada para este valor. |
+| 322 | LOW | src/app/api/v1/storage/gcs/route.ts | **Magic Numbers**: Magic Number detectado: 403 | Defina uma constante nomeada para este valor. |
+| 323 | LOW | src/app/api/v1/storage/gcs/route.ts | **Magic Numbers**: Magic Number detectado: 200 | Defina uma constante nomeada para este valor. |
+| 324 | LOW | src/app/api/v1/storage/gcs/route.ts | **Magic Numbers**: Magic Number detectado: 500 | Defina uma constante nomeada para este valor. |
+| 325 | LOW | src/app/api/v1/teams/[id]/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 326 | LOW | src/app/api/v1/team_members/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 327 | LOW | src/app/api/v1/tower-activity-goals/route.ts | **Magic Numbers**: Magic Number detectado: 400 | Defina uma constante nomeada para este valor. |
+| 328 | LOW | src/app/api/v1/tower-production/delete/route.ts | **Long Method**: Função/Método na linha 12 possui 73 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 329 | LOW | src/app/api/v1/teams/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 330 | LOW | src/app/api/v1/team_members/route.ts | **Nome de variável genérico**: Uso de nomes genéricos: val, item. | Use nomes descritivos que revelem a intenção da variável. |
+| 331 | LOW | src/app/api/v1/tower-activity-goals/route.ts | **Magic Numbers**: Magic Number detectado: 500 | Defina uma constante nomeada para este valor. |
+| 332 | LOW | src/app/api/v1/tower-production/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 333 | LOW | src/app/api/v1/time_records/route.ts | **Falta de Tipagem Explícita**: 4 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 334 | LOW | src/app/api/v1/time_records/route.ts | **Nome de variável genérico**: Uso de nomes genéricos: val, data. | Use nomes descritivos que revelem a intenção da variável. |
+| 335 | LOW | src/app/api/v1/tower-activity-goals/route.ts | **Magic Numbers**: Magic Number detectado: 400 | Defina uma constante nomeada para este valor. |
+| 336 | LOW | src/app/api/v1/tower-construction/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 337 | LOW | src/app/api/v1/tower-activity-goals/route.ts | **Magic Numbers**: Magic Number detectado: 500 | Defina uma constante nomeada para este valor. |
+| 338 | LOW | src/app/api/v1/tower-activity-goals/route.ts | **Magic Numbers**: Magic Number detectado: 400 | Defina uma constante nomeada para este valor. |
+| 339 | LOW | src/app/api/v1/tower-activity-goals/route.ts | **Magic Numbers**: Magic Number detectado: 500 | Defina uma constante nomeada para este valor. |
+| 340 | LOW | src/app/api/v1/tower-activity-goals/route.ts | **Falta de Tipagem Explícita**: 4 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 341 | LOW | src/app/api/v1/users/route.ts | **Long Method**: Função/Método na linha 37 possui 72 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 342 | LOW | src/app/api/v1/users/utils.ts | **Falta de Tipagem Explícita**: 5 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 343 | LOW | src/app/api/v1/user_roles/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 344 | LOW | src/app/api/v1/users/[id]/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 345 | LOW | src/app/api/v1/users/route.ts | **Falta de Tipagem Explícita**: 6 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 346 | LOW | src/app/api/v1/users/utils.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 347 | LOW | src/app/api/v1/work_stages/[id]/route.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 348 | LOW | src/core/tower/domain/tower.schema.ts | **Long Method**: Função/Método na linha 61 possui 115 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 349 | LOW | src/core/span/application/span.service.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 350 | LOW | src/lib/auth/core.ts | **Magic Numbers**: Magic Number detectado: 2500 | Defina uma constante nomeada para este valor. |
+| 351 | LOW | src/lib/auth/config.ts | **Falta de Tipagem Explícita**: 9 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 352 | LOW | src/lib/auth/core.ts | **Magic Numbers**: Magic Number detectado: 3600000 | Defina uma constante nomeada para este valor. |
+| 353 | LOW | src/lib/auth/config.ts | **Método Público sem Tipagem**: 5 métodos públicos sem tipo de retorno. | Sempre tipar retorno de métodos públicos para garantir contratos claros. |
+| 354 | LOW | src/lib/auth/core.ts | **Magic Numbers**: Magic Number detectado: 7 | Defina uma constante nomeada para este valor. |
+| 355 | LOW | src/lib/auth/core.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 356 | LOW | src/lib/auth/permissions.ts | **Magic Numbers**: Magic Number detectado: 401 | Defina uma constante nomeada para este valor. |
+| 357 | LOW | src/lib/constants/business.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 358 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 20 | Defina uma constante nomeada para este valor. |
+| 359 | LOW | src/lib/constants/security.ts | **Magic Numbers**: Magic Number detectado: 1500 | Defina uma constante nomeada para este valor. |
+| 360 | LOW | src/lib/auth/permissions.ts | **Magic Numbers**: Magic Number detectado: 403 | Defina uma constante nomeada para este valor. |
+| 361 | LOW | src/lib/auth/validators.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 362 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 500 | Defina uma constante nomeada para este valor. |
+| 363 | LOW | src/lib/constants/business.ts | **Magic Numbers**: Magic Number detectado: 4 | Defina uma constante nomeada para este valor. |
+| 364 | LOW | src/lib/docs/openapi.ts | **Magic Numbers**: Magic Number detectado: 8 | Defina uma constante nomeada para este valor. |
+| 365 | LOW | src/lib/constants/security.ts | **Magic Numbers**: Magic Number detectado: 900 | Defina uma constante nomeada para este valor. |
+| 366 | LOW | src/lib/auth/permissions.ts | **Magic Numbers**: Magic Number detectado: 403 | Defina uma constante nomeada para este valor. |
+| 367 | LOW | src/lib/auth/validators.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 368 | LOW | src/lib/constants/business.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 369 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 10000 | Defina uma constante nomeada para este valor. |
+| 370 | LOW | src/lib/docs/openapi.ts | **Magic Numbers**: Magic Number detectado: 8 | Defina uma constante nomeada para este valor. |
+| 371 | LOW | src/lib/constants/security.ts | **Magic Numbers**: Magic Number detectado: 500 | Defina uma constante nomeada para este valor. |
+| 372 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 50000 | Defina uma constante nomeada para este valor. |
+| 373 | LOW | src/lib/constants/business.ts | **Magic Numbers**: Magic Number detectado: 6 | Defina uma constante nomeada para este valor. |
+| 374 | LOW | src/lib/constants/security.ts | **Magic Numbers**: Magic Number detectado: 150 | Defina uma constante nomeada para este valor. |
+| 375 | LOW | src/lib/auth/permissions.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 376 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 2000 | Defina uma constante nomeada para este valor. |
+| 377 | LOW | src/lib/constants/business.ts | **Magic Numbers**: Magic Number detectado: 8 | Defina uma constante nomeada para este valor. |
+| 378 | LOW | src/lib/constants/security.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 379 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 5000 | Defina uma constante nomeada para este valor. |
+| 380 | LOW | src/lib/constants/business.ts | **Magic Numbers**: Magic Number detectado: 11 | Defina uma constante nomeada para este valor. |
+| 381 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 50 | Defina uma constante nomeada para este valor. |
+| 382 | LOW | src/lib/constants/business.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 383 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 30000 | Defina uma constante nomeada para este valor. |
+| 384 | LOW | src/lib/constants/business.ts | **Magic Numbers**: Magic Number detectado: 4 | Defina uma constante nomeada para este valor. |
+| 385 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 60000 | Defina uma constante nomeada para este valor. |
+| 386 | LOW | src/lib/constants/business.ts | **Magic Numbers**: Magic Number detectado: 20 | Defina uma constante nomeada para este valor. |
+| 387 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 500 | Defina uma constante nomeada para este valor. |
+| 388 | LOW | src/lib/constants/business.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 389 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 60 | Defina uma constante nomeada para este valor. |
+| 390 | LOW | src/lib/constants/business.ts | **Magic Numbers**: Magic Number detectado: 4 | Defina uma constante nomeada para este valor. |
+| 391 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 3600 | Defina uma constante nomeada para este valor. |
+| 392 | LOW | src/lib/constants/business.ts | **Magic Numbers**: Magic Number detectado: 30 | Defina uma constante nomeada para este valor. |
+| 393 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 31536000 | Defina uma constante nomeada para este valor. |
+| 394 | LOW | src/lib/constants/business.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 395 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 396 | LOW | src/lib/constants/business.ts | **Magic Numbers**: Magic Number detectado: 4 | Defina uma constante nomeada para este valor. |
+| 397 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 500 | Defina uma constante nomeada para este valor. |
+| 398 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 30 | Defina uma constante nomeada para este valor. |
+| 399 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 24 | Defina uma constante nomeada para este valor. |
+| 400 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 60 | Defina uma constante nomeada para este valor. |
+| 401 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 60 | Defina uma constante nomeada para este valor. |
+| 402 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 30 | Defina uma constante nomeada para este valor. |
+| 403 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 8 | Defina uma constante nomeada para este valor. |
+| 404 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 128 | Defina uma constante nomeada para este valor. |
+| 405 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 12 | Defina uma constante nomeada para este valor. |
+| 406 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 407 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 408 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 15 | Defina uma constante nomeada para este valor. |
+| 409 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 410 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 6 | Defina uma constante nomeada para este valor. |
+| 411 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 8 | Defina uma constante nomeada para este valor. |
+| 412 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 24 | Defina uma constante nomeada para este valor. |
+| 413 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 60 | Defina uma constante nomeada para este valor. |
+| 414 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 60 | Defina uma constante nomeada para este valor. |
+| 415 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 60 | Defina uma constante nomeada para este valor. |
+| 416 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 60 | Defina uma constante nomeada para este valor. |
+| 417 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 255 | Defina uma constante nomeada para este valor. |
+| 418 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 255 | Defina uma constante nomeada para este valor. |
+| 419 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 512 | Defina uma constante nomeada para este valor. |
+| 420 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 5000 | Defina uma constante nomeada para este valor. |
+| 421 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 422 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 11 | Defina uma constante nomeada para este valor. |
+| 423 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 14 | Defina uma constante nomeada para este valor. |
+| 424 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 8 | Defina uma constante nomeada para este valor. |
+| 425 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 11 | Defina uma constante nomeada para este valor. |
+| 426 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 1024 | Defina uma constante nomeada para este valor. |
+| 427 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 1024 | Defina uma constante nomeada para este valor. |
+| 428 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 200 | Defina uma constante nomeada para este valor. |
+| 429 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 201 | Defina uma constante nomeada para este valor. |
+| 430 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 202 | Defina uma constante nomeada para este valor. |
+| 431 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 204 | Defina uma constante nomeada para este valor. |
+| 432 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 400 | Defina uma constante nomeada para este valor. |
+| 433 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 401 | Defina uma constante nomeada para este valor. |
+| 434 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 403 | Defina uma constante nomeada para este valor. |
+| 435 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 404 | Defina uma constante nomeada para este valor. |
+| 436 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 409 | Defina uma constante nomeada para este valor. |
+| 437 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 412 | Defina uma constante nomeada para este valor. |
+| 438 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 422 | Defina uma constante nomeada para este valor. |
+| 439 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 429 | Defina uma constante nomeada para este valor. |
+| 440 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 500 | Defina uma constante nomeada para este valor. |
+| 441 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 503 | Defina uma constante nomeada para este valor. |
+| 442 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 2000 | Defina uma constante nomeada para este valor. |
+| 443 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 1500 | Defina uma constante nomeada para este valor. |
+| 444 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 1200 | Defina uma constante nomeada para este valor. |
+| 445 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 950 | Defina uma constante nomeada para este valor. |
+| 446 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 900 | Defina uma constante nomeada para este valor. |
+| 447 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 850 | Defina uma constante nomeada para este valor. |
+| 448 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 850 | Defina uma constante nomeada para este valor. |
+| 449 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 800 | Defina uma constante nomeada para este valor. |
+| 450 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 700 | Defina uma constante nomeada para este valor. |
+| 451 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 600 | Defina uma constante nomeada para este valor. |
+| 452 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 400 | Defina uma constante nomeada para este valor. |
+| 453 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 300 | Defina uma constante nomeada para este valor. |
+| 454 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 50 | Defina uma constante nomeada para este valor. |
+| 455 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 456 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 23 | Defina uma constante nomeada para este valor. |
+| 457 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 59 | Defina uma constante nomeada para este valor. |
+| 458 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 59 | Defina uma constante nomeada para este valor. |
+| 459 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 999 | Defina uma constante nomeada para este valor. |
+| 460 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 60 | Defina uma constante nomeada para este valor. |
+| 461 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 60 | Defina uma constante nomeada para este valor. |
+| 462 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 24 | Defina uma constante nomeada para este valor. |
+| 463 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 86400 | Defina uma constante nomeada para este valor. |
+| 464 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 3600000 | Defina uma constante nomeada para este valor. |
+| 465 | LOW | src/lib/constants/index.ts | **Magic Numbers**: Magic Number detectado: 86400000 | Defina uma constante nomeada para este valor. |
+| 466 | LOW | src/lib/constants/index.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 467 | LOW | src/lib/utils/api/error.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 468 | LOW | src/lib/utils/api/response.ts | **Magic Numbers**: Magic Number detectado: 400 | Defina uma constante nomeada para este valor. |
+| 469 | LOW | src/lib/utils/api/response.ts | **Magic Numbers**: Magic Number detectado: 50 | Defina uma constante nomeada para este valor. |
+| 470 | LOW | src/lib/utils/api/response.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 471 | LOW | src/lib/utils/api/response.ts | **Magic Numbers**: Magic Number detectado: 50 | Defina uma constante nomeada para este valor. |
+| 472 | LOW | src/lib/utils/api/response.ts | **Nome de variável genérico**: Uso de nomes genéricos: data, item. | Use nomes descritivos que revelem a intenção da variável. |
+| 473 | LOW | src/lib/utils/validators/route-schemas.ts | **Magic Numbers**: Magic Number detectado: 200 | Defina uma constante nomeada para este valor. |
+| 474 | LOW | src/middleware.ts | **Long Method**: Função/Método na linha 138 possui 82 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 475 | LOW | src/lib/utils/rate-limiter.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 476 | LOW | src/modules/access-control/application/access-control.service.ts | **Falta de Tipagem Explícita**: 5 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 477 | LOW | src/middleware.ts | **Magic Numbers**: Magic Number detectado: 301 | Defina uma constante nomeada para este valor. |
+| 478 | LOW | src/lib/utils/validators/schemas.ts | **Magic Numbers**: Magic Number detectado: 9 | Defina uma constante nomeada para este valor. |
+| 479 | LOW | src/lib/utils/validators/route-schemas.ts | **Magic Numbers**: Magic Number detectado: 200 | Defina uma constante nomeada para este valor. |
+| 480 | LOW | src/modules/access-control/application/access-control.service.ts | **Método Público sem Tipagem**: 5 métodos públicos sem tipo de retorno. | Sempre tipar retorno de métodos públicos para garantir contratos claros. |
+| 481 | LOW | src/lib/utils/rate-limiter.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 482 | LOW | src/lib/utils/logger.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 483 | LOW | src/middleware.ts | **Magic Numbers**: Magic Number detectado: 7 | Defina uma constante nomeada para este valor. |
+| 484 | LOW | src/lib/utils/validators/route-schemas.ts | **Magic Numbers**: Magic Number detectado: 500 | Defina uma constante nomeada para este valor. |
+| 485 | LOW | src/lib/utils/validators/schemas.ts | **Magic Numbers**: Magic Number detectado: 11 | Defina uma constante nomeada para este valor. |
+| 486 | LOW | src/lib/utils/rate-limiter.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 487 | LOW | src/lib/utils/validators/route-schemas.ts | **Magic Numbers**: Magic Number detectado: 200 | Defina uma constante nomeada para este valor. |
+| 488 | LOW | src/lib/utils/validators/schemas.ts | **Magic Numbers**: Magic Number detectado: 9 | Defina uma constante nomeada para este valor. |
+| 489 | LOW | src/lib/utils/validators/schemas.ts | **Magic Numbers**: Magic Number detectado: 11 | Defina uma constante nomeada para este valor. |
+| 490 | LOW | src/lib/utils/validators/route-schemas.ts | **Magic Numbers**: Magic Number detectado: 200 | Defina uma constante nomeada para este valor. |
+| 491 | LOW | src/lib/utils/validators/schemas.ts | **Magic Numbers**: Magic Number detectado: 11 | Defina uma constante nomeada para este valor. |
+| 492 | LOW | src/lib/utils/validators/route-schemas.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 493 | LOW | src/lib/utils/validators/schemas.ts | **Magic Numbers**: Magic Number detectado: 11 | Defina uma constante nomeada para este valor. |
+| 494 | LOW | src/lib/utils/validators/schemas.ts | **Magic Numbers**: Magic Number detectado: 12 | Defina uma constante nomeada para este valor. |
+| 495 | LOW | src/lib/utils/validators/schemas.ts | **Magic Numbers**: Magic Number detectado: 11 | Defina uma constante nomeada para este valor. |
+| 496 | LOW | src/lib/utils/validators/schemas.ts | **Magic Numbers**: Magic Number detectado: 13 | Defina uma constante nomeada para este valor. |
+| 497 | LOW | src/lib/utils/validators/schemas.ts | **Magic Numbers**: Magic Number detectado: 50 | Defina uma constante nomeada para este valor. |
+| 498 | LOW | src/lib/utils/validators/schemas.ts | **Nome de variável genérico**: Uso de nomes genéricos: val, data. | Use nomes descritivos que revelem a intenção da variável. |
+| 499 | LOW | src/lib/utils/validators/schemas.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 500 | LOW | src/modules/audit/application/architectural-auditor.service.ts | **Falta de Tipagem Explícita**: 5 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 501 | LOW | src/modules/audit/application/audit-stream.service.ts | **Long Method**: Função/Método na linha 8 possui 88 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 502 | LOW | src/modules/audit/application/quality-test-runner.service.ts | **Nome de variável genérico**: Uso de nomes genéricos: data. | Use nomes descritivos que revelem a intenção da variável. |
+| 503 | LOW | src/modules/audit/application/audit-log.service.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 504 | LOW | src/modules/audit/application/audit-stream.service.ts | **Long Method**: Função/Método na linha 14 possui 77 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 505 | LOW | src/modules/audit/application/governance.service.ts | **Falta de Tipagem Explícita**: 7 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 506 | LOW | src/modules/audit/application/governance.service.ts | **Método Público sem Tipagem**: 7 métodos públicos sem tipo de retorno. | Sempre tipar retorno de métodos públicos para garantir contratos claros. |
+| 507 | LOW | src/modules/audit/application/security-audit.service.ts | **Magic Numbers**: Magic Number detectado: 30 | Defina uma constante nomeada para este valor. |
+| 508 | LOW | src/modules/audit/domain/rules/clean-code.rule.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 509 | LOW | src/modules/audit/application/security-insight.service.ts | **Long Method**: Função/Método na linha 41 possui 99 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 510 | LOW | src/modules/audit/application/security-audit.service.ts | **Magic Numbers**: Magic Number detectado: 20 | Defina uma constante nomeada para este valor. |
+| 511 | LOW | src/modules/audit/application/security-insight.service.ts | **Magic Numbers**: Magic Number detectado: 24 | Defina uma constante nomeada para este valor. |
+| 512 | LOW | src/modules/audit/domain/rules/clean-code.rule.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 513 | LOW | src/modules/audit/domain/rules/clean-code.rule.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 514 | LOW | src/modules/audit/domain/rules/clean-code.rule.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 515 | LOW | src/modules/audit/domain/rules/clean-code.rule.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 516 | LOW | src/modules/audit/domain/rules/srp.rule.ts | **Magic Numbers**: Magic Number detectado: 600 | Defina uma constante nomeada para este valor. |
+| 517 | LOW | src/modules/audit/domain/rules/solid-violations.rule.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 518 | LOW | src/modules/audit/domain/rules/type-safety.rule.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 519 | LOW | src/modules/audit/domain/rules/type-safety.rule.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 520 | LOW | src/modules/audit/domain/rules/srp.rule.ts | **Magic Numbers**: Magic Number detectado: 400 | Defina uma constante nomeada para este valor. |
+| 521 | LOW | src/modules/audit/domain/rules/type-safety.rule.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 522 | LOW | src/modules/auth/application/context-validation.service.ts | **Long Method**: Função/Método na linha 28 possui 106 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 523 | LOW | src/modules/auth/application/auth.service.ts | **Magic Numbers**: Magic Number detectado: 6 | Defina uma constante nomeada para este valor. |
+| 524 | LOW | src/modules/auth/application/context-validation.service.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 525 | LOW | src/modules/auth/application/auth.service.ts | **Magic Numbers**: Magic Number detectado: 6 | Defina uma constante nomeada para este valor. |
+| 526 | LOW | src/modules/auth/application/context-validation.service.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 527 | LOW | src/modules/auth/application/auth.service.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 528 | LOW | src/modules/auth/application/auth.service.ts | **Magic Numbers**: Magic Number detectado: 6 | Defina uma constante nomeada para este valor. |
+| 529 | LOW | src/modules/auth/application/auth.service.ts | **Magic Numbers**: Magic Number detectado: 6 | Defina uma constante nomeada para este valor. |
+| 530 | LOW | src/modules/auth/application/auth.service.ts | **Magic Numbers**: Magic Number detectado: 20 | Defina uma constante nomeada para este valor. |
+| 531 | LOW | src/modules/auth/application/auth.service.ts | **Magic Numbers**: Magic Number detectado: 32 | Defina uma constante nomeada para este valor. |
+| 532 | LOW | src/modules/auth/application/auth.service.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 533 | LOW | src/modules/auth/application/auth.service.ts | **Magic Numbers**: Magic Number detectado: 8 | Defina uma constante nomeada para este valor. |
+| 534 | LOW | src/modules/auth/application/auth.service.ts | **Magic Numbers**: Magic Number detectado: 8 | Defina uma constante nomeada para este valor. |
+| 535 | LOW | src/modules/auth/application/auth.service.ts | **Magic Numbers**: Magic Number detectado: 8 | Defina uma constante nomeada para este valor. |
+| 536 | LOW | src/modules/auth/application/auth.service.ts | **Falta de Tipagem Explícita**: 5 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 537 | LOW | src/modules/auth/application/auth.service.ts | **Método Público sem Tipagem**: 5 métodos públicos sem tipo de retorno. | Sempre tipar retorno de métodos públicos para garantir contratos claros. |
+| 538 | LOW | src/modules/auth/application/auth.service.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 539 | LOW | src/modules/common/application/database-diagram.service.ts | **Falta de Tipagem Explícita**: 5 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 540 | LOW | src/modules/auth/infrastructure/prisma-auth-credential.repository.ts | **Magic Numbers**: Magic Number detectado: 11 | Defina uma constante nomeada para este valor. |
+| 541 | LOW | src/modules/common/application/task-worker.ts | **Magic Numbers**: Magic Number detectado: 1500 | Defina uma constante nomeada para este valor. |
+| 542 | LOW | src/modules/common/application/queue.service.ts | **Falta de Tipagem Explícita**: 4 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 543 | LOW | src/modules/common/application/database-diagram.service.ts | **Método Público sem Tipagem**: 5 métodos públicos sem tipo de retorno. | Sempre tipar retorno de métodos públicos para garantir contratos claros. |
+| 544 | LOW | src/modules/common/application/queue.service.ts | **Método Público sem Tipagem**: 4 métodos públicos sem tipo de retorno. | Sempre tipar retorno de métodos públicos para garantir contratos claros. |
+| 545 | LOW | src/modules/common/application/queue.service.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 546 | LOW | src/modules/companies/application/job-function.service.ts | **Magic Numbers**: Magic Number detectado: 36 | Defina uma constante nomeada para este valor. |
+| 547 | LOW | src/modules/companies/application/company.service.ts | **Falta de Tipagem Explícita**: 5 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 548 | LOW | src/modules/companies/application/job-function.service.ts | **Magic Numbers**: Magic Number detectado: 11 | Defina uma constante nomeada para este valor. |
+| 549 | LOW | src/modules/companies/application/company.service.ts | **Método Público sem Tipagem**: 5 métodos públicos sem tipo de retorno. | Sempre tipar retorno de métodos públicos para garantir contratos claros. |
+| 550 | LOW | src/modules/companies/application/job-function.service.ts | **Falta de Tipagem Explícita**: 5 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 551 | LOW | src/modules/companies/application/job-function.service.ts | **Método Público sem Tipagem**: 5 métodos públicos sem tipo de retorno. | Sempre tipar retorno de métodos públicos para garantir contratos claros. |
+| 552 | LOW | src/modules/map-elements/application/map-visibility.service.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 553 | LOW | src/modules/map-elements/application/map-element.service.ts | **Long Method**: Função/Método na linha 69 possui 87 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 554 | LOW | src/modules/documents/application/document.service.ts | **Falta de Tipagem Explícita**: 5 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 555 | LOW | src/modules/map-elements/application/anchor.service.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 556 | LOW | src/modules/documents/application/document.service.ts | **Método Público sem Tipagem**: 5 métodos públicos sem tipo de retorno. | Sempre tipar retorno de métodos públicos para garantir contratos claros. |
+| 557 | LOW | src/modules/map-elements/application/map-element.service.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 558 | LOW | src/modules/map-elements/infrastructure/prisma-map-element.repository.ts | **Long Method**: Função/Método na linha 115 possui 125 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 559 | LOW | src/modules/production/application/daily-report.service.ts | **Long Method**: Função/Método na linha 215 possui 129 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 560 | LOW | src/modules/map-elements/infrastructure/prisma-map-element.repository.ts | **Magic Numbers**: Magic Number detectado: 10000 | Defina uma constante nomeada para este valor. |
+| 561 | LOW | src/modules/production/application/production-config.service.ts | **Falta de Tipagem Explícita**: 11 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 562 | LOW | src/modules/production/application/production-progress.service.ts | **Long Method**: Função/Método na linha 320 possui 143 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 563 | LOW | src/modules/production/application/production-config.service.ts | **Método Público sem Tipagem**: 11 métodos públicos sem tipo de retorno. | Sempre tipar retorno de métodos públicos para garantir contratos claros. |
+| 564 | LOW | src/modules/production/application/production-analytics.service.ts | **Long Method**: Função/Método na linha 46 possui 149 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 565 | LOW | src/modules/production/application/time-record.service.ts | **Falta de Tipagem Explícita**: 4 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 566 | LOW | src/modules/production/application/production-config.service.ts | **Nome de variável genérico**: Uso de nomes genéricos: data. | Use nomes descritivos que revelem a intenção da variável. |
+| 567 | LOW | src/modules/production/application/production-analytics.service.ts | **Long Method**: Função/Método na linha 201 possui 184 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 568 | LOW | src/modules/production/application/time-record.service.ts | **Método Público sem Tipagem**: 4 métodos públicos sem tipo de retorno. | Sempre tipar retorno de métodos públicos para garantir contratos claros. |
+| 569 | LOW | src/modules/production/application/production-analytics.service.ts | **Long Method**: Função/Método na linha 391 possui 73 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 570 | LOW | src/modules/production/application/production-analytics.service.ts | **Magic Numbers**: Magic Number detectado: 50 | Defina uma constante nomeada para este valor. |
+| 571 | LOW | src/modules/production/application/production-analytics.service.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 572 | LOW | src/modules/production/application/work-stage-sync.service.ts | **Long Method**: Função/Método na linha 15 possui 83 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 573 | LOW | src/modules/production/application/work-stage-sync.service.ts | **Long Method**: Função/Método na linha 100 possui 73 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 574 | LOW | src/modules/production/infrastructure/prisma-production-progress.repository.ts | **Nome de variável genérico**: Uso de nomes genéricos: res, data. | Use nomes descritivos que revelem a intenção da variável. |
+| 575 | LOW | src/modules/production/infrastructure/prisma-project-element.repository.ts | **Long Method**: Função/Método na linha 17 possui 220 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 576 | LOW | src/modules/projects/application/delegation.service.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 577 | LOW | src/modules/production/infrastructure/prisma-project-element.repository.ts | **Long Method**: Função/Método na linha 121 possui 102 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 578 | LOW | src/modules/production/infrastructure/prisma-project-element.repository.ts | **Long Method**: Função/Método na linha 318 possui 71 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 579 | LOW | src/modules/production/infrastructure/prisma-project-element.repository.ts | **Console.log esquecido**: Presença excessiva de console.logs (6x). | Remova logs de debug ou use um logger estruturado. |
+| 580 | LOW | src/modules/sites/application/site.service.ts | **Falta de Tipagem Explícita**: 5 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 581 | LOW | src/modules/system-testing/application/database-management.service.ts | **Magic Numbers**: Magic Number detectado: 1024 | Defina uma constante nomeada para este valor. |
+| 582 | LOW | src/modules/sites/application/site.service.ts | **Método Público sem Tipagem**: 5 métodos públicos sem tipo de retorno. | Sempre tipar retorno de métodos públicos para garantir contratos claros. |
+| 583 | LOW | src/modules/system-testing/application/database-management.service.ts | **Magic Numbers**: Magic Number detectado: 1024 | Defina uma constante nomeada para este valor. |
+| 584 | LOW | src/modules/span/application/span.service.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 585 | LOW | src/modules/system-testing/application/database-management.service.ts | **Magic Numbers**: Magic Number detectado: 1024 | Defina uma constante nomeada para este valor. |
+| 586 | LOW | src/modules/system-testing/application/database-management.service.ts | **Magic Numbers**: Magic Number detectado: 1024 | Defina uma constante nomeada para este valor. |
+| 587 | LOW | src/modules/system-testing/application/database-management.service.ts | **Magic Numbers**: Magic Number detectado: 20 | Defina uma constante nomeada para este valor. |
+| 588 | LOW | src/modules/system-testing/application/database-management.service.ts | **Magic Numbers**: Magic Number detectado: 1024 | Defina uma constante nomeada para este valor. |
+| 589 | LOW | src/modules/system-testing/application/database-management.service.ts | **Magic Numbers**: Magic Number detectado: 1024 | Defina uma constante nomeada para este valor. |
+| 590 | LOW | src/modules/system-testing/application/database-management.service.ts | **Magic Numbers**: Magic Number detectado: 15000 | Defina uma constante nomeada para este valor. |
+| 591 | LOW | src/modules/system-testing/application/database-management.service.ts | **Magic Numbers**: Magic Number detectado: 30000 | Defina uma constante nomeada para este valor. |
+| 592 | LOW | src/modules/tower/application/tower-import.service.ts | **Long Method**: Função/Método na linha 49 possui 110 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 593 | LOW | src/modules/tower/application/tower-construction.service.ts | **Long Method**: Função/Método na linha 43 possui 143 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 594 | LOW | src/modules/tower/application/tower-activity.service.ts | **Long Method**: Função/Método na linha 14 possui 120 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 595 | LOW | src/modules/teams/infrastructure/prisma-team.repository.ts | **Magic Numbers**: Magic Number detectado: 300 | Defina uma constante nomeada para este valor. |
+| 596 | LOW | src/modules/teams/application/team.service.ts | **Falta de Tipagem Explícita**: 10 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 597 | LOW | src/modules/teams/application/team.service.ts | **Método Público sem Tipagem**: 10 métodos públicos sem tipo de retorno. | Sempre tipar retorno de métodos públicos para garantir contratos claros. |
+| 598 | LOW | src/modules/tower/application/tower-activity.service.ts | **Nome de variável genérico**: Uso de nomes genéricos: data, item. | Use nomes descritivos que revelem a intenção da variável. |
+| 599 | LOW | src/modules/tower/application/tower-construction.service.ts | **Nome de variável genérico**: Uso de nomes genéricos: data, item. | Use nomes descritivos que revelem a intenção da variável. |
+| 600 | LOW | src/modules/tower/domain/tower.schema.ts | **Long Method**: Função/Método na linha 61 possui 115 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 601 | LOW | src/modules/user-roles/application/user-role.service.ts | **Falta de Tipagem Explícita**: 4 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 602 | LOW | src/modules/user-roles/infrastructure/prisma-user-role.repository.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 603 | LOW | src/modules/user-roles/application/access-control.service.ts | **Falta de Tipagem Explícita**: 4 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 604 | LOW | src/modules/user-roles/application/user-role.service.ts | **Método Público sem Tipagem**: 4 métodos públicos sem tipo de retorno. | Sempre tipar retorno de métodos públicos para garantir contratos claros. |
+| 605 | LOW | src/modules/user-roles/application/access-control.service.ts | **Método Público sem Tipagem**: 4 métodos públicos sem tipo de retorno. | Sempre tipar retorno de métodos públicos para garantir contratos claros. |
+| 606 | LOW | src/modules/users/infrastructure/prisma-permission.repository.ts | **Falta de Tipagem Explícita**: 4 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 607 | LOW | src/modules/users/domain/user.repository.ts | **Nome de variável genérico**: Uso de nomes genéricos: data. | Use nomes descritivos que revelem a intenção da variável. |
+| 608 | LOW | src/modules/users/application/user-permission.service.ts | **Long Method**: Função/Método na linha 22 possui 87 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 609 | LOW | src/modules/users/infrastructure/prisma-permission.repository.ts | **Método Público sem Tipagem**: 4 métodos públicos sem tipo de retorno. | Sempre tipar retorno de métodos públicos para garantir contratos claros. |
+| 610 | LOW | src/modules/users/application/user.service.ts | **Long Method**: Função/Método na linha 123 possui 78 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 611 | LOW | src/modules/users/application/user.service.ts | **Long Method**: Função/Método na linha 294 possui 73 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 612 | LOW | src/modules/users/infrastructure/prisma-user.repository.ts | **Nome de variável genérico**: Uso de nomes genéricos: data, item. | Use nomes descritivos que revelem a intenção da variável. |
+| 613 | LOW | src/modules/users/application/user.service.ts | **Long Method**: Função/Método na linha 373 possui 78 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 614 | LOW | src/modules/users/application/user.service.ts | **Nome de variável genérico**: Uso de nomes genéricos: data, value. | Use nomes descritivos que revelem a intenção da variável. |
+| 615 | LOW | src/modules/work-stages/infrastructure/prisma-work-stage-bulk.repository.ts | **Long Method**: Função/Método na linha 14 possui 102 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 616 | LOW | src/modules/work-stages/infrastructure/prisma-work-stage-read.repository.ts | **Long Method**: Função/Método na linha 215 possui 77 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 617 | LOW | src/modules/work-stages/infrastructure/prisma-work-stage-bulk.repository.ts | **Long Method**: Função/Método na linha 21 possui 89 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 618 | LOW | src/scripts/check-queue-simple.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 619 | LOW | src/scripts/check-queue.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 620 | LOW | src/scripts/check-prisma-models.ts | **Console.log esquecido**: Presença excessiva de console.logs (6x). | Remova logs de debug ou use um logger estruturado. |
+| 621 | LOW | src/scripts/diag-prisma-types.ts | **Console.log esquecido**: Presença excessiva de console.logs (8x). | Remova logs de debug ou use um logger estruturado. |
+| 622 | LOW | src/scripts/debug-reports.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 623 | LOW | src/scripts/check-queue.ts | **Console.log esquecido**: Presença excessiva de console.logs (7x). | Remova logs de debug ou use um logger estruturado. |
+| 624 | LOW | src/scripts/debug-permissions.ts | **Console.log esquecido**: Presença excessiva de console.logs (15x). | Remova logs de debug ou use um logger estruturado. |
+| 625 | LOW | src/scripts/master-seed.ts | **Console.log esquecido**: Presença excessiva de console.logs (6x). | Remova logs de debug ou use um logger estruturado. |
+| 626 | LOW | src/scripts/seed-initial-data.ts | **Magic Numbers**: Magic Number detectado: 18 | Defina uma constante nomeada para este valor. |
+| 627 | LOW | src/scripts/migrate-auth-credentials.ts | **Long Method**: Função/Método na linha 26 possui 85 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 628 | LOW | src/scripts/seed-permissions-full.ts | **Long Method**: Função/Método na linha 102 possui 107 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 629 | LOW | src/scripts/seed-permission-matrix.ts | **Long Method**: Função/Método na linha 50 possui 74 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 630 | LOW | src/scripts/full-sync-permissions.ts | **Long Method**: Função/Método na linha 56 possui 90 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 631 | LOW | src/scripts/nuke-db.ts | **Magic Numbers**: Magic Number detectado: 5000 | Defina uma constante nomeada para este valor. |
+| 632 | LOW | src/scripts/seed-initial-data.ts | **Magic Numbers**: Magic Number detectado: 65 | Defina uma constante nomeada para este valor. |
+| 633 | LOW | src/scripts/migrate-auth-credentials.ts | **Console.log esquecido**: Presença excessiva de console.logs (14x). | Remova logs de debug ou use um logger estruturado. |
+| 634 | LOW | src/scripts/nuke-db.ts | **Console.log esquecido**: Presença excessiva de console.logs (9x). | Remova logs de debug ou use um logger estruturado. |
+| 635 | LOW | src/scripts/seed-permissions-full.ts | **Magic Numbers**: Magic Number detectado: 2000 | Defina uma constante nomeada para este valor. |
+| 636 | LOW | src/scripts/seed-permission-matrix.ts | **Magic Numbers**: Magic Number detectado: 2000 | Defina uma constante nomeada para este valor. |
+| 637 | LOW | src/scripts/full-sync-permissions.ts | **Magic Numbers**: Magic Number detectado: 2500 | Defina uma constante nomeada para este valor. |
+| 638 | LOW | src/scripts/seed-permission-matrix.ts | **Magic Numbers**: Magic Number detectado: 1500 | Defina uma constante nomeada para este valor. |
+| 639 | LOW | src/scripts/seed-permissions-full.ts | **Magic Numbers**: Magic Number detectado: 1900 | Defina uma constante nomeada para este valor. |
+| 640 | LOW | src/scripts/seed-initial-data.ts | **Magic Numbers**: Magic Number detectado: 6 | Defina uma constante nomeada para este valor. |
+| 641 | LOW | src/scripts/full-sync-permissions.ts | **Magic Numbers**: Magic Number detectado: 2000 | Defina uma constante nomeada para este valor. |
+| 642 | LOW | src/scripts/seed-permissions-full.ts | **Magic Numbers**: Magic Number detectado: 1800 | Defina uma constante nomeada para este valor. |
+| 643 | LOW | src/scripts/seed-initial-data.ts | **Magic Numbers**: Magic Number detectado: 7 | Defina uma constante nomeada para este valor. |
+| 644 | LOW | src/scripts/full-sync-permissions.ts | **Magic Numbers**: Magic Number detectado: 1500 | Defina uma constante nomeada para este valor. |
+| 645 | LOW | src/scripts/seed-permission-matrix.ts | **Magic Numbers**: Magic Number detectado: 950 | Defina uma constante nomeada para este valor. |
+| 646 | LOW | src/scripts/seed-permissions-full.ts | **Magic Numbers**: Magic Number detectado: 1500 | Defina uma constante nomeada para este valor. |
+| 647 | LOW | src/scripts/full-sync-permissions.ts | **Magic Numbers**: Magic Number detectado: 1200 | Defina uma constante nomeada para este valor. |
+| 648 | LOW | src/scripts/seed-initial-data.ts | **Magic Numbers**: Magic Number detectado: 9 | Defina uma constante nomeada para este valor. |
+| 649 | LOW | src/scripts/seed-permission-matrix.ts | **Magic Numbers**: Magic Number detectado: 900 | Defina uma constante nomeada para este valor. |
+| 650 | LOW | src/scripts/seed-permissions-full.ts | **Magic Numbers**: Magic Number detectado: 1400 | Defina uma constante nomeada para este valor. |
+| 651 | LOW | src/scripts/full-sync-permissions.ts | **Magic Numbers**: Magic Number detectado: 1100 | Defina uma constante nomeada para este valor. |
+| 652 | LOW | src/scripts/seed-initial-data.ts | **Magic Numbers**: Magic Number detectado: 59 | Defina uma constante nomeada para este valor. |
+| 653 | LOW | src/scripts/seed-permission-matrix.ts | **Magic Numbers**: Magic Number detectado: 850 | Defina uma constante nomeada para este valor. |
+| 654 | LOW | src/scripts/seed-permissions-full.ts | **Magic Numbers**: Magic Number detectado: 900 | Defina uma constante nomeada para este valor. |
+| 655 | LOW | src/scripts/full-sync-permissions.ts | **Magic Numbers**: Magic Number detectado: 950 | Defina uma constante nomeada para este valor. |
+| 656 | LOW | src/scripts/seed-initial-data.ts | **Magic Numbers**: Magic Number detectado: 16 | Defina uma constante nomeada para este valor. |
+| 657 | LOW | src/scripts/seed-permission-matrix.ts | **Magic Numbers**: Magic Number detectado: 850 | Defina uma constante nomeada para este valor. |
+| 658 | LOW | src/scripts/seed-permissions-full.ts | **Magic Numbers**: Magic Number detectado: 850 | Defina uma constante nomeada para este valor. |
+| 659 | LOW | src/scripts/full-sync-permissions.ts | **Magic Numbers**: Magic Number detectado: 900 | Defina uma constante nomeada para este valor. |
+| 660 | LOW | src/scripts/seed-initial-data.ts | **Magic Numbers**: Magic Number detectado: 18 | Defina uma constante nomeada para este valor. |
+| 661 | LOW | src/scripts/seed-permission-matrix.ts | **Magic Numbers**: Magic Number detectado: 800 | Defina uma constante nomeada para este valor. |
+| 662 | LOW | src/scripts/seed-permissions-full.ts | **Magic Numbers**: Magic Number detectado: 800 | Defina uma constante nomeada para este valor. |
+| 663 | LOW | src/scripts/seed-initial-data.ts | **Magic Numbers**: Magic Number detectado: 59 | Defina uma constante nomeada para este valor. |
+| 664 | LOW | src/scripts/full-sync-permissions.ts | **Magic Numbers**: Magic Number detectado: 800 | Defina uma constante nomeada para este valor. |
+| 665 | LOW | src/scripts/seed-permission-matrix.ts | **Magic Numbers**: Magic Number detectado: 700 | Defina uma constante nomeada para este valor. |
+| 666 | LOW | src/scripts/seed-permissions-full.ts | **Magic Numbers**: Magic Number detectado: 700 | Defina uma constante nomeada para este valor. |
+| 667 | LOW | src/scripts/seed-initial-data.ts | **Magic Numbers**: Magic Number detectado: 23.55052 | Defina uma constante nomeada para este valor. |
+| 668 | LOW | src/scripts/full-sync-permissions.ts | **Magic Numbers**: Magic Number detectado: 700 | Defina uma constante nomeada para este valor. |
+| 669 | LOW | src/scripts/seed-permission-matrix.ts | **Magic Numbers**: Magic Number detectado: 600 | Defina uma constante nomeada para este valor. |
+| 670 | LOW | src/scripts/seed-permissions-full.ts | **Magic Numbers**: Magic Number detectado: 600 | Defina uma constante nomeada para este valor. |
+| 671 | LOW | src/scripts/seed-initial-data.ts | **Magic Numbers**: Magic Number detectado: 46.633308 | Defina uma constante nomeada para este valor. |
+| 672 | LOW | src/scripts/full-sync-permissions.ts | **Magic Numbers**: Magic Number detectado: 600 | Defina uma constante nomeada para este valor. |
+| 673 | LOW | src/scripts/seed-permission-matrix.ts | **Magic Numbers**: Magic Number detectado: 400 | Defina uma constante nomeada para este valor. |
+| 674 | LOW | src/scripts/seed-permissions-full.ts | **Magic Numbers**: Magic Number detectado: 400 | Defina uma constante nomeada para este valor. |
+| 675 | LOW | src/scripts/seed-initial-data.ts | **Magic Numbers**: Magic Number detectado: 23.55052 | Defina uma constante nomeada para este valor. |
+| 676 | LOW | src/scripts/full-sync-permissions.ts | **Magic Numbers**: Magic Number detectado: 500 | Defina uma constante nomeada para este valor. |
+| 677 | LOW | src/scripts/seed-permission-matrix.ts | **Magic Numbers**: Magic Number detectado: 300 | Defina uma constante nomeada para este valor. |
+| 678 | LOW | src/scripts/seed-permissions-full.ts | **Magic Numbers**: Magic Number detectado: 300 | Defina uma constante nomeada para este valor. |
+| 679 | LOW | src/scripts/seed-initial-data.ts | **Magic Numbers**: Magic Number detectado: 46.633308 | Defina uma constante nomeada para este valor. |
+| 680 | LOW | src/scripts/full-sync-permissions.ts | **Magic Numbers**: Magic Number detectado: 300 | Defina uma constante nomeada para este valor. |
+| 681 | LOW | src/scripts/seed-permission-matrix.ts | **Magic Numbers**: Magic Number detectado: 50 | Defina uma constante nomeada para este valor. |
+| 682 | LOW | src/scripts/seed-permissions-full.ts | **Magic Numbers**: Magic Number detectado: 200 | Defina uma constante nomeada para este valor. |
+| 683 | LOW | src/scripts/seed-initial-data.ts | **Magic Numbers**: Magic Number detectado: 50 | Defina uma constante nomeada para este valor. |
+| 684 | LOW | src/scripts/full-sync-permissions.ts | **Magic Numbers**: Magic Number detectado: 150 | Defina uma constante nomeada para este valor. |
+| 685 | LOW | src/scripts/seed-permission-matrix.ts | **Console.log esquecido**: Presença excessiva de console.logs (7x). | Remova logs de debug ou use um logger estruturado. |
+| 686 | LOW | src/scripts/seed-permissions-full.ts | **Magic Numbers**: Magic Number detectado: 50 | Defina uma constante nomeada para este valor. |
+| 687 | LOW | src/scripts/seed-initial-data.ts | **Falta de Tipagem Explícita**: 8 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 688 | LOW | src/scripts/full-sync-permissions.ts | **Magic Numbers**: Magic Number detectado: 50 | Defina uma constante nomeada para este valor. |
+| 689 | LOW | src/scripts/seed-permissions-full.ts | **Console.log esquecido**: Presença excessiva de console.logs (7x). | Remova logs de debug ou use um logger estruturado. |
+| 690 | LOW | src/scripts/seed-initial-data.ts | **Console.log esquecido**: Presença excessiva de console.logs (18x). | Remova logs de debug ou use um logger estruturado. |
+| 691 | LOW | src/scripts/full-sync-permissions.ts | **Console.log esquecido**: Presença excessiva de console.logs (9x). | Remova logs de debug ou use um logger estruturado. |
+| 692 | LOW | src/services/cacheService.ts | **Magic Numbers**: Magic Number detectado: 60 | Defina uma constante nomeada para este valor. |
+| 693 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 694 | LOW | src/scripts/seed-production.ts | **Long Method**: Função/Método na linha 5 possui 105 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 695 | LOW | src/tests/manual/CLI-audit.spec.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 696 | LOW | src/tests/integration/ContextEndpoints.test.ts | **Magic Numbers**: Magic Number detectado: 401 | Defina uma constante nomeada para este valor. |
+| 697 | LOW | src/scripts/test-db.ts | **Magic Numbers**: Magic Number detectado: 10000 | Defina uma constante nomeada para este valor. |
+| 698 | LOW | src/services/cacheService.ts | **Magic Numbers**: Magic Number detectado: 3600 | Defina uma constante nomeada para este valor. |
+| 699 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 700 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 4 | Defina uma constante nomeada para este valor. |
+| 701 | LOW | src/tests/manual/CLI-audit.spec.ts | **Magic Numbers**: Magic Number detectado: 60000 | Defina uma constante nomeada para este valor. |
+| 702 | LOW | src/scripts/test-db.ts | **Console.log esquecido**: Presença excessiva de console.logs (10x). | Remova logs de debug ou use um logger estruturado. |
+| 703 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 704 | LOW | src/tests/manual/CLI-audit.spec.ts | **Console.log esquecido**: Presença excessiva de console.logs (11x). | Remova logs de debug ou use um logger estruturado. |
+| 705 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 4 | Defina uma constante nomeada para este valor. |
+| 706 | LOW | src/services/cacheService.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 707 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 708 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 6 | Defina uma constante nomeada para este valor. |
+| 709 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 6 | Defina uma constante nomeada para este valor. |
+| 710 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 7 | Defina uma constante nomeada para este valor. |
+| 711 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 8 | Defina uma constante nomeada para este valor. |
+| 712 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 7 | Defina uma constante nomeada para este valor. |
+| 713 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 9 | Defina uma constante nomeada para este valor. |
+| 714 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 8 | Defina uma constante nomeada para este valor. |
+| 715 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 11 | Defina uma constante nomeada para este valor. |
+| 716 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 9 | Defina uma constante nomeada para este valor. |
+| 717 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 718 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 11 | Defina uma constante nomeada para este valor. |
+| 719 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 720 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 721 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 722 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 723 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 4 | Defina uma constante nomeada para este valor. |
+| 724 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 725 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 726 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 4 | Defina uma constante nomeada para este valor. |
+| 727 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 728 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 729 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 6 | Defina uma constante nomeada para este valor. |
+| 730 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 731 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 7 | Defina uma constante nomeada para este valor. |
+| 732 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 6 | Defina uma constante nomeada para este valor. |
+| 733 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 8 | Defina uma constante nomeada para este valor. |
+| 734 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 7 | Defina uma constante nomeada para este valor. |
+| 735 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 736 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 8 | Defina uma constante nomeada para este valor. |
+| 737 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 738 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 739 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 740 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 741 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 7 | Defina uma constante nomeada para este valor. |
+| 742 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 743 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 4 | Defina uma constante nomeada para este valor. |
+| 744 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 7 | Defina uma constante nomeada para este valor. |
+| 745 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 746 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 4 | Defina uma constante nomeada para este valor. |
+| 747 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 4 | Defina uma constante nomeada para este valor. |
+| 748 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 749 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 750 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 4 | Defina uma constante nomeada para este valor. |
+| 751 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 752 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 753 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 754 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 755 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 756 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 757 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 4 | Defina uma constante nomeada para este valor. |
+| 758 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 759 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 760 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 4 | Defina uma constante nomeada para este valor. |
+| 761 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 6 | Defina uma constante nomeada para este valor. |
+| 762 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 763 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 764 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 6 | Defina uma constante nomeada para este valor. |
+| 765 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 7 | Defina uma constante nomeada para este valor. |
+| 766 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 767 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 8 | Defina uma constante nomeada para este valor. |
+| 768 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 7 | Defina uma constante nomeada para este valor. |
+| 769 | LOW | src/scripts/seed-production-categories.ts | **Magic Numbers**: Magic Number detectado: 9 | Defina uma constante nomeada para este valor. |
+| 770 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 8 | Defina uma constante nomeada para este valor. |
+| 771 | LOW | src/scripts/seed-production-categories.ts | **Console.log esquecido**: Presença excessiva de console.logs (7x). | Remova logs de debug ou use um logger estruturado. |
+| 772 | LOW | src/scripts/seed-production.ts | **Magic Numbers**: Magic Number detectado: 9 | Defina uma constante nomeada para este valor. |
+| 773 | LOW | src/scripts/seed-production.ts | **Console.log esquecido**: Presença excessiva de console.logs (7x). | Remova logs de debug ou use um logger estruturado. |
+| 774 | LOW | src/tests/setup.ts | **Magic Numbers**: Magic Number detectado: 30000 | Defina uma constante nomeada para este valor. |
+| 775 | LOW | src/tests/unit/001.Security.test.ts | **Long Method**: Função/Método na linha 31 possui 85 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 776 | LOW | src/tests/unit/audit/infrastructure/config/audit-config.service.test.ts | **Magic Numbers**: Magic Number detectado: 50 | Defina uma constante nomeada para este valor. |
+| 777 | LOW | src/tests/unit/audit/infrastructure/git/git-diff.service.test.ts | **Magic Numbers**: Magic Number detectado: 3 | Defina uma constante nomeada para este valor. |
+| 778 | LOW | src/tests/unit/ContextValidationService.test.ts | **Long Method**: Função/Método na linha 27 possui 124 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 779 | LOW | src/tests/unit/logger.test.ts | **Magic Numbers**: Magic Number detectado: 200 | Defina uma constante nomeada para este valor. |
+| 780 | LOW | src/tests/setup.ts | **Falta de Tipagem Explícita**: 3 funções/métodos sem tipo de retorno explícito. | Adicione tipos de retorno (: void, : Promise<T>, etc.) para melhor documentação e segurança. |
+| 781 | LOW | src/tests/unit/001.Security.test.ts | **Magic Numbers**: Magic Number detectado: 403 | Defina uma constante nomeada para este valor. |
+| 782 | LOW | src/tests/unit/ContextValidationService.test.ts | **Long Method**: Função/Método na linha 36 possui 80 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 783 | LOW | src/tests/unit/logger.test.ts | **Magic Numbers**: Magic Number detectado: 150 | Defina uma constante nomeada para este valor. |
+| 784 | LOW | src/tests/setup.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 785 | LOW | src/tests/unit/001.Security.test.ts | **Magic Numbers**: Magic Number detectado: 401 | Defina uma constante nomeada para este valor. |
+| 786 | LOW | src/tests/unit/tower.service.test.ts | **Magic Numbers**: Magic Number detectado: 30 | Defina uma constante nomeada para este valor. |
+| 787 | LOW | src/tests/unit/work-stage.service.test.ts | **Long Method**: Função/Método na linha 7 possui 162 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 788 | LOW | src/tests/unit/validators.test.ts | **Long Method**: Função/Método na linha 15 possui 206 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 789 | LOW | src/tests/unit/security-flags.test.ts | **Long Method**: Função/Método na linha 12 possui 213 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 790 | LOW | src/types/auth.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 791 | LOW | src/types/api.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 792 | LOW | src/tests/unit/tower.service.test.ts | **Magic Numbers**: Magic Number detectado: 30 | Defina uma constante nomeada para este valor. |
+| 793 | LOW | src/tests/unit/security-flags.test.ts | **Long Method**: Função/Método na linha 17 possui 120 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 794 | LOW | src/tests/unit/validators.test.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 795 | LOW | src/types/database.ts | **Código comentado**: Possível código comentado detectado. | Remova código morto. O Git já mantém o histórico. |
+| 796 | LOW | src/tests/unit/work-stage.service.test.ts | **Long Method**: Função/Método na linha 78 possui 90 linhas. | Extraia blocos lógicos para métodos auxiliares. |
+| 797 | LOW | src/tests/unit/tower.service.test.ts | **Magic Numbers**: Magic Number detectado: 30 | Defina uma constante nomeada para este valor. |
+| 798 | LOW | src/tests/unit/validators.test.ts | **Magic Numbers**: Magic Number detectado: 50 | Defina uma constante nomeada para este valor. |
+| 799 | LOW | src/tests/unit/validators.test.ts | **Magic Numbers**: Magic Number detectado: 5 | Defina uma constante nomeada para este valor. |
+| 800 | LOW | src/tests/unit/validators.test.ts | **Magic Numbers**: Magic Number detectado: 50 | Defina uma constante nomeada para este valor. |

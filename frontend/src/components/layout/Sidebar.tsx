@@ -1,16 +1,10 @@
 import React, { useEffect } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
-import { useSignals } from "@preact/signals-react/runtime";
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { getRoleStyle, getRoleLabel } from '@/utils/roleUtils';
-import {
-  isFieldWorker,
-  isProtectedUser,
-  UserScope,
-} from "@/utils/permissionHelpers";
-import { isProtectedSignal, can, show } from "@/signals/authSignals";
-import { logoUrlSignal, logoWidthSignal, initSettings } from "@/signals/settingsSignals";
+import { isFieldWorker, isProtectedUser, UserScope } from "@/utils/permissionHelpers";
+import { useSettings } from "@/contexts/SettingsContext";
 import { ShieldCheck } from "lucide-react";
 import {
   Home,
@@ -258,7 +252,6 @@ const menuGroups: SidebarGroup[] = [
   },
 ];
 
-import { useNavigate } from "react-router-dom";
 import { ProjectModuleSelectionModal } from "../shared/ProjectModuleSelectionModal";
 
 function SidebarGroupItem({
@@ -276,14 +269,13 @@ function SidebarGroupItem({
   isTeamLeader: boolean;
   handleNavClick: (e: React.MouseEvent, item: SidebarItem) => void;
 }) {
-  useSignals();
+  const { can, show, isProtected } = useAuth();
   const isCollapsible = group.title !== "Principal"; // Agora quase todos são colapsáveis
   const visibleItems = group.items.filter((item) => {
     // Restrição para itens exclusivos de desenvolvimento
     if (item.devOnly && !import.meta.env.DEV) return false;
 
-    const isProtected = isProtectedSignal.value;
-      const hasAdminMenu = show("showAdminMenu");
+    const hasAdminMenu = show("showAdminMenu");
 
     if (isProtected || hasAdminMenu) return true;
     const moduleId = item.id;
@@ -377,22 +369,16 @@ function SidebarGroupItem({
   );
 }
 
-export function Sidebar({ isOpen, onClose, desktopOpen = true }: SidebarProps) {
-  useSignals();
-  const { user, profile } = useAuth();
-  const location = useLocation();
+export function Sidebar({ isOpen, onClose, desktopOpen }: SidebarProps) {
+  const { user, profile, permissions, uiFlags, simulationRole, can: canAuth, isProtected, show } = useAuth();
+  const { logoUrl, logoWidth } = useSettings();
+  const { pathname } = useLocation();
   const navigate = useNavigate();
   const { employees } = useEmployees();
   const { teams } = useTeams();
 
-  // Initialize Settings (Logo, etc)
-  useEffect(() => {
-    if (profile?.companyId) {
-        initSettings(profile.companyId);
-    } else {
-        initSettings(); // Local load only
-    }
-  }, [profile?.companyId]);
+  const isSuper = isProtected;
+  const isSimulated = !!simulationRole;
 
   // Project Selection Modal State
   const [modalState, setModalState] = React.useState<{
@@ -419,7 +405,7 @@ export function Sidebar({ isOpen, onClose, desktopOpen = true }: SidebarProps) {
     if (item.requiresProject) {
       // 2. Exception: Gestão Global (isProtectedSignal or UI Admin access)
       const isGlobalManagement =
-        isProtectedSignal.value || show("ui.admin_access");
+        isProtected || show("ui.admin_access");
 
       if (!isGlobalManagement) {
         // 3. User must select project
@@ -457,20 +443,20 @@ export function Sidebar({ isOpen, onClose, desktopOpen = true }: SidebarProps) {
       >
         {/* Header containing Logo */}
         <div className="flex-none p-6 border-b border-white/5 flex flex-col items-center justify-center min-h-[100px] relative">
-            {logoUrlSignal.value ? (
+            {logoUrl ? (
                 <img 
-                    src={logoUrlSignal.value} 
+                    src={logoUrl} 
                     alt="Logo" 
                     className="object-contain transition-all duration-500"
                     style={{ 
-                        width: `${logoWidthSignal.value}px`,
+                        width: `${logoWidth}px`,
                         maxWidth: '100%',
                         maxHeight: '80px'
                     }}
                 />
             ) : (
                 // Fallback Text Logo if no image -> USANDO A ORIGINAL COM A TORRE
-                <div style={{ transform: `scale(${Math.min(logoWidthSignal.value / 180, 1.3)})` }} className="transition-transform duration-300">
+                <div style={{ transform: `scale(${Math.min(logoWidth / 180, 1.3)})` }} className="transition-transform duration-300">
                     <Logo />
                 </div>
             )}

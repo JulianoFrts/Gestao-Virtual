@@ -13,13 +13,13 @@ import {
     Filter as FilterIcon,
     HardHat,
     AlertCircle,
+    Lock,
 } from 'lucide-react';
-import { selectedContextSignal } from '@/signals/authSignals';
-import { useSignals } from "@preact/signals-react/runtime";
 import { ProjectEmptyState } from '@/components/shared/ProjectEmptyState';
 import { ProjectSelector } from '@/components/shared/ProjectSelector';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Hooks
 import { useWorkStages } from '@/hooks/useWorkStages';
@@ -35,10 +35,7 @@ import GAPODeviationReport from '@/components/gapo/GAPODeviationReport';
 import GAPOExecutiveOverview from '@/components/gapo/GAPOExecutiveOverview';
 
 export default function GAPO() {
-    useSignals();
-    
-    // Context from Global Signal
-    const selectedContext = selectedContextSignal.value;
+    const { selectedContext } = useAuth();
     const selectedProjectId = selectedContext?.projectId || null;
     const selectedSiteId = selectedContext?.siteId || 'all';
 

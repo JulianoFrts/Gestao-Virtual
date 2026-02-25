@@ -22,21 +22,19 @@ export type { User, Session, Account, AuditLog, VerificationToken };
 // =============================================
 
 /**
- * Seleção de campos públicos do usuário
+ * Seleção de campos públicos do usuário (Tripartição de Responsabilidades)
  */
 export const publicUserSelect = {
+  // PILAR PESSOAL
   id: true,
   name: true,
   image: true,
-  hierarchyLevel: true,
-  registrationNumber: true,
   cpf: true,
   phone: true,
-  functionId: true,
-  laborType: true,
-  iapName: true,
   gender: true,
   birthDate: true,
+  createdAt: true,
+  updatedAt: true,
   address: {
     select: {
       cep: true,
@@ -48,31 +46,38 @@ export const publicUserSelect = {
       estado: true,
     },
   },
-  createdAt: true,
-  updatedAt: true,
+
+  // PILAR DE SEGURANÇA
   authCredential: {
     select: {
       email: true,
       role: true,
       status: true,
       mfaEnabled: true,
-      mfaSecret: true,
+      isSystemAdmin: true,
+      permissions: true,
     },
   },
+
+  // PILAR DE OBRA / OPERACIONAL
   affiliation: {
     select: {
       companyId: true,
       projectId: true,
       siteId: true,
-    },
-  },
-  ...({ isSystemAdmin: true } as any),
-  jobFunction: {
-    select: {
-      id: true,
-      name: true,
-      canLeadTeam: true,
+      registrationNumber: true,
       hierarchyLevel: true,
+      laborType: true,
+      iapName: true,
+      functionId: true,
+      jobFunction: {
+        select: {
+          id: true,
+          name: true,
+          category: true,
+          canLeadTeam: true,
+        },
+      },
     },
   },
 } as const satisfies Prisma.UserSelect;
@@ -177,7 +182,7 @@ function buildSearchFilter(search?: string | null): Prisma.UserWhereInput {
     OR: [
       { authCredential: { email: { contains: search, mode: "insensitive" } } },
       { name: { contains: search, mode: "insensitive" } },
-      { registrationNumber: { contains: search, mode: "insensitive" } },
+      { affiliation: { registrationNumber: { contains: search, mode: "insensitive" } } },
       { cpf: { contains: search, mode: "insensitive" } },
     ],
   };

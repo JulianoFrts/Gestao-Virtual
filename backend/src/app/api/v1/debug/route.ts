@@ -5,12 +5,12 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const results = await prisma.$queryRawUnsafe(`
+    const results = await prisma.$queryRaw`
       SELECT external_id 
       FROM "public"."map_element_technical_data"
       ORDER BY "sequence" 
-      LIMIT 1000 OFFSET 0;
-    `);
+      LIMIT 1000 OFFSET 0
+    `;
 
     // Organize to summarize easily
     const data = results as any[];

@@ -23,13 +23,24 @@ export class PrismaPermissionRepository implements PermissionRepository {
     }
 
     async findUserWithPermissions(userId: string) {
-        return prisma.user.findUnique({
+        const user = await prisma.user.findUnique({
             where: { id: userId },
             select: {
-                functionId: true,
-                permissions: true
+                authCredential: {
+                    select: { permissions: true }
+                },
+                affiliation: {
+                    select: { functionId: true }
+                }
             },
         });
+
+        if (!user) return null;
+
+        return {
+            permissions: user.authCredential?.permissions || {},
+            functionId: user.affiliation?.functionId
+        };
     }
 
     async findProjectDelegations(projectId: string, jobFunctionId: string) {

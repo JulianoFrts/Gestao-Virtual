@@ -53,13 +53,16 @@ describe("TowerService", () => {
   });
 
   it("should call deleteByProject with correct id", async () => {
-    mockTowerRepository.deleteByProject.mockResolvedValue(5);
+    const EXPECTED_DELETED_COUNT = 5;
+    mockTowerRepository.deleteByProject.mockResolvedValue(
+      EXPECTED_DELETED_COUNT,
+    );
 
     const result = await towerService.deleteAllFromProject("proj-123");
 
     expect(mockTowerRepository.deleteByProject).toHaveBeenCalledWith(
       "proj-123",
     );
-    expect(result).toBe(5);
+    expect(result).toBe(EXPECTED_DELETED_COUNT);
   });
 });

@@ -2,30 +2,13 @@ import React, { useEffect, useRef } from 'react';
 import { useUsers } from '@/hooks/useUsers';
 import { useTeams } from '@/hooks/useTeams';
 import { fetchEmployees } from '@/signals/employeeSignals';
-import { useSignals } from "@preact/signals-react/runtime";
-import {
-    hasUsersFetchedSignal,
-    hasTeamsFetchedSignal,
-    hasGlobalDataFetchedSignal,
-    has3dFetchedSignal,
-    hasReportsFetchedSignal
-} from '@/signals/syncSignals';
+import { useInit } from '@/contexts/InitContext';
 import { fetchGlobalData } from '@/signals/globalDataSignals';
 import { ParallelLoader } from '@/lib/async/ParallelLoader';
-import { fetchSystemMessages, hasSystemMessagesFetchedSignal } from '@/signals/monitoringSignals';
-import { fetchTimeRecords, hasTimeRecordsFetchedSignal } from '@/signals/timeSignals';
-import { fetchWorkStages, hasWorkStagesFetchedSignal } from '@/signals/workStageSignals';
+import { fetchSystemMessages } from '@/signals/monitoringSignals';
+import { fetchTimeRecords } from '@/signals/timeSignals';
+import { fetchWorkStages } from '@/signals/workStageSignals';
 import { fetchAuditLogs } from '@/signals/auditSignals';
-import {
-    loaderConcurrencySignal,
-    activeTaskIdsSignal,
-    pendingTaskIdsSignal
-} from '@/signals/loaderSignals';
-import {
-    hasEmployeesFetchedSignal,
-    hasAuditFetchedSignal,
-    hasCostsFetchedSignal
-} from '@/signals/syncSignals';
 import { fetchProductionData } from '@/signals/productionSignals';
 import { useDailyReports, DailyReportStatus } from '@/hooks/useDailyReports';
 import { kpiService } from '@/services/kpiService';
@@ -40,7 +23,23 @@ import { AlertCircle } from 'lucide-react';
  * Orquestra o carregamento inicial usando ParallelLoader (4 workers).
  */
 export const GlobalInitializer = () => {
-    useSignals();
+    const { 
+        setModuleStatus, 
+        hasUsersFetched,
+        setHasUsersFetched, 
+        hasTeamsFetched,
+        setHasTeamsFetched, 
+        hasGlobalDataFetched,
+        setHasGlobalDataFetched,
+        setHas3dFetched,
+        setHasReportsFetched,
+        setHasEmployeesFetched,
+        setHasAuditFetched,
+        setHasCostsFetched,
+        setHasTimeRecordsFetched,
+        setHasWorkStagesFetched,
+        setHasSystemMessagesFetched
+    } = useInit();
 
     // Hooks que retornam funções de refresh
     const { reports, refresh: refreshReports } = useDailyReports();
@@ -60,26 +59,18 @@ export const GlobalInitializer = () => {
         initializedRef.current = true;
 
         const initLoader = async () => {
-            console.log(`[GlobalInitializer] Iniciando ParallelLoader (Limite: ${loaderConcurrencySignal.value})...`);
+            const loaderConcurrency = 4; // Default or fetch from somewhere else
+            console.log(`[GlobalInitializer] Iniciando ParallelLoader (Limite: ${loaderConcurrency})...`);
 
             // Importar dinamicamente db para evitar carregamento precoce se necessário
             const { db } = await import("@/integrations/database");
 
-            const loader = new ParallelLoader(loaderConcurrencySignal);
+            const loader = new ParallelLoader(loaderConcurrency);
             loaderRef.current = loader;
 
             // Rastreamento de Estado
             loader.onTaskStateChange((id, status) => {
-                if (status === 'running') {
-                    activeTaskIdsSignal.value = [...activeTaskIdsSignal.value, id];
-                    pendingTaskIdsSignal.value = pendingTaskIdsSignal.value.filter(pid => pid !== id);
-                } else if (status === 'completed' || status === 'failed') {
-                    activeTaskIdsSignal.value = activeTaskIdsSignal.value.filter(aid => aid !== id);
-                } else if (status === 'pending') {
-                    if (!pendingTaskIdsSignal.value.includes(id)) {
-                        pendingTaskIdsSignal.value = [...pendingTaskIdsSignal.value, id];
-                    }
-                }
+                setModuleStatus(id, status as any);
             });
 
             loader.onProgress((completed, total, task) => {
@@ -107,9 +98,8 @@ export const GlobalInitializer = () => {
                 action: async () => {
                     // Job functions já carregadas via fetchGlobalData no orionApi em alguns casos, 
                     // mas garantimos aqui se necessário.
-                    const { data } = await orionApi.get('/production/categories'); // Exemplo de categorias
                     const { data: jobFuncs } = await db.from('job_functions').select('*');
-                    // hasGlobalDataFetchedSignal cobrirá isso
+                    setHasGlobalDataFetched(true);
                 },
                 priority: 90
             });
@@ -120,7 +110,7 @@ export const GlobalInitializer = () => {
                 label: 'Funcionários',
                 action: async () => {
                     await fetchEmployees(true);
-                    hasEmployeesFetchedSignal.value = true;
+                    setHasEmployeesFetched(true);
                 },
                 priority: 80
             });
@@ -138,7 +128,7 @@ export const GlobalInitializer = () => {
                 label: 'Relatórios Diários (RDO)',
                 action: async () => {
                     // Trigger inicial de cache se necessário
-                    hasReportsFetchedSignal.value = true;
+                    setHasReportsFetched(true);
                 },
                 priority: 70,
                 dependencies: ['teams']
@@ -175,7 +165,7 @@ export const GlobalInitializer = () => {
                 action: async () => {
                     // Trigger calc ou warming de custos
                     await kpiService.getUnitCosts('all');
-                    hasCostsFetchedSignal.value = true;
+                    setHasCostsFetched(true);
                 },
                 priority: 40,
                 dependencies: ['production']
@@ -187,7 +177,7 @@ export const GlobalInitializer = () => {
                 label: 'Logs de Auditoria',
                 action: async () => {
                     await fetchAuditLogs(); // Inicia stream em background
-                    hasAuditFetchedSignal.value = true;
+                    setHasAuditFetched(true);
                 },
                 priority: 100
             });
@@ -197,7 +187,7 @@ export const GlobalInitializer = () => {
                 id: 'viewer3d',
                 label: 'Engenharia 3D',
                 action: async () => {
-                    has3dFetchedSignal.value = true;
+                    setHas3dFetched(true);
                 },
                 priority: 95
             });
@@ -230,20 +220,20 @@ export const GlobalInitializer = () => {
         // Safety Timeout (Aumentado para 25s para acomodar delays)
         const timer = setTimeout(() => {
             const notReady =
-                !hasUsersFetchedSignal.value ||
-                !hasTeamsFetchedSignal.value ||
-                !hasGlobalDataFetchedSignal.value;
+                !hasUsersFetched ||
+                !hasTeamsFetched ||
+                !hasGlobalDataFetched;
 
             if (notReady) {
                 console.warn("[GlobalInitializer] Tempo limite excedido. Forçando renderização da UI.");
-                hasUsersFetchedSignal.value = true;
-                hasTeamsFetchedSignal.value = true;
-                hasGlobalDataFetchedSignal.value = true;
-                has3dFetchedSignal.value = true;
-                hasReportsFetchedSignal.value = true;
-                hasSystemMessagesFetchedSignal.value = true;
-                hasTimeRecordsFetchedSignal.value = true;
-                hasWorkStagesFetchedSignal.value = true;
+                setHasUsersFetched(true);
+                setHasTeamsFetched(true);
+                setHasGlobalDataFetched(true);
+                setHas3dFetched(true);
+                setHasReportsFetched(true);
+                setHasSystemMessagesFetched(true);
+                setHasTimeRecordsFetched(true);
+                setHasWorkStagesFetched(true);
             }
         }, 25000);
 

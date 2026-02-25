@@ -36,9 +36,15 @@ export class AuthService {
     }
 
     const newUser = await this.userService.createUser({
-      ...data,
+      email: data.email,
+      password: data.password,
+      name: data.name,
+      companyId: data.companyId || undefined,
+      projectId: data.projectId || undefined,
+      siteId: data.siteId || undefined,
+      registrationNumber: data.registrationNumber || undefined,
       role: data.role || "USER",
-    });
+    } as any);
 
     return newUser;
   }
@@ -71,7 +77,7 @@ export class AuthService {
       return { success: false, error: "SYSTEM_ACCESS_DISABLED" };
     }
 
-    const isValidPassword = await bcrypt.compare(password, credential.password);
+    const isValidPassword = await bcrypt.compare(password, credential.password || "");
     if (!isValidPassword) {
       return { success: false, error: "INVALID_CREDENTIALS" };
     }
@@ -81,7 +87,7 @@ export class AuthService {
         return { success: false, error: "MFA_REQUIRED", requiresMfa: true };
       }
 
-      if (!this.verifyTotpCode(credential.mfaSecret, mfaCode)) {
+      if (!this.verifyTotpCode(credential.mfaSecret || "", mfaCode)) {
         return { success: false, error: "INVALID_MFA_CODE" };
       }
     }
@@ -101,8 +107,8 @@ export class AuthService {
       user: {
         id: credential.userId,
         email: credential.email,
-        name: credential.user.name,
-        role: credential.role,
+        name: credential.user?.name || "",
+        role: (credential as any).role || (credential.user as any)?.role || "USER",
         status: credential.status,
       },
     };
@@ -222,7 +228,7 @@ export class AuthService {
       return { success: false, error: "Usuário não encontrado" };
     }
 
-    const isValidPassword = await bcrypt.compare(password, credential.password);
+    const isValidPassword = await bcrypt.compare(password, credential.password || "");
     if (!isValidPassword) {
       return { success: false, error: "Senha inválida" };
     }

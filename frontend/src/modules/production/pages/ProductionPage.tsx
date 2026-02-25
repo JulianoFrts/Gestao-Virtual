@@ -10,8 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import {
-    permissionsSignal,
-    selectedContextSignal
+    permissionsSignal
 } from "@/signals/authSignals";
 import { activeJobs, JobState } from "@/signals/jobSignals";
 import { useSignals } from "@preact/signals-react/runtime";
@@ -56,6 +55,7 @@ import TowerActivityGoalModal from "../components/TowerActivityGoalModal";
 import ActivityPresetsModal from "../components/ActivityPresetsModal";
 import { useCompanies } from "@/hooks/useCompanies";
 import { Building2 } from "lucide-react";
+import ProductionSidebar from "../components/ProductionSidebar";
 import { useProjects } from "@/hooks/useProjects"; // Necessary for auto-selection logic
 import { useSites } from "@/hooks/useSites";
 import { useWorkStages, WorkStage } from "@/hooks/useWorkStages";
@@ -333,17 +333,17 @@ const ProductionTableRow = React.memo(({
 ProductionTableRow.displayName = "ProductionTableRow";
 
 const ProductionPage = () => {
-    const { profile } = useAuth();
+    const { profile, selectedContext } = useAuth();
     const queryClient = useQueryClient();
     const navigate = useNavigate();
     useSignals();
-    const selectedContext = selectedContextSignal.value;
     const selectedCompanyId = selectedContext?.companyId || 'all';
     const selectedProjectId = selectedContext?.projectId || 'all';
     const selectedSiteId = selectedContext?.siteId || 'all';
 
     const [activeTab, setActiveTab] = useState("grid");
     const [searchTerm, setSearchTerm] = useState("");
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [selectedCell, setSelectedCell] = useState<{
         towerId: string;
         towerName: string;
@@ -942,191 +942,78 @@ const ProductionPage = () => {
 
             {/* Toolbar - Fixed at Top (Locked) */}
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
-                <div className="shrink-0 z-40 bg-background/95 backdrop-blur-xl border-b border-white/5 py-4 px-6 shadow-xl space-y-3">
-                    <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-4">
+                <div className="shrink-0 z-40 bg-background/95 backdrop-blur-xl border-b border-white/5 py-3 px-6 shadow-xl">
+                    <div className="flex items-center justify-between gap-4">
                         <TabsList className="glass-card p-1 flex justify-start w-fit bg-secondary/20">
-                            <TabsTrigger value="grid" className="gap-2 px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                            <TabsTrigger value="grid" className="gap-2 px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-300">
                                 <LayoutGrid className="w-4 h-4" /> Torres (Produção)
                             </TabsTrigger>
-                            <TabsTrigger value="activities" className="gap-2 px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                            <TabsTrigger value="activities" className="gap-2 px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all duration-300">
                                 <Activity className="w-4 h-4" /> Atividades/Metas
                             </TabsTrigger>
                         </TabsList>
 
-                        <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
-                            {activeTab === 'grid' && (
-                                <div className="flex items-center gap-3 w-full sm:w-80">
-                                    <div className="relative flex-1 group">
-                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary/50 group-focus-within:text-primary transition-colors" />
-                                        <Input
-                                            placeholder="Localizar torre ou trecho..."
-                                            className="pl-9 bg-black/40 border-white/10 focus:border-primary/50 focus:ring-1 focus:ring-primary/20 h-9 text-xs transition-all rounded-lg text-foreground placeholder:text-muted-foreground/30 font-medium"
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                        />
-                                    </div>
-
-                                    {/* Meta Mae Filter */}
-                                    <Select value={selectedMetaMae} onValueChange={setSelectedMetaMae}>
-                                        <SelectTrigger className="w-[200px] h-9 bg-black/40 border-white/10 text-xs font-bold uppercase tracking-wider text-primary/80 transition-all rounded-lg focus:ring-1 focus:ring-primary/20">
-                                            <div className="flex items-center gap-2 truncate">
-                                                <Filter className="w-3.5 h-3.5 text-primary/60" />
-                                                <SelectValue placeholder="Filtrar Etapa" />
-                                            </div>
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-slate-950 border-white/10">
-                                            <SelectItem value="all" className="text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-primary">
-                                                Todas as Etapas
-                                            </SelectItem>
-                                            {stages?.filter(s => !s.parentId).map(parent => (
-                                                <SelectItem key={parent.id} value={parent.name} className="text-xs font-bold uppercase tracking-widest text-primary/80">
-                                                    {parent.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                        {activeTab === 'grid' && (
+                            <div className="flex items-center gap-3">
+                                <div className="relative group">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary/50 group-focus-within:text-primary transition-colors duration-300" />
+                                    <Input
+                                        placeholder="Localizar torre ou trecho..."
+                                        className="pl-9 w-72 bg-black/40 border-white/10 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 h-9 text-xs transition-all duration-300 rounded-lg text-foreground placeholder:text-muted-foreground/30 font-medium"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
                                 </div>
-                            )}
 
-                            <div className="flex items-center gap-2 w-full sm:w-auto">
-                                {activeTab === 'grid' && (
-                                    <>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="gap-2 border-primary/20 hover:bg-primary/10 glass text-foreground font-bold h-9 px-4 rounded-lg flex-1 sm:flex-none uppercase text-[10px] tracking-wider"
-                                                    disabled={isBulkDeleting}
-                                                >
-                                                    <Edit2 className="h-3.5 w-3.5 text-primary" />
-                                                    Configurar
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-56 bg-slate-950 border-slate-800">
-                                                <DropdownMenuLabel>Gestão de Etapas</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={() => { setEditingStage(null); setIsStageModalOpen(true); }} className="cursor-pointer">
-                                                    <Plus className="mr-2 h-4 w-4" /> Criar/Editar Etapas
-                                                </DropdownMenuItem>
-                                                <DropdownMenuSeparator className="bg-slate-800" />
-                                                <DropdownMenuLabel>Mapa Visual (Vínculos)</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={handleBulkAutoLink} className="cursor-pointer" disabled={isBulkLinking}>
-                                                    {isBulkLinking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Activity className="mr-2 h-4 w-4 text-green-500" />}
-                                                    Auto-Vincular Todas
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={handleBulkUnlink} className="cursor-pointer text-red-500 focus:text-red-500">
-                                                    <Trash2 className="mr-2 h-4 w-4" /> 
-                                                    Desvincular Todas
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="gap-2 border-primary/20 hover:bg-primary/10 glass text-foreground font-bold h-9 px-4 rounded-lg flex-1 sm:flex-none uppercase text-[10px] tracking-wider"
-                                            onClick={() => {
-                                                if (activeTab === 'grid') setIsImportModalOpen(true);
-                                                else setIsActivityImportModalOpen(true);
-                                            }}
-                                        >
-                                            <Upload className="h-3.5 w-3.5 text-primary" />
-                                            Importar {activeTab === 'grid' ? 'Torres' : 'Atividades'}
-                                        </Button>
-
-                                        {/* BULK ACTIONS */}
-                                        {selectedTowers.length > 0 && (
-                                            <div className="flex gap-2 animate-in fade-in slide-in-from-top-2">
-                                                 <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <Button variant="destructive" size="sm" className="gap-2 h-9 px-4 rounded-lg uppercase text-[10px] tracking-wider font-bold" disabled={isBulkDeleting}>
-                                                            {isBulkDeleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                                                            Excluir ({selectedTowers.length})
-                                                        </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                Tem certeza que deseja excluir <b>{selectedTowers.length}</b> torres selecionadas?
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={handleBulkDelete} className="bg-destructive hover:bg-destructive/90">
-                                                                Excluir
-                                                            </AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
-                                            </div>
-                                        )}
-                                        
-                                        {!selectedTowers.length && (
-                                            <AlertDialog>
-                                                <AlertDialogTrigger asChild>
-                                                     <Button variant="ghost" size="sm" className="gap-2 h-9 px-4 rounded-lg uppercase text-[10px] tracking-wider font-bold text-destructive hover:bg-destructive/10" disabled={isBulkDeleting}>
-                                                        <Trash2 className="w-3 h-3" />
-                                                        Excluir Tudo
-                                                    </Button>
-                                                </AlertDialogTrigger>
-                                                 <AlertDialogContent>
-                                                    <AlertDialogHeader>
-                                                        <AlertDialogTitle className="text-destructive">PERIGO: Excluir TODO o Projeto?</AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                            Você está prestes a excluir <b>TODAS AS TORRES</b> deste projeto.<br/><br/>
-                                                            Quantidade: <b>{towers?.length || 0} torres</b>.<br/><br/>
-                                                            Esta ação não pode ser desfeita.
-                                                        </AlertDialogDescription>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={handleDeleteAll} className="bg-destructive hover:bg-destructive/90">
-                                                            Sim, Excluir TUDO
-                                                        </AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
-                                        )}
-
-                                        <Button
-                                            size="sm"
-                                            className="gap-2 shadow-lg shadow-primary/30 hover:shadow-primary/50 hover:scale-[1.02] active:scale-95 gradient-primary border-none text-primary-foreground font-black uppercase tracking-wider h-9 px-4 rounded-lg flex-1 sm:flex-none text-[10px]"
-                                            onClick={() => {
-                                                setEditingTower(null);
-                                                setIsTowerModalOpen(true);
-                                            }}
-                                        >
-                                            <Plus className="h-4 w-4" />
-                                            Nova Torre
-                                        </Button>
-                                    </>
-                                )}
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="gap-2 border-primary/30 hover:bg-primary/10 text-primary font-bold h-9 px-4 rounded-lg flex-1 sm:flex-none uppercase text-[10px] tracking-wider"
-                                    onClick={() => navigate('/producao/projeto')}
-                                >
-                                    <Database className="h-3.5 w-3.5" />
-                                    Dados Técnicos
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="gap-2 border-sky-500/30 hover:bg-sky-500/10 text-sky-400 font-bold h-9 px-4 rounded-lg flex-1 sm:flex-none uppercase text-[10px] tracking-wider"
-                                    onClick={() => navigate('/producao/analytics')}
-                                >
-                                    <BarChart3 className="h-3.5 w-3.5" />
-                                    Analytics & Custos
-                                </Button>
+                                {/* Meta Mae Filter */}
+                                <Select value={selectedMetaMae} onValueChange={setSelectedMetaMae}>
+                                    <SelectTrigger className="w-[200px] h-9 bg-black/40 border-white/10 text-xs font-bold uppercase tracking-wider text-primary/80 transition-all duration-300 rounded-lg focus:ring-2 focus:ring-primary/20">
+                                        <div className="flex items-center gap-2 truncate">
+                                            <Filter className="w-3.5 h-3.5 text-primary/60" />
+                                            <SelectValue placeholder="Filtrar Etapa" />
+                                        </div>
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-slate-950 border-white/10">
+                                        <SelectItem value="all" className="text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-primary">
+                                            Todas as Etapas
+                                        </SelectItem>
+                                        {stages?.filter(s => !s.parentId).map(parent => (
+                                            <SelectItem key={parent.id} value={parent.name} className="text-xs font-bold uppercase tracking-widest text-primary/80">
+                                                {parent.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
-                        </div>
+                        )}
                     </div>
                 </div>
 
-                {/* Main Content - Full Screen Layout */}
-                <main className="flex-1 flex flex-col overflow-hidden relative bg-black/20">
+                {/* Main Content - Full Screen Layout with Sidebar */}
+                <main className="flex-1 flex overflow-hidden relative bg-black/20">
+                    {/* Sidebar de Ações - Colapsável */}
+                    {activeTab === 'grid' && (
+                        <ProductionSidebar
+                            isOpen={isSidebarOpen}
+                            onToggle={() => setIsSidebarOpen(prev => !prev)}
+                            onConfigureStages={() => { setEditingStage(null); setIsStageModalOpen(true); }}
+                            onImportTowers={() => setIsImportModalOpen(true)}
+                            onNewTower={() => { setEditingTower(null); setIsTowerModalOpen(true); }}
+                            selectedCount={selectedTowers.length}
+                            totalCount={towers?.length || 0}
+                            onBulkDelete={handleBulkDelete}
+                            onDeleteAll={handleDeleteAll}
+                            onAutoLink={handleBulkAutoLink}
+                            onUnlinkAll={handleBulkUnlink}
+                            isBulkDeleting={isBulkDeleting}
+                            isBulkLinking={isBulkLinking}
+                            onNavigateProject={() => navigate('/producao/projeto')}
+                            onNavigateAnalytics={() => navigate('/producao/analytics')}
+                        />
+                    )}
+
+                    {/* Conteúdo Principal */}
+                    <div className="flex-1 flex flex-col overflow-hidden">
                     <TabsContent value="grid" className="h-full flex flex-col data-[state=active]:flex">
                         {loadingTowers ? (
                             <div className="flex-1 flex items-center justify-center">
@@ -1485,6 +1372,7 @@ const ProductionPage = () => {
                             onOpenPresets={() => setIsPresetsModalOpen(true)}
                         />
                     </TabsContent>
+                    </div>
                 </main>
             </Tabs>
 

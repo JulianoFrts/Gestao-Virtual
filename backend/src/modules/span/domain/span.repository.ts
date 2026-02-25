@@ -1,10 +1,24 @@
-export interface Span {
+export interface SpanBase {
   id?: string;
   projectId?: string;
   companyId?: string;
   spanName?: string;
   towerStartId: string;
   towerEndId: string;
+  metadata?: Record<string, unknown>;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export interface SpanConductor {
+  cableType?: string;
+  voltageKv?: number;
+  cableColor?: string;
+  cablePhases?: number;
+  cableSpacing?: number;
+}
+
+export interface SpanMeasurement {
   spanLength?: number;
   heightStart?: number;
   heightEnd?: number;
@@ -18,16 +32,10 @@ export interface Span {
   horizontalAngle?: number;
   verticalAngle?: number;
   radiusOfCurvature?: number;
-  cableType?: string;
-  voltageKv?: number;
-  cableColor?: string;
-  cablePhases?: number;
-  cableSpacing?: number;
-  geometryData?: any;
-  metadata?: any;
-  createdAt?: Date;
-  updatedAt?: Date;
+  geometryData?: Record<string, unknown>;
 }
+
+export interface Span extends SpanBase, SpanConductor, SpanMeasurement {}
 
 export interface SpanRepository {
   save(span: Span): Promise<Span>;

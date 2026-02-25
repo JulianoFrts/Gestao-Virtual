@@ -33,6 +33,114 @@
     }
   ],
   "paths": {
+    "/api/v1/map_elements": {
+      "get": {
+        "tags": [
+          "Infrastructure Assets"
+        ],
+        "summary": "Listar ativos de infraestrutura",
+        "description": "Retorna torres, vãos e outros elementos do mapa filtrados por projeto.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "companyId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "TOWER",
+                "SPAN"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de ativos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Asset"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Infrastructure Assets"
+        ],
+        "summary": "Sincronizar ativos (Importação)",
+        "description": "Cria ou atualiza ativos em lote para um projeto.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CreateAssetInput"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ativos sincronizados"
+          }
+        }
+      }
+    },
+    "/api/v1/tower-construction": {
+      "get": {
+        "tags": [
+          "Infrastructure Assets"
+        ],
+        "summary": "Dados de construção de torres",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de status de construção"
+          }
+        }
+      }
+    },
     "/api/v1/health": {
       "get": {
         "tags": [
@@ -511,9 +619,14 @@
       "Role": {
         "type": "string",
         "enum": [
-          "USER",
-          "Admin",
-          "Moderator"
+          "SUPER_ADMIN_GOD",
+          "SYSTEM_ADMIN",
+          "COMPANY_ADMIN",
+          "PROJECT_MANAGER",
+          "SITE_MANAGER",
+          "SUPERVISOR",
+          "OPERATIONAL",
+          "VIEWER"
         ]
       },
       "AccountStatus": {
@@ -545,9 +658,27 @@
           "status": {
             "$ref": "#/components/schemas/AccountStatus"
           },
-          "image": {
+          "isSystemAdmin": {
+            "type": "boolean"
+          },
+          "companyId": {
             "type": "string",
             "nullable": true
+          },
+          "projectId": {
+            "type": "string",
+            "nullable": true
+          },
+          "siteId": {
+            "type": "string",
+            "nullable": true
+          },
+          "registrationNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "hierarchyLevel": {
+            "type": "integer"
           },
           "createdAt": {
             "type": "string",
@@ -556,34 +687,66 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
-          },
-          "lastLoginAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
           }
         }
       },
-      "CreateUserInput": {
+      "Asset": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "elementType": {
+            "type": "string",
+            "example": "TOWER"
+          },
+          "externalId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "sequence": {
+            "type": "integer"
+          },
+          "latitude": {
+            "type": "number",
+            "nullable": true
+          },
+          "longitude": {
+            "type": "number",
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object"
+          }
+        }
+      },
+      "CreateAssetInput": {
         "type": "object",
         "required": [
-          "email",
-          "password"
+          "elementType",
+          "externalId"
         ],
         "properties": {
-          "email": {
-            "type": "string",
-            "format": "email"
+          "elementType": {
+            "type": "string"
+          },
+          "externalId": {
+            "type": "string"
           },
           "name": {
             "type": "string"
           },
-          "password": {
-            "type": "string",
-            "minLength": 8
+          "latitude": {
+            "type": "number"
           },
-          "role": {
-            "$ref": "#/components/schemas/Role"
+          "longitude": {
+            "type": "number"
+          },
+          "metadata": {
+            "type": "object"
           }
         }
       },

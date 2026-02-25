@@ -1,8 +1,12 @@
-import { type Prisma } from "@prisma/client";
-
+// PermissionRepository
 export interface PermissionRepository {
-    findLevelByName(name: string): Promise<{ id: string } | null>;
-    findMatrixByLevelId(levelId: string): Promise<any[]>;
-    findUserWithPermissions(userId: string): Promise<any | null>;
-    findProjectDelegations(projectId: string, jobFunctionId: string): Promise<any[]>;
+  findLevelByName(name: string): Promise<{ id: string } | null>;
+  findMatrixByLevelId(levelId: string): Promise<Record<string, unknown>[]>;
+  findUserWithPermissions(
+    userId: string,
+  ): Promise<Record<string, unknown> | null>;
+  findProjectDelegations(
+    projectId: string,
+    jobFunctionId: string,
+  ): Promise<Record<string, unknown>[]>;
 }

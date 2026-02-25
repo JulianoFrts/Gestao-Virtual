@@ -1,6 +1,7 @@
 import { Pool, PoolConfig } from "pg";
 import { execSync } from "child_process";
-import { HTTP_STATUS, DEFAULT_TIMEOUT_MS } from "@/lib/constants";
+import { HTTP_STATUS } from "@/lib/constants";
+const DEFAULT_TIMEOUT_MS = 30000;
 
 export interface DbDoctorResult {
     pg: string;

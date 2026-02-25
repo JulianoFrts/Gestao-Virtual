@@ -10,9 +10,10 @@ import {
 import { ProductionScheduleService } from "./production-schedule.service";
 import { DailyProductionService } from "./daily-production.service";
 import { RecordDailyProductionDTO } from "./dtos/record-daily-production.dto";
+import { SystemTimeProvider } from "@/lib/utils/time-provider";
 
 // Novos Repositórios (Divisão SRP)
-import { PrismaProductionCatalogueRepository } from "../infrastructure/prisma-production-catalogue.repository";
+import { ProductionCatalogueRepository } from "../domain/production-catalogue.repository";
 
 export class ProductionService {
   public readonly progressService: ProductionProgressService;
@@ -24,22 +25,26 @@ export class ProductionService {
     private readonly elementRepository: ProjectElementRepository,
     private readonly syncRepository: ProductionSyncRepository,
     private readonly scheduleRepository: ProductionScheduleRepository,
-    private readonly catalogueRepository: PrismaProductionCatalogueRepository,
+    private readonly catalogueRepository: ProductionCatalogueRepository,
   ) {
+    const timeProvider = new SystemTimeProvider();
     this.progressService = new ProductionProgressService(
       progressRepository,
       elementRepository,
       syncRepository,
       scheduleRepository,
+      timeProvider,
     );
     this.scheduleService = new ProductionScheduleService(
       scheduleRepository,
       progressRepository,
       elementRepository,
+      timeProvider,
     );
     this.dailyService = new DailyProductionService(
       progressRepository,
       elementRepository,
+      timeProvider,
     );
   }
 
@@ -57,7 +62,9 @@ export class ProductionService {
     siteId?: string,
     skip?: number,
     take?: number,
-  ): Promise<any[]> {
+  ): Promise<
+    import("./dtos/production-progress.dto").ElementProgressResponse[]
+  > {
     return this.progressService.listProjectProgress(
       projectId,
       companyId,
@@ -69,18 +76,21 @@ export class ProductionService {
 
   async getLogsByElement(
     elementId: string,
-    companyId?: string | null,
-  ): Promise<any[]> {
-    return this.progressService.getLogsByElement(elementId, companyId);
+  ): Promise<import("./dtos/production-progress.dto").ProductionLogDTO[]> {
+    return this.progressService.getLogsByElement(elementId);
   }
 
-  async getPendingLogs(companyId?: string | null): Promise<any[]> {
+  async getPendingLogs(
+    companyId?: string | null,
+  ): Promise<import("./dtos/production-progress.dto").ProductionLogDTO[]> {
     return this.progressService.getPendingLogs(companyId);
   }
 
   async updateProgress(
     dto: UpdateProductionProgressDTO,
-  ): Promise<ProductionProgress> {
+  ): Promise<
+    import("../domain/production-progress.entity").ProductionProgress
+  > {
     return this.progressService.updateProgress(dto);
   }
 
@@ -112,7 +122,7 @@ export class ProductionService {
     towerId: string,
     activityId?: string,
     user?: { role: string; companyId?: string | null },
-  ) {
+  ): Promise<import("./daily-production.service").DailyProductionListItem[]> {
     return this.dailyService.listDailyProduction(towerId, activityId, user);
   }
 
@@ -121,16 +131,20 @@ export class ProductionService {
   // ==========================================
 
   async saveSchedule(
-    data: any,
+    data: Record<string, unknown>,
     user: { id: string; role: string; companyId?: string | null },
-  ) {
+  ): Promise<
+    import("../domain/production-schedule.repository").ProductionSchedule
+  > {
     return this.scheduleService.saveSchedule(data, user);
   }
 
   async listSchedules(
     params: { elementId?: string; projectId?: string },
     user: { id: string; role: string; companyId?: string | null },
-  ) {
+  ): Promise<
+    import("../domain/production-schedule.repository").ProductionSchedule[]
+  > {
     return this.scheduleService.listSchedules(params, user);
   }
 
@@ -138,15 +152,15 @@ export class ProductionService {
     scheduleId: string,
     user: { id: string; role: string; companyId?: string | null },
     options?: { targetDate?: string },
-  ) {
+  ): Promise<void> {
     return this.scheduleService.removeSchedule(scheduleId, user, options);
   }
 
   async removeSchedulesByScope(
     scope: "project_all" | "batch",
-    params: any,
+    params: Record<string, unknown>,
     user: { id: string; role: string; companyId?: string | null },
-  ) {
+  ): Promise<{ count: number; skipped?: number }> {
     return this.scheduleService.removeSchedulesByScope(scope, params, user);
   }
 
@@ -155,7 +169,9 @@ export class ProductionService {
     return this.scheduleService.hasExecution(elementId, activityId);
   }
 
-  async listIAPs() {
+  async listIAPs(): Promise<
+    import("../domain/production-catalogue.repository").ProductionIAP[]
+  > {
     return this.catalogueRepository.findAllIAPs();
   }
 

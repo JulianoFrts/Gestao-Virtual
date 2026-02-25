@@ -1,34 +1,44 @@
-import { Project, Prisma } from "@prisma/client";
+import {
+  ProjectEntity,
+  ProjectFiltersDTO,
+  CreateProjectDTO,
+  UpdateProjectDTO,
+} from "./project.dto";
 
 export interface ProjectRepository {
   findAll(params: {
-    where: Prisma.ProjectWhereInput;
+    where: ProjectFiltersDTO;
     skip: number;
     take: number;
-    orderBy?: Prisma.ProjectOrderByWithRelationInput;
-    include?: Prisma.ProjectInclude;
-  }): Promise<Partial<Project>[]>;
+    orderBy?: Record<string, unknown>;
+    select?: Record<string, unknown>;
+  }): Promise<ProjectEntity[]>;
 
-  count(where: Prisma.ProjectWhereInput): Promise<number>;
+  count(where: ProjectFiltersDTO): Promise<number>;
 
   findById(
     id: string,
-    include?: Prisma.ProjectInclude,
-  ): Promise<Partial<Project> | null>;
+    select?: Record<string, unknown>,
+  ): Promise<ProjectEntity | null>;
 
   create(
-    data: Prisma.ProjectCreateInput,
-    include?: Prisma.ProjectInclude,
-  ): Promise<Partial<Project>>;
+    data: CreateProjectDTO,
+    select?: Record<string, unknown>,
+  ): Promise<ProjectEntity>;
 
   update(
     id: string,
-    data: Prisma.ProjectUpdateInput,
-    include?: Prisma.ProjectInclude,
-  ): Promise<Partial<Project>>;
+    data: UpdateProjectDTO,
+    select?: Record<string, unknown>,
+  ): Promise<ProjectEntity>;
 
   delete(id: string): Promise<void>;
 
-  get3dCableSettings(projectId: string): Promise<any>;
-  upsert3dCableSettings(projectId: string, settings: any): Promise<any>;
+  get3dCableSettings(
+    projectId: string,
+  ): Promise<Record<string, unknown> | null>;
+  upsert3dCableSettings(
+    projectId: string,
+    settings: Record<string, unknown>,
+  ): Promise<Record<string, unknown>>;
 }

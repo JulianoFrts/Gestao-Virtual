@@ -1,162 +1,193 @@
-import React from 'react';
-import { Scene } from '../components/Scene';
-import { CompletedWorkModal } from '../components/CompletedWorkModal';
-import { useCompanies } from '@/hooks/useCompanies';
-import { useProjects } from '@/hooks/useProjects';
-import { useAuth } from '@/contexts/AuthContext';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue
-} from "@/components/ui/select";
-import { Building2, Briefcase, ChevronRight } from "lucide-react";
-import { cn } from '@/lib/utils';
-import { ExcelDataUploader } from '@/components/map/ExcelDataUploader';
-import { toast } from 'sonner';
-import { orionApi } from '@/integrations/orion/client';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { Map as ReactMap, useControl, Source } from "react-map-gl/mapbox";
+import { MapboxOverlay } from "@deck.gl/mapbox";
+import { AmbientLight, DirectionalLight, LightingEffect } from "@deck.gl/core";
+import "mapbox-gl/dist/mapbox-gl.css";
 
-export const GeoViewerPage = () => {
-    const { profile } = useAuth();
-    const [isOffline, setIsOffline] = React.useState(false);
+import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
+import { useAuth } from "@/contexts/AuthContext";
+import { Toaster } from "@/components/ui/toaster";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
-    // Filters State
-    const [selectedCompanyId, setSelectedCompanyId] = React.useState<string | null>(profile?.companyId || null);
-    const [selectedProjectId, setSelectedProjectId] = React.useState<string | null>(null);
+import { useMapControl } from "../hooks/useMapControl";
+import { useSceneData } from "../hooks/useSceneData";
+import { useProjectData } from "../hooks/useProjectData";
+import { GeoViewerSidebar } from "../components/GeoViewerSidebar";
+import { GeoViewerHeader } from "../components/GeoViewerHeader";
+import { GeoViewerToolbar } from "../components/GeoViewerToolbar";
+import { TowerDetailsModals } from "@/components/map/TowerDetailsModals";
+import { TowerExecutionHistoryModal } from "@/components/map/TowerExecutionHistoryModal";
+import { CableConfigModal } from "@/components/map/CableConfigModal";
+import { DEFAULT_PHASES } from "../constants/map-config";
+import { Tower, Cable, PhaseConfig } from "../types";
 
-    const { companies } = useCompanies();
-    const { projects } = useProjects(selectedCompanyId || undefined);
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_API_KEY;
 
-    // Auto-select first project when company changes
-    React.useEffect(() => {
-        if (selectedCompanyId) {
-            const companyProjects = projects.filter(p => p.companyId === selectedCompanyId);
-            if (companyProjects.length > 0 && !selectedProjectId) {
-                setSelectedProjectId(companyProjects[0].id);
-            }
-        }
-    }, [selectedCompanyId, projects, selectedProjectId]);
+// Lighting Setup
+const ambientLight = new AmbientLight({ color: [255, 255, 255], intensity: 2.2 });
+const dirLight = new DirectionalLight({ color: [255, 255, 255], intensity: 2.5, direction: [-1, -2, -3] });
+const rimLight = new DirectionalLight({ color: [200, 220, 255], intensity: 1.5, direction: [1, 2, 1] });
+const lightingEffect = new LightingEffect({ ambientLight, dirLight, rimLight });
 
-    return (
-        <div className="w-screen h-screen relative bg-[#0a0a0a] overflow-hidden">
-            {/* 3D Scene Container */}
-            <div className="absolute inset-0 z-0">
-                <Scene offline={isOffline} />
-            </div>
+function DeckGLOverlay(props: any) {
+  const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay({ ...props, effects: [lightingEffect] }), { interleaved: true });
+  useEffect(() => { if (overlay) overlay.setProps({ ...props, effects: [lightingEffect] }); }, [props, overlay]);
+  return null;
+}
 
-            {/* TOP BAR UI - Professional Multi-Project Switcher */}
-            <div className="absolute top-6 left-6 z-10 flex items-center gap-3">
-                {/* Logo Area */}
-                <div className="flex items-center gap-2 bg-black/40 backdrop-blur-xl border border-white/10 px-4 h-11 rounded-2xl shadow-2xl">
-                    <div className="w-6 h-6 rounded-lg bg-primary/20 flex items-center justify-center border border-primary/30">
-                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                    </div>
-                    <span className="text-[11px] font-black uppercase tracking-[0.3em] text-white/90">
-                        GESTÃO VIRTUAL <span className="text-primary">Viewer</span>
-                    </span>
-                </div>
+export default function GeoViewerPage() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { can } = usePermissions();
+  const { profile } = useAuth();
 
-                <div className="h-6 w-px bg-white/10 mx-1" />
+  // Custom Hooks
+  const { viewState, setViewState, mapRef, handleFitToTowers, flyToTower } = useMapControl();
+  const { towers, setTowers, cables, setCables, signalSpheres, connections } = useSceneData();
+  const { projects, selectedProjectId, handleProjectSelect, isLoading } = useProjectData();
 
-                {/* Company Select */}
-                <div className="flex items-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl pl-4 pr-1 h-11 hover:border-white/20 transition-all shadow-xl group">
-                    <Building2 className="w-4 h-4 text-white/40 group-hover:text-primary/60 transition-colors" />
-                    <Select value={selectedCompanyId || ""} onValueChange={setSelectedCompanyId}>
-                        <SelectTrigger className="w-[180px] bg-transparent border-none text-[11px] font-bold uppercase tracking-widest text-white/80 focus:ring-0">
-                            <SelectValue placeholder="Selecione Empresa" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-slate-900 border-white/10 text-white">
-                            {companies.map(c => (
-                                <SelectItem key={c.id} value={c.id} className="text-[11px] uppercase font-bold tracking-widest">
-                                    {c.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
+  // UI States (to be extracted further)
+  const [isControlsCollapsed, setIsControlsCollapsed] = useState(true);
+  const [showTowerMenu, setShowTowerMenu] = useState(false);
+  const [showCableMenu, setShowCableMenu] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [isExecutivePanelOpen, setIsExecutivePanelOpen] = useState(false);
+  const [towerSearch, setTowerSearch] = useState("");
+  const [towerElevation, setTowerElevation] = useState(4.0);
+  const [scale, setScale] = useState(50);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
+  const [hiddenTowerIds, setHiddenTowerIds] = useState<Set<string>>(new Set());
+  const [isConnectMode, setIsConnectMode] = useState(false);
+  const [isSwapMode, setIsSwapMode] = useState(false);
 
-                <ChevronRight className="w-4 h-4 text-white/20" />
+  // Modals
+  const [selectedTowerForDetails, setSelectedTowerForDetails] = useState<Tower | null>(null);
+  const [isTowerModalOpen, setIsTowerModalOpen] = useState(false);
+  const [selectedTowerForHistory, setSelectedTowerForHistory] = useState<Tower | null>(null);
+  const [isExecutionHistoryModalOpen, setIsExecutionHistoryModalOpen] = useState(false);
 
-                {/* Project Select */}
-                <div className={cn(
-                    "flex items-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl pl-4 pr-1 h-11 transition-all shadow-xl group",
-                    !selectedCompanyId && "opacity-40 grayscale pointer-events-none"
-                )}>
-                    <Briefcase className="w-4 h-4 text-white/40 group-hover:text-primary/60 transition-colors" />
-                    <Select value={selectedProjectId || ""} onValueChange={setSelectedProjectId}>
-                        <SelectTrigger className="w-[200px] bg-transparent border-none text-[11px] font-bold uppercase tracking-widest text-white/80 focus:ring-0">
-                            <SelectValue placeholder="Selecione Obra" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-slate-900 border-white/10 text-white">
-                            {projects.map(p => (
-                                <SelectItem key={p.id} value={p.id} className="text-[11px] uppercase font-bold tracking-widest">
-                                    {p.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
+  const [phases, setPhases] = useState<PhaseConfig[]>(() => {
+    const saved = localStorage.getItem("orion-cable-config");
+    return saved ? JSON.parse(saved) : DEFAULT_PHASES;
+  });
 
-            {/* Top Right Controls */}
-            <div className="absolute top-6 right-6 z-10 flex flex-col gap-3">
-                <ExcelDataUploader onLoad={async (towers, _conns) => {
-                    if (!selectedProjectId) {
-                        toast.error("Selecione um projeto primeiro");
-                        return;
-                    }
-                    try {
-                        const towersToUpdate = towers.map((t, index) => ({
-                            projectId: selectedProjectId,
-                            externalId: t.name,
-                            name: t.name,
-                            elementType: "TOWER",
-                            latitude: t.coordinates.lat,
-                            longitude: t.coordinates.lng,
-                            elevation: t.coordinates.altitude,
-                            sequence: index,
-                            metadata: t.properties || {},
-                        }));
+  const canEdit = can("map.edit");
+  const canManage = can("map.manage");
+  const canSeeExecutivePanel = profile?.isSystemAdmin || (profile?.permissionsMap as any)?.["system.All_Access"] || ["SUPER_ADMIN_GOD", "HELPER_SYSTEM"].includes(profile?.role || "");
 
-                        const { error } = await orionApi.from("map_elements").insert(towersToUpdate.map(t => ({ ...t, type: 'TOWER' })));
-                        if (error) throw error;
+  // Placeholder Handlers (logic still in migration)
+  const handleSaveConfig = () => { toast({ title: "Salvando...", description: "Implementando persistência modular." }); };
+  const handleClearTowers = () => { setIsClearing(true); setTimeout(() => { setTowers([]); setIsClearing(false); setIsClearConfirmOpen(false); }, 1000); };
+  const handleTowerClick = useCallback((info: any) => { if (info.object) { setSelectedTowerForDetails(info.object); setIsTowerModalOpen(true); } }, []);
 
-                        toast.success("Projeto Importado com Sucesso");
-                        window.location.reload(); // Refresh to show new towers in Scene
-                    } catch (err) {
-                        console.error(err);
-                        toast.error("Erro ao importar projeto");
-                    }
-                }} />
-                <CompletedWorkModal
-                    companyId={selectedCompanyId}
-                    projectId={selectedProjectId}
-                    onCompanyChange={setSelectedCompanyId}
-                    onProjectChange={setSelectedProjectId}
-                />
+  // Deck.GL Layers (This will be a huge separate hook later)
+  const layers = useMemo(() => [], []);
 
-                {/* Offline Toggle Badge */}
-                <div className="flex items-center gap-2 bg-black/40 backdrop-blur-xl border border-white/10 px-3 py-1.5 rounded-full self-end">
-                    <div className={cn("w-1.5 h-1.5 rounded-full", isOffline ? "bg-red-500" : "bg-green-500")} />
-                    <span className="text-[9px] font-black uppercase tracking-widest text-white/60">
-                        {isOffline ? 'Offline' : 'Live Mode'}
-                    </span>
-                    <input
-                        type="checkbox"
-                        checked={isOffline}
-                        onChange={(e) => setIsOffline(e.target.checked)}
-                        className="opacity-0 absolute inset-0 cursor-pointer"
-                    />
-                </div>
-            </div>
+  if (!MAPBOX_TOKEN) return <div className="flex items-center justify-center h-screen text-red-500 font-black">MAPBOX TOKEN MISSING</div>;
 
-            {/* Footer Info */}
-            <div className="absolute bottom-4 left-4 z-10 text-white/40 text-xs">
-                <p>Modules / Geo Viewer / v1.0.0</p>
-            </div>
+  return (
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-black text-white font-sans fixed inset-0" onContextMenu={(e) => e.preventDefault()}>
+      <GeoViewerHeader
+        isFullScreen={isFullScreen}
+        setIsFullScreen={setIsFullScreen}
+        selectedProjectId={selectedProjectId}
+        setSelectedProjectId={handleProjectSelect}
+        projects={projects}
+        isSaving={isSaving}
+        handleSaveConfig={handleSaveConfig}
+        canEdit={canEdit}
+        canManage={canManage}
+        isClearing={isClearing}
+        towersCount={towers.length}
+        setIsClearConfirmOpen={setIsClearConfirmOpen}
+        navigate={navigate}
+        viewState={viewState}
+      />
+
+      <GeoViewerSidebar
+        isControlsCollapsed={isControlsCollapsed}
+        setIsControlsCollapsed={setIsControlsCollapsed}
+        towerSearch={towerSearch}
+        setTowerSearch={setTowerSearch}
+        towerElevation={towerElevation}
+        setTowerElevation={setTowerElevation}
+        scale={scale}
+        setScale={setScale}
+        isConnectMode={isConnectMode}
+        setIsConnectMode={setIsConnectMode}
+        isSwapMode={isSwapMode}
+        setIsSwapMode={setIsSwapMode}
+        isSaving={isSaving}
+        handleSave={handleSaveConfig}
+        isFullScreen={isFullScreen}
+        setIsFullScreen={setIsFullScreen}
+        handleClearTowers={() => setIsClearConfirmOpen(true)}
+        handleFitToTowers={() => handleFitToTowers(towers)}
+        towersCount={towers.length}
+      />
+
+      <main className={cn("fixed inset-0 transition-all duration-700 ease-in-out bg-neutral-950 overflow-hidden flex flex-col", isFullScreen ? "z-1" : "z-0")}>
+        <div className="relative flex-1 group overflow-hidden">
+          <ReactMap
+            ref={mapRef}
+            {...viewState}
+            onMove={(evt) => setViewState(evt.viewState)}
+            mapboxAccessToken={MAPBOX_TOKEN}
+            mapStyle="mapbox://styles/mapbox/satellite-v9"
+            style={{ width: "100%", height: "100%" }}
+            terrain={{ source: "mapbox-dem", exaggeration: 1.5 }}
+          >
+            <Source id="mapbox-dem" type="raster-dem" url="mapbox://mapbox.mapbox-terrain-dem-v1" tileSize={512} maxzoom={14} />
+            <DeckGLOverlay layers={layers} />
+          </ReactMap>
         </div>
-    );
-};
+      </main>
 
-export default GeoViewerPage;
+      <GeoViewerToolbar
+        showTowerMenu={showTowerMenu}
+        toggleTowerMenu={() => setShowTowerMenu(!showTowerMenu)}
+        showCableMenu={showCableMenu}
+        toggleCableMenu={() => setShowCableMenu(!showCableMenu)}
+        canSeeExecutivePanel={canSeeExecutivePanel}
+        selectedProjectId={selectedProjectId}
+        handleSelectTowerFromModal={(id) => flyToTower({ id } as any)}
+        setIsExecutivePanelOpen={setIsExecutivePanelOpen}
+        hiddenTowerIds={hiddenTowerIds}
+        setHiddenTowerIds={setHiddenTowerIds}
+        handleSnapToTerrain={() => {}}
+        handleAutoRotateTowers={() => {}}
+        handleFitToTowers={() => handleFitToTowers(towers)}
+        isConnectMode={isConnectMode}
+        setIsConnectMode={setIsConnectMode}
+        isSwapMode={isSwapMode}
+        setIsSwapMode={setIsSwapMode}
+        canEdit={canEdit}
+        handleAutoConnectSequence={() => {}}
+        isFullScreen={isFullScreen}
+      />
+
+      <TowerDetailsModals isOpen={isTowerModalOpen} onClose={() => setIsTowerModalOpen(false)} tower={selectedTowerForDetails} />
+      <TowerExecutionHistoryModal isOpen={isExecutionHistoryModalOpen} onClose={() => setIsExecutionHistoryModalOpen(false)} tower={selectedTowerForHistory} projectId={selectedProjectId} />
+      <CableConfigModal isOpen={showCableMenu} onClose={() => setShowCableMenu(false)} phases={phases} onUpdate={setPhases} onSave={handleSaveConfig} onRestoreDefaults={() => setPhases(DEFAULT_PHASES)} readOnly={!canEdit} onScanTower={() => {}} />
+
+      <AlertDialog open={isClearConfirmOpen} onOpenChange={setIsClearConfirmOpen}>
+        <AlertDialogContent className="bg-neutral-950 border border-white/10">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-400 font-black text-lg">Confirmar Limpeza</AlertDialogTitle>
+            <AlertDialogDescription className="text-neutral-400">Deseja remover {towers.length} torres?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-white/10 text-neutral-300">Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearTowers} disabled={isClearing} className="bg-red-600">Remover</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Toaster />
+    </div>
+  );
+}

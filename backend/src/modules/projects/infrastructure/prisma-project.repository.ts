@@ -1,59 +1,67 @@
 import { prisma } from "@/lib/prisma/client";
-import { Project, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { ProjectRepository } from "../domain/project.repository";
+import {
+  ProjectEntity,
+  ProjectFiltersDTO,
+  CreateProjectDTO,
+  UpdateProjectDTO,
+} from "../domain/project.dto";
 import { randomUUID } from "crypto";
 
 export class PrismaProjectRepository implements ProjectRepository {
   async findAll(params: {
-    where: Prisma.ProjectWhereInput;
+    where: ProjectFiltersDTO;
     skip: number;
     take: number;
-    orderBy?: Prisma.ProjectOrderByWithRelationInput;
-    include?: Prisma.ProjectInclude;
-  }): Promise<Partial<Project>[]> {
+    orderBy?: Record<string, unknown>;
+    select?: Record<string, unknown>;
+  }): Promise<ProjectEntity[]> {
     return prisma.project.findMany({
-      where: params.where,
+      where: params.where as Prisma.ProjectWhereInput,
       skip: params.skip,
       take: params.take,
-      orderBy: params.orderBy,
-      include: params.include,
-    });
+      orderBy: params.orderBy as Prisma.ProjectOrderByWithRelationInput,
+      select: params.select as Prisma.ProjectSelect,
+    }) as Promise<ProjectEntity[]>;
   }
 
-  async count(where: Prisma.ProjectWhereInput): Promise<number> {
-    return prisma.project.count({ where });
+  async count(where: ProjectFiltersDTO): Promise<number> {
+    return prisma.project.count({
+      where: where as Prisma.ProjectWhereInput,
+    });
   }
 
   async findById(
     id: string,
-    include?: Prisma.ProjectInclude,
-  ): Promise<Partial<Project> | null> {
+    select?: Record<string, unknown>,
+  ): Promise<ProjectEntity | null> {
     return prisma.project.findUnique({
       where: { id },
-      include,
-    });
+      select: select as Prisma.ProjectSelect,
+    }) as Promise<ProjectEntity | null>;
   }
 
   async create(
-    data: Prisma.ProjectCreateInput,
-    include?: Prisma.ProjectInclude,
-  ): Promise<Partial<Project>> {
+    data: CreateProjectDTO,
+    select?: Record<string, unknown>,
+  ): Promise<ProjectEntity> {
     return prisma.project.create({
-      data,
-      include,
-    });
+      data: data as unknown as Prisma.ProjectUncheckedCreateInput,
+      select: select as Prisma.ProjectSelect,
+    }) as Promise<ProjectEntity>;
   }
 
   async update(
     id: string,
-    data: Prisma.ProjectUpdateInput,
-    include?: Prisma.ProjectInclude,
-  ): Promise<Partial<Project>> {
+    data: UpdateProjectDTO,
+    select?: Record<string, unknown>,
+  ): Promise<ProjectEntity> {
     return prisma.project.update({
       where: { id },
-      data,
-      include,
-    });
+      data: data as unknown as Prisma.ProjectUncheckedUpdateInput,
+      select: select as Prisma.ProjectSelect,
+    }) as Promise<ProjectEntity>;
   }
 
   async delete(id: string): Promise<void> {
@@ -62,21 +70,28 @@ export class PrismaProjectRepository implements ProjectRepository {
     });
   }
 
-  async get3dCableSettings(projectId: string): Promise<any> {
-    return prisma.project3dCableSettings.findUnique({
+  async get3dCableSettings(
+    projectId: string,
+  ): Promise<Record<string, unknown> | null> {
+    const result = await prisma.project3dCableSettings.findUnique({
       where: { projectId },
     });
+    return result as Record<string, unknown> | null;
   }
 
-  async upsert3dCableSettings(projectId: string, settings: any): Promise<any> {
-    return prisma.project3dCableSettings.upsert({
+  async upsert3dCableSettings(
+    projectId: string,
+    settings: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const result = await prisma.project3dCableSettings.upsert({
       where: { projectId },
-      update: { settings },
+      update: { settings: settings as Prisma.InputJsonValue },
       create: {
         id: randomUUID(),
         projectId,
-        settings,
+        settings: settings as Prisma.InputJsonValue,
       },
     });
+    return result as Record<string, unknown>;
   }
 }

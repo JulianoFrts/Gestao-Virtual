@@ -3,17 +3,21 @@ import {
   WorkStage,
   CreateWorkStageDTO,
   CreateWorkStageBulkItem,
-  WorkStageProgress,
 } from "../domain/work-stage.repository";
 import { logger } from "@/lib/utils/logger";
-import { WorkStageSyncService } from "@/modules/production/application/work-stage-sync.service";
-import { prisma } from "@/lib/prisma/client";
+import { WorkStageSecurityService } from "./work-stage-security.service";
+import { WorkStageSyncManager } from "./work-stage-sync.manager";
+import { WorkStageReorderService } from "./work-stage-reorder.service";
 
 export class WorkStageService {
-  private readonly syncService: WorkStageSyncService;
+  private readonly security: WorkStageSecurityService;
+  private readonly syncManager: WorkStageSyncManager;
+  private readonly reorderService: WorkStageReorderService;
 
   constructor(private readonly repository: WorkStageRepository) {
-    this.syncService = new WorkStageSyncService();
+    this.security = new WorkStageSecurityService(repository);
+    this.syncManager = new WorkStageSyncManager(repository);
+    this.reorderService = new WorkStageReorderService(repository);
   }
 
   async findAll(
@@ -39,14 +43,7 @@ export class WorkStageService {
     let finalCompanyId = params.companyId;
 
     if (securityContext) {
-      const { isGlobalAdmin } = await import("@/lib/auth/session");
-      const isGlobal = isGlobalAdmin(
-        securityContext.role,
-        securityContext.hierarchyLevel,
-        securityContext.permissions,
-      );
-
-      if (!isGlobal) {
+      if (!(await this.security.isGlobal(securityContext))) {
         finalCompanyId = securityContext.companyId;
       }
     }
@@ -80,36 +77,10 @@ export class WorkStageService {
       throw new Error("Site ID or Project ID is required");
     }
 
-    if (securityContext) {
-      const { isGlobalAdmin } = await import("@/lib/auth/session");
-      const isGlobal = isGlobalAdmin(
-        securityContext.role,
-        securityContext.hierarchyLevel,
-        securityContext.permissions,
-      );
-
-      if (!isGlobal) {
-        if (effectiveSiteId) {
-          const site = await prisma.site.findFirst({
-            where: {
-              id: effectiveSiteId,
-              project: { companyId: securityContext.companyId },
-            },
-          });
-          if (!site)
-            throw new Error("Forbidden: Site não pertence à sua empresa");
-        } else if (effectiveProjectId) {
-          const project = await prisma.project.findFirst({
-            where: {
-              id: effectiveProjectId,
-              companyId: securityContext.companyId,
-            },
-          });
-          if (!project)
-            throw new Error("Forbidden: Projeto não pertence à sua empresa");
-        }
-      }
-    }
+    await this.security.validateAccess(
+      { siteId: effectiveSiteId, projectId: effectiveProjectId },
+      securityContext,
+    );
 
     let productionActivityId = data.productionActivityId;
     if (productionActivityId) {
@@ -147,35 +118,10 @@ export class WorkStageService {
     const effectiveSiteId =
       !siteId || ["all", "none"].includes(siteId) ? undefined : siteId;
 
-    if (securityContext) {
-      const { isGlobalAdmin } = await import("@/lib/auth/session");
-      const isGlobal = isGlobalAdmin(
-        securityContext.role,
-        securityContext.hierarchyLevel,
-        securityContext.permissions,
-      );
-
-      if (!isGlobal) {
-        const project = await prisma.project.findFirst({
-          where: { id: projectId, companyId: securityContext.companyId },
-        });
-        if (!project)
-          throw new Error("Forbidden: Projeto não pertence à sua empresa");
-
-        if (effectiveSiteId) {
-          const site = await prisma.site.findFirst({
-            where: {
-              id: effectiveSiteId,
-              project: { id: projectId, companyId: securityContext.companyId },
-            },
-          });
-          if (!site)
-            throw new Error(
-              "Forbidden: Site não pertence ao projeto desta empresa",
-            );
-        }
-      }
-    }
+    await this.security.validateAccess(
+      { siteId: effectiveSiteId, projectId },
+      securityContext,
+    );
 
     return await this.repository.createBulk(projectId, effectiveSiteId, data);
   }
@@ -185,32 +131,7 @@ export class WorkStageService {
     data: Partial<CreateWorkStageDTO>,
     securityContext?: any,
   ): Promise<WorkStage> {
-    const existing = await this.repository.findById(id);
-    if (!existing) throw new Error("Etapa não encontrada");
-
-    if (securityContext) {
-      const { isGlobalAdmin } = await import("@/lib/auth/session");
-      const isGlobal = isGlobalAdmin(
-        securityContext.role,
-        securityContext.hierarchyLevel,
-        securityContext.permissions,
-      );
-
-      if (!isGlobal) {
-        const stageInCompany = await prisma.workStage.findFirst({
-          where: {
-            id,
-            OR: [
-              { project: { companyId: securityContext.companyId } },
-              { site: { project: { companyId: securityContext.companyId } } },
-            ],
-          },
-        });
-        if (!stageInCompany)
-          throw new Error("Forbidden: Etapa não pertence à sua empresa");
-      }
-    }
-
+    await this.security.validateStageAccess(id, securityContext);
     return await this.repository.update(id, data);
   }
 
@@ -220,12 +141,7 @@ export class WorkStageService {
     securityContext: any,
   ): Promise<any[]> {
     const { siteId, projectId } = params;
-    const { isGlobalAdmin } = await import("@/lib/auth/session");
-    const isGlobal = isGlobalAdmin(
-      securityContext.role,
-      securityContext.hierarchyLevel,
-      securityContext.permissions,
-    );
+    const isGlobal = await this.security.isGlobal(securityContext);
 
     logger.info(`Iniciando sincronização de etapas`, {
       source: "WorkStage/WorkStageService",
@@ -235,193 +151,32 @@ export class WorkStageService {
     });
 
     if (!isGlobal) {
-      if (projectId) {
-        const project = await prisma.project.findFirst({
-          where: { id: projectId, companyId },
-        });
-        if (!project)
-          throw new Error("Forbidden: Projeto não encontrado no seu escopo");
-      }
-      if (siteId && siteId !== "all") {
-        const site = await prisma.site.findFirst({
-          where: { id: siteId, project: { companyId } },
-        });
-        if (!site)
-          throw new Error("Forbidden: Site não encontrado no seu escopo");
-      }
-    }
-
-    let stages = [];
-    if (siteId && siteId !== "all") {
-      stages = await this.repository.findLinkedStagesBySite(
-        siteId,
-        isGlobal ? undefined : companyId,
+      await this.security.validateAccess(
+        { siteId, projectId },
+        securityContext,
       );
-    } else if (projectId) {
-      stages = await this.repository.findLinkedStagesByProjectId(
-        projectId,
-        isGlobal ? undefined : companyId,
-      );
-    } else {
-      return [];
     }
 
-    const results = [];
-    const useSiteFilter = !!(siteId && siteId !== "all");
-
-    for (const stage of stages) {
-      try {
-        const effectiveProjectId = stage.site?.projectId || projectId;
-        if (!effectiveProjectId) continue;
-
-        const avgProgress = await this.calculateAverageProgress(
-          stage,
-          effectiveProjectId,
-          useSiteFilter,
-        );
-
-        await this.updateTodayProgress(stage.id, avgProgress);
-        results.push({ stage: stage.name, progress: avgProgress });
-      } catch (err: any) {
-        logger.error(
-          `Error syncing stage ${stage.id} (${stage.name}): ${err.message}`,
-          { stageId: stage.id },
-        );
-      }
-    }
+    const results = await this.syncManager.syncStagesOfScope(
+      params,
+      companyId,
+      isGlobal,
+    );
 
     if (projectId) {
-      await this.syncService.syncAllStages(
-        projectId,
-        siteId && siteId !== "all" ? siteId : undefined,
-      );
-      await this.syncOrderWithGoals(projectId);
+      await this.reorderService.syncOrderWithGoals(projectId);
     }
 
     return results;
   }
 
-  private async syncOrderWithGoals(projectId: string): Promise<void> {
-    try {
-      const goals = await prisma.towerActivityGoal.findMany({
-        where: { projectId },
-        orderBy: [{ level: "asc" }, { order: "asc" }],
-      });
-
-      if (goals.length === 0) return;
-
-      const stages = await this.repository.findAll({ projectId });
-      const updates: { id: string; displayOrder: number }[] = [];
-
-      for (const goal of goals) {
-        const goalName = goal.name.trim().toUpperCase();
-        const matchedStages = stages.filter(
-          (s) => s.name.trim().toUpperCase() === goalName,
-        );
-
-        for (const stage of matchedStages) {
-          if (stage.displayOrder !== goal.order) {
-            updates.push({ id: stage.id, displayOrder: goal.order });
-          }
-        }
-      }
-
-      if (updates.length > 0) {
-        await this.repository.reorder(updates);
-      }
-    } catch (error: any) {
-      logger.error(
-        `[WorkStageService] syncOrderWithGoals error: ${error.message}`,
-      );
-    }
-  }
-
-  private async calculateAverageProgress(
-    stage: WorkStage,
-    projectId: string,
-    useSiteFilter: boolean = true,
-  ): Promise<number> {
-    if (!stage.productionActivityId) return 0;
-
-    const result = await this.repository.findProductionElementsWeighted(
-      projectId,
-      stage.productionActivityId,
-      useSiteFilter ? stage.site?.name : undefined,
-    );
-
-    if (!result || result.totalWeight === 0) return 0;
-    return Math.min(100, result.weightedProgress / result.totalWeight);
-  }
-
-  private async updateTodayProgress(
-    stageId: string,
-    progress: number,
-  ): Promise<void> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const existing = await this.repository.findProgressByDate(stageId, today);
-
-    await this.repository.saveProgress({
-      id: existing?.id,
-      stageId,
-      actualPercentage: progress,
-      recordedDate: today,
-      notes: "Sincronização Automática (Modelo DDD)",
-    });
-  }
-
   async delete(id: string, securityContext?: any): Promise<void> {
-    const existing = await this.repository.findById(id);
-    if (!existing) throw new Error("Etapa não encontrada");
-
-    if (securityContext) {
-      const { isGlobalAdmin } = await import("@/lib/auth/session");
-      const isGlobal = isGlobalAdmin(
-        securityContext.role,
-        securityContext.hierarchyLevel,
-        securityContext.permissions,
-      );
-
-      if (!isGlobal) {
-        const stageInCompany = await prisma.workStage.findFirst({
-          where: {
-            id,
-            OR: [
-              { project: { companyId: securityContext.companyId } },
-              { site: { project: { companyId: securityContext.companyId } } },
-            ],
-          },
-        });
-        if (!stageInCompany)
-          throw new Error("Forbidden: Etapa não pertence à sua empresa");
-      }
-    }
-
+    await this.security.validateStageAccess(id, securityContext);
     return await this.repository.delete(id);
   }
 
   async deleteBySite(siteId: string, securityContext?: any): Promise<void> {
-    if (securityContext) {
-      const { isGlobalAdmin } = await import("@/lib/auth/session");
-      const isGlobal = isGlobalAdmin(
-        securityContext.role,
-        securityContext.hierarchyLevel,
-        securityContext.permissions,
-      );
-
-      if (!isGlobal) {
-        const site = await prisma.site.findFirst({
-          where: {
-            id: siteId,
-            project: { companyId: securityContext.companyId },
-          },
-        });
-        if (!site)
-          throw new Error("Forbidden: Site não pertence à sua empresa");
-      }
-    }
-
+    await this.security.validateAccess({ siteId }, securityContext);
     return await this.repository.deleteBySite(siteId);
   }
 
@@ -430,41 +185,12 @@ export class WorkStageService {
     securityContext?: any,
   ): Promise<void> {
     if (securityContext) {
-      const { isGlobalAdmin } = await import("@/lib/auth/session");
-      const isGlobal = isGlobalAdmin(
-        securityContext.role,
-        securityContext.hierarchyLevel,
-        securityContext.permissions,
+      await this.security.validateStageAccessBulk(
+        updates.map((u) => u.id),
+        securityContext,
       );
-
-      if (!isGlobal) {
-        // Verificar se TODAS as etapas pertencem à empresa
-        const stages = await prisma.workStage.findMany({
-          where: {
-            id: { in: updates.map((u) => u.id) },
-          },
-          select: {
-            id: true,
-            projectId: true,
-            site: { select: { projectId: true } },
-          },
-        });
-
-        for (const stage of stages) {
-          const pid = stage.projectId || stage.site?.projectId;
-          if (!pid) throw new Error("Forbidden: Etapa sem projeto associado");
-
-          const project = await prisma.project.findFirst({
-            where: { id: pid, companyId: securityContext.companyId },
-          });
-          if (!project)
-            throw new Error(
-              "Forbidden: Uma ou mais etapas não pertencem à sua empresa",
-            );
-        }
-      }
     }
 
-    return await this.repository.reorder(updates);
+    return await this.reorderService.reorder(updates);
   }
 }

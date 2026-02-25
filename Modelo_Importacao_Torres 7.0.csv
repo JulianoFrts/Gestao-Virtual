@@ -1,6 +1,4 @@
-```csv
 Sequencia;Trecho;NumeroTorre;VaoVante_m;TextoTorre;Tipificacao;Concreto_m3;PesoArmacao_ton;PesoEstrutura_ton;TramoLancamento
-```
 1;C1;TRIO_C1;113,39;PORT;PORT;0;0;0;19
 2;C1;0/1A;217,61;MSCAT;Autoportante;66;3355,15;27,427;19
 3;C1;0/2;174,27;KD12A2;Autoportante;80,5;3946,89;38,4264;19

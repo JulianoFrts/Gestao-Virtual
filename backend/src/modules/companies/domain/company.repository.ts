@@ -1,3 +1,9 @@
+import {
+  CompanyEntity,
+  CreateCompanyDTO,
+  UpdateCompanyDTO,
+} from "./company.dto";
+
 export interface CompanyPagination {
   page: number;
   limit: number;
@@ -8,7 +14,7 @@ export interface CompanyPagination {
 }
 
 export interface CompanyListResult {
-  items: any[];
+  items: CompanyEntity[];
   pagination: CompanyPagination;
 }
 
@@ -20,13 +26,13 @@ export interface CompanyRepository {
     isActive?: boolean;
   }): Promise<CompanyListResult>;
 
-  findById(id: string): Promise<any | null>;
+  findById(id: string): Promise<CompanyEntity | null>;
 
-  findByTaxId(taxId: string): Promise<any | null>;
+  findByTaxId(taxId: string): Promise<CompanyEntity | null>;
 
-  create(data: any): Promise<any>;
+  create(data: CreateCompanyDTO): Promise<CompanyEntity>;
 
-  update(id: string, data: any): Promise<any>;
+  update(id: string, data: UpdateCompanyDTO): Promise<CompanyEntity>;
 
   delete(id: string): Promise<void>;
 }

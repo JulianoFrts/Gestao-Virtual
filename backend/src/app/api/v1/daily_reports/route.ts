@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
       ...query,
       isAdmin,
       companyId: (currentUser as any).companyId,
-    });
+    } as any);
 
     return ApiResponse.json(result);
   } catch (error) {
@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
 
     fieldsToRemove.forEach((field) => delete finalData[field]);
 
-    const report = await dailyReportService.createReport(finalData);
+    const report = await dailyReportService.createReport(finalData as any);
 
     logger.info("Relatório criado", { reportId: report.id });
 

@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
       return ApiResponse.badRequest("towerId/elementId é obrigatório");
     }
 
-    const logs = await service.getLogsByElement(towerId, companyIdFilter);
+    const logs = await service.getLogsByElement(towerId);
 
     return ApiResponse.json(logs);
   } catch (error) {

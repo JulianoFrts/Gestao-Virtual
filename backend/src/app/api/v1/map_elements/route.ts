@@ -1,16 +1,17 @@
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { requireAuth, isGlobalAdmin } from "@/lib/auth/session";
+import { requireAuth } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { z } from "zod";
 import { Validator } from "@/lib/utils/api/validator";
 import { paginationQuerySchema } from "@/modules/common/domain/common.schema";
-import { PrismaMapElementRepository } from "@/modules/map-elements/infrastructure/prisma-map-element.repository";
-import { MapElementService } from "@/modules/map-elements/application/map-element.service";
+import { PrismaAssetRepository } from "@/modules/infrastructure-assets/infrastructure/prisma-asset.repository";
+import { AssetService } from "@/modules/infrastructure-assets/application/asset.service";
 import { API } from "@/lib/constants";
 
-const repository = new PrismaMapElementRepository();
-const service = new MapElementService(repository);
+// Injeção de Dependência
+const repository = new PrismaAssetRepository();
+const assetService = new AssetService(repository);
 
 const querySchema = paginationQuerySchema.extend({
   projectId: z.preprocess(
@@ -55,50 +56,22 @@ export async function GET(request: NextRequest) {
       (user as any).permissions,
     );
 
-    logger.info(
-      `GET /api/v1/map_elements: Session companyId=${user.companyId}, Requested companyId=${companyId}, projectId=${projectId}, GlobalAdmin=${isGlobal}`,
-    );
-
-    // If projectId is provided, filter by project (and optionally company)
-    if (projectId) {
-      const elements = await service.getElements(projectId, companyId);
-      const filtered = companyId
-        ? elements.filter((e) => e.companyId === companyId)
-        : elements;
-      return ApiResponse.json(filtered);
-    }
-
-    // Security: For non-admins, require their own company
     const effectiveCompanyId = companyId || user.companyId;
 
     if (!isGlobal && effectiveCompanyId !== user.companyId) {
       return ApiResponse.forbidden("Acesso negado a dados de outra empresa.");
     }
 
-    // If companyId is available, filter by company
-    if (effectiveCompanyId) {
-      const elements = await service.getElementsByCompany(
-        effectiveCompanyId,
-        type,
-      );
-      logger.info(
-        `GET /api/v1/map_elements: Found ${elements.length} elements for company ${effectiveCompanyId}`,
-      );
-      return ApiResponse.json(elements);
-    }
+    // Busca unificada via AssetService
+    const elements = await assetService.listAssets({
+      projectId,
+      companyId: effectiveCompanyId,
+      elementType: type,
+    });
 
-    // System admins without companyId can get all elements (with limit)
-    if (isGlobal) {
-      const elements = await service.getAllElements(type, API.BATCH.LARGE);
-      logger.info(
-        `GET /api/v1/map_elements: Global Admin fetched ${elements.length} elements globally`,
-      );
-      return ApiResponse.json(elements);
-    }
-
-    return ApiResponse.badRequest("projectId ou companyId é obrigatório");
+    return ApiResponse.json(elements);
   } catch (error) {
-    logger.error("Erro ao listar elementos do mapa", { error });
+    logger.error("Erro ao listar ativos de infraestrutura", { error });
     return handleApiError(error, "src/app/api/v1/map_elements/route.ts#GET");
   }
 }
@@ -109,43 +82,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const params = Object.fromEntries(request.nextUrl.searchParams.entries());
     const urlProjectId = params.projectId || params.project_id;
-    const urlSiteId = params.siteId || params.site_id;
 
-    // Injetar IDs da URL no body se estiverem faltando
-    const processItem = (item: any) => {
-      if (!item.projectId && urlProjectId) item.projectId = urlProjectId;
-      if (!item.siteId && urlSiteId) item.siteId = urlSiteId;
-      if (!item.companyId && user.companyId) item.companyId = user.companyId;
-      return item;
-    };
-
-    const finalBody = Array.isArray(body)
-      ? body.map(processItem)
-      : processItem(body);
-
-    logger.info("POST /api/v1/map_elements: Received body", {
-      isArray: Array.isArray(body),
-      count: Array.isArray(body) ? body.length : 1,
-      projectId: urlProjectId,
-      siteId: urlSiteId,
-    });
-
-    if (Array.isArray(finalBody)) {
-      const results = await service.saveBatch(finalBody);
-      return ApiResponse.json(
-        results,
-        `${results.length} elementos processados.`,
-      );
+    if (!urlProjectId && !user.companyId) {
+      return ApiResponse.badRequest("Contexto de projeto ou empresa não identificado.");
     }
 
-    const result = await service.saveElement(body);
-    return ApiResponse.json(result, "Elemento processado com sucesso.");
+    const count = await assetService.syncAssetsFromImport(
+      user.companyId || "",
+      urlProjectId || "",
+      Array.isArray(body) ? body : [body]
+    );
+
+    return ApiResponse.json({ success: true, count }, `${count} ativos processados com sucesso.`);
   } catch (error: any) {
-    logger.error("Erro ao salvar elemento(s) do mapa", {
-      message: error.message,
-      stack: error.stack,
-      error,
-    });
+    logger.error("Erro ao salvar ativos", { message: error.message });
     return handleApiError(error, "src/app/api/v1/map_elements/route.ts#POST");
   }
 }
@@ -154,47 +104,20 @@ export async function DELETE(request: NextRequest) {
   try {
     const user = await requireAuth(request);
     const id = request.nextUrl.searchParams.get("id");
-    const projectId = request.nextUrl.searchParams.get("projectId");
 
     const { isGlobalAdmin } = await import("@/lib/auth/session");
-    const isGlobal = isGlobalAdmin(
-      user.role,
-      (user as any).hierarchyLevel,
-      (user as any).permissions,
-    );
-
-    if (!isGlobal) {
-      return ApiResponse.forbidden(
-        "Apenas administradores globais podem remover elementos diretamente via API genérica.",
-      );
+    if (!isGlobalAdmin(user.role, (user as any).hierarchyLevel, (user as any).permissions)) {
+      return ApiResponse.forbidden("Acesso restrito.");
     }
 
     if (id) {
-      await service.deleteElement(id);
-      return ApiResponse.json({ success: true }, "Elemento removido.");
+      await assetService.deleteAsset(id);
+      return ApiResponse.json({ success: true }, "Ativo removido.");
     }
 
-    const ids = request.nextUrl.searchParams.get("ids");
-    if (ids) {
-      const idList = ids.split(",").filter(Boolean);
-      const count = await service.deleteElements(idList);
-      return ApiResponse.json(
-        { success: true, count },
-        `${count} elementos removidos.`,
-      );
-    }
-
-    if (projectId) {
-      const count = await service.clearProject(projectId);
-      return ApiResponse.json(
-        { success: true, count },
-        `${count} elementos removidos do projeto.`,
-      );
-    }
-
-    return ApiResponse.badRequest("id ou projectId obrigatório.");
+    return ApiResponse.badRequest("id obrigatório.");
   } catch (error) {
-    logger.error("Erro ao remover elemento(s) do mapa", { error });
+    logger.error("Erro ao remover ativo", { error });
     return handleApiError(error, "src/app/api/v1/map_elements/route.ts#DELETE");
   }
 }

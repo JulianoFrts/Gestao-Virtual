@@ -1,6 +1,8 @@
 import { loadEnv } from "@/lib/utils/env";
 loadEnv();
 
+process.setMaxListeners(30);
+
 import { logger } from "@/lib/utils/logger";
 
 type HandlerRegistration = {

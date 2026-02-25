@@ -1,7 +1,7 @@
 import request from "supertest";
 import { cleanDatabase } from "../setup";
 
-const appUrl = process.env.APP_URL || "http://localhost:3000";
+const appUrl = process.env.APP_URL || "https://orion.gestaovirtual.com";
 const apiPrefix = "/api/v1";
 
 describe("Context Integration Tests", () => {

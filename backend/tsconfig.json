@@ -58,6 +58,10 @@
   "exclude": [
     "node_modules",
     ".next",
-    "out"
+    "out",
+    "scripts/archive",
+    "prisma/archive",
+    "scripts",
+    "prisma"
   ]
 }

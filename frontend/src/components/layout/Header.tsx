@@ -9,9 +9,7 @@ import { ModeToggle } from "@/components/ModeToggle";
 import { isProtectedUser } from "@/utils/permissionHelpers";
 import { getRoleStyle, getRoleLabel } from "@/utils/roleUtils";
 import { cn } from "@/lib/utils";
-import { isProtectedSignal, can } from "@/signals/authSignals";
-import { appNameSignal } from "@/signals/settingsSignals";
-import { useSignals } from "@preact/signals-react/runtime";
+import { useSettings } from "@/contexts/SettingsContext";
 import {
   Popover,
   PopoverContent,
@@ -63,7 +61,9 @@ interface HeaderProps {
 }
 
 export function Header({ onMenuClick, title: propTitle }: HeaderProps) {
-  const { user, profile, logout } = useAuth();
+  const { user, profile, logout, isProtected, can, simulationRole } = useAuth();
+  const isSimulated = !!simulationRole;
+  const { appName } = useSettings();
   const { isOnline, isSyncing, pendingChanges, syncNow } = useSync();
   const { messages } = useMessages();
   const location = useLocation();
@@ -88,10 +88,9 @@ export function Header({ onMenuClick, title: propTitle }: HeaderProps) {
 
   const title = useMemo(() => {
     if (propTitle) return propTitle;
-    return PAGE_TITLES[location.pathname] || appNameSignal.value;
-  }, [location.pathname, propTitle, PAGE_TITLES, appNameSignal.value]);
-
-  useSignals();
+    // Fallback to a generic app name if not found, or use a default
+    return PAGE_TITLES[location.pathname] || appName; 
+  }, [location.pathname, propTitle, PAGE_TITLES]);
 
   const displayName =
     profile?.fullName || user?.email?.split("@")[0] || "Usuário";
@@ -101,7 +100,7 @@ export function Header({ onMenuClick, title: propTitle }: HeaderProps) {
     return messages.filter((msg) => {
       const isRecipient = msg.recipientId === profile?.id;
       const canManageTickets =
-        can("system_messages.manage") || isProtectedSignal.value;
+        can("system_messages.manage") || isProtected;
       const isAdminType =
         msg.recipientRole === "ADMIN" || msg.type === "PASSWORD_RESET";
 
@@ -119,7 +118,7 @@ export function Header({ onMenuClick, title: propTitle }: HeaderProps) {
     return messages.filter((msg) => {
       const isRecipient = msg.recipientId === profile?.id;
       const canManageTickets =
-        can("system_messages.manage") || isProtectedSignal.value;
+        can("system_messages.manage") || isProtected;
       const isAdminType =
         msg.recipientRole === "ADMIN" || msg.type === "PASSWORD_RESET";
 

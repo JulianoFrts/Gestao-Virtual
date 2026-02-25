@@ -63,11 +63,11 @@ async function executeLogin(email: string, password: string) {
     logger.info("Usuário verificado no banco. Gerando token...", { userId: user.id });
 
     const token = await generateToken({
-      id: user.id!,
-      email: user.email!,
-      name: user.name!,
-      role: user.role!,
-      status: user.status!,
+      id: user.id as string,
+      email: user.email as string,
+      name: user.name as string,
+      role: (user as any).role as string,
+      status: user.status as string,
       companyId: undefined,
       projectId: undefined,
     });

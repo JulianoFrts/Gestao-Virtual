@@ -1,5 +1,6 @@
 import { RouteHealthRepository, RouteHealthResult } from "../domain/route-health.repository";
-import { HTTP_STATUS, DEFAULT_TIMEOUT_MS } from "@/lib/constants";
+import { HTTP_STATUS } from "@/lib/constants";
+const DEFAULT_TIMEOUT_MS = 30000;
 
 export class SystemTestingService {
     constructor(private readonly repository: RouteHealthRepository) { }

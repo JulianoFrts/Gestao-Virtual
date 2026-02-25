@@ -29,14 +29,14 @@ export class PrismaMapElementRepository implements MapElementRepository {
 
     // Sincronização com as novas tabelas se for torre
     if (updated.elementType === "TOWER") {
-      await this.syncTower(
-        updated.projectId,
-        updated.externalId,
-        updated.companyId,
-        updated.siteId,
-        updated.metadata,
-        updated.sequence,
-      );
+      await this.syncTower({
+        projectId: updated.projectId,
+        towerId: updated.externalId,
+        companyId: updated.companyId,
+        siteId: updated.siteId,
+        metadata: updated.metadata,
+        sequence: updated.sequence,
+      });
     }
 
     return updated as unknown as MapElementTechnicalData;
@@ -64,14 +64,14 @@ export class PrismaMapElementRepository implements MapElementRepository {
 
     // Sincronização com as novas tabelas se for torre
     if (result.elementType === "TOWER") {
-      await this.syncTower(
-        result.projectId,
-        result.externalId,
-        result.companyId,
-        result.siteId,
-        result.metadata,
-        result.sequence,
-      );
+      await this.syncTower({
+        projectId: result.projectId,
+        towerId: result.externalId,
+        companyId: result.companyId,
+        siteId: result.siteId,
+        metadata: result.metadata,
+        sequence: result.sequence,
+      });
     }
 
     return result as unknown as MapElementTechnicalData;
@@ -80,19 +80,24 @@ export class PrismaMapElementRepository implements MapElementRepository {
   /**
    * Helper para sincronizar dados de torre entre a skeleton e as tabelas especializadas
    */
-  private async syncTower(
-    projectId: string,
-    towerId: string,
-    companyId: string,
-    siteId: string | null,
-    metadata: any,
-    sequence: number = 0,
-  ) {
+  private async syncTower(data: {
+    projectId: string;
+    towerId: string;
+    companyId: string;
+    siteId: string | null;
+    metadata: any;
+    sequence?: number;
+  }) {
+    const {
+      projectId,
+      towerId,
+      companyId,
+      siteId,
+      metadata,
+      sequence = 0,
+    } = data;
     const meta = typeof metadata === "string" ? JSON.parse(metadata) : metadata;
 
-    // Sincronizar APENAS com TowerProduction.
-    // TowerConstruction (dados técnicos) é gerenciado exclusivamente pelo import de Dados Técnicos.
-    // NÃO tocar em TowerConstruction aqui para evitar sobrescrever dados técnicos com zeros.
     await prisma.towerProduction.upsert({
       where: { projectId_towerId: { projectId, towerId } },
       update: { companyId, siteId, metadata: meta, sequencia: sequence },
@@ -210,14 +215,14 @@ export class PrismaMapElementRepository implements MapElementRepository {
         const batch = towers.slice(i, i + BATCH_SIZE);
         await Promise.all(
           batch.map((el) =>
-            this.syncTower(
-              el.projectId,
-              el.externalId,
-              el.companyId,
-              el.siteId,
-              el.metadata,
-              Number(el.sequence) || 0,
-            ),
+            this.syncTower({
+              projectId: el.projectId,
+              towerId: el.externalId,
+              companyId: el.companyId,
+              siteId: el.siteId,
+              metadata: el.metadata,
+              sequence: Number(el.sequence) || 0,
+            }),
           ),
         );
       }

@@ -1,0 +1,177 @@
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { storageService } from "@/services/storageService";
+import { ActivityStatus } from "@/hooks/useDailyReports";
+
+export interface DailyReportPhoto {
+    url?: string; // URL remota (GCP) ou string base64 legada
+    uri?: string; // URL local temporária para preview no navegador
+    file?: File;  // Arquivo pendente para upload (retido pelo IndexedDB)
+    comment?: string;
+}
+
+export interface WeatherRecord {
+    morning: 'GOOD' | 'RAIN' | 'IMPRACTICABLE';
+    afternoon: 'GOOD' | 'RAIN' | 'IMPRACTICABLE';
+    night: 'GOOD' | 'RAIN' | 'IMPRACTICABLE';
+}
+
+export interface ManpowerRecord {
+    registration?: string;
+    name: string;
+    role: string;
+    observations?: string;
+}
+
+export interface EquipmentRecord {
+    equipment: string;
+    type: string;
+    model?: string;
+    driverName?: string;
+    plate?: string;
+    observations?: string;
+}
+
+export interface DailyReportSubPointDetail {
+    id: string; // Identificação (ex: Nome da Torre ou ID do Vão)
+    status: ActivityStatus;
+    progress: number; // Porcentagem de 0 a 100
+    comment?: string; // Comentário individual opcional
+    startTime?: string; // Horário inicial (HH:mm)
+    endTime?: string; // Horário final (HH:mm)
+    photos?: DailyReportPhoto[];
+}
+
+export interface DailyReportActivity {
+    id: string; // Local ID for UI management
+    stageId: string;
+    stageName?: string;
+    subPointType: 'GERAL' | 'TORRE' | 'VAO' | 'TRECHO' | 'ESTRUTURA';
+    subPoint: string;
+    subPointEnd?: string;
+    isMultiSelection: boolean;
+    observations: string;
+    status: ActivityStatus;
+    details: DailyReportSubPointDetail[];
+    photos?: DailyReportPhoto[];
+}
+
+export interface DailyReportDraft {
+    employeeId: string;
+    teamIds: string[];
+    selectedActivities: DailyReportActivity[];
+    siteId?: string;
+    projectId?: string;
+    companyId?: string;
+    weather?: WeatherRecord;
+    manpower?: ManpowerRecord[];
+    equipment?: EquipmentRecord[];
+    generalObservations?: string;
+    generalPhotos?: DailyReportPhoto[];
+    rdoNumber?: string;
+    revision?: string;
+    projectDeadline?: number;
+    editingReportId?: string; // ID do relatório original se for uma correção
+    isCorrection?: boolean;   // Sinaliza que este rascunho é para corrigir um RDO devolvido
+    isProgrammed?: boolean;   // Sinaliza que este rascunho originou-se de uma programação do supervisor
+    step: number;
+    updatedAt: number;
+}
+
+const DEFAULT_DRAFT: DailyReportDraft = {
+    employeeId: '',
+    teamIds: [],
+    selectedActivities: [],
+    siteId: '',
+    projectId: '',
+    companyId: '',
+    weather: {
+        morning: 'GOOD',
+        afternoon: 'GOOD',
+        night: 'GOOD'
+    },
+    manpower: [],
+    equipment: [],
+    generalObservations: '',
+    generalPhotos: [],
+    rdoNumber: '',
+    revision: '0A',
+    projectDeadline: undefined,
+    step: 1,
+    updatedAt: Date.now()
+};
+
+interface DailyReportContextType {
+    draft: DailyReportDraft;
+    updateReportDraft: (updates: Partial<DailyReportDraft>) => void;
+    resetReportDraft: () => void;
+    globalRefreshTrigger: number;
+    triggerGlobalReportRefresh: () => void;
+}
+
+const DailyReportContext = createContext<DailyReportContextType | undefined>(undefined);
+
+export function DailyReportProvider({ children }: { children: React.ReactNode }) {
+    const [draft, setDraft] = useState<DailyReportDraft>(DEFAULT_DRAFT);
+    const [globalRefreshTrigger, setGlobalRefreshTrigger] = useState<number>(Date.now());
+    const [isInitialized, setIsInitialized] = useState(false);
+
+    // Initial load from storage
+    useEffect(() => {
+        const loadDraft = async () => {
+            const saved = await storageService.getItem<DailyReportDraft>('daily-report-draft');
+            if (saved) {
+                setDraft(saved);
+            }
+            setIsInitialized(true);
+        };
+        loadDraft();
+    }, []);
+
+    // Persist to storage whenever draft changes
+    useEffect(() => {
+        if (!isInitialized) return;
+        
+        if (draft.updatedAt !== DEFAULT_DRAFT.updatedAt) {
+            storageService.setItem('daily-report-draft', draft);
+        }
+    }, [draft, isInitialized]);
+
+    const updateReportDraft = useCallback((updates: Partial<DailyReportDraft>) => {
+        setDraft(prev => ({
+            ...prev,
+            ...updates,
+            updatedAt: Date.now()
+        }));
+    }, []);
+
+    const resetReportDraft = useCallback(() => {
+        setDraft(DEFAULT_DRAFT);
+        storageService.removeItem('daily-report-draft');
+    }, []);
+
+    const triggerGlobalReportRefresh = useCallback(() => {
+        setGlobalRefreshTrigger(Date.now());
+    }, []);
+
+    return (
+        <DailyReportContext.Provider
+            value={{
+                draft,
+                updateReportDraft,
+                resetReportDraft,
+                globalRefreshTrigger,
+                triggerGlobalReportRefresh
+            }}
+        >
+            {children}
+        </DailyReportContext.Provider>
+    );
+}
+
+export function useDailyReportContext() {
+    const context = useContext(DailyReportContext);
+    if (context === undefined) {
+        throw new Error('useDailyReportContext must be used within a DailyReportProvider');
+    }
+    return context;
+}

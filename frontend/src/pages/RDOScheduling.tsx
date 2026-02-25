@@ -39,15 +39,11 @@ import {
   X,
   Lock
 } from "lucide-react";
-import { useSignals } from "@preact/signals-react/runtime";
 import { Badge } from "@/components/ui/badge";
 import { getRoleStyle, getRoleLabel, STANDARD_ROLES } from "@/utils/roleUtils";
-import {
-  rdoSchedulingDraftSignal,
-  updateSchedulingDraft,
-  resetSchedulingDraft,
-} from "@/signals/rdoSchedulingSignals";
-import { toggleSidebar, isSidebarOpenSignal } from "@/signals/uiSignals";
+import { useLayout } from "@/contexts/LayoutContext";
+import { useDailyReportContext } from "@/contexts/DailyReportContext";
+import { useRDOScheduling } from "@/contexts/RDOSchedulingContext";
 import { cn } from "@/lib/utils";
 import {
   Command,
@@ -63,8 +59,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useWorkStages } from "@/hooks/useWorkStages";
-import { fetchWorkStages } from "@/signals/workStageSignals";
-import { triggerGlobalReportRefresh } from "@/signals/dailyReportSignals";
 import { useCompanies } from "@/hooks/useCompanies";
 import { useProjects } from "@/hooks/useProjects";
 import { Input } from "@/components/ui/input";
@@ -100,8 +94,11 @@ const fixBrokenEncoding = (str: string) => {
 };
 
 export default function RDOScheduling() {
-  useSignals();
+  const layout = useLayout();
   const { profile } = useAuth();
+  const { draft, updateSchedulingDraft, resetSchedulingDraft } = useRDOScheduling();
+  const { triggerGlobalReportRefresh } = useDailyReportContext();
+  
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string | undefined>(profile?.companyId || undefined);
   const { teams } = useTeams(selectedCompanyId);
   const { sites } = useSites();
@@ -109,8 +106,6 @@ export default function RDOScheduling() {
   const { toast } = useToast();
   const { companies } = useCompanies();
 
-  const isSidebarOpen = isSidebarOpenSignal.value;
-  const draft = rdoSchedulingDraftSignal.value;
   const isSuperAdmin = !profile?.companyId; // Gestão Global / Super Admin
 
   const [selectedProjectId, setSelectedProjectId] = React.useState<string | undefined>(undefined);
@@ -285,7 +280,8 @@ export default function RDOScheduling() {
   // Forçar reload das stages
   React.useEffect(() => {
     if (finalProjectId) {
-      fetchWorkStages(true, finalSiteId || undefined, finalProjectId, selectedCompanyId).catch(console.error);
+      // Usando API diretamente em vez do signal helper para carregar etapas se necessário
+      orionApi.get(`/work-stages/project/${finalProjectId}`).catch(console.error);
     }
   }, [finalProjectId, finalSiteId, selectedCompanyId]);
 
@@ -585,8 +581,8 @@ export default function RDOScheduling() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-3 text-2xl font-bold tracking-tight">
-                    <Button variant="ghost" size="icon" onClick={toggleSidebar} className="h-8 w-8 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors hidden lg:flex">
-                      {isSidebarOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
+                    <Button variant="ghost" size="icon" onClick={() => layout.toggleSidebar()} className="h-8 w-8 text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors hidden lg:flex">
+                      {layout.isSidebarOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
                     </Button>
                     <CalendarClock className="w-6 h-6 text-blue-500" />
                     Programação Diária de Obra

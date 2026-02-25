@@ -28,6 +28,8 @@ interface DeviationItem {
   status: 'ahead' | 'on_track' | 'behind' | 'critical';
   weight: number;
   displayOrder: number;
+  totalTowers?: number;
+  executedTowers?: number;
 }
 
 interface DeviationGroup extends DeviationItem {
@@ -61,6 +63,8 @@ export default function GAPODeviationReport({ stages, projectId }: GAPODeviation
       status,
       weight: s.weight || 0,
       displayOrder: s.displayOrder || 0,
+      totalTowers: s.metadata?.totalTowers,
+      executedTowers: s.metadata?.executedTowers,
     };
   };
 
@@ -76,8 +80,30 @@ export default function GAPODeviationReport({ stages, projectId }: GAPODeviation
         .sort((a, b) => a.displayOrder - b.displayOrder)
         .map(getDeviationData);
 
+      const parentItem = getDeviationData(parent);
+
+      // Implement Parent Goal percentage as average of children (sub-goals)
+      if (children.length > 0) {
+        const sumPlanned = children.reduce((acc, c) => acc + c.planned, 0);
+        const sumActual = children.reduce((acc, c) => acc + c.actual, 0);
+        
+        parentItem.planned = Math.round((sumPlanned / children.length) * 10) / 10;
+        parentItem.actual = Math.round((sumActual / children.length) * 10) / 10;
+        parentItem.deviation = Math.round((parentItem.actual - parentItem.planned) * 10) / 10;
+        
+        // Agregar contagens para o pai (Meta Mãe)
+        parentItem.totalTowers = children.reduce((acc, c) => acc + (c.totalTowers || 0), 0);
+        parentItem.executedTowers = children.reduce((acc, c) => acc + (c.executedTowers || 0), 0);
+
+        // Recalculate status based on new deviation
+        if (parentItem.deviation > 5) parentItem.status = 'ahead';
+        else if (parentItem.deviation < -15) parentItem.status = 'critical';
+        else if (parentItem.deviation < -5) parentItem.status = 'behind';
+        else parentItem.status = 'on_track';
+      }
+
       return {
-        ...getDeviationData(parent),
+        ...parentItem,
         children
       };
     }).filter(group => group.children.length > 0 || group.planned > 0 || group.actual > 0);
@@ -144,7 +170,7 @@ export default function GAPODeviationReport({ stages, projectId }: GAPODeviation
               {/* Header da Atividade Mãe */}
               <div className="flex items-center gap-2 px-1 mb-1">
                 <Layers className="w-3 h-3 text-primary/60" />
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/80">{group.name}</h3>
+                <h3 className="text-[12px] font-black uppercase tracking-[0.2em] text-primary/80">{group.name}</h3>
                 <div className="h-px flex-1 bg-linear-to-r from-primary/20 to-transparent" />
               </div>
 
@@ -184,29 +210,29 @@ function DeviationRow({ item, isParent }: { item: DeviationItem; isParent?: bool
   return (
     <div
       className={cn(
-        "flex items-center justify-between p-2.5 rounded-lg border transition-all hover:brightness-110",
+        "flex items-center justify-between p-3.5 rounded-xl border transition-all hover:brightness-110 shadow-sm",
         cfg.bg,
         cfg.border,
-        isParent ? "opacity-90" : "opacity-100"
+        isParent ? "opacity-100 bg-linear-to-r" : "opacity-100"
       )}
     >
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        <Icon className={cn("w-3.5 h-3.5 shrink-0", cfg.color)} />
+      <div className="flex items-center gap-3.5 flex-1 min-w-0">
+        <Icon className={cn("w-4 h-4 shrink-0", cfg.color)} />
         <div className="min-w-0">
-          <span className={cn("text-[11px] font-bold truncate block tracking-tight", isParent ? "text-white" : "text-slate-200")}>
+          <span className={cn("text-[15px] font-black truncate block tracking-tight leading-tight mb-0.5", isParent ? "text-white" : "text-slate-100")}>
             {item.name}
           </span>
-          <span className="text-[9px] text-muted-foreground/50 font-medium">
-            Plan: {item.planned}% | Real: {item.actual}% | Peso: {item.weight}
+          <span className="text-[11px] text-muted-foreground/70 font-bold uppercase tracking-wide">
+            Plan: {item.planned}% | Real {item.totalTowers ? `(${item.executedTowers || 0}/${item.totalTowers})` : ''}: <span className={cn("text-[13px] font-black tabular-nums", cfg.color)}>{item.actual}%</span> | Peso: {item.weight}
           </span>
         </div>
       </div>
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex items-center gap-4 shrink-0">
         <div className="text-right flex flex-col items-end">
-          <span className={cn("text-[11px] font-black tabular-nums", cfg.color)}>
+          <span className={cn("text-[16px] font-black tabular-nums leading-none", cfg.color)}>
             {item.deviation > 0 ? '+' : ''}{item.deviation}%
           </span>
-          <span className={cn("text-[7px] font-black uppercase tracking-widest", cfg.color)}>
+          <span className={cn("text-[9px] font-black uppercase tracking-[0.15em] mt-1", cfg.color)}>
             {cfg.label}
           </span>
         </div>

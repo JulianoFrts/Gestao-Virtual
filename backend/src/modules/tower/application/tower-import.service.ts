@@ -52,6 +52,14 @@ export class TowerImportService {
     data: TowerImportItem[],
     defaultSiteId?: string | null,
   ): Promise<ImportResults> {
+    if (!projectId || projectId === "all") {
+      throw new Error("Project ID is required and cannot be 'all'");
+    }
+
+    if (!companyId || companyId === "all") {
+      throw new Error("Company ID is required and cannot be 'all'");
+    }
+
     const results: ImportResults = {
       total: data.length,
       imported: 0,

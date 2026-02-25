@@ -52,6 +52,7 @@ describe("WorkStageService", () => {
           siteId: "site-1",
           projectId: "proj-1",
           productionActivityId: null,
+          displayOrder: 1,
         },
       ];
       mockRepo.findAll.mockResolvedValue(stages);

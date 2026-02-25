@@ -9,6 +9,27 @@ import {
 import { logger } from "@/lib/utils/logger";
 import { prisma } from "@/lib/prisma/client";
 
+export interface TowerImportItem {
+  towerId: string | number;
+  sequencia?: number | string;
+  vao?: number | string;
+  elevacao?: number | string;
+  lat?: number | string;
+  lng?: number | string;
+  zona?: string;
+  pesoEstrutura?: number | string;
+  pesoConcreto?: number | string;
+  pesoEscavacao?: number | string;
+  aco1?: number | string;
+  aco2?: number | string;
+  aco3?: number | string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SyncableProductionRepository extends TowerProductionRepository {
+  syncTechnicalData(projectId: string, updates: any[]): Promise<number>;
+}
+
 export class TowerConstructionService {
   constructor(
     private readonly repository: TowerConstructionRepository,
@@ -22,8 +43,16 @@ export class TowerConstructionService {
   async importProjectData(
     projectId: string,
     companyId: string,
-    data: any[],
-  ): Promise<any> {
+    data: TowerImportItem[],
+  ): Promise<{ imported: number; total: number }> {
+    if (!projectId || projectId === "all") {
+      throw new Error("Project ID is required and cannot be 'all'");
+    }
+
+    if (!companyId || companyId === "all") {
+      throw new Error("Company ID is required and cannot be 'all'");
+    }
+
     logger.info(
       `[TowerConstructionService] Importing project data for ${data.length} towers`,
     );
@@ -52,54 +81,104 @@ export class TowerConstructionService {
 
     const saved = await this.repository.saveMany(elements);
 
-    // 2. Auto-provisionar torres na tabela de Produção APENAS se não existirem
+    // 2. Auto-provisionar torres NOVAS na tabela de Produção
     // NÃO sobrescrever registros existentes para preservar dados de produção (ex: towerType/TextoTorre)
     if (this.productionRepository) {
       const existingTowers = await prisma.towerProduction.findMany({
         where: {
           projectId,
-          towerId: { in: data.map((d: any) => String(d.towerId)) },
+          towerId: { in: data.map((d) => String(d.towerId)) },
         },
         select: { towerId: true },
       });
-      const existingSet = new Set(existingTowers.map((t: any) => t.towerId));
+      const existingSet = new Set(
+        existingTowers.map((t: { towerId: string }) => t.towerId),
+      );
 
       const newTowers = data.filter(
         (item: any) => !existingSet.has(String(item.towerId)),
       );
 
+      // Etapa 2a: Criar torres NOVAS na Produção
       if (newTowers.length > 0) {
-        logger.info(
-          `[TowerConstructionService] Auto-provisioning ${newTowers.length} NEW towers in Production (skipping ${existingSet.size} existing)`,
-        );
-
-        const productionElements: TowerProductionData[] = newTowers.map(
-          (item: any) => ({
-            projectId,
-            companyId,
-            towerId: String(item.towerId),
-            sequencia: Number(item.sequencia || 0),
-            metadata: {
-              trecho: "",
-              towerType: "Autoportante",
-            },
-          }),
-        );
-
         try {
+          logger.info(
+            `[TowerConstructionService] Auto-provisioning ${newTowers.length} NEW towers in Production (skipping ${existingSet.size} existing)`,
+          );
+
+          const productionElements: TowerProductionData[] = newTowers.map(
+            (item: any) => ({
+              projectId,
+              companyId,
+              towerId: String(item.towerId),
+              sequencia: Number(item.sequencia || 0),
+              metadata: {
+                trecho: "",
+                towerType: "Autoportante",
+                // Já incluir dados técnicos nas novas torres
+                goForward: Number(item.vao || 0),
+                pesoEstrutura: Number(item.pesoEstrutura || 0),
+                totalConcreto: Number(item.pesoConcreto || 0),
+                pesoArmacao: Number(item.aco1 || 0),
+              },
+            }),
+          );
+
           await this.productionRepository.saveMany(productionElements);
           logger.info(
             `[TowerConstructionService] Production auto-provision complete`,
           );
-        } catch (err: any) {
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
           logger.error(
-            `[TowerConstructionService] Production auto-provision failed: ${err.message}`,
+            `[TowerConstructionService] Production auto-provision failed: ${message}`,
           );
+          // NÃO interromper — a importação de dados técnicos já foi salva com sucesso
         }
       } else {
         logger.info(
           `[TowerConstructionService] All ${data.length} towers already exist in Production, skipping auto-provision`,
         );
+      }
+
+      // Etapa 2b: Sincronizar dados técnicos para torres EXISTENTES
+      // Isso garante que campos como vão, peso, concreto sejam atualizados na Produção
+      const existingTowerItems = data.filter((item) =>
+        existingSet.has(String(item.towerId)),
+      );
+
+      if (
+        existingTowerItems.length > 0 &&
+        "syncTechnicalData" in this.productionRepository
+      ) {
+        try {
+          logger.info(
+            `[TowerConstructionService] Syncing technical data for ${existingTowerItems.length} existing towers`,
+          );
+
+          const updates = existingTowerItems.map((item) => ({
+            towerId: String(item.towerId),
+            technicalMetadata: {
+              distancia_vao: Number(item.vao || 0),
+              peso_estrutura: Number(item.pesoEstrutura || 0),
+              peso_concreto: Number(item.pesoConcreto || 0),
+              peso_aco_1: Number(item.aco1 || 0),
+            },
+          }));
+
+          const syncedCount = await (
+            this.productionRepository as unknown as SyncableProductionRepository
+          ).syncTechnicalData(projectId, updates);
+          logger.info(
+            `[TowerConstructionService] Technical data synced for ${syncedCount} towers`,
+          );
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err);
+          logger.error(
+            `[TowerConstructionService] Technical data sync failed: ${message}`,
+          );
+          // NÃO interromper — a importação de dados técnicos já foi salva com sucesso
+        }
       }
     }
 

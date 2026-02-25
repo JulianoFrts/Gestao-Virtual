@@ -50,21 +50,21 @@ export async function POST(request: NextRequest) {
     }
 
     const token = await generateToken({
-      id: user.id!,
-      email: user.email!,
+      id: user.userId as string,
+      email: user.email as string,
       name: (user as any).user?.name || "Funcionário",
-      role: user.role!,
-      status: user.status!,
+      role: (user as any).user?.role || "USER",
+      status: user.status as string,
       companyId: undefined,
       projectId: undefined,
     });
 
     return ApiResponse.json({
       user: {
-        id: user.id,
+        id: user.userId,
         email: user.email,
         name: (user as any).user?.name,
-        role: user.role,
+        role: (user as any).user?.role || "USER",
         registrationNumber: (user as any).user?.registrationNumber,
         cpf: (user as any).user?.cpf,
         companyId: undefined,

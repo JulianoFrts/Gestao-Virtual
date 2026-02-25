@@ -371,6 +371,25 @@ export const userFiltersSchema = z.object({
 });
 
 // ======================================================
+// MAP ELEMENTS / ANCHORS
+// ======================================================
+
+export const anchorSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, "Nome da âncora é obrigatório"),
+  type: z.string().optional(),
+  x: z.number(),
+  y: z.number(),
+  z: z.number(),
+  towerId: z.string().optional().nullable(),
+  projectId: z.string().optional().nullable(),
+  companyId: z.string().optional().nullable(),
+  metadata: z.record(z.any()).optional(),
+});
+
+export const anchorListSchema = z.array(anchorSchema);
+
+// ======================================================
 // TIPOS INFERIDOS
 // ======================================================
 

@@ -3,8 +3,6 @@ import { Navigate, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSync } from "@/contexts/SyncContext";
 import { ShieldAlert } from "lucide-react";
-import { isProtectedSignal, can } from "@/signals/authSignals";
-import { useSignals } from "@preact/signals-react/runtime";
 import { Button } from "@/components/ui/button";
 import { LoadingScreen } from "@/components/shared/LoadingScreen";
 
@@ -23,8 +21,7 @@ export function ProtectedRoute({
   roles,
   isPublic = false
 }: ProtectedRouteProps) {
-  useSignals();
-  const { user, profile, isLoading } = useAuth();
+  const { user, profile, isLoading, can } = useAuth();
   const { isOnline } = useSync();
   const navigate = useNavigate();
   const location = useLocation();
@@ -35,11 +32,13 @@ export function ProtectedRoute({
 
   // Lógica para rotas PÚBLICAS (ex: /auth)
   if (isPublic) {
-    // Se o usuário já está logado e tenta acessar uma rota pública, redireciona para o home
-    if (user) {
+    const { selectedContext } = useAuth();
+    // Se o usuário está logado E tem contexto selecionado, redireciona para dashboard
+    // Se não tem contexto, permite que ele fique na página de Auth para selecionar um.
+    if (user && selectedContext) {
       return <Navigate to="/dashboard" replace />;
     }
-    // Se não está logado, permite ver a rota pública
+    // Se não está logado ou não tem contexto, permite ver a rota pública (ex: login/context selector)
     return <>{children}</>;
   }
 

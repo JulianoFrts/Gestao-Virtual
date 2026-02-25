@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma/client";
-import { TaskStatus } from "@prisma/client";
+import { TaskStatus, Prisma } from "@prisma/client";
 import { ITaskHandler } from "../domain/task-handler.interface";
 
 export class TaskWorker {
@@ -27,18 +27,20 @@ export class TaskWorker {
       try {
         // Tenta capturar uma tarefa atômica mudando de 'pending' para 'processing' em um único passo
         // Isso evita que dois Workers capturem a mesma tarefa simultaneamente
-        const tasks = (await prisma.$queryRaw`
-          UPDATE "task_queue" 
-          SET status = ${TaskStatus.processing}::"TaskStatus", "updated_at" = NOW()
-          WHERE id = (
-            SELECT id FROM "task_queue"
-            WHERE status = ${TaskStatus.pending}::"TaskStatus"
-            ORDER BY "created_at" ASC
-            LIMIT 1
-            FOR UPDATE SKIP LOCKED
-          )
-          RETURNING *
-        `) as any[];
+        const tasks = (await prisma.$queryRaw(
+          Prisma.sql`
+            UPDATE "task_queue" 
+            SET status = ${TaskStatus.processing}::"TaskStatus", "updated_at" = NOW()
+            WHERE id = (
+              SELECT id FROM "task_queue"
+              WHERE status = ${TaskStatus.pending}::"TaskStatus"
+              ORDER BY "created_at" ASC
+              LIMIT 1
+              FOR UPDATE SKIP LOCKED
+            )
+            RETURNING *
+          `
+        )) as any[];
 
         const task = tasks && tasks.length > 0 ? tasks[0] : null;
 
@@ -88,7 +90,9 @@ export class TaskWorker {
           data: { status: TaskStatus.completed, updatedAt: new Date() },
         });
       } else {
-        await prisma.$executeRaw`UPDATE "task_queue" SET status = ${TaskStatus.completed}::"TaskStatus", "updated_at" = NOW() WHERE id = ${task.id}`;
+        await prisma.$executeRaw(
+          Prisma.sql`UPDATE "task_queue" SET status = ${TaskStatus.completed}::"TaskStatus", "updated_at" = NOW() WHERE id = ${task.id}`
+        );
       }
     } catch (error: any) {
       await this.markAsFailed(task.id, error.message);
@@ -108,7 +112,9 @@ export class TaskWorker {
           },
         });
       } else {
-        await prisma.$executeRaw`UPDATE "task_queue" SET status = ${TaskStatus.failed}::"TaskStatus", error = ${errorMessage}, "updated_at" = NOW() WHERE id = ${id}`;
+        await prisma.$executeRaw(
+          Prisma.sql`UPDATE "task_queue" SET status = ${TaskStatus.failed}::"TaskStatus", error = ${errorMessage}, "updated_at" = NOW() WHERE id = ${id}`
+        );
       }
     } catch (err) {
       // Silencioso

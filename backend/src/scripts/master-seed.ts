@@ -12,7 +12,7 @@ async function runScript(scriptName: string) {
         execSync(`npx tsx "${scriptPath}"`, { stdio: 'inherit', env: process.env });
         console.log(`✅ ${scriptName} concluído com sucesso!`);
     } catch (error) {
-        console.error(`❌ Erro ao executar ${scriptName}:`, error.message);
+        console.error(`❌ Erro ao executar ${scriptName}:`, (error as any).message);
         throw error;
     }
 }

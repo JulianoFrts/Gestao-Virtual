@@ -13,7 +13,7 @@ import { PasswordResetRequestForm } from '@/components/auth/PasswordResetRequest
 import { PasswordRecovery2FAForm } from '@/components/auth/PasswordRecovery2FAForm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Logo } from '@/components/common/Logo';
-import { logoUrlSignal } from "@/signals/settingsSignals";
+import { useSettings } from "@/contexts/SettingsContext";
 import {
   Dialog,
   DialogContent,
@@ -49,6 +49,7 @@ export default function Auth() {
   const [showContextSelector, setShowContextSelector] = useState(false);
 
   const { login, loginOffline, getLastOfflineAccount, setMfaVerified, user, selectedContext, isLoading: isAuthLoading, bypassAuth } = useAuth();
+  const { logoUrl } = useSettings();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -215,9 +216,9 @@ export default function Auth() {
 
           <CardHeader className="text-center pb-2 relative z-10">
             <div className="flex flex-col items-center justify-center mb-6">
-                {logoUrlSignal.value ? (
+                {logoUrl ? (
                     <img
-                        src={logoUrlSignal.value}
+                        src={logoUrl}
                         alt="Logo"
                         className="max-h-20 object-contain drop-shadow-xl"
                     />

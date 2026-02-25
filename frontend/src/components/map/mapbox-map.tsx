@@ -183,6 +183,7 @@ export function MapboxMap({
             //map.setTerrain({ 'source': 'mapbox-dem', 'exaggeration': 1.0 });
             map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.0 });
 
+            /*
             // Add Fog for realistic horizon and occlusion of distant objects
             map.setFog({
                 'range': [0.5, 10],
@@ -191,7 +192,7 @@ export function MapboxMap({
                 'space-color': '#000000',
                 'horizon-blend': 0.1
             });
-
+            */
             // PREVENTIVE FIX: Explicitly add common missing icons to stop errors immediately
             const addPlaceholder = (id: string) => {
                 if (map.hasImage(id)) return;

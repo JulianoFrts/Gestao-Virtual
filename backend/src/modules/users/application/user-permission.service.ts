@@ -83,7 +83,7 @@ export class UserPermissionService {
       // 5. Buscar Permissões Delegadas por Cargo no Projeto
       if (projectId && userId && user?.functionId) {
         const delegatedPerms =
-          await this.repository.findProjectDelegations(projectId, user.functionId);
+          await this.repository.findProjectDelegations(projectId, user.functionId as string);
 
         delegatedPerms.forEach((item: any) => {
           const moduleCode = item.permissionModule?.code;

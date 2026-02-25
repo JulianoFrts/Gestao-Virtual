@@ -27,7 +27,6 @@ import { cn } from '@/lib/utils';
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { utils, writeFile } from "xlsx";
-import { selectedContextSignal } from "@/signals/authSignals";
 
 interface ConstructionImportModalProps {
   isOpen: boolean;
@@ -40,11 +39,10 @@ const ConstructionImportModal = ({
   onClose,
   projectId
 }: ConstructionImportModalProps) => {
-  const { profile } = useAuth();
+  const { profile, selectedContext } = useAuth();
   const { toast } = useToast();
   
-  const selectedContext = selectedContextSignal.value;
-  const initialCompanyId = selectedContext?.companyId || 'company-dev-xyz';
+  const companyId = selectedContext?.companyId || profile?.companyId;
 
   const [items, setItems] = useState<RawConstructionImportItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -110,11 +108,16 @@ const ConstructionImportModal = ({
       return;
     }
 
+    if (!companyId) {
+      toast({ title: 'Empresa não identificada', description: 'O contexto da empresa é necessário para importar dados.', variant: 'destructive' });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const res = await orionApi.post('/tower-construction', {
         projectId,
-        companyId: profile?.companyId || initialCompanyId,
+        companyId,
         data: validItems
       });
 

@@ -5,6 +5,8 @@ import { logger } from "@/lib/utils/logger";
 import { UserService } from "@/modules/users/application/user.service";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
 import { PrismaSystemAuditRepository } from "@/modules/audit/infrastructure/prisma-system-audit.repository";
+import { Validator } from "@/lib/utils/api/validator";
+import { deleteUserSafeSchema } from "@/lib/utils/validators/route-schemas";
 
 const userService = new UserService(
   new PrismaUserRepository(),
@@ -15,11 +17,17 @@ export async function POST(request: NextRequest) {
   try {
     const admin = await requireAdmin();
     const body = await request.json();
-    const userId = body.user_id || body.userId;
 
-    if (!userId) {
-      return ApiResponse.badRequest("User ID is required");
-    }
+    // Aceitar tanto user_id quanto userId
+    const normalizedBody = {
+      userId: body.user_id || body.userId,
+      confirmDelete: body.confirmDelete,
+    };
+
+    const validation = Validator.validate(deleteUserSafeSchema, normalizedBody);
+    if (!validation.success) return validation.response;
+
+    const { userId } = validation.data;
 
     // Prevent deleting self
     if (userId === admin.id) {

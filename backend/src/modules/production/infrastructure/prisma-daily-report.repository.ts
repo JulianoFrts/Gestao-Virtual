@@ -1,31 +1,48 @@
-import { prisma } from "@/lib/prisma/client";
+import { prisma, ExtendedPrismaClient } from "@/lib/prisma/client";
 import { DailyReportRepository } from "../domain/daily-report.repository";
+import {
+  DailyReportEntity,
+  CreateDailyReportDTO,
+  UpdateDailyReportDTO,
+  DailyReportFiltersDTO,
+} from "../domain/daily-report.dto";
+import { PrismaBaseRepository } from "../../common/infrastructure/prisma-base.repository";
 
-export class PrismaDailyReportRepository implements DailyReportRepository {
-  async findAll(
-    where: any,
-    skip: number,
-    take: number,
-    orderBy: any,
-  ): Promise<any[]> {
-    return prisma.dailyReport.findMany({
-      where,
-      skip,
-      take,
-      orderBy,
+export class PrismaDailyReportRepository
+  extends PrismaBaseRepository<
+    DailyReportEntity,
+    CreateDailyReportDTO,
+    UpdateDailyReportDTO,
+    DailyReportFiltersDTO
+  >
+  implements DailyReportRepository
+{
+  protected model = this.prisma.dailyReport;
+
+  constructor(prismaInstance?: ExtendedPrismaClient) {
+    super(prismaInstance);
+  }
+
+  async findAll(params: {
+    where?: DailyReportFiltersDTO;
+    skip?: number;
+    take?: number;
+    orderBy?: Record<string, "asc" | "desc">;
+  }): Promise<DailyReportEntity[]> {
+    return this.model.findMany({
+      where: params.where as any,
+      skip: params.skip,
+      take: params.take,
+      orderBy: params.orderBy,
       include: {
         team: { select: { id: true, name: true } },
         user: { select: { id: true, name: true } },
       },
-    });
+    }) as Promise<DailyReportEntity[]>;
   }
 
-  async count(where: any): Promise<number> {
-    return prisma.dailyReport.count({ where });
-  }
-
-  async findById(id: string): Promise<any | null> {
-    return prisma.dailyReport.findUnique({
+  async findById(id: string): Promise<DailyReportEntity | null> {
+    return this.model.findUnique({
       where: { id },
       include: {
         team: {
@@ -39,23 +56,26 @@ export class PrismaDailyReportRepository implements DailyReportRepository {
         user: { select: { id: true, name: true } },
         approvedBy: { select: { id: true, name: true } },
       },
-    });
+    }) as Promise<DailyReportEntity | null>;
   }
 
-  async create(data: any): Promise<any> {
-    return prisma.dailyReport.create({
-      data,
+  async create(data: CreateDailyReportDTO): Promise<DailyReportEntity> {
+    return this.model.create({
+      data: data as any,
       include: {
         team: { select: { id: true, name: true } },
         user: { select: { id: true, name: true } },
       },
-    });
+    }) as Promise<DailyReportEntity>;
   }
 
-  async update(id: string, data: any): Promise<any> {
-    return prisma.dailyReport.update({
+  async update(
+    id: string,
+    data: UpdateDailyReportDTO,
+  ): Promise<DailyReportEntity> {
+    return this.model.update({
       where: { id },
-      data,
+      data: data as any,
       include: {
         team: {
           select: {
@@ -67,21 +87,21 @@ export class PrismaDailyReportRepository implements DailyReportRepository {
         user: { select: { id: true, name: true } },
         approvedBy: { select: { id: true, name: true } },
       },
-    });
+    }) as Promise<DailyReportEntity>;
   }
 
-  async updateMany(ids: string[], data: any): Promise<any> {
+  async updateMany(ids: string[], data: UpdateDailyReportDTO): Promise<any> {
     const updates = ids.map((id) =>
-      prisma.dailyReport.update({
+      this.model.update({
         where: { id },
-        data,
+        data: data as any,
       }),
     );
     return Promise.all(updates);
   }
 
-  async findAllMinimal(ids: string[]): Promise<any[]> {
-    return prisma.dailyReport.findMany({
+  async findAllMinimal(ids: string[]): Promise<DailyReportEntity[]> {
+    return this.model.findMany({
       where: { id: { in: ids } },
       select: {
         id: true,
@@ -98,6 +118,6 @@ export class PrismaDailyReportRepository implements DailyReportRepository {
           },
         },
       },
-    });
+    }) as Promise<DailyReportEntity[]>;
   }
 }

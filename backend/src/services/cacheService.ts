@@ -6,13 +6,14 @@
  */
 
 import { logger } from "@/lib/utils/logger";
+import { ICacheService } from "./cache.interface";
 
 interface CacheEntry<T> {
   value: T;
   expiresAt: number;
 }
 
-class CacheService {
+export class CacheService implements ICacheService {
   private cache: Map<string, CacheEntry<any>> = new Map();
   private cleanupInterval: NodeJS.Timeout;
 

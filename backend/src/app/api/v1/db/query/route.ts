@@ -30,28 +30,47 @@ export async function POST(request: NextRequest) {
 
     const trimmedQuery = query.trim().toLowerCase();
 
-    // Determina se a query deve retornar dados ou apenas executar
-    const isReadOnly =
-      trimmedQuery.startsWith("select") ||
-      trimmedQuery.startsWith("show") ||
-      trimmedQuery.startsWith("describe") ||
-      trimmedQuery.startsWith("explain") ||
-      trimmedQuery.startsWith("with");
+    // SEGURANÇA: Bloquear comandos destrutivos — apenas leitura permitida
+    const ALLOWED_PREFIXES = [
+      "select",
+      "show",
+      "describe",
+      "explain",
+      "with",
+    ] as const;
+    const BLOCKED_KEYWORDS = [
+      "drop",
+      "truncate",
+      "alter",
+      "grant",
+      "revoke",
+      "create",
+    ] as const;
+
+    const isReadOnly = ALLOWED_PREFIXES.some((prefix) =>
+      trimmedQuery.startsWith(prefix),
+    );
+    const hasBlockedKeyword = BLOCKED_KEYWORDS.some((kw) =>
+      trimmedQuery.includes(kw),
+    );
+
+    if (!isReadOnly || hasBlockedKeyword) {
+      logger.warn("SQL bloqueado por segurança", {
+        query: query.substring(0, 100),
+      });
+      return ApiResponse.forbidden(
+        "Apenas queries de leitura (SELECT/SHOW/EXPLAIN) são permitidas pelo console SQL.",
+      );
+    }
 
     let result;
 
-    logger.info("Executando query SQL manual", {
+    logger.info("Executando query SQL manual (somente leitura)", {
       query: query.substring(0, 100),
     });
 
-    if (isReadOnly) {
-      // queryRawUnsafe retorna o array de resultados
-      result = await prisma.$queryRawUnsafe(query);
-    } else {
-      // executeRawUnsafe retorna o número de linhas afetadas
-      const affectedRows = await prisma.$executeRawUnsafe(query);
-      result = { affectedRows };
-    }
+    // Usando $queryRawUnsafe para queries ad-hoc de leitura (admin-only)
+    result = await prisma.$queryRawUnsafe(query);
 
     return ApiResponse.json(result);
   } catch (error: any) {

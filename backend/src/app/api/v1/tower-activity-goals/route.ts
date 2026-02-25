@@ -4,7 +4,7 @@ import { TowerActivityService } from "@/modules/tower/application/tower-activity
 import { requireAuth } from "@/lib/auth/session";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 
-import { PrismaWorkStageRepository } from "@/modules/work-stages/domain/work-stage.repository";
+import { PrismaWorkStageRepository } from "@/modules/work-stages/infrastructure/prisma-work-stage.repository";
 
 const repository = new PrismaTowerActivityRepository();
 const workStageRepository = new PrismaWorkStageRepository();

@@ -19,12 +19,8 @@ import { useEmployees } from '@/hooks/useEmployees';
 import { useTeams } from '@/hooks/useTeams';
 import { useTimeRecords } from '@/hooks/useTimeRecords';
 import { useDailyReports } from '@/hooks/useDailyReports';
-import { isProtectedSignal, can } from "@/signals/authSignals";
-import { useSignals } from "@preact/signals-react/runtime";
-
 export default function Dashboard() {
-  useSignals();
-  const { profile, user } = useAuth();
+  const { profile, user, can } = useAuth();
   const navigate = useNavigate();
   const { employees, isLoading: loadingEmployees } = useEmployees();
   const { teams, isLoading: loadingTeams } = useTeams();

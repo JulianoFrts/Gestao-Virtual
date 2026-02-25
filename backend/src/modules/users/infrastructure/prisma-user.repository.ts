@@ -1,216 +1,166 @@
-import { prisma } from "@/lib/prisma/client";
-import { User, Prisma } from "@prisma/client";
+import { prisma, ExtendedPrismaClient } from "@/lib/prisma/client";
+import { Prisma } from "@prisma/client";
 import { UserRepository } from "../domain/user.repository";
+import {
+  UserEntity,
+  UserFiltersDTO,
+  CreateUserDTO,
+  UpdateUserDTO,
+} from "../domain/user.dto";
+import { PrismaBaseRepository } from "../../common/infrastructure/prisma-base.repository";
 
-export class PrismaUserRepository implements UserRepository {
-  private prisma: any;
+export class PrismaUserRepository
+  extends PrismaBaseRepository<
+    UserEntity,
+    CreateUserDTO,
+    UpdateUserDTO,
+    UserFiltersDTO
+  >
+  implements UserRepository
+{
+  protected model = this.prisma.user;
 
-  constructor(prismaInstance?: any) {
-    this.prisma = prismaInstance || prisma;
+  constructor(prismaInstance?: ExtendedPrismaClient) {
+    super(prismaInstance);
   }
 
-  async findAll(params: {
-    where: Prisma.UserWhereInput;
-    skip: number;
-    take: number;
-    orderBy?: Prisma.UserOrderByWithRelationInput;
-    select?: Prisma.UserSelect;
-  }): Promise<Partial<User>[]> {
-    return this.prisma.user.findMany({
-      where: params.where,
-      skip: params.skip,
-      take: params.take,
-      orderBy: params.orderBy,
-      select: params.select,
-    });
-  }
-
-  async count(where: Prisma.UserWhereInput): Promise<number> {
-    return this.prisma.user.count({ where });
-  }
-
-  async findById(
-    id: string,
-    select?: Prisma.UserSelect,
-  ): Promise<Partial<User> | null> {
-    return this.prisma.user.findUnique({
-      where: { id },
-      select,
-    });
-  }
-
-  async findByEmail(email: string): Promise<Partial<User> | null> {
+  async findByEmail(email: string): Promise<UserEntity | null> {
     const authCredential = await this.prisma.authCredential.findUnique({
       where: { email: email.toLowerCase().trim() },
       include: { user: true },
     });
-    return authCredential?.user ?? null;
+    return (authCredential?.user as unknown as UserEntity) ?? null;
   }
 
-  async create(data: any, select?: Prisma.UserSelect): Promise<Partial<User>> {
+  async create(
+    data: CreateUserDTO,
+    select?: Record<string, unknown>,
+  ): Promise<UserEntity> {
     const {
-      id: _bodyId,
       email,
       password,
       role,
       status,
+      isSystemAdmin,
+      permissions,
       companyId,
       projectId,
       siteId,
-      zipCode,
-      street,
-      number,
-      neighborhood,
-      city,
-      state,
-      fullName,
-      mfa_enabled,
-      mfa_secret,
-      ...userData
-    } = data;
+      registrationNumber,
+      hierarchyLevel,
+      laborType,
+      iapName,
+      functionId,
+      ...personalData
+    } = data as any;
 
     const createData: any = {
-      ...userData,
+      ...personalData,
       authCredential: {
         create: {
           email,
-          password,
-          role: role || "USER",
-          status: status || "PENDING_VERIFICATION",
-          mfaEnabled: mfa_enabled ?? false,
-          mfaSecret: mfa_secret || null,
+          password: password || "",
+          role: (role as any) || "OPERATIONAL",
+          status: (status as any) || "PENDING_VERIFICATION",
+          isSystemAdmin: !!isSystemAdmin,
+          permissions: permissions || {},
         },
       },
-    };
-
-    if (companyId || projectId || siteId) {
-      createData.affiliation = {
+      affiliation: {
         create: {
           companyId,
           projectId,
           siteId,
+          registrationNumber,
+          hierarchyLevel: hierarchyLevel || 0,
+          laborType: laborType || "MOD",
+          iapName,
+          functionId,
         },
-      };
-    }
-
-    if (zipCode || street || neighborhood || city || state) {
-      createData.address = {
-        create: {
-          cep: zipCode || "",
-          logradouro: street || "",
-          bairro: neighborhood || "",
-          localidade: city || "",
-          uf: state || "",
-          estado: "",
-          number: number || null,
-        },
-      };
-    }
+      },
+    };
 
     return this.prisma.user.create({
       data: createData,
-      select,
-    });
+      select: select as Prisma.UserSelect,
+    }) as Promise<UserEntity>;
   }
 
+  // Specialized update to handle nested relations (Auth, Affiliation)
   async update(
     id: string,
-    data: any,
-    select?: Prisma.UserSelect,
-  ): Promise<Partial<User>> {
+    data: UpdateUserDTO,
+    select?: Record<string, unknown>,
+  ): Promise<UserEntity> {
     const {
-      id: _bodyId,
       email,
       password,
       role,
       status,
+      isSystemAdmin,
+      permissions,
       companyId,
       projectId,
       siteId,
-      zipCode,
-      street,
-      number,
-      neighborhood,
-      city,
-      state,
-      fullName,
-      mfa_enabled,
-      mfa_secret,
-      ...userData
-    } = data;
+      registrationNumber,
+      hierarchyLevel,
+      laborType,
+      iapName,
+      functionId,
+      ...personalData
+    } = data as any;
 
-    const updateData: any = { ...userData };
-    if (fullName && !updateData.name) {
-      updateData.name = fullName;
-    }
+    const updateData: Prisma.UserUpdateInput = {
+      ...personalData,
+    } as unknown as Prisma.UserUpdateInput;
 
-    if (
-      email ||
-      password ||
-      role ||
-      status ||
-      mfa_enabled !== undefined ||
-      mfa_secret !== undefined
-    ) {
+    // 1. Atualizar Setor de Segurança
+    if (email || password || role || status || isSystemAdmin !== undefined || permissions) {
       updateData.authCredential = {
         update: {
           ...(email && { email }),
           ...(password && { password }),
-          ...(role && { role }),
-          ...(status && { status }),
-          ...(mfa_enabled !== undefined && { mfaEnabled: mfa_enabled }),
-          ...(mfa_secret !== undefined && { mfaSecret: mfa_secret }),
+          ...(role && { role: role as any }),
+          ...(status && { status: status as any }),
+          ...(isSystemAdmin !== undefined && { isSystemAdmin }),
+          ...(permissions && { permissions }),
         },
       };
     }
 
-    if (
-      companyId !== undefined ||
-      projectId !== undefined ||
-      siteId !== undefined
-    ) {
+    // 2. Atualizar Setor de Obra / Operacional
+    const hasAffiliationData = 
+      companyId !== undefined || 
+      projectId !== undefined || 
+      siteId !== undefined || 
+      registrationNumber !== undefined ||
+      hierarchyLevel !== undefined ||
+      laborType !== undefined ||
+      iapName !== undefined ||
+      functionId !== undefined;
+
+    if (hasAffiliationData) {
       updateData.affiliation = {
         upsert: {
           create: {
             companyId,
             projectId,
             siteId,
+            registrationNumber,
+            hierarchyLevel: hierarchyLevel || 0,
+            laborType: laborType || "MOD",
+            iapName,
+            functionId,
           },
           update: {
             ...(companyId !== undefined && { companyId }),
             ...(projectId !== undefined && { projectId }),
             ...(siteId !== undefined && { siteId }),
-          },
-        },
-      };
-    }
-
-    if (
-      zipCode !== undefined ||
-      street !== undefined ||
-      number !== undefined ||
-      neighborhood !== undefined ||
-      city !== undefined ||
-      state !== undefined
-    ) {
-      updateData.address = {
-        upsert: {
-          create: {
-            cep: zipCode || "",
-            logradouro: street || "",
-            bairro: neighborhood || "",
-            localidade: city || "",
-            uf: state || "",
-            estado: "",
-            number: number || null,
-          },
-          update: {
-            ...(zipCode !== null && { cep: zipCode }),
-            ...(street !== null && { logradouro: street }),
-            ...(neighborhood !== null && { bairro: neighborhood }),
-            ...(city !== null && { localidade: city }),
-            ...(state !== null && { uf: state }),
-            ...(number !== undefined && { number: number || null }),
+            ...(registrationNumber !== undefined && { registrationNumber }),
+            ...(hierarchyLevel !== undefined && { hierarchyLevel }),
+            ...(laborType !== undefined && { laborType }),
+            ...(iapName !== undefined && { iapName }),
+            ...(functionId !== undefined && { functionId }),
           },
         },
       };
@@ -219,61 +169,40 @@ export class PrismaUserRepository implements UserRepository {
     return this.prisma.user.update({
       where: { id },
       data: updateData,
-      select,
-    });
+      select: select as Prisma.UserSelect,
+    }) as Promise<UserEntity>;
   }
 
-  async updateMany(ids: string[], data: any): Promise<{ count: number }> {
-    // Nota: updateMany do Prisma não suporta relações aninhadas (upsert de logs/endereços)
-    // Então para manter a integridade total do nosso DDD (que inclui endereços),
-    // usaremos uma transação com updates individuais se houver dados complexos,
-    // ou updateMany direto se forem dados simples.
-
+  async updateMany(
+    ids: string[],
+    data: UpdateUserDTO,
+  ): Promise<{ count: number }> {
+    const updateInput = data as Record<string, unknown>;
     const hasComplexData =
-      data.zipCode ||
-      data.street ||
-      data.number ||
-      data.neighborhood ||
-      data.city ||
-      data.state ||
+      updateInput.zipCode ||
+      updateInput.street ||
+      updateInput.number ||
+      updateInput.neighborhood ||
+      updateInput.city ||
+      updateInput.state ||
       data.email ||
-      data.password;
+      data.password ||
+      data.companyId !== undefined ||
+      data.projectId !== undefined ||
+      data.siteId !== undefined;
 
     if (!hasComplexData) {
-      // Otimização: Update direto se forem apenas campos da tabela User (ex: siteId, status, role)
-      const { companyId, projectId, siteId, fullName, isActive, ...userData } =
-        data;
-
-      const flatData: any = { ...userData };
-      if (fullName) flatData.name = fullName;
-      if (isActive !== undefined)
-        flatData.status = isActive ? "ACTIVE" : "INACTIVE";
-      if (
-        companyId !== undefined ||
-        projectId !== undefined ||
-        siteId !== undefined
-      ) {
-        // Prisma updateMany não aceita Relations.
-        // Se precisar mudar canteiro em massa, temos que usar transação ou raw SQL
-        // Para garantir consistência com a estrutura atual, usamos transação.
-        return this.prisma.$transaction(async (tx: any) => {
-          for (const id of ids) {
-            await this.update(id, data);
-          }
-          return { count: ids.length };
-        });
-      }
-
+      const { ...userData } = data as Record<string, unknown>;
       return this.prisma.user.updateMany({
         where: { id: { in: ids } },
-        data: flatData,
+        data: userData as Prisma.UserUpdateManyMutationInput,
       });
     }
 
     // Fallback: Transação para dados complexos (Relações)
-    return this.prisma.$transaction(async (tx: any) => {
+    return this.prisma.$transaction(async (tx) => {
       let count = 0;
-      const repoWithTx = new PrismaUserRepository(tx);
+      const repoWithTx = new PrismaUserRepository(tx as ExtendedPrismaClient);
       for (const id of ids) {
         await repoWithTx.update(id, data);
         count++;
@@ -282,16 +211,10 @@ export class PrismaUserRepository implements UserRepository {
     });
   }
 
-  async delete(id: string): Promise<void> {
-    await this.prisma.user.delete({
-      where: { id },
-    });
-  }
-
   async findByIdentifier(
     identifier: string,
-    select?: Prisma.UserSelect,
-  ): Promise<Partial<User> | null> {
+    select?: Record<string, unknown>,
+  ): Promise<UserEntity | null> {
     const user = await this.prisma.user.findFirst({
       where: {
         OR: [
@@ -299,10 +222,10 @@ export class PrismaUserRepository implements UserRepository {
           { cpf: identifier.replace(/\D/g, "") },
         ],
       },
-      select,
+      select: select as Prisma.UserSelect,
     });
 
-    if (user) return user;
+    if (user) return user as unknown as UserEntity;
 
     const authCredential = await this.prisma.authCredential.findFirst({
       where: {
@@ -314,7 +237,7 @@ export class PrismaUserRepository implements UserRepository {
       include: { user: true },
     });
 
-    return authCredential?.user ?? null;
+    return (authCredential?.user as unknown as UserEntity) ?? null;
   }
 
   async deduplicateCPFs(): Promise<number> {
@@ -370,7 +293,11 @@ export class PrismaUserRepository implements UserRepository {
         });
         fixCount++;
       } catch (error) {
-        console.error(`[Maintenance] Erro ao sanitizar ID ${item.id}:`, error);
+        const err = error as Error;
+        console.error(
+          `[Maintenance] Erro ao sanitizar ID ${item.id}:`,
+          err.message,
+        );
       }
     }
 
@@ -378,11 +305,14 @@ export class PrismaUserRepository implements UserRepository {
     return fixCount;
   }
 
-  async upsertAddress(userId: string, data: any): Promise<any> {
+  async upsertAddress(
+    userId: string,
+    data: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
     return this.prisma.userAddress.upsert({
       where: { userId },
-      update: data,
-      create: { ...data, userId },
-    });
+      update: data as Prisma.UserAddressUpdateInput,
+      create: { ...(data as Prisma.UserAddressCreateInput), userId } as any,
+    }) as Promise<Record<string, unknown>>;
   }
 }

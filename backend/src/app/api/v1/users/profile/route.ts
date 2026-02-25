@@ -26,7 +26,7 @@ export async function GET() {
     });
   } catch (error: any) {
     if (error.message === "User not found")
-      return ApiResponse.notFound(MESSAGES.USER.NOT_FOUND);
+      return ApiResponse.notFound(MESSAGES.ERROR.NOT_FOUND);
     return handleApiError(error, "src/app/api/v1/users/profile/route.ts#GET");
   }
 }
@@ -83,12 +83,12 @@ export async function PUT(request: NextRequest) {
     );
 
     // Invalidar cache de sessão após atualização de perfil
-    await invalidateSessionCache(sessionUser.id);
+    await invalidateSessionCache();
 
     return ApiResponse.json(updatedUser, MESSAGES.SUCCESS.UPDATED);
   } catch (error: any) {
     if (error.message === "User not found")
-      return ApiResponse.notFound(MESSAGES.USER.NOT_FOUND);
+      return ApiResponse.notFound(MESSAGES.ERROR.NOT_FOUND);
     console.log(error);
     return handleApiError(error, "src/app/api/v1/users/profile/route.ts#PUT");
   }

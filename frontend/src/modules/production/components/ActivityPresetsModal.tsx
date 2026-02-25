@@ -69,6 +69,16 @@ const ActivityPresetsModal = ({
       return;
     }
 
+    if (!projectId || projectId === "all") {
+      toast.error("Projeto não selecionado");
+      return;
+    }
+
+    if (!companyId || companyId === "all") {
+      toast.error("Empresa não selecionada");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       // Build hierarchy: for each selected category, create parent + children

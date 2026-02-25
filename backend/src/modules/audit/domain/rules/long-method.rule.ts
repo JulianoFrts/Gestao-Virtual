@@ -28,7 +28,6 @@ export class LongMethodRule implements AuditRule {
                         severity: "LOW",
                         message: `Função/Método na linha ${start + 1} possui ${lines} linhas.`,
                         violation: "Long Method",
-                        severity: "LOW",
                         suggestion: "Extraia blocos lógicos para métodos auxiliares.",
                     });
                 }

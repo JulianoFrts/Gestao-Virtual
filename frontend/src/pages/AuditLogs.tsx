@@ -340,7 +340,7 @@ export default function AuditLogs() {
   const [streamSortConfig, setStreamSortConfig] = useState<{
     key: string;
     direction: "asc" | "desc";
-  } | null>(null);
+  } | null>({ key: "severity", direction: "desc" });
 
   const handleSortStream = (key: string) => {
     let direction: "asc" | "desc" = "asc";
@@ -354,25 +354,26 @@ export default function AuditLogs() {
     setStreamSortConfig({ key, direction });
   };
 
+  const SEVERITY_WEIGHT: Record<string, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 };
+
   const sortedStreamLogs = useMemo(() => {
     const logs = streamLogs.filter((l) => l.type === "violation");
-    if (!streamSortConfig) return logs;
+
+    // Ordenação padrão: sempre por severidade DESC se nenhum config
+    const config = streamSortConfig || { key: "severity", direction: "desc" as const };
 
     return [...logs].sort((a, b) => {
-      let aValue = a.data[streamSortConfig.key];
-      let bValue = b.data[streamSortConfig.key];
+      let aValue = a.data[config.key];
+      let bValue = b.data[config.key];
 
       // Tratamento especial para severidade
-      if (streamSortConfig.key === "severity") {
-        const severityMap: Record<string, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 };
-        aValue = severityMap[aValue] || 0;
-        bValue = severityMap[bValue] || 0;
+      if (config.key === "severity") {
+        aValue = SEVERITY_WEIGHT[aValue] || 0;
+        bValue = SEVERITY_WEIGHT[bValue] || 0;
       }
 
-      if (aValue < bValue)
-        return streamSortConfig.direction === "asc" ? -1 : 1;
-      if (aValue > bValue)
-        return streamSortConfig.direction === "asc" ? 1 : -1;
+      if (aValue < bValue) return config.direction === "asc" ? -1 : 1;
+      if (aValue > bValue) return config.direction === "asc" ? 1 : -1;
       return 0;
     });
   }, [streamLogs, streamSortConfig]);
@@ -411,19 +412,32 @@ export default function AuditLogs() {
     const violations = streamLogs.filter((l) => l.type === "violation");
     if (violations.length === 0) return "Nenhuma violação encontrada.";
 
+    // Ordenar por severidade: HIGH > MEDIUM > LOW
+    const sorted = [...violations].sort((a, b) => {
+      return (SEVERITY_WEIGHT[b.data.severity] || 0) - (SEVERITY_WEIGHT[a.data.severity] || 0);
+    });
+
     let md = "# Relatório de Auditoria GESTÃO VIRTUAL e demandas de refatorações e melhorias!\n\n";
     md += "| N° | Severidade | Arquivo | Descrição do Problema | Plano de Refatoração |\n";
     md += "| :--- | :--- | :--- | :--- | :--- |\n";
-    violations.forEach((v) => {
-      md += `| ${v.data.index} | ${v.data.severity} | ${v.data.file} | **${v.data.violation}**: ${v.data.message || ''} | ${v.data.suggestion || '-'} |\n`;
+    sorted.forEach((v, i) => {
+      md += `| ${i + 1} | ${v.data.severity} | ${v.data.file} | **${v.data.violation}**: ${v.data.message || ''} | ${v.data.suggestion || '-'} |\n`;
     });
     return md;
   };
 
   const generateCSVReport = (data: any[]) => {
     if (data.length === 0) return "";
+
+    // Ordenar por severidade: HIGH > MEDIUM > LOW
+    const sorted = [...data].sort((a, b) => {
+      const sevA = a.severity || a.data?.severity;
+      const sevB = b.severity || b.data?.severity;
+      return (SEVERITY_WEIGHT[sevB] || 0) - (SEVERITY_WEIGHT[sevA] || 0);
+    });
+
     const headers = ["N", "Severidade", "Arquivo", "Tipo de Violacao", "Descricao", "Plano de Refatoracao"];
-    const rows = data.map((v, i) => [
+    const rows = sorted.map((v, i) => [
       i + 1,
       v.severity || v.data?.severity,
       v.file || v.data?.file,

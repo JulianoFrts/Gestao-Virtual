@@ -1,6 +1,9 @@
 import {
   ActivityStatus,
   ProductionProgress as IProductionProgress,
+  ProgressHistoryEntry,
+  DailyProductionRecord,
+  ActivityReference,
 } from "./production.repository";
 
 export class ProductionProgress implements IProductionProgress {
@@ -12,11 +15,13 @@ export class ProductionProgress implements IProductionProgress {
   progressPercent: number;
   startDate?: Date | null;
   endDate?: Date | null;
-  history: any[];
-  dailyProduction: Record<string, any>;
+  history: ProgressHistoryEntry[];
+  dailyProduction: Record<string, DailyProductionRecord>;
   requiresApproval?: boolean;
   approvalReason?: string | null;
-  activity?: any;
+  activity?: ActivityReference;
+  element?: Record<string, unknown>;
+  project?: Record<string, unknown>;
   updatedAt?: Date;
   createdAt?: Date;
 
@@ -33,22 +38,48 @@ export class ProductionProgress implements IProductionProgress {
     this.approvalReason = data.approvalReason;
     this.startDate = data.startDate;
     this.endDate = data.endDate;
-    this.activity = data.activity;
+    this.activity = data.activity as ActivityReference;
 
     // Fallback logic for older records missing top-level dates
     if (!this.startDate || !this.endDate) {
       const history = Array.isArray(this.history) ? this.history : [];
-      const finishedLog = history.find((h: any) => h.status === 'FINISHED' || (h.progressPercent || 0) >= 100);
-      
+      const finishedLog = history.find(
+        (h: ProgressHistoryEntry) =>
+          h.status === "FINISHED" || (h.progressPercent || 0) >= 100,
+      );
+
+      const toDate = (v: unknown): Date | null => {
+        if (!v) return null;
+        if (v instanceof Date) return v;
+        if (typeof v === "string") return new Date(v);
+        return null;
+      };
+
       if (!this.startDate) {
         const firstLog = history[0];
-        this.startDate = firstLog?.finalStartDate || firstLog?.startDate || firstLog?.timestamp || data.createdAt || null;
+        this.startDate =
+          toDate(firstLog?.finalStartDate) ??
+          toDate(firstLog?.startDate) ??
+          toDate(firstLog?.timestamp) ??
+          data.createdAt ??
+          null;
       }
-      if (!this.endDate && (this.currentStatus === 'FINISHED' || Number(this.progressPercent) >= 100)) {
-        this.endDate = finishedLog?.finalEndDate || finishedLog?.endDate || finishedLog?.timestamp || data.updatedAt || null;
+      if (
+        !this.endDate &&
+        (this.currentStatus === "FINISHED" ||
+          Number(this.progressPercent) >= 100)
+      ) {
+        this.endDate =
+          toDate(finishedLog?.finalEndDate) ??
+          toDate(finishedLog?.endDate) ??
+          toDate(finishedLog?.timestamp) ??
+          data.updatedAt ??
+          null;
       }
     }
 
+    this.element = data.element;
+    this.project = data.project;
     this.updatedAt = data.updatedAt;
     this.createdAt = data.createdAt;
   }
@@ -59,7 +90,7 @@ export class ProductionProgress implements IProductionProgress {
   public recordProgress(
     status: ActivityStatus,
     progress: number,
-    metadata: any,
+    metadata: Record<string, unknown>,
     userId?: string,
   ): void {
     this.currentStatus = status;
@@ -82,7 +113,7 @@ export class ProductionProgress implements IProductionProgress {
    */
   public approveLog(logTimestamp: string, approvedBy: string): void {
     const entryIndex = this.history.findIndex(
-      (entry: any) => entry.timestamp === logTimestamp,
+      (entry: ProgressHistoryEntry) => entry.timestamp === logTimestamp,
     );
 
     if (entryIndex === -1) {
@@ -102,7 +133,11 @@ export class ProductionProgress implements IProductionProgress {
   /**
    * Registra produção diária (HHH e quantidade)
    */
-  public recordDailyProduction(date: string, data: any, userId: string): void {
+  public recordDailyProduction(
+    date: string,
+    data: Record<string, unknown>,
+    userId: string,
+  ): void {
     this.dailyProduction[date] = {
       ...data,
       updatedAt: new Date().toISOString(),

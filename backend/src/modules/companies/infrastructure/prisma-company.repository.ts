@@ -1,8 +1,14 @@
 import { prisma } from "@/lib/prisma/client";
+import { Prisma } from "@prisma/client";
 import {
   CompanyRepository,
   CompanyListResult,
 } from "../domain/company.repository";
+import {
+  CompanyEntity,
+  CreateCompanyDTO,
+  UpdateCompanyDTO,
+} from "../domain/company.dto";
 
 export class PrismaCompanyRepository implements CompanyRepository {
   async findAll(params: {
@@ -29,7 +35,7 @@ export class PrismaCompanyRepository implements CompanyRepository {
     const pages = Math.ceil(total / limit);
 
     return {
-      items,
+      items: items as unknown as CompanyEntity[],
       pagination: {
         page,
         limit,
@@ -44,8 +50,8 @@ export class PrismaCompanyRepository implements CompanyRepository {
   private buildWhereClause(params: {
     search?: string;
     isActive?: boolean;
-  }): any {
-    const where: any = {};
+  }): Prisma.CompanyWhereInput {
+    const where: Prisma.CompanyWhereInput = {};
 
     if (params.search) {
       where.OR = [
@@ -66,30 +72,50 @@ export class PrismaCompanyRepository implements CompanyRepository {
     return where;
   }
 
-  async findById(id: string): Promise<any | null> {
+  async findById(id: string): Promise<CompanyEntity | null> {
     return prisma.company.findUnique({
       where: { id },
       include: {
         _count: { select: { projects: true, userAffiliations: true } },
       },
-    });
+    }) as Promise<CompanyEntity | null>;
   }
 
-  async findByTaxId(taxId: string): Promise<any | null> {
+  async findByTaxId(taxId: string): Promise<CompanyEntity | null> {
     return prisma.company.findUnique({
       where: { taxId },
-    });
+    }) as Promise<CompanyEntity | null>;
   }
 
-  async create(data: any): Promise<any> {
-    return prisma.company.create({ data });
+  async create(data: CreateCompanyDTO): Promise<CompanyEntity> {
+    const createData = {
+      name: data.name,
+      taxId: data.taxId,
+      address: data.address,
+      phone: data.phone,
+      logoUrl: data.logoUrl,
+      isActive: data.isActive,
+      metadata: (data.metadata || {}) as any,
+    } as any;
+    return prisma.company.create({
+      data: createData,
+    }) as Promise<CompanyEntity>;
   }
 
-  async update(id: string, data: any): Promise<any> {
+  async update(id: string, data: UpdateCompanyDTO): Promise<CompanyEntity> {
+    const updateData = {
+      name: data.name,
+      taxId: data.taxId,
+      address: data.address,
+      phone: data.phone,
+      logoUrl: data.logoUrl,
+      isActive: data.isActive,
+      metadata: data.metadata as any
+    } as any;
     return prisma.company.update({
       where: { id },
-      data,
-    });
+      data: updateData,
+    }) as Promise<CompanyEntity>;
   }
 
   async delete(id: string): Promise<void> {

@@ -73,10 +73,10 @@ export class AccessControlService {
       try {
         const handler = new PermissionMatrixHandler();
         await handler.handle(updates);
-        await this.repository.updateTaskStatus(task.id, "completed");
+        await this.repository.updateTaskStatus(task.id as string, "completed");
       } catch (error) {
         console.error("Erro ao processar tarefa síncrona em dev:", error);
-        await this.repository.updateTaskStatus(task.id, "failed");
+        await this.repository.updateTaskStatus(task.id as string, "failed");
       }
     }
 

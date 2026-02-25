@@ -38,12 +38,14 @@ import { AuthService } from "@/modules/auth/application/auth.service";
 import { UserService } from "@/modules/users/application/user.service";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
 import { PrismaSystemAuditRepository } from "@/modules/audit/infrastructure/prisma-system-audit.repository";
+import { PrismaAuthCredentialRepository } from "@/modules/auth/infrastructure/prisma-auth-credential.repository";
 
 // DI (Manual)
 const userRepository = new PrismaUserRepository();
 const systemAuditRepository = new PrismaSystemAuditRepository();
 const userService = new UserService(userRepository, systemAuditRepository);
-const authService = new AuthService(userService);
+const authRepo = new PrismaAuthCredentialRepository();
+const authService = new AuthService(userService, authRepo);
 
 export async function POST(request: NextRequest) {
   try {

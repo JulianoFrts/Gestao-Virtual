@@ -23,18 +23,16 @@ import {
 } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
 import { orionApi } from "@/integrations/orion/client";
-import { selectedContextSignal } from "@/signals/authSignals";
-import { useSignals } from "@preact/signals-react/runtime";
+import { useAuth } from "@/contexts/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
 import ConstructionImportModal from "../components/ConstructionImportModal";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 
 const TowerConstructionPage = () => {
-    useSignals();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
-    const selectedContext = selectedContextSignal.value;
+    const { selectedContext } = useAuth();
     const projectId = selectedContext?.projectId || 'all';
     
     const { toast } = useToast();

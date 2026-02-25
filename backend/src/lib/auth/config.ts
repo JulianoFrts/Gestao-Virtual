@@ -43,7 +43,7 @@ export const authConfig: NextAuthConfig = {
     }),
   ],
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
         token.email = user.email ?? "";
@@ -62,6 +62,12 @@ export const authConfig: NextAuthConfig = {
       }
 
       if (trigger === "update" && token.id) {
+        // Permitir atualização manual de contexto vinda do session object
+        if (session?.user) {
+          if (session.user.companyId) token.companyId = session.user.companyId;
+          if (session.user.projectId) token.projectId = session.user.projectId;
+          if (session.user.siteId) token.siteId = session.user.siteId;
+        }
         await refreshUserToken(token);
       }
       return token;
@@ -145,7 +151,11 @@ async function verifyCredentials(credentials: CredentialsInput) {
       role: authCredential.role,
       status: authCredential.status,
       image: authCredential.user.image,
-      hierarchyLevel: authCredential.user.hierarchyLevel,
+      // Busca hierarquia da afiliação (Obra)
+      hierarchyLevel: authCredential.user.affiliation?.hierarchyLevel || 0,
+      companyId: authCredential.user.affiliation?.companyId,
+      projectId: authCredential.user.affiliation?.projectId,
+      siteId: authCredential.user.affiliation?.siteId,
     };
   } catch (error) {
     if (error instanceof Error && error.message === "MFA_REQUIRED") throw error;
@@ -155,7 +165,25 @@ async function verifyCredentials(credentials: CredentialsInput) {
 }
 
 async function findAuthCredential(identifier: string) {
-  const includeUser = { include: { user: { select: { name: true, image: true, cpf: true, hierarchyLevel: true } } } };
+  const includeUser = {
+    include: {
+      user: {
+        select: {
+          name: true,
+          image: true,
+          cpf: true,
+          affiliation: {
+            select: {
+              hierarchyLevel: true,
+              companyId: true,
+              projectId: true,
+              siteId: true,
+            },
+          },
+        },
+      },
+    },
+  };
 
   // 1. Email
   let credential = await prisma.authCredential.findUnique({ where: { email: identifier }, ...includeUser });
@@ -227,30 +255,47 @@ async function refreshUserToken(token: Record<string, unknown>) {
   const authCred = await prisma.authCredential.findUnique({
     where: { userId: token.id as string },
     select: {
-      role: true, status: true, email: true,
-      user: { select: { name: true, hierarchyLevel: true, affiliation: { select: { companyId: true, projectId: true } } } },
+      role: true,
+      status: true,
+      email: true,
+      user: {
+        select: {
+          name: true,
+          affiliation: {
+            select: {
+              hierarchyLevel: true,
+              companyId: true,
+              projectId: true,
+              siteId: true,
+            },
+          },
+        },
+      },
     },
   });
 
   if (authCred) {
+    const affiliation = authCred.user.affiliation;
     Object.assign(token, {
       role: authCred.role,
       status: authCred.status,
       email: authCred.email,
       name: authCred.user.name,
-      hierarchyLevel: authCred.user.hierarchyLevel,
-      companyId: authCred.user.affiliation?.companyId,
-      projectId: authCred.user.affiliation?.projectId,
+      // Se não tiver no token (seleção manual), usa o fixo da afiliação
+      hierarchyLevel: affiliation?.hierarchyLevel || 0,
+      companyId: token.companyId || affiliation?.companyId,
+      projectId: token.projectId || affiliation?.projectId,
+      siteId: token.siteId || affiliation?.siteId,
     });
 
     token.permissions = await permissionService.getPermissionsMap(
       authCred.role,
       token.id as string,
-      authCred.user.affiliation?.projectId || undefined,
+      (token.projectId as string) || affiliation?.projectId || undefined,
     );
     token.ui = await permissionService.getUIFlagsMap(
       authCred.role,
-      authCred.user.hierarchyLevel,
+      affiliation?.hierarchyLevel || 0,
     );
   }
 }

@@ -5,8 +5,6 @@
  * Implementa interface compatível com o db JS SDK para facilitar a migração.
  */
 
-import { signal, effect } from "@preact/signals-react";
-
 const API_URL = import.meta.env.VITE_API_URL || "/api/v1";
 const DB_MODE = import.meta.env.VITE_DB_MODE || 'orion_db';
 
@@ -40,40 +38,43 @@ interface QueryBuilder<T = any> {
 
 export class OrionApiClient {
   public baseUrl: string;
-  public tokenSignal = signal<string | null>(null);
-  public userSignal = signal<any | null>(null);
+  private _token: string | null = null;
+  private _user: any | null = null;
   private authListeners: Array<(event: string, session: any) => void> = [];
   private last401Time: number = 0;
   private readonly AUTH_THROTTLE_MS = 5000;
   private readonly RENDER_CACHE_TTL = 3000; // Cache de 3s para renderização
   private renderCache = new Map<string, { data: any; timestamp: number }>();
+  private _syncingToken = false;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
     this.loadToken();
-
-    effect(() => {
-      const currentToken = this.tokenSignal.value;
-      try {
-        if (currentToken) {
-          localStorage.setItem("orion_token", currentToken);
-          localStorage.setItem("token", currentToken);
-        } else {
-          localStorage.removeItem("orion_token");
-          localStorage.removeItem("token");
-        }
-      } catch (e) {
-        console.warn("[ORION CLIENT] LocalStorage access denied during effect:", e);
-      }
-    });
   }
 
   get token(): string | null {
-    return this.tokenSignal.value;
+    return this._token;
   }
 
   set token(value: string | null) {
-    this.tokenSignal.value = value;
+    if (this._token === value) return;
+    this._token = value;
+    this.syncTokenToStorage(value);
+  }
+
+  private syncTokenToStorage(value: string | null) {
+    if (typeof window === 'undefined') return;
+    try {
+      if (value) {
+        localStorage.setItem("orion_token", value);
+        localStorage.setItem("token", value);
+      } else {
+        localStorage.removeItem("orion_token");
+        localStorage.removeItem("token");
+      }
+    } catch (e) {
+      console.warn("[ORION CLIENT] LocalStorage access denied during sync:", e);
+    }
   }
 
   private loadToken() {
@@ -102,10 +103,10 @@ export class OrionApiClient {
         }
       }
 
-      this.tokenSignal.value = finalToken;
+      this._token = finalToken;
     } catch (e) {
       console.error("[ORION CLIENT] Failed to load token from LocalStorage:", e);
-      this.tokenSignal.value = null;
+      this._token = null;
     }
   }
 
@@ -114,21 +115,21 @@ export class OrionApiClient {
   }
 
   setToken(token: string, initialSession?: any) {
-    this.tokenSignal.value = token;
+    this.token = token;
     if (initialSession?.user) {
-      this.userSignal.value = initialSession.user;
+      this._user = initialSession.user;
       this.notifyAuthChange("SIGNED_IN", initialSession);
     }
     this.auth.getSession().then((res) => {
       const user = res.data?.session?.user || null;
-      this.userSignal.value = user;
+      this._user = user;
       this.notifyAuthChange("SIGNED_IN", res.data?.session);
     });
   }
 
   clearToken() {
-    this.tokenSignal.value = null;
-    this.userSignal.value = null;
+    this.token = null;
+    this._user = null;
     this.notifyAuthChange("SIGNED_OUT", null);
   }
 

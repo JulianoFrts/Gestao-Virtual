@@ -28,11 +28,12 @@ const ALLOWED_ORIGINS = [
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Frame-Options": "DENY",
   "X-Content-Type-Options": "nosniff",
+  "X-XSS-Protection": "1; mode=block",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy":
     "camera=(self), microphone=(self), geolocation=(self), payment=(), usb=()",
   "Content-Security-Policy":
-    `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';`.replace(
+    `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';`.replace(
       /\n/g,
       "",
     ),
@@ -62,6 +63,9 @@ function applySecurityHeaders(response: NextResponse) {
   Object.entries(SECURITY_HEADERS).forEach(([key, value]) =>
     response.headers.set(key, value),
   );
+  // Proteção extra contra fingerprinting
+  response.headers.delete("X-Powered-By");
+  response.headers.delete("Server");
 }
 
 function handleCors(request: NextRequest, response: NextResponse) {

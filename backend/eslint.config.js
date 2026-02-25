@@ -17,7 +17,7 @@ export default tseslint.config(
       "prisma",
       "*.cjs",
       "*.js",
-      "next-env.d.ts"
+      "next-env.d.ts",
     ],
   },
   js.configs.recommended,
@@ -29,7 +29,7 @@ export default tseslint.config(
         ...globals.browser,
       },
       parserOptions: {
-        project: ['./tsconfig.json'],
+        project: ["./tsconfig.json"],
         tsconfigRootDir: __dirname,
       },
     },
@@ -39,8 +39,9 @@ export default tseslint.config(
     rules: {
       ...nextPlugin.configs.recommended.rules,
       ...nextPlugin.configs["core-web-vitals"].rules,
-      "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unused-vars": "warn",
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/explicit-module-boundary-types": "error",
+      "@typescript-eslint/no-non-null-assertion": "error",
     },
   },
 );

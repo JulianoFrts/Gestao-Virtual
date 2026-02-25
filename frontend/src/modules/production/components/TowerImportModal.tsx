@@ -100,8 +100,14 @@ export default function TowerImportModal({
 const MAX_IMPORT_LIMIT = 900;
 
 const handleConfirm = async () => {
-  if (!projectId) {
+  if (!projectId || projectId === "all") {
     toast({ title: "Obra não selecionada", variant: "destructive" });
+    return;
+  }
+
+  const cid = companyId || profile?.companyId;
+  if (!cid || cid === "all") {
+    toast({ title: "Empresa não identificada", variant: "destructive" });
     return;
   }
 
@@ -137,7 +143,7 @@ const handleConfirm = async () => {
           payload: {
             data: validItems.map((item) => ({
               projectId,
-              companyId: companyId || profile.companyId,
+              companyId: cid,
               siteId: siteId && siteId !== "all" ? siteId : null,
               externalId: item.NumeroTorre,
               trecho: item.Trecho,
@@ -152,7 +158,7 @@ const handleConfirm = async () => {
               type: "TOWER",
             })),
             projectId,
-            companyId: companyId || profile.companyId,
+            companyId: cid,
             siteId: siteId && siteId !== "all" ? siteId : null,
             requestedBy: profile.id,
           },
@@ -186,7 +192,7 @@ const handleConfirm = async () => {
               payload: {
                 data: batch.map((item) => ({
                   projectId,
-                  companyId: companyId || profile.companyId,
+                  companyId: cid,
                   siteId: siteId && siteId !== "all" ? siteId : null,
                   externalId: item.NumeroTorre,
                   trecho: item.Trecho,
@@ -201,7 +207,7 @@ const handleConfirm = async () => {
                   type: "TOWER",
                 })),
                 projectId,
-                companyId: companyId || profile.companyId,
+                companyId: cid,
                 siteId: siteId && siteId !== "all" ? siteId : null,
                 requestedBy: profile.id,
                 batchInfo: {

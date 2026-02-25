@@ -16,6 +16,14 @@ export class TowerActivityService {
     companyId: string,
     data: any[],
   ): Promise<any> {
+    if (!projectId || projectId === "all") {
+      throw new Error("Project ID is required and cannot be 'all'");
+    }
+
+    if (!companyId || companyId === "all") {
+      throw new Error("Company ID is required and cannot be 'all'");
+    }
+
     logger.info(
       `[TowerActivityService] Importing ${data.length} goals for project ${projectId}`,
     );

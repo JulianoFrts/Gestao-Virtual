@@ -29,32 +29,32 @@ async function seedAdminUsers(hashedPassword: string) {
     {
       email: "socio@gestaovirtual.com",
       name: "Socio (Gestão Global)",
-      role: "SOCIO_DIRETOR" as const,
+      role: "COMPANY_ADMIN" as const,
     },
     {
       email: "admin@gestaovirtual.com",
       name: "Admin (Gestão Global)",
-      role: "ADMIN" as const,
+      role: "SYSTEM_ADMIN" as const,
     },
     {
       email: "ti@gestaovirtual.com",
       name: "Suporte Técnico (Gestão Global)",
-      role: "TI_SOFTWARE" as const,
+      role: "SYSTEM_ADMIN" as const,
     },
     {
       email: "pm@gestaovirtual.com",
       name: "GESTOR DE PROJETO (Gestão Global)",
-      role: "GESTOR_PROJECT" as const,
+      role: "PROJECT_MANAGER" as const,
     },
     {
       email: "pc@gestaovirtual.com",
       name: "GESTOR DE CANTEIRO (Gestão Global)",
-      role: "GESTOR_CANTEIRO" as const,
+      role: "SITE_MANAGER" as const,
     },
     {
       email: "trabalhador@gestaovirtual.com",
       name: "TRABALHADOR (Gestão Global)",
-      role: "WORKER" as const,
+      role: "OPERATIONAL" as const,
     },
   ];
 
@@ -77,7 +77,9 @@ async function seedAdminUsers(hashedPassword: string) {
             },
           },
           affiliation: {
-            create: {},
+            create: {
+              hierarchyLevel: 100, // Admin level default for seed admins
+            },
           },
         },
       });
@@ -105,21 +107,27 @@ async function seedMockWorkers(count: number, hashedPassword: string) {
         data: {
           name: fullName,
           cpf: cpf,
-          birthDate: faker.date.birthdate({ min: 18, max: 65, mode: "age" }).toISOString().split('T')[0],
-          registrationNumber: faker.string.numeric(6),
+          birthDate: faker.date
+            .birthdate({ min: 18, max: 65, mode: "age" })
+            .toISOString()
+            .split("T")[0],
           createdAt: new Date(),
           updatedAt: new Date(),
           authCredential: {
             create: {
               email: email,
               password: hashedPassword,
-              role: "WORKER",
+              role: "OPERATIONAL",
               status: "ACTIVE",
               systemUse: true,
             },
           },
           affiliation: {
-            create: {},
+            create: {
+              registrationNumber: faker.string.numeric(6),
+              laborType: "MOD",
+              hierarchyLevel: 0,
+            },
           },
           // O endereço agora é uma tabela separada (UserAddress)
           address: {
@@ -129,9 +137,9 @@ async function seedMockWorkers(count: number, hashedPassword: string) {
               bairro: "Centro",
               localidade: faker.location.city(),
               uf: "SP",
-              estado: "São Paulo"
-            }
-          }
+              estado: "São Paulo",
+            },
+          },
         },
       });
       if ((i + 1) % 10 === 0)
@@ -145,25 +153,26 @@ async function seedMockWorkers(count: number, hashedPassword: string) {
 
 async function seedProjectInfrastructure() {
   console.log("🏗️ Criando infraestrutura de projetos e canteiros...");
-  
+
   const company = await prisma.company.create({
     data: {
       name: "OrioN Energia S.A.",
       taxId: "12345678000199",
       isActive: true,
-    }
+    },
   });
 
   const project = await prisma.project.create({
     data: {
       name: "LT 500kV Araraquara - Taubaté",
       code: "LT-ATA-500",
-      description: "Linha de Transmissão de 500kV conectando Araraquara a Taubaté",
+      description:
+        "Linha de Transmissão de 500kV conectando Araraquara a Taubaté",
       status: "active",
       companyId: company.id,
       startDate: new Date("2024-01-01"),
       endDate: new Date("2025-12-31"),
-    }
+    },
   });
 
   const sites = [
@@ -179,7 +188,7 @@ async function seedProjectInfrastructure() {
         name: siteData.name,
         code: siteData.code,
         projectId: project.id,
-      }
+      },
     });
   }
 
@@ -188,7 +197,7 @@ async function seedProjectInfrastructure() {
 
 async function seedTeams(companyId: string, projectId: string, workers: any[]) {
   console.log("👷 Criando equipes e associando membros...");
-  
+
   const sites = await prisma.site.findMany({ where: { projectId } });
   if (sites.length === 0) return [];
 
@@ -203,7 +212,7 @@ async function seedTeams(companyId: string, projectId: string, workers: any[]) {
 
   for (const [index, teamData] of teamsData.entries()) {
     const site = sites[index % sites.length];
-    
+
     // Pegar um subconjunto de trabalhadores
     const teamWorkers = workers.slice(index * 10, (index + 1) * 10);
     if (teamWorkers.length === 0) continue;
@@ -216,15 +225,17 @@ async function seedTeams(companyId: string, projectId: string, workers: any[]) {
         isActive: true,
         laborType: teamData.laborType,
         teamMembers: {
-          create: teamWorkers.map(w => ({
-            userId: w.id
-          }))
-        }
+          create: teamWorkers.map((w) => ({
+            userId: w.id,
+          })),
+        },
       },
-      include: { teamMembers: true }
+      include: { teamMembers: true },
     });
     createdTeams.push(team);
-    console.log(`✅ Equipe criada: ${team.name} com ${teamWorkers.length} membros`);
+    console.log(
+      `✅ Equipe criada: ${team.name} com ${teamWorkers.length} membros`,
+    );
   }
 
   return createdTeams;
@@ -232,7 +243,7 @@ async function seedTeams(companyId: string, projectId: string, workers: any[]) {
 
 async function seedTimeRecords(workers: any[], companyId: string) {
   console.log("⏰ Gerando registros de ponto (TimeRecords)...");
-  
+
   const daysFn = [0, 1, 2, 3, 4]; // Hoje e 4 dias atrás
   let totalRecords = 0;
 
@@ -240,7 +251,7 @@ async function seedTimeRecords(workers: any[], companyId: string) {
     for (const daysAgo of daysFn) {
       const date = new Date();
       date.setDate(date.getDate() - daysAgo);
-      
+
       // Random start time (07:00 - 09:00)
       const startHour = faker.number.int({ min: 7, max: 9 });
       const startMin = faker.number.int({ min: 0, max: 59 });
@@ -261,10 +272,10 @@ async function seedTimeRecords(workers: any[], companyId: string) {
           companyId,
           recordType: "entry",
           recordedAt: entryDate,
-          latitude: -23.550520,
+          latitude: -23.55052,
           longitude: -46.633308,
-          createdBy: worker.id // Self reported
-        }
+          createdBy: worker.id, // Self reported
+        },
       });
 
       // Create Exit (sometimes missing to simulate real data)
@@ -276,10 +287,10 @@ async function seedTimeRecords(workers: any[], companyId: string) {
             companyId,
             recordType: "exit",
             recordedAt: exitDate,
-            latitude: -23.550520,
+            latitude: -23.55052,
             longitude: -46.633308,
-            createdBy: worker.id
-          }
+            createdBy: worker.id,
+          },
         });
         totalRecords += 2;
       } else {
@@ -292,7 +303,7 @@ async function seedTimeRecords(workers: any[], companyId: string) {
 
 async function seedDailyReports(teams: any[], companyId: string) {
   console.log("📋 Gerando relatórios diários de obra (RDO)...");
-  
+
   const daysFn = [0, 1, 2, 3]; // Últimos 4 dias
   let totalReports = 0;
 
@@ -311,9 +322,9 @@ async function seedDailyReports(teams: any[], companyId: string) {
           createdBy: "System Seed",
           metadata: {
             weather: "Sunny",
-            temperature: "25C"
-          }
-        }
+            temperature: "25C",
+          },
+        },
       });
       totalReports++;
     }
@@ -325,17 +336,22 @@ async function seed() {
   console.log("🌱 Iniciando seeding completo do banco de dados...");
   const startTime = Date.now();
 
-  const defaultPassword = "orion123";
-  const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+  const seedPassword = process.env.SEED_PASSWORD;
+  if (!seedPassword) {
+    throw new Error(
+      "❌ ERRO CRÍTICO: SEED_PASSWORD não definida no .env. O seeding foi interrompido por segurança.",
+    );
+  }
+  const hashedPassword = await bcrypt.hash(seedPassword, 10);
 
   await cleanDatabase();
   const { companyId, projectId } = await seedProjectInfrastructure();
   await seedAdminUsers(hashedPassword);
-  
+
   // Need to fetch created workers to link them
   await seedMockWorkers(50, hashedPassword); // Reduced to 50 for speed
-  const workers = await prisma.user.findMany({ 
-    where: { authCredential: { role: 'WORKER' } } 
+  const workers = await prisma.user.findMany({
+    where: { authCredential: { role: "WORKER" } },
   });
 
   const teams = await seedTeams(companyId, projectId, workers);

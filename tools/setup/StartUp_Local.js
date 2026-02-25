@@ -6,6 +6,9 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Aumentar o limite de ouvintes para evitar o aviso de memory leak no ambiente de dev com muitos processos
+process.setMaxListeners(30);
+
 const isBackground =
   process.argv.includes("--bg") || process.argv.includes("-b");
 const rootDir = path.resolve(__dirname, "../../");

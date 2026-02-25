@@ -12,17 +12,20 @@ export interface ProductionSchedule {
 }
 
 export interface ProductionScheduleRepository {
-  findSchedule(elementId: string, activityId: string): Promise<any | null>;
+  findSchedule(
+    elementId: string,
+    activityId: string,
+  ): Promise<ProductionSchedule | null>;
   findSchedulesBatch(
     elementIds: string[],
     activityIds: string[],
-  ): Promise<any[]>;
+  ): Promise<ProductionSchedule[]>;
   findScheduleByElement(
     elementId: string,
     activityId: string,
-  ): Promise<any | null>;
-  findScheduleById(id: string): Promise<any | null>;
-  saveSchedule(data: any): Promise<any>;
+  ): Promise<ProductionSchedule | null>;
+  findScheduleById(id: string): Promise<ProductionSchedule | null>;
+  saveSchedule(data: Partial<ProductionSchedule>): Promise<ProductionSchedule>;
   deleteSchedule(id: string): Promise<void>;
   deleteSchedulesBatch(ids: string[]): Promise<number>;
   findSchedulesByScope(params: {
@@ -31,6 +34,10 @@ export interface ProductionScheduleRepository {
     elementId?: string;
     activityId?: string;
     dateRange?: { start: Date; end: Date };
-  }): Promise<any[]>;
-  splitSchedule(id: string, updateData: any, createData: any): Promise<void>;
+  }): Promise<ProductionSchedule[]>;
+  splitSchedule(
+    id: string,
+    updateData: Partial<ProductionSchedule>,
+    createData: Partial<ProductionSchedule>,
+  ): Promise<void>;
 }

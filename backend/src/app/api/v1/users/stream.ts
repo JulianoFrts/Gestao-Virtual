@@ -50,7 +50,7 @@ export function generateUsersStream(params: UserStreamParams): ReadableStream {
 
           if (users.length === 0) break;
 
-          const flattenedUsers = users.map((u) => userService.flattenUser(u));
+          const flattenedUsers = users.map((u: any) => (userService as any).flattenUser(u));
           const usersJson = flattenedUsers.map((u) => JSON.stringify(u)).join(",");
           
           const prefix = totalSent > 0 ? "," : "";

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { AnchorService } from "@/modules/map-elements/application/anchor.service";
 import { PrismaAnchorRepository } from "@/modules/map-elements/infrastructure/prisma-anchor.repository";
+import { validate, anchorListSchema } from "@/lib/utils/validators/schemas";
 
 // DI
 const anchorService = new AnchorService(new PrismaAnchorRepository());
@@ -14,6 +15,11 @@ export async function GET(request: NextRequest) {
   const modelUrl = searchParams.get("modelUrl");
 
   try {
+    // Validação básica de parâmetros obrigatórios
+    if (!companyId || !projectId) {
+      return ApiResponse.badRequest("companyId e projectId são obrigatórios");
+    }
+
     const result = await anchorService.getAnchors({
       companyId,
       projectId,
@@ -30,8 +36,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    
+    // Validação de Schema
+    const validation = validate(anchorListSchema, body);
+    if (!validation.success) {
+      return ApiResponse.validationError(validation.errors);
+    }
 
-    const result = await anchorService.saveAnchors(body);
+    const result = await anchorService.saveAnchors(validation.data);
 
     return ApiResponse.json(result);
   } catch (error) {

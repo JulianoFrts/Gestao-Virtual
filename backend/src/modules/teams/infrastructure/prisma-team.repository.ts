@@ -4,15 +4,18 @@ import {
   FindAllTeamsParams,
   TeamsListResult,
 } from "../domain/team.repository";
-import { cacheService } from "@/services/cacheService";
+import { ICacheService } from "@/services/cache.interface";
+import { cacheService } from "@/services/cacheService"; // Fallback para manter a interface atual de instanciacao
 import { getLaborClassification } from "@/lib/utils/laborUtils";
 
 export class PrismaTeamRepository implements TeamRepository {
   private readonly CACHE_PREFIX = "teams:";
 
+  constructor(private readonly cache: ICacheService = cacheService) {}
+
   async findAll(params: FindAllTeamsParams): Promise<TeamsListResult> {
     const cacheKey = `${this.CACHE_PREFIX}list:${JSON.stringify(params)}`;
-    const cached = await cacheService.get<TeamsListResult>(cacheKey);
+    const cached = await this.cache.get<TeamsListResult>(cacheKey);
     if (cached) return cached;
 
     const skip = (params.page - 1) * params.limit;
@@ -44,7 +47,7 @@ export class PrismaTeamRepository implements TeamRepository {
     ]);
 
     const result = { items, total };
-    await cacheService.set(cacheKey, result, 300); // 5 minutes cache
+    await this.cache.set(cacheKey, result, 300); // 5 minutes cache
     return result;
   }
 
@@ -270,7 +273,7 @@ export class PrismaTeamRepository implements TeamRepository {
   }
 
   private async invalidateCache(): Promise<void> {
-    await cacheService.delByPattern(`${this.CACHE_PREFIX}*`);
+    await this.cache.delByPattern(`${this.CACHE_PREFIX}*`);
   }
 
   async count(where: any): Promise<number> {

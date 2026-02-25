@@ -19,7 +19,7 @@ async function main() {
         data: { role: 'SUPER_ADMIN_GOD' }
       });
       
-      console.log(\`✅ Sucesso! O usuário com ID \${userId} teve sua role atualizada para SUPER_ADMIN_GOD. Registros afetados: \${updateResult.count}\`);
+      console.log(`✅ Sucesso! O usuário com ID ${userId} teve sua role atualizada para SUPER_ADMIN_GOD. Registros afetados: ${updateResult.count}`);
       
     } else {
        console.log("❌ Erro: Não foi possível encontrar nenhum usuário na tabela 'auth.users' com este e-mail.");

@@ -1,16 +1,24 @@
-import { ProductionProgressRepository } from "../domain/production.repository";
-import { ProductionScheduleRepository } from "../domain/production-schedule.repository";
+import {
+  ProductionProgressRepository,
+  ProductionProgress as IProductionProgress,
+} from "../domain/production.repository";
+import {
+  ProductionSchedule,
+  ProductionScheduleRepository,
+} from "../domain/production-schedule.repository";
 import { ProjectElementRepository } from "../domain/project-element.repository";
+import { TimeProvider } from "@/lib/utils/time-provider";
 
 export class ProductionScheduleService {
   constructor(
     private readonly scheduleRepository: ProductionScheduleRepository,
     private readonly progressRepository: ProductionProgressRepository,
     private readonly elementRepository: ProjectElementRepository,
+    private readonly timeProvider: TimeProvider,
   ) {}
 
   async saveSchedule(
-    data: any,
+    data: Record<string, unknown>,
     user: {
       id: string;
       role: string;
@@ -18,7 +26,7 @@ export class ProductionScheduleService {
       hierarchyLevel?: number;
       permissions?: Record<string, boolean>;
     },
-  ) {
+  ): Promise<ProductionSchedule> {
     if (
       !data.towerId ||
       data.towerId === "undefined" ||
@@ -29,17 +37,19 @@ export class ProductionScheduleService {
     }
 
     // Garantir que o elemento existe no repositório (Materialização se for virtual)
-    const effectiveId = await this.elementRepository.materializeVirtualElement(
-      data.towerId,
-    );
-    const effectiveElementId = effectiveId || data.towerId;
+    const towerId = data.towerId as string;
+    const activityId = data.activityId as string;
+
+    const effectiveId =
+      await this.elementRepository.materializeVirtualElement(towerId);
+    const effectiveElementId = effectiveId || towerId;
 
     const existing = await this.scheduleRepository.findScheduleByElement(
       effectiveElementId,
-      data.activityId,
+      activityId,
     );
 
-    if (data.activityId.startsWith("custom-")) {
+    if (activityId.startsWith("custom-")) {
       throw new Error(
         "Agendamento falhou: Esta etapa não está vinculada a uma atividade real do catálogo.",
       );
@@ -48,11 +58,11 @@ export class ProductionScheduleService {
     const payload = {
       id: existing?.id,
       elementId: effectiveElementId,
-      activityId: data.activityId,
-      plannedStart: new Date(data.plannedStart),
-      plannedEnd: new Date(data.plannedEnd),
-      plannedQuantity: data.plannedQuantity,
-      plannedHhh: data.plannedHhh,
+      activityId: activityId,
+      plannedStart: new Date(data.plannedStart as string),
+      plannedEnd: new Date(data.plannedEnd as string),
+      plannedQuantity: data.plannedQuantity as number,
+      plannedHhh: data.plannedHhh as number,
       createdBy: existing ? undefined : user.id, // Fixed: createdBy matches Prisma model
     };
 
@@ -70,7 +80,7 @@ export class ProductionScheduleService {
       hierarchyLevel?: number;
       permissions?: Record<string, boolean>;
     },
-  ) {
+  ): Promise<ProductionSchedule[]> {
     const { isUserAdmin } = await import("@/lib/auth/session");
     const isAdmin = isUserAdmin(
       user.role,
@@ -95,7 +105,7 @@ export class ProductionScheduleService {
       permissions?: Record<string, boolean>;
     },
     options?: { targetDate?: string },
-  ) {
+  ): Promise<void> {
     const existing = await this.scheduleRepository.findScheduleById(scheduleId);
     if (!existing) throw new Error("Agendamento não encontrado");
 
@@ -118,7 +128,7 @@ export class ProductionScheduleService {
 
   async removeSchedulesByScope(
     scope: "project_all" | "batch",
-    params: any,
+    params: Record<string, unknown>,
     user: {
       id: string;
       role: string;
@@ -126,7 +136,7 @@ export class ProductionScheduleService {
       hierarchyLevel?: number;
       permissions?: Record<string, boolean>;
     },
-  ) {
+  ): Promise<{ count: number; skipped?: number }> {
     const { isUserAdmin } = await import("@/lib/auth/session");
     const isAdmin = isUserAdmin(
       user.role,
@@ -150,21 +160,21 @@ export class ProductionScheduleService {
 
   private async findRemovalCandidates(
     scope: string,
-    params: any,
+    params: Record<string, unknown>,
     companyId?: string | null,
-  ): Promise<any[]> {
-    let queryParams: any = { companyId };
+  ): Promise<ProductionSchedule[]> {
+    let queryParams: Record<string, unknown> = { companyId };
 
     if (scope === "project_all") {
       queryParams.projectId = params.projectId;
     } else if (scope === "batch") {
       queryParams = {
         ...queryParams,
-        projectId: params.projectId,
-        activityId: params.activityId,
+        projectId: params.projectId as string,
+        activityId: params.activityId as string,
         dateRange: {
-          start: new Date(params.startDate),
-          end: new Date(params.endDate),
+          start: new Date(params.startDate as string),
+          end: new Date(params.endDate as string),
         },
       };
     }
@@ -173,7 +183,7 @@ export class ProductionScheduleService {
   }
 
   private async filterNonExecutedSchedules(
-    candidates: any[],
+    candidates: ProductionSchedule[],
   ): Promise<string[]> {
     const validIds: string[] = [];
     for (const sched of candidates) {
@@ -181,7 +191,7 @@ export class ProductionScheduleService {
         sched.elementId,
         sched.activityId,
       );
-      if (!hasExec) {
+      if (!hasExec && sched.id) {
         validIds.push(sched.id);
       }
     }
@@ -190,7 +200,9 @@ export class ProductionScheduleService {
 
   async hasExecution(elementId: string, activityId: string): Promise<boolean> {
     const progress = await this.progressRepository.findByElement(elementId);
-    const specific = progress.find((p: any) => p.activityId === activityId);
+    const specific = progress.find(
+      (p: IProductionProgress) => p.activityId === activityId,
+    );
     return !!(
       specific &&
       (specific.currentStatus === "IN_PROGRESS" ||
@@ -200,9 +212,9 @@ export class ProductionScheduleService {
 
   private async performScheduleSplit(
     scheduleId: string,
-    existing: any,
+    existing: ProductionSchedule,
     targetDate: Date,
-  ) {
+  ): Promise<void> {
     const part1End = new Date(targetDate);
     part1End.setDate(part1End.getDate() - 1);
     const part2Start = new Date(targetDate);

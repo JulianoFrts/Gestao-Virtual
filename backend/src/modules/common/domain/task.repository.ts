@@ -1,9 +1,12 @@
-import { TaskQueue } from "@prisma/client";
+import { TaskEntity } from "./task.dto";
 
 export interface ITaskRepository {
-  create(type: string, payload: any): Promise<TaskQueue>;
-  findById(id: string): Promise<TaskQueue | null>;
-  updateStatus(id: string, status: string, error?: string): Promise<TaskQueue>;
-  findPending(): Promise<TaskQueue | null>;
-  listRecent(limit: number): Promise<TaskQueue[]>;
+  create(
+    type: string,
+    payload: Record<string, unknown> | unknown[],
+  ): Promise<TaskEntity>;
+  findById(id: string): Promise<TaskEntity | null>;
+  updateStatus(id: string, status: string, error?: string): Promise<TaskEntity>;
+  findPending(): Promise<TaskEntity | null>;
+  listRecent(limit: number): Promise<TaskEntity[]>;
 }
