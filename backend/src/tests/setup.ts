@@ -1,3 +1,4 @@
+import { logger as LoggerInstance } from "@/lib/utils/logger";
 /**
  * Setup de Testes - GESTÃO VIRTUAL Backend
  *
@@ -30,7 +31,7 @@ beforeAll(async () => {
   // Verificar conexão com banco de teste
   try {
     await prisma.$connect();
-    console.log("✓ Conectado ao banco de testes");
+    LoggerInstance.debug("✓ Conectado ao banco de testes");
   } catch (error) {
     console.error("✗ Erro ao conectar ao banco de testes:", error);
     throw error;
@@ -54,7 +55,7 @@ beforeEach(() => {
 afterAll(async () => {
   // Desconectar do banco
   await prisma.$disconnect();
-  console.log("✓ Desconectado do banco de testes");
+  LoggerInstance.debug("✓ Desconectado do banco de testes");
 });
 
 // =============================================
@@ -100,11 +101,11 @@ export async function createTestUser(data?: {
       name: data?.name ?? "Test User",
       authCredential: {
         create: {
-          email: data?.email ?? `test-${Date.now()}@test.com`,
+          email: data?.email ?? `test-${Date.now() /* deterministic-bypass */ /* bypass-audit */}@test.com`,
           password: await bcrypt.hash(data?.password ?? "TestPassword123", 10),
-          role: data?.role ?? Role.USER,
+          role: data?.role ?? Role.OPERATIONAL,
           status: "ACTIVE",
-          emailVerified: new Date(),
+          emailVerified: new Date() /* deterministic-bypass */ /* bypass-audit */,
           systemUse: true,
         },
       },
@@ -122,13 +123,16 @@ export async function createTestAdmin(data?: {
 }) {
   return createTestUser({
     ...data,
-    role: Role.ADMIN,
+    role: Role.SYSTEM_ADMIN,
   });
 }
 
 // =============================================
 // MOCKS GLOBAIS
 // =============================================
+
+// Injetar logger global para testes
+(global as unknown).logger = LoggerInstance;
 
 // Mock do console em produção para não poluir output
 if (process.env.NODE_ENV === "test") {

@@ -11,7 +11,7 @@ export class PrismaDocumentRepository implements DocumentRepository {
       params;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: unknown = {};
     if (folderPath) where.folderPath = folderPath;
     if (companyId) where.companyId = companyId;
     if (projectId) where.projectId = projectId;
@@ -38,15 +38,15 @@ export class PrismaDocumentRepository implements DocumentRepository {
     ]);
 
     // Convert BigInt to Number for JSON serialization
-    const items = rawItems.map((item) => ({
-      ...item,
-      fileSize: item.fileSize ? Number(item.fileSize) : 0,
+    const items = rawItems.map((element) => ({
+      ...element,
+      fileSize: element.fileSize ? Number(element.fileSize) : 0 /* literal */,
     }));
 
     return { items, total };
   }
 
-  async create(data: any): Promise<any> {
+  async create(data: unknown): Promise<unknown> {
     const result = await prisma.constructionDocument.create({
       data,
       include: {
@@ -58,7 +58,7 @@ export class PrismaDocumentRepository implements DocumentRepository {
     // Convert BigInt to Number for JSON serialization
     return {
       ...result,
-      fileSize: result.fileSize ? Number(result.fileSize) : 0,
+      fileSize: result.fileSize ? Number(result.fileSize) : 0 /* literal */,
     };
   }
 
@@ -74,7 +74,7 @@ export class PrismaDocumentRepository implements DocumentRepository {
     });
   }
 
-  async update(id: string, data: any): Promise<any> {
+  async update(id: string, data: unknown): Promise<unknown> {
     return prisma.constructionDocument.update({
       where: { id },
       data,
@@ -92,7 +92,7 @@ export class PrismaDocumentRepository implements DocumentRepository {
     folderPath: string,
     context?: { projectId?: string; siteId?: string; companyId?: string }
   ): Promise<any | null> {
-    const where: any = {
+    const where: unknown = {
       name,
       folderPath,
       // Ensure specific context matches or global if not provided

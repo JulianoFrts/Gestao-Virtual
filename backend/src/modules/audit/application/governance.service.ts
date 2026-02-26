@@ -4,7 +4,7 @@ export class GovernanceService {
   constructor(private readonly repository: GovernanceRepository) {}
 
   async getHistory(type: string, limit: number, companyId?: string) {
-    const results: any = {};
+    const results: unknown = {};
 
     if (type === "all" || type === "architectural") {
       results.architectural = await this.repository.findGovernanceHistory(
@@ -28,23 +28,23 @@ export class GovernanceService {
     return this.repository.findOpenViolation(file, violation);
   }
 
-  async createViolation(data: any) {
+  async createViolation(data: unknown) {
     return this.repository.createViolation(data);
   }
 
-  async updateViolation(id: string, data: any) {
+  async updateViolation(id: string, data: unknown) {
     return this.repository.updateViolation(id, data);
   }
 
-  async findOpenViolations() {
+  async findOpenViolations(): Promise<unknown> {
     return this.repository.findOpenViolations();
   }
 
-  async listViolationsWithFilters(filters: any, take?: number, skip?: number) {
+  async listViolationsWithFilters(filters: unknown, take?: number, skip?: number) {
     return this.repository.findViolationsWithFilters(filters, take, skip);
   }
 
-  async countViolations(filters: any) {
+  async countViolations(filters: unknown) {
     return this.repository.countViolations(filters);
   }
 }

@@ -1,3 +1,4 @@
+import { logger } from "@/lib/utils/logger";
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth } from "@/lib/auth/session";
@@ -21,12 +22,12 @@ const createCategorySchema = z.object({
 /**
  * GET - Lista todas as categorias de produção
  */
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
 
     const categories = await configService.listCategories();
-    console.log(`[DEBUG] Found ${categories.length} production categories`);
+    logger.debug(`[DEBUG] Found ${categories.length} production categories`);
 
     return ApiResponse.json(categories);
   } catch (error) {
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
 /**
  * POST - Cria uma nova categoria de produção
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const body = await request.json();

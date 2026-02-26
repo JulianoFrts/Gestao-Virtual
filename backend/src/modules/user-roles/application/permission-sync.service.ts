@@ -1,3 +1,4 @@
+import { logger } from "@/lib/utils/logger";
 import { prisma } from "@/lib/prisma/client";
 import { ROLE_LEVELS } from "@/lib/constants";
 
@@ -6,8 +7,8 @@ export class PermissionSyncService {
    * Sincroniza as constantes ROLE_LEVELS com a tabela permission_levels no banco.
    * Realiza um upsert para cada cargo definido nas constantes.
    */
-  static async syncHierarchy() {
-    console.log("[PermissionSync] Iniciando sincronização de hierarquia...");
+  static async syncHierarchy(): Promise<unknown> {
+    logger.debug("[PermissionSync] Iniciando sincronização de hierarquia...");
 
     const roles = Object.keys(ROLE_LEVELS);
     let updatedCount = 0;
@@ -29,7 +30,7 @@ export class PermissionSyncService {
           },
         });
         updatedCount++;
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error(
           `[PermissionSync] Erro ao sincronizar cargo ${name}:`,
           error.message,
@@ -37,7 +38,7 @@ export class PermissionSyncService {
       }
     }
 
-    console.log(
+    logger.debug(
       `[PermissionSync] Sincronização concluída. ${updatedCount}/${roles.length} cargos processados.`,
     );
     return updatedCount;

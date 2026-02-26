@@ -48,10 +48,10 @@ export class DailyProductionService {
         elementId,
         activityId,
         currentStatus: "PENDING",
-        progressPercent: 0,
+        progressPercent: 0 /* literal */,
         history: [],
         dailyProduction: {},
-        updatedAt: new Date(),
+        updatedAt: this.timeProvider ? this.timeProvider.now() : this.timeProvider.now(),
       });
     }
 

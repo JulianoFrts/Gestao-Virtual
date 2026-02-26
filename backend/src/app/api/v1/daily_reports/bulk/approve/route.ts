@@ -4,23 +4,34 @@ import { requireAuth } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
 import { ProductionFactory } from "@/modules/production/application/production.factory";
 
+import { z } from "zod";
+
+import { HTTP_STATUS } from "@/lib/constants";
+
 const dailyReportService = ProductionFactory.createDailyReportService();
 
-export async function POST(request: NextRequest) {
-  try {
-    const user = await requireAuth();
-    const { ids } = await request.json();
+const bulkActionSchema = z.object({
+  ids: z.array(z.string()).min(1, "A lista de IDs não pode estar vazia"),
+});
 
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return ApiResponse.errorJson("Lista de IDs inválida", 400);
+export async function POST(request: NextRequest): Promise<Response> {
+  try {
+    const user = await authSession.requireAuth();
+    const body = await request.json();
+    
+    const validation = bulkActionSchema.safeParse(body);
+    if (!validation.success) {
+      return ApiResponse.badRequest(validation.error.issues[0].message);
     }
 
-    const result = await dailyReportService.bulkApproveReports(ids, (user as any).id);
+    const { ids } = validation.data;
+
+    const result = await dailyReportService.bulkApproveReports(ids, user.id);
 
     logger.info("Aprovação em lote enfileirada", { 
       idsCount: ids.length, 
-      approvedBy: (user as any).id,
-      jobId: (result as any).id
+      approvedBy: user.id,
+      jobId: (result as { id?: string })?.id
     });
 
     return ApiResponse.json(result, "Aprovação em lote enviada para processamento");

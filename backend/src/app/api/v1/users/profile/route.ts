@@ -1,3 +1,4 @@
+import { logger } from "@/lib/utils/logger";
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { updateProfileSchema, validate } from "@/lib/utils/validators/schemas";
@@ -8,30 +9,29 @@ import { UserService } from "@/modules/users/application/user.service";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
 import { PrismaSystemAuditRepository } from "@/modules/audit/infrastructure/prisma-system-audit.repository";
 
-
 // DI (Manual)
 const userRepository = new PrismaUserRepository();
 const auditRepository = new PrismaSystemAuditRepository();
 const userService = new UserService(userRepository, auditRepository);
 
-export async function GET() {
+export async function GET(): Promise<Response> {
   try {
     const sessionUser = await requireAuth();
-    const user = (await userService.getProfile(sessionUser.id)) as any;
+    const user = (await userService.getProfile(sessionUser.id)) as unknown;
 
     return ApiResponse.json({
       ...user,
       activeSessions: user._count?.sessions || 0,
       _count: undefined,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === "User not found")
       return ApiResponse.notFound(MESSAGES.ERROR.NOT_FOUND);
     return handleApiError(error, "src/app/api/v1/users/profile/route.ts#GET");
   }
 }
 
-export async function PUT(request: NextRequest) {
+export async function PUT(request: NextRequest): Promise<Response> {
   try {
     const sessionUser = await requireActiveAccount();
     const body = await request.json();
@@ -60,7 +60,7 @@ export async function PUT(request: NextRequest) {
             "Senha alterada com sucesso",
           );
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         return ApiResponse.badRequest(err.message);
       }
     }
@@ -86,10 +86,10 @@ export async function PUT(request: NextRequest) {
     await invalidateSessionCache();
 
     return ApiResponse.json(updatedUser, MESSAGES.SUCCESS.UPDATED);
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === "User not found")
       return ApiResponse.notFound(MESSAGES.ERROR.NOT_FOUND);
-    console.log(error);
+    logger.debug(error);
     return handleApiError(error, "src/app/api/v1/users/profile/route.ts#PUT");
   }
 }

@@ -47,7 +47,7 @@ export class PrismaProjectRepository implements ProjectRepository {
     select?: Record<string, unknown>,
   ): Promise<ProjectEntity> {
     return prisma.project.create({
-      data: data as unknown as Prisma.ProjectUncheckedCreateInput,
+      data: data as Prisma.ProjectUncheckedCreateInput,
       select: select as Prisma.ProjectSelect,
     }) as Promise<ProjectEntity>;
   }
@@ -59,7 +59,7 @@ export class PrismaProjectRepository implements ProjectRepository {
   ): Promise<ProjectEntity> {
     return prisma.project.update({
       where: { id },
-      data: data as unknown as Prisma.ProjectUncheckedUpdateInput,
+      data: data as Prisma.ProjectUncheckedUpdateInput,
       select: select as Prisma.ProjectSelect,
     }) as Promise<ProjectEntity>;
   }

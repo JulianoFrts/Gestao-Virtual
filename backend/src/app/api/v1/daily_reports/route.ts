@@ -36,11 +36,11 @@ const createDailyReportSchema = z
 
 const querySchema = z.object({
   page: z.preprocess(
-    (val) => (val === null || val === "" ? undefined : val),
+    (schemaInput) => (schemaInput === null || schemaInput === "" ? undefined : schemaInput),
     z.coerce.number().min(1).default(1),
   ),
   limit: z.preprocess(
-    (val) => (val === null || val === "" ? undefined : val),
+    (schemaInput) => (schemaInput === null || schemaInput === "" ? undefined : schemaInput),
     z.coerce
       .number()
       .min(1)
@@ -52,34 +52,34 @@ const querySchema = z.object({
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => val || undefined),
+    .transform((text) => text || undefined),
   userId: z
     .string()
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => val || undefined),
+    .transform((text) => text || undefined),
   startDate: z
     .string()
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => val || undefined),
+    .transform((text) => text || undefined),
   endDate: z
     .string()
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => val || undefined),
+    .transform((text) => text || undefined),
   status: z
     .string()
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => val || undefined),
+    .transform((text) => text || undefined),
 });
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const currentUser = await authSession.requirePermission(
       "daily_reports.create",
@@ -99,15 +99,15 @@ export async function GET(request: NextRequest) {
     const { isUserAdmin } = await import("@/lib/auth/session");
     const isAdmin = isUserAdmin(
       currentUser.role,
-      (currentUser as any).hierarchyLevel,
-      (currentUser as any).permissions,
+      currentUser.hierarchyLevel,
+      currentUser.permissions as Record<string, boolean>,
     );
 
     const result = await dailyReportService.listReports({
       ...query,
       isAdmin,
-      companyId: (currentUser as any).companyId,
-    } as any);
+      companyId: currentUser.companyId,
+    } as unknown); // @fixme: provide correct type for listReports params
 
     return ApiResponse.json(result);
   } catch (error) {
@@ -116,107 +116,92 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const user = await authSession.requirePermission("daily_reports.create");
-    const { companyId: userCompanyId } = user as any;
+    const { companyId: userCompanyId } = user;
 
     const body = await request.json();
-    logger.info("[daily_reports POST] Body received", {
-      bodyKeys: Object.keys(body),
-      activities: typeof body.activities,
-      activitiesLen: body.activities?.length,
-    });
-
-    let rawData;
-    try {
-      rawData = createDailyReportSchema.parse(body);
-    } catch (zodErr: any) {
-      logger.error("[daily_reports POST] Zod validation failed", {
-        issues: zodErr.issues,
-        bodySnapshot: JSON.stringify(body).slice(
-          0,
-          API.LOGGING.MAX_LOG_SNAPSHOT,
-        ),
-      });
-      throw zodErr;
-    }
+    const rawData = validateDailyReportData(body);
 
     // Mapeamento de campos garantindo segurança
-    const cleanData: any = {
-      reportDate: rawData.reportDate || rawData.report_date,
-      activities: rawData.activities || "Atividade sem descrição",
-      observations: rawData.observations || null,
-      localId: rawData.localId || rawData.local_id || null,
-      subPoint: rawData.subPoint || rawData.sub_point || null,
-      subPointType: rawData.subPointType || rawData.sub_point_type || null,
-      metadata: rawData.metadata || (body as any).metadata || {},
-      createdBy: rawData.createdBy || rawData.created_by || (user as any).id,
-      weather: rawData.weather || {},
-      manpower: rawData.manpower || [],
-      equipment: rawData.equipment || [],
-      rdoNumber: rawData.rdoNumber || rawData.rdo_number || null,
-      revision: rawData.revision || "0A",
-      projectDeadline:
-        rawData.projectDeadline || rawData.project_deadline
-          ? Number(rawData.projectDeadline || rawData.project_deadline)
-          : null,
-      status: rawData.status || undefined, // Garantir que status seja enviado se existir
-    };
+    const cleanData = mapDailyReportData(rawData as Record<string, unknown>, body, user.id);
 
-    // Conectando relações explicitamente para evitar "Unknown argument userId" do Prisma
-    const teamIdStr = rawData.teamId || rawData.team_id;
-    if (teamIdStr) cleanData.team = { connect: { id: teamIdStr } };
-
-    const userIdStr =
-      rawData.userId ||
-      rawData.user_id ||
-      rawData.employeeId ||
-      (user as any).id;
-    if (userIdStr) cleanData.user = { connect: { id: userIdStr } };
-
-    const companyIdStr =
-      userCompanyId || rawData.companyId || rawData.company_id;
-
-    // Validação de Escopo: Usuário comum só pode criar RDO para sua própria empresa
+    const companyIdStr = (userCompanyId || rawData.companyId || rawData.company_id) as string | undefined;
     await authSession.requireScope(companyIdStr, "COMPANY", request);
 
     if (companyIdStr) cleanData.company = { connect: { id: companyIdStr } };
 
-    // Associar o usuário da sessão como o criador se não especificado
-    if (!cleanData.createdBy) {
-      cleanData.createdBy = (user as any).id;
-    }
-
-    // Helper function to remove undefined and null values
-    const finalData = Object.fromEntries(
-      Object.entries(cleanData).filter(([, v]) => v != null),
-    );
-
-    // Remove explicitly internal fields coming from frontend sync store
-    // This is CRITICAL to prevent Prisma "Unknown argument" errors if legacy frontend sends these
-    const fieldsToRemove = [
-      "scheduledAt",
-      "executedAt",
-      "reviewedAt",
-      "syncedAt",
-      "id",
-      "createdAt",
-      "updatedAt",
-      "scheduled_at",
-      "executed_at",
-      "reviewed_at",
-    ];
-
-    fieldsToRemove.forEach((field) => delete finalData[field]);
-
-    const report = await dailyReportService.createReport(finalData as any);
+    const finalData = finalizeReportData(cleanData);
+    const report = await dailyReportService.createReport(finalData as unknown);
 
     logger.info("Relatório criado", { reportId: report.id });
-
     return ApiResponse.created(report, "Relatório criado com sucesso");
   } catch (error) {
     logger.error("Erro ao criar relatório", { error });
     return handleApiError(error, "src/app/api/v1/daily_reports/route.ts#POST");
   }
+}
+
+function validateDailyReportData(body: unknown): z.infer<typeof createDailyReportSchema> {
+  try {
+    return createDailyReportSchema.parse(body);
+  } catch (error: unknown) {
+    const zodErr = error as z.ZodError;
+    logger.error("[daily_reports POST] Zod validation failed", {
+      issues: zodErr.issues,
+      bodySnapshot: JSON.stringify(body).slice(0, API.LOGGING.MAX_LOG_SNAPSHOT),
+    });
+    throw zodErr;
+  }
+}
+
+function mapDailyReportData(
+  rawData: Record<string, unknown>,
+  body: Record<string, unknown>,
+  userId: string,
+): Record<string, unknown> {
+  const data: Record<string, unknown> = {
+    reportDate: rawData.reportDate || rawData.report_date,
+    activities: rawData.activities || "Atividade sem descrição",
+    observations: rawData.observations || null,
+    localId: rawData.localId || rawData.local_id || null,
+    subPoint: rawData.subPoint || rawData.sub_point || null,
+    subPointType: rawData.subPointType || rawData.sub_point_type || null,
+    metadata: rawData.metadata || body.metadata || {},
+    createdBy: rawData.createdBy || rawData.created_by || userId,
+    weather: rawData.weather || {},
+    manpower: rawData.manpower || [],
+    equipment: rawData.equipment || [],
+    rdoNumber: rawData.rdoNumber || rawData.rdo_number || null,
+    revision: rawData.revision || "0A",
+    projectDeadline:
+      rawData.projectDeadline || rawData.project_deadline
+        ? Number(rawData.projectDeadline || rawData.project_deadline)
+        : null,
+    status: rawData.status || undefined,
+  };
+
+  const teamIdStr = (rawData.teamId || rawData.team_id) as string | undefined;
+  if (teamIdStr) data.team = { connect: { id: teamIdStr } };
+
+  const userIdStr = (rawData.userId || rawData.user_id || rawData.employeeId || userId) as string | undefined;
+  if (userIdStr) data.user = { connect: { id: userIdStr } };
+
+  return data;
+}
+
+function finalizeReportData(cleanData: Record<string, unknown>): Record<string, unknown> {
+  const finalData = Object.fromEntries(
+    Object.entries(cleanData).filter(([, v]) => v != null),
+  );
+
+  const fieldsToRemove = [
+    "scheduledAt", "executedAt", "reviewedAt", "syncedAt",
+    "id", "createdAt", "updatedAt", "scheduled_at",
+    "executed_at", "reviewed_at",
+  ];
+
+  fieldsToRemove.forEach((field) => delete finalData[field]);
+  return finalData;
 }

@@ -6,7 +6,7 @@ import path from "path";
 
 const STORAGE_ROOT = path.join(process.cwd(), "storage", "3d-models");
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const formData = await req.formData();
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
       path: relPath,
       publicUrl,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return handleApiError(err, "src/app/api/v1/storage/3d-models/upload/route.ts#POST");
   }
 }

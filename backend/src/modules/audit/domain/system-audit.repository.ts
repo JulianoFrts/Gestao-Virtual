@@ -3,8 +3,8 @@ export interface AuditLogData {
   action: string;
   entity: string;
   entityId: string;
-  newValues?: any;
-  oldValues?: any;
+  newValues?: unknown;
+  oldValues?: unknown;
 }
 
 export interface SystemAuditRepository {

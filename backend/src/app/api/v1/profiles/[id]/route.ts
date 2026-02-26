@@ -9,7 +9,6 @@ import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { updateUserSchema, validate } from "@/lib/utils/validators/schemas";
 import { requireOwnerOrAdmin } from "@/lib/auth/session";
 import { publicUserSelect, Role } from "@/types/database";
-import { logger } from "@/lib/utils/logger";
 import { UserService } from "@/modules/users/application/user.service";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
 import { PrismaSystemAuditRepository } from "@/modules/audit/infrastructure/prisma-system-audit.repository";
@@ -20,13 +19,13 @@ interface RouteParams {
 
 // Inicialização rápida seguindo o padrão do projeto
 const userRepository = new PrismaUserRepository();
-const auditRepository = new PrismaSystemAuditRepository();
-const userService = new UserService(userRepository, auditRepository);
+const systemAuditRepository = new PrismaSystemAuditRepository();
+const userService = new UserService(userRepository, systemAuditRepository);
 
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(request: NextRequest, { params }: RouteParams): Promise<Response> {
   const { id } = await params;
   try {
-    await (requireOwnerOrAdmin as any)(id);
+    await requireOwnerOrAdmin(id, request);
 
     const user = await userService.getUserById(id, publicUserSelect);
 
@@ -36,20 +35,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const legacyProfile = mapToLegacyProfile(user);
     return ApiResponse.json(legacyProfile);
-  } catch (error) {
+  } catch (error: unknown) {
     return handleApiError(error, "src/app/api/v1/profiles/[id]/route.ts#GET");
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
+export async function PATCH(request: NextRequest, { params }: RouteParams): Promise<Response> {
   const { id } = await params;
   try {
-    const currentUser = await (requireOwnerOrAdmin as any)(id);
-    const isAdmin = currentUser.role === Role.ADMIN;
+    const currentUser = await requireOwnerOrAdmin(id, request);
+    const isAdmin = currentUser.role === Role.SYSTEM_ADMIN || currentUser.role === Role.COMPANY_ADMIN;
 
     const body = await request.json();
     const mappedBody = mapLegacyToUnified(body);
-
 
     const validationResult = validate(updateUserSchema, mappedBody);
 
@@ -57,7 +55,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return ApiResponse.validationError(validationResult.errors);
     }
 
-    const updateData = validationResult.data as any;
+    const updateData = validationResult.data as unknown;
 
     // Se não for admin, não pode alterar role ou status
     if (!isAdmin && (updateData.role || updateData.status)) {
@@ -66,8 +64,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Delegação para o UserService (Encapsulamento de Regras de Negócio)
-    // Passamos currentUser.id como performerId para auditoria automática
+    // Delegação para o UserService
     const updatedUser = await userService.updateUser(
       id,
       updateData,
@@ -77,43 +74,44 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const legacyProfile = mapToLegacyProfile(updatedUser);
     return ApiResponse.json(legacyProfile, "Perfil atualizado com sucesso");
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(error, "src/app/api/v1/profiles/[id]/route.ts#PATCH");
   }
 }
 
-export async function PUT(request: NextRequest, context: RouteParams) {
+export async function PUT(request: NextRequest, context: RouteParams): Promise<Response> {
   return PATCH(request, context);
 }
 
 /**
- * Mapeador Anti-Corrupção: Model Unificado -> Perfil Legado
+ * Mapeador Model Unificado -> Perfil Legado
  */
-function mapToLegacyProfile(user: any) {
+function mapToLegacyProfile(user: Record<string, any>) {
+  const aff = user.affiliation || {};
   return {
     id: user.id,
     full_name: user.name,
     email: user.authCredential?.email,
-    registration_number: user.registrationNumber,
+    registration_number: aff.registrationNumber,
     cpf: user.cpf,
     phone: user.phone,
-    company_id: user.companyId,
-    project_id: user.projectId,
-    site_id: user.siteId,
-    function_id: user.functionId,
-    hierarchy_level: user.hierarchyLevel,
-    is_blocked: user.status !== "ACTIVE",
-    is_system_admin: user.role === Role.ADMIN,
+    company_id: aff.companyId,
+    project_id: aff.projectId,
+    site_id: aff.siteId,
+    function_id: aff.functionId,
+    hierarchy_level: aff.hierarchyLevel,
+    is_blocked: user.authCredential?.status !== "ACTIVE",
+    is_system_admin: user.authCredential?.role === Role.SYSTEM_ADMIN || user.authCredential?.isSystemAdmin,
     created_at: user.createdAt,
     updated_at: user.updatedAt,
   };
 }
 
 /**
- * Mapeador Anti-Corrupção: Perfil Legado -> Model Unificado
+ * Mapeador Perfil Legado -> Model Unificado
  */
-function mapLegacyToUnified(body: any) {
-  const mapped = {
+function mapLegacyToUnified(body: Record<string, any>) {
+  const mapped: Record<string, unknown> = {
     name: body.full_name || body.name,
     email: body.email,
     phone: body.phone,
@@ -131,7 +129,7 @@ function mapLegacyToUnified(body: any) {
 
   // Remove undefined values
   Object.keys(mapped).forEach(
-    (key) => (mapped as any)[key] === undefined && delete (mapped as any)[key]
+    (key) => mapped[key] === undefined && delete mapped[key]
   );
 
   return mapped;

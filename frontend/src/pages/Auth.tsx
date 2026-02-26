@@ -91,7 +91,7 @@ export default function Auth() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [getLastOfflineAccount]);
+  }, [user, selectedContext, isAuthLoading, navigate, getLastOfflineAccount, toast]);
 
   useEffect(() => {
     if (mode === 'qr') {

@@ -6,7 +6,7 @@ export class QueueService {
   /**
    * Enfileira uma nova tarefa
    */
-  async enqueue(type: string, payload: any) {
+  async enqueue(type: string, payload: unknown) {
     return this.taskRepository.create(type, payload);
   }
 
@@ -20,7 +20,7 @@ export class QueueService {
   /**
    * Lista tarefas recentes
    */
-  async listRecentJobs(limit = 10) {
+  async listRecentJobs(limit = 10): Promise<unknown> {
     return this.taskRepository.listRecent(limit);
   }
 

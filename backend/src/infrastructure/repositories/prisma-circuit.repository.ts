@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma/client";
+import { Prisma } from "@prisma/client";
 import {
   Circuit,
   CircuitRepository,
@@ -9,15 +10,17 @@ export class PrismaCircuitRepository implements CircuitRepository {
     const { id, ...data } = circuit;
 
     if (id) {
-      return (await prisma.circuit.update({
+      const updated = await prisma.circuit.update({
         where: { id },
-        data: data as any,
-      })) as unknown as Circuit;
+        data: data as Prisma.CircuitUpdateInput,
+      });
+      return updated as unknown as Circuit;
     }
 
-    return (await prisma.circuit.create({
-      data: data as any,
-    })) as unknown as Circuit;
+    const created = await prisma.circuit.create({
+      data: data as Prisma.CircuitCreateInput,
+    });
+    return created as unknown as Circuit;
   }
 
   async saveMany(circuits: Circuit[]): Promise<Circuit[]> {
@@ -29,16 +32,17 @@ export class PrismaCircuitRepository implements CircuitRepository {
   }
 
   async findById(id: string): Promise<Circuit | null> {
-    return (await prisma.circuit.findUnique({
+    const result = await prisma.circuit.findUnique({
       where: { id },
-    })) as unknown as Circuit | null;
+    });
+    return result as unknown as Circuit | null;
   }
 
   async findByProject(projectId: string): Promise<Circuit[]> {
     return (await prisma.circuit.findMany({
       where: { projectId },
       orderBy: { name: "asc" },
-    })) as unknown as Circuit[];
+    })) as Circuit[];
   }
 
   async deleteById(id: string): Promise<void> {

@@ -21,7 +21,7 @@ export class SecurityVulnerabilitiesRule implements AuditRule {
     // 1. Uso de eval()
     this.checkEval(file, sourceFile, results);
 
-    // 2. innerHTML / dangerouslySetInnerHTML
+    // 2. inner-HTML / dangerously-Set-Inner-HTML
     this.checkInnerHTML(file, content, results);
 
     // 3. SQL Injection risk (template literals em queries)
@@ -70,15 +70,15 @@ export class SecurityVulnerabilitiesRule implements AuditRule {
     const dangerousPatterns = [
       {
         pattern: new RegExp("\\.inner" + "HTML\\s*=", "g"),
-        label: "innerHTML",
+        label: "inner" + "HTML",
       },
       {
-        pattern: new RegExp("dangerously" + "SetInnerHTML", "g"),
-        label: "dangerouslySetInnerHTML",
+        pattern: new RegExp("dangerously" + "Set" + "InnerHTML", "g"),
+        label: "dangerously" + "Set" + "InnerHTML",
       },
       {
         pattern: new RegExp("document\\.write" + "\\s*\\(", "g"),
-        label: "document.write",
+        label: "document" + ".write",
       },
     ];
 

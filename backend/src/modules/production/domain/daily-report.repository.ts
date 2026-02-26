@@ -16,6 +16,6 @@ export interface DailyReportRepository {
   findById(id: string): Promise<DailyReportEntity | null>;
   create(data: CreateDailyReportDTO): Promise<DailyReportEntity>;
   update(id: string, data: UpdateDailyReportDTO): Promise<DailyReportEntity>;
-  updateMany(ids: string[], data: UpdateDailyReportDTO): Promise<any>;
+  updateMany(ids: string[], data: UpdateDailyReportDTO): Promise<unknown>;
   findAllMinimal(ids: string[]): Promise<DailyReportEntity[]>;
 }

@@ -17,7 +17,7 @@ const updateWorkStageSchema = z.object({
   displayOrder: z.number().int().optional(),
   weight: z.number().optional(),
   productionActivityId: z.string().optional().nullable(),
-  metadata: z.record(z.any()).optional().nullable(),
+  metadata: z.record(z.unknown()).optional().nullable(),
 });
 
 interface Params {
@@ -25,7 +25,7 @@ interface Params {
 }
 
 // GET: Fetch a single work stage
-export async function GET(req: NextRequest, { params }: Params) {
+export async function GET(req: NextRequest, { params }: Params): Promise<Response> {
   try {
     const user = await requireAuth();
     const { id } = await params;
@@ -33,8 +33,8 @@ export async function GET(req: NextRequest, { params }: Params) {
     const securityContext = {
       role: user.role,
       companyId: user.companyId,
-      hierarchyLevel: (user as any).hierarchyLevel,
-      permissions: (user as any).permissions,
+      hierarchyLevel: user.hierarchyLevel,
+      permissions: (user.permissions as Record<string, boolean>),
     };
 
     // Usando findAll com filtro de id para garantir validação de escopo centralizada (ou poderíamos ler individualmente)
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest, { params }: Params) {
 }
 
 // PUT: Update a work stage
-export async function PUT(req: NextRequest, { params }: Params) {
+export async function PUT(req: NextRequest, { params }: Params): Promise<Response> {
   try {
     const user = await requireAuth();
     const { id } = await params;
@@ -68,17 +68,18 @@ export async function PUT(req: NextRequest, { params }: Params) {
       );
     }
 
-    const stage = await service.update(id, validation.data as any, {
+    const stage = await service.update(id, validation.data as Record<string, unknown>, {
       role: user.role,
       companyId: user.companyId,
-      hierarchyLevel: (user as any).hierarchyLevel,
-      permissions: (user as any).permissions,
+      hierarchyLevel: user.hierarchyLevel,
+      permissions: (user.permissions as Record<string, boolean>),
     });
 
     return ApiResponse.json(stage);
-  } catch (error: any) {
-    if (error.message.includes("Forbidden")) {
-      return ApiResponse.forbidden(error.message);
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message && err.message.includes("Forbidden")) {
+      return ApiResponse.forbidden(err.message);
     }
     return handleApiError(
       error,
@@ -88,7 +89,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 }
 
 // DELETE: Delete a work stage
-export async function DELETE(req: NextRequest, { params }: Params) {
+export async function DELETE(req: NextRequest, { params }: Params): Promise<Response> {
   try {
     const user = await requireAuth();
     const { id } = await params;
@@ -96,14 +97,15 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     await service.delete(id, {
       role: user.role,
       companyId: user.companyId,
-      hierarchyLevel: (user as any).hierarchyLevel,
-      permissions: (user as any).permissions,
+      hierarchyLevel: user.hierarchyLevel,
+      permissions: (user.permissions as Record<string, boolean>),
     });
 
     return ApiResponse.json({ success: true }, "Etapa removida com sucesso");
-  } catch (error: any) {
-    if (error.message.includes("Forbidden")) {
-      return ApiResponse.forbidden(error.message);
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message && err.message.includes("Forbidden")) {
+      return ApiResponse.forbidden(err.message);
     }
     return handleApiError(
       error,

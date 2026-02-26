@@ -1,33 +1,47 @@
-export interface Span {
+export interface SpanIdentification {
   id?: string;
   projectId?: string;
   companyId?: string;
   spanName?: string;
   towerStartId: string;
   towerEndId: string;
+}
+
+export interface SpanGeometry {
   spanLength?: number;
   heightStart?: number;
   heightEnd?: number;
   elevationStart?: number;
   elevationEnd?: number;
+  horizontalAngle?: number;
+  verticalAngle?: number;
+  radiusOfCurvature?: number;
+  geometryData?: unknown;
+}
+
+export interface SpanPhysicalProperties {
   sag?: number;
   tension?: number;
   weightPerMeter?: number;
   catenaryConstant?: number;
   arcLength?: number;
-  horizontalAngle?: number;
-  verticalAngle?: number;
-  radiusOfCurvature?: number;
+}
+
+export interface SpanElectrical {
   cableType?: string;
   voltageKv?: number;
   cableColor?: string;
   cablePhases?: number;
   cableSpacing?: number;
-  geometryData?: any;
-  metadata?: any;
+}
+
+export interface SpanSystem {
+  metadata?: unknown;
   createdAt?: Date;
   updatedAt?: Date;
 }
+
+export interface Span extends SpanIdentification, SpanGeometry, SpanPhysicalProperties, SpanElectrical, SpanSystem {}
 
 export interface SpanRepository {
   save(span: Span): Promise<Span>;

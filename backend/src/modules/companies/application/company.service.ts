@@ -18,7 +18,7 @@ export class CompanyService {
     return company;
   }
 
-  async createCompany(data: any) {
+  async createCompany(data: unknown) {
     if (data.taxId) {
       const existing = await this.repository.findByTaxId(data.taxId);
       if (existing) throw new Error("CNPJ/CPF já cadastrado");
@@ -26,7 +26,7 @@ export class CompanyService {
     return this.repository.create(data);
   }
 
-  async updateCompany(id: string, data: any) {
+  async updateCompany(id: string, data: unknown) {
     const existing = await this.repository.findById(id);
     if (!existing) throw new Error("Company not found");
     return this.repository.update(id, data);

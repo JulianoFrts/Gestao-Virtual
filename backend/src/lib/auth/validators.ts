@@ -1,11 +1,24 @@
 import { decode } from "next-auth/jwt";
 import { jwtVerify } from "jose";
 import { CONSTANTS } from "@/lib/constants";
+import { SystemTimeProvider } from "@/lib/utils/time-provider";
+
+const timeProvider = new SystemTimeProvider();
+
+interface TokenPayload {
+  sub?: string;
+  id?: string;
+  email?: string;
+  name?: string;
+  role?: string;
+  exp?: number;
+  [key: string]: unknown;
+}
 
 /**
  * Valida um token JWT (dual strategy: JWE e JWS)
  */
-export async function validateToken(token: string) {
+export async function validateToken(token: string): Promise<TokenPayload | null> {
   try {
     const jwtSecret = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
 
@@ -14,7 +27,7 @@ export async function validateToken(token: string) {
       return null;
     }
 
-    let payload: any = null;
+    let payload: TokenPayload | null = null;
 
     // 1. Tentar decodificar como NextAuth JWE (v5)
     payload = await tryDecodeJWE(token, jwtSecret);
@@ -30,9 +43,9 @@ export async function validateToken(token: string) {
     }
 
     return payload;
-  } catch (error: any) {
-    if (error.code !== "ERR_JWT_EXPIRED") {
-      console.warn("[AUTH] Erro ao validar token:", error.message);
+  } catch (error: unknown) {
+    if (error?.code !== "ERR_JWT_EXPIRED") {
+      console.warn("[AUTH] Erro ao validar token:", error?.message);
     }
     return null;
   }
@@ -41,7 +54,7 @@ export async function validateToken(token: string) {
 /**
  * Tenta decodificar token como JWE (NextAuth)
  */
-async function tryDecodeJWE(token: string, secret: string) {
+async function tryDecodeJWE(token: string, secret: string): Promise<TokenPayload | null> {
   const JWE_PARTS = 5;
   if (token.split('.').length !== JWE_PARTS) return null;
 
@@ -50,9 +63,9 @@ async function tryDecodeJWE(token: string, secret: string) {
       token,
       secret,
       salt: process.env.NEXTAUTH_SALT || "authjs.session-token"
-    });
-  } catch (e: any) {
-    console.debug("[AUTH] Falha ao decodificar JWE:", e.message);
+    }) as TokenPayload | null;
+  } catch (e: unknown) {
+    console.debug("[AUTH] Falha ao decodificar JWE:", e?.message);
     return null;
   }
 }
@@ -60,13 +73,13 @@ async function tryDecodeJWE(token: string, secret: string) {
 /**
  * Tenta decodificar token como JWS (HS256 legados)
  */
-async function tryDecodeJWS(token: string, secret: string) {
+async function tryDecodeJWS(token: string, secret: string): Promise<TokenPayload | null> {
   try {
     const secretBuffer = new TextEncoder().encode(secret);
     const verified = await jwtVerify(token, secretBuffer);
-    return verified.payload;
-  } catch (e: any) {
-    console.debug("[AUTH] Falha ao decodificar HS256:", e.message);
+    return verified.payload as TokenPayload;
+  } catch (e: unknown) {
+    console.debug("[AUTH] Falha ao decodificar HS256:", e?.message);
     return null;
   }
 }
@@ -74,9 +87,9 @@ async function tryDecodeJWS(token: string, secret: string) {
 /**
  * Calcula a data de expiração do token
  */
-export function getTokenExpiration(payload: any): string {
-  if (payload.exp) {
+export function getTokenExpiration(payload: TokenPayload): string {
+  if (payload?.exp) {
     return new Date((payload.exp as number) * CONSTANTS.TIME.MS_IN_SECOND).toISOString();
   }
-  return new Date(Date.now() + CONSTANTS.TIME.MS_IN_DAY).toISOString();
+  return new Date(timeProvider.now().getTime() + CONSTANTS.TIME.MS_IN_DAY).toISOString();
 }

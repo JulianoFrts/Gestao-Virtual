@@ -17,7 +17,7 @@ import { PrismaAuthCredentialRepository } from "@/modules/auth/infrastructure/pr
 const userService = new UserService(new PrismaUserRepository());
 const authService = new AuthService(userService, new PrismaAuthCredentialRepository());
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     let body;
     try {
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     return ApiResponse.json(user);
-  } catch (error: any) {
+  } catch (error: unknown) {
 
     return handleApiError(error, "src/app/api/v1/rpc/resolve_login_identifier/route.ts#POST");
   }

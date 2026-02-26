@@ -23,7 +23,7 @@ const settingsSchema = z.object({
   settings: z.any(),
 });
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const searchParams = request.nextUrl.searchParams;
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const body = await request.json();

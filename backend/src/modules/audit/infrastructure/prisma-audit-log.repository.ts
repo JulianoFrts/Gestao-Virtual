@@ -3,10 +3,10 @@ import { AuditLogRepository } from "../domain/audit-log.repository";
 
 export class PrismaAuditLogRepository implements AuditLogRepository {
   async findMany(
-    where: any,
+    where: unknown,
     take: number,
     skip: number,
-    orderBy: any,
+    orderBy: unknown,
   ): Promise<any[]> {
     // Otimização: Não trazer JSONs pesados (newValues/oldValues) na listagem
     return prisma.auditLog.findMany({
@@ -33,11 +33,11 @@ export class PrismaAuditLogRepository implements AuditLogRepository {
     });
   }
 
-  async count(where: any): Promise<number> {
+  async count(where: unknown): Promise<number> {
     return prisma.auditLog.count({ where });
   }
 
-  async create(data: any): Promise<any> {
+  async create(data: unknown): Promise<unknown> {
     const { metadata, ...rest } = data;
     return prisma.auditLog.create({
       data: {

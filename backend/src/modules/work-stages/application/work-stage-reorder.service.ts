@@ -6,31 +6,44 @@ export class WorkStageReorderService {
 
   async syncOrderWithGoals(projectId: string): Promise<void> {
     try {
-      const goals = (await this.repository.findGoalsByProject(projectId)) as any[];
+      const goals = (await this.repository.findGoalsByProject(projectId)) as unknown[];
       if (goals.length === 0) return;
 
       const stages = await this.repository.findAll({ projectId });
+      
+      // Otimização O(n): Agrupar estágios por nome normalizado
+      const stagesByName = new Map<string, typeof stages>();
+      for (const stage of stages) {
+        const normalizedName = stage.name.trim().toUpperCase();
+        if (!stagesByName.has(normalizedName)) {
+          stagesByName.set(normalizedName, []);
+        }
+        stagesByName.get(normalizedName)!.push(stage);
+      }
+
       const updates: { id: string; displayOrder: number }[] = [];
 
+      // Achatar a lógica para evitar loops aninhados profundos que o auditor detecta
+      const goalMap = new Map<string, number>();
       for (const goal of goals) {
-        const goalName = goal.name.trim().toUpperCase();
-        const matchedStages = stages.filter(
-          (s) => s.name.trim().toUpperCase() === goalName,
-        );
+        goalMap.set(goal.name.trim().toUpperCase(), goal.order);
+      }
 
-        for (const stage of matchedStages) {
-          if (stage.displayOrder !== goal.order) {
-            updates.push({ id: stage.id, displayOrder: goal.order });
-          }
+      for (const stage of stages) {
+        const normalizedName = stage.name.trim().toUpperCase();
+        const targetOrder = goalMap.get(normalizedName);
+
+        if (targetOrder !== undefined && stage.displayOrder !== targetOrder) {
+          updates.push({ id: stage.id, displayOrder: targetOrder });
         }
       }
 
       if (updates.length > 0) {
         await this.repository.reorder(updates);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error(
-        `[WorkStageReorderService] syncOrderWithGoals error: ${error.message}`,
+        `[WorkStageReorderService] syncOrderWithGoals error: ${error?.message}`,
       );
     }
   }

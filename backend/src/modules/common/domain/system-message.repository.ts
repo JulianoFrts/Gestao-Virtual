@@ -1,5 +1,5 @@
 export interface SystemMessageRepository {
-  findAll(where: any, skip: number, take: number, orderBy: any): Promise<any[]>;
-  count(where: any): Promise<number>;
-  create(data: any): Promise<any>;
+  findAll(where: unknown, skip: number, take: number, orderBy: unknown): Promise<any[]>;
+  count(where: unknown): Promise<number>;
+  create(data: unknown): Promise<unknown>;
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { HTTP_STATUS } from "@/lib/constants";
 
 /**
  * [DEV ONLY] Mapa Estático de Permissões para Simulação
@@ -121,12 +122,12 @@ const PERMISSIONS_MAP: Record<
   },
 };
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<Response> {
   // Segurança: Só habilitado em desenvolvimento
   if (process.env.NODE_ENV === "production") {
     return NextResponse.json(
       { error: "Unauthorized in production" },
-      { status: 403 },
+      { status: HTTP_STATUS.FORBIDDEN },
     );
   }
 
@@ -136,7 +137,7 @@ export async function GET(req: NextRequest) {
   if (!role || !PERMISSIONS_MAP[role]) {
     return NextResponse.json(
       { error: "Role não encontrada no mapa de simulação" },
-      { status: 404 },
+      { status: HTTP_STATUS.NOT_FOUND },
     );
   }
 

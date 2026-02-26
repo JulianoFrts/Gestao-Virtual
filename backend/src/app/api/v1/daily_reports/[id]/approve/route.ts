@@ -10,7 +10,7 @@ interface RouteParams {
 
 const dailyReportService = ProductionFactory.createDailyReportService();
 
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export async function POST(request: NextRequest, { params }: RouteParams): Promise<Response> {
   const { id } = await params;
   try {
     const user = await requireAuth();
@@ -19,9 +19,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Para simplificar agora, permitiremos se autenticado, mas o ideal é checar role.
     // O requireAuth já garante que está logado.
 
-    const report = await dailyReportService.approveReport(id, (user as any).id);
+    const report = await dailyReportService.approveReport(id, user.id);
 
-    logger.info("Relatório aprovado", { reportId: id, approvedBy: (user as any).id });
+    logger.info("Relatório aprovado", { reportId: id, approvedBy: user.id });
 
     return ApiResponse.json(report, "Relatório aprovado com sucesso");
   } catch (error) {

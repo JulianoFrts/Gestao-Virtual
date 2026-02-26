@@ -38,7 +38,7 @@ export const spanSchema = z.object({
 export type SpanDTO = z.infer<typeof spanSchema>;
 
 export function mapDtoToEntity(dto: SpanDTO): any {
-  const data: any = {
+  const data: unknown = {
     id: dto.id,
     projectId: dto.projectId || dto.project_id,
     companyId: dto.companyId || dto.company_id,

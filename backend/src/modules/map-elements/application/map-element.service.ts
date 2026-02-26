@@ -42,13 +42,13 @@ export class MapElementService {
     try {
       await Promise.all(elements.map((e) => this.enrichElement(e)));
       return await this.repository.saveMany(elements);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("[MapElementService] Error saving batch:", error);
       throw error;
     }
   }
 
-  private async enrichElement(element: any) {
+  private async enrichElement(element: unknown) {
     // 1. Map legacy/frontend fields
     this.mapOriginalFields(element);
 
@@ -66,7 +66,7 @@ export class MapElementService {
     this.finalizeEnrichment(element);
   }
 
-  private mapOriginalFields(element: any) {
+  private mapOriginalFields(element: unknown) {
     if (!element.elementType) {
       element.elementType =
         element.tower_type || (element.object_id && !element.tower_start_id)
@@ -155,7 +155,7 @@ export class MapElementService {
     }
   }
 
-  private finalizeEnrichment(element: any) {
+  private finalizeEnrichment(element: unknown) {
     const modelFields = [
       "id",
       "companyId",

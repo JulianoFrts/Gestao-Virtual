@@ -27,23 +27,24 @@ interface RouteParams {
 }
 
 // GET - Buscar empresa
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     await authSession.requireAuth(request);
     const { id } = await params;
     const company = await companyService.getCompanyById(id);
     return ApiResponse.json(company);
-  } catch (error: any) {
-    if (error.message === "Company not found") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "Company not found") {
       return ApiResponse.notFound("Empresa não encontrada");
     }
-    logger.error("Erro ao buscar empresa", { error });
+    logger.error("Erro ao buscar empresa", { error: err.message });
     return handleApiError(error, "src/app/api/v1/companies/[id]/route.ts#GET");
   }
 }
 
 // PUT - Atualizar empresa
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     const user = await authSession.requireAuth(request);
     const { id } = await params;
@@ -53,18 +54,19 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Validação de Escopo: Apenas Admin ou o próprio dono da empresa
     const isAdmin = authSession.isUserAdmin(
-      (user as any).role,
-      (user as any).hierarchyLevel,
-      (user as any).permissions,
+      user.role,
+      user.hierarchyLevel,
+      user.permissions as Record<string, boolean>,
     );
-    if (!isAdmin && (user as any).companyId !== id) {
+    if (!isAdmin && user.companyId !== id) {
       return ApiResponse.forbidden(
         "Você não tem permissão para alterar dados desta empresa",
       );
     }
 
     // Se houver alteração de metadata.system, exige God Role
-    if (data.metadata?.system && !isGodRole((user as any).role)) {
+    const metadata = data.metadata as Record<string, unknown> | undefined;
+    if (metadata?.system && !isGodRole(user.role)) {
       return ApiResponse.forbidden(
         "Apenas administradores do sistema podem alterar configurações globais",
       );
@@ -75,17 +77,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     logger.info("Empresa atualizada", { companyId: company.id });
 
     return ApiResponse.json(company, "Empresa atualizada com sucesso");
-  } catch (error: any) {
-    if (error.message === "Company not found") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "Company not found") {
       return ApiResponse.notFound("Empresa não encontrada");
     }
-    logger.error("Erro ao atualizar empresa", { error });
+    logger.error("Erro ao atualizar empresa", { error: err.message });
     return handleApiError(error, "src/app/api/v1/companies/[id]/route.ts#PUT");
   }
 }
 
 // DELETE - Remover empresa
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     await authSession.requireAdmin(request);
     const { id } = await params;
@@ -95,11 +98,12 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     logger.info("Empresa removida", { companyId: id });
 
     return ApiResponse.noContent();
-  } catch (error: any) {
-    if (error.message === "Company not found") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "Company not found") {
       return ApiResponse.notFound("Empresa não encontrada");
     }
-    logger.error("Erro ao remover empresa", { error });
+    logger.error("Erro ao remover empresa", { error: err.message });
     return handleApiError(
       error,
       "src/app/api/v1/companies/[id]/route.ts#DELETE",

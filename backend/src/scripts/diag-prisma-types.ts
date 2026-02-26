@@ -26,7 +26,7 @@ async function runDiagnostic() {
             console.log("✅ mfaEnabled mapeado corretamente como BOOLEANO.");
         }
 
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error("🚨 Falha no Diagnóstico v108:", err.message);
     } finally {
         await prisma.$disconnect();

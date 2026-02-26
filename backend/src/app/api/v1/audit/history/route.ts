@@ -8,7 +8,7 @@ const governanceService = new GovernanceService(
   new PrismaGovernanceRepository(),
 );
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth(request);
 
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "50");
 
     // Aplicar isolamento de tenant
-    const companyId = (user as any).companyId;
+    const companyId = user.companyId;
     const results = await governanceService.getHistory(type, limit, companyId);
 
     return ApiResponse.json(results);

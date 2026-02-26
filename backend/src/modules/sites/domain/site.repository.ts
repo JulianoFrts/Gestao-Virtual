@@ -8,15 +8,15 @@ export interface FindAllSitesParams {
 }
 
 export interface SitesListResult {
-  items: any[];
+  items: unknown[];
   total: number;
 }
 
 export interface SiteRepository {
   findAll(params: FindAllSitesParams): Promise<SitesListResult>;
-  create(data: any): Promise<any>;
-  count(where: any): Promise<number>;
+  create(data: unknown): Promise<unknown>;
+  count(where: unknown): Promise<number>;
   findById(id: string): Promise<any | null>;
-  update(id: string, data: any): Promise<any>;
+  update(id: string, data: unknown): Promise<unknown>;
   delete(id: string): Promise<void>;
 }

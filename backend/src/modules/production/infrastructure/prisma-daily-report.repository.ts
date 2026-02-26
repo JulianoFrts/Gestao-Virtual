@@ -30,7 +30,7 @@ export class PrismaDailyReportRepository
     orderBy?: Record<string, "asc" | "desc">;
   }): Promise<DailyReportEntity[]> {
     return this.model.findMany({
-      where: params.where as any,
+      where: params.where as unknown,
       skip: params.skip,
       take: params.take,
       orderBy: params.orderBy,
@@ -61,7 +61,7 @@ export class PrismaDailyReportRepository
 
   async create(data: CreateDailyReportDTO): Promise<DailyReportEntity> {
     return this.model.create({
-      data: data as any,
+      data: data as unknown,
       include: {
         team: { select: { id: true, name: true } },
         user: { select: { id: true, name: true } },
@@ -75,7 +75,7 @@ export class PrismaDailyReportRepository
   ): Promise<DailyReportEntity> {
     return this.model.update({
       where: { id },
-      data: data as any,
+      data: data as unknown,
       include: {
         team: {
           select: {
@@ -90,11 +90,11 @@ export class PrismaDailyReportRepository
     }) as Promise<DailyReportEntity>;
   }
 
-  async updateMany(ids: string[], data: UpdateDailyReportDTO): Promise<any> {
+  async updateMany(ids: string[], data: UpdateDailyReportDTO): Promise<unknown> {
     const updates = ids.map((id) =>
       this.model.update({
         where: { id },
-        data: data as any,
+        data: data as unknown,
       }),
     );
     return Promise.all(updates);

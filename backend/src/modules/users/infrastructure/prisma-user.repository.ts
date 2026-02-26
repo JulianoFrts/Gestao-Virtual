@@ -1,3 +1,4 @@
+import { logger } from "@/lib/utils/logger";
 import { prisma, ExtendedPrismaClient } from "@/lib/prisma/client";
 import { Prisma } from "@prisma/client";
 import { UserRepository } from "../domain/user.repository";
@@ -29,7 +30,41 @@ export class PrismaUserRepository
       where: { email: email.toLowerCase().trim() },
       include: { user: true },
     });
-    return (authCredential?.user as unknown as UserEntity) ?? null;
+    return (authCredential?.user as UserEntity) ?? null;
+  }
+
+  private mapRole(role?: string): Prisma.Role {
+    if (!role) return "OPERATIONAL";
+    const r = role.toUpperCase();
+    
+    // 1. Verificar se já é um valor exato do Enum atual (Prioridade)
+    const validRoles: Prisma.Role[] = [
+      "HELPER_SYSTEM",
+      "ADMIN",
+      "COMPANY_ADMIN",
+      "PROJECT_MANAGER",
+      "SITE_MANAGER",
+      "SUPERVISOR",
+      "OPERATIONAL",
+      "VIEWER"
+    ];
+    
+    if (validRoles.includes(r as Prisma.Role)) {
+      return r as Prisma.Role;
+    }
+
+    // 2. Mapeamento de Compatibilidade Legada
+    if (r === "SUPER_ADMIN_GOD") return "HELPER_SYSTEM";
+    if (r === "SYSTEM_ADMIN") return "ADMIN";
+    if (r === "MODERATOR") return "COMPANY_ADMIN";
+    if (r === "MANAGER") return "PROJECT_MANAGER";
+    if (r === "GESTOR_PROJECT") return "PROJECT_MANAGER";
+    if (r === "GESTOR_CANTEIRO") return "SITE_MANAGER";
+    if (r === "TECHNICIAN") return "SITE_MANAGER";
+    if (r === "WORKER") return "OPERATIONAL";
+    if (r === "USER") return "OPERATIONAL";
+
+    return "OPERATIONAL";
   }
 
   async create(
@@ -52,18 +87,18 @@ export class PrismaUserRepository
       iapName,
       functionId,
       ...personalData
-    } = data as any;
+    } = data;
 
-    const createData: any = {
+    const createData: Prisma.UserCreateInput = {
       ...personalData,
       authCredential: {
         create: {
           email,
           password: password || "",
-          role: (role as any) || "OPERATIONAL",
-          status: (status as any) || "PENDING_VERIFICATION",
+          role: this.mapRole(role as string),
+          status: (status as Prisma.AccountStatus) || "PENDING_VERIFICATION",
           isSystemAdmin: !!isSystemAdmin,
-          permissions: permissions || {},
+          permissions: (permissions as Prisma.InputJsonValue) || {},
         },
       },
       affiliation: {
@@ -73,20 +108,33 @@ export class PrismaUserRepository
           siteId,
           registrationNumber,
           hierarchyLevel: hierarchyLevel || 0,
-          laborType: laborType || "MOD",
+          laborType: (laborType as Prisma.LaborType) || "MOD",
           iapName,
           functionId,
         },
       },
+      address: data.zipCode ? {
+        create: {
+          cep: String(data.zipCode),
+          logradouro: String(data.street || ""),
+          unidade: String(data.number || ""),
+          complemento: String(data.complement || ""),
+          bairro: String(data.neighborhood || ""),
+          localidade: String(data.city || ""),
+          estado: String(data.state || ""),
+          uf: String((data.state as string)?.substring(0, 2).toUpperCase() || "SP"),
+        }
+      } : undefined
     };
 
-    return this.prisma.user.create({
+    const user = await this.prisma.user.create({
       data: createData,
       select: select as Prisma.UserSelect,
-    }) as Promise<UserEntity>;
+    });
+    return user as UserEntity;
   }
 
-  // Specialized update to handle nested relations (Auth, Affiliation)
+  // Specialized update to handle nested relations (Auth, Affiliation, Address)
   async update(
     id: string,
     data: UpdateUserDTO,
@@ -107,12 +155,20 @@ export class PrismaUserRepository
       laborType,
       iapName,
       functionId,
+      // Endereço
+      zipCode,
+      street,
+      number,
+      complement,
+      neighborhood,
+      city,
+      state,
       ...personalData
-    } = data as any;
+    } = data as unknown;
 
     const updateData: Prisma.UserUpdateInput = {
       ...personalData,
-    } as unknown as Prisma.UserUpdateInput;
+    };
 
     // 1. Atualizar Setor de Segurança
     if (email || password || role || status || isSystemAdmin !== undefined || permissions) {
@@ -120,10 +176,10 @@ export class PrismaUserRepository
         update: {
           ...(email && { email }),
           ...(password && { password }),
-          ...(role && { role: role as any }),
-          ...(status && { status: status as any }),
+          ...(role && { role: this.mapRole(role as string) }),
+          ...(status && { status: status as Prisma.AccountStatus }),
           ...(isSystemAdmin !== undefined && { isSystemAdmin }),
-          ...(permissions && { permissions }),
+          ...(permissions && { permissions: permissions as Prisma.InputJsonValue }),
         },
       };
     }
@@ -166,11 +222,48 @@ export class PrismaUserRepository
       };
     }
 
-    return this.prisma.user.update({
+    // 3. Atualizar Endereço
+    const hasAddressData = 
+      zipCode !== undefined ||
+      street !== undefined ||
+      number !== undefined ||
+      complement !== undefined ||
+      neighborhood !== undefined ||
+      city !== undefined ||
+      state !== undefined;
+
+    if (hasAddressData) {
+      updateData.address = {
+        upsert: {
+          create: {
+            cep: String(zipCode || ""),
+            logradouro: String(street || ""),
+            unidade: String(number || ""),
+            complemento: String(complement || ""),
+            bairro: String(neighborhood || ""),
+            localidade: String(city || ""),
+            estado: String(state || ""),
+            uf: String((state as string)?.substring(0, 2).toUpperCase() || "SP"),
+          },
+          update: {
+            ...(zipCode !== undefined && { cep: String(zipCode) }),
+            ...(street !== undefined && { logradouro: String(street) }),
+            ...(number !== undefined && { unidade: String(number) }),
+            ...(complement !== undefined && { complemento: String(complement) }),
+            ...(neighborhood !== undefined && { bairro: String(neighborhood) }),
+            ...(city !== undefined && { localidade: String(city) }),
+            ...(state !== undefined && { estado: String(state) }),
+          },
+        },
+      };
+    }
+
+    const user = await this.prisma.user.update({
       where: { id },
       data: updateData,
       select: select as Prisma.UserSelect,
-    }) as Promise<UserEntity>;
+    });
+    return user as UserEntity;
   }
 
   async updateMany(
@@ -218,14 +311,14 @@ export class PrismaUserRepository
     const user = await this.prisma.user.findFirst({
       where: {
         OR: [
-          { registrationNumber: identifier },
+          { affiliation: { registrationNumber: identifier } },
           { cpf: identifier.replace(/\D/g, "") },
         ],
       },
       select: select as Prisma.UserSelect,
     });
 
-    if (user) return user as unknown as UserEntity;
+    if (user) return user as UserEntity;
 
     const authCredential = await this.prisma.authCredential.findFirst({
       where: {
@@ -237,11 +330,11 @@ export class PrismaUserRepository
       include: { user: true },
     });
 
-    return (authCredential?.user as unknown as UserEntity) ?? null;
+    return (authCredential?.user as UserEntity) ?? null;
   }
 
   async deduplicateCPFs(): Promise<number> {
-    console.log("[Maintenance] Iniciando limpeza profunda de CPFs...");
+    logger.debug("[Maintenance] Iniciando limpeza profunda de CPFs...");
 
     const allUsers = await this.prisma.user.findMany({
       where: { cpf: { not: null } },
@@ -275,7 +368,7 @@ export class PrismaUserRepository
     let fixCount = 0;
 
     if (toNullify.length > 0) {
-      console.log(
+      logger.debug(
         `[Maintenance] Anulando ${toNullify.length} CPFs conflitantes...`,
       );
       await this.prisma.user.updateMany({
@@ -285,23 +378,23 @@ export class PrismaUserRepository
       fixCount += toNullify.length;
     }
 
-    for (const item of toSanitize) {
+    for (const element of toSanitize) {
       try {
         await this.prisma.user.update({
-          where: { id: item.id },
-          data: { cpf: item.sanitized },
+          where: { id: element.id },
+          data: { cpf: element.sanitized },
         });
         fixCount++;
       } catch (error) {
         const err = error as Error;
         console.error(
-          `[Maintenance] Erro ao sanitizar ID ${item.id}:`,
+          `[Maintenance] Erro ao sanitizar ID ${element.id}:`,
           err.message,
         );
       }
     }
 
-    console.log(`[Maintenance] Saneamento concluído: ${fixCount} alterações.`);
+    logger.debug(`[Maintenance] Saneamento concluído: ${fixCount} alterações.`);
     return fixCount;
   }
 
@@ -309,10 +402,22 @@ export class PrismaUserRepository
     userId: string,
     data: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
+    const mapped: any = {};
+    if (data.zipCode) mapped.cep = data.zipCode;
+    if (data.street) mapped.logradouro = data.street;
+    if (data.number) mapped.unidade = data.number;
+    if (data.complement) mapped.complemento = data.complement;
+    if (data.neighborhood) mapped.bairro = data.neighborhood;
+    if (data.city) mapped.localidade = data.city;
+    if (data.state) {
+        mapped.estado = data.state;
+        mapped.uf = String(data.state).substring(0, 2).toUpperCase();
+    }
+
     return this.prisma.userAddress.upsert({
       where: { userId },
-      update: data as Prisma.UserAddressUpdateInput,
-      create: { ...(data as Prisma.UserAddressCreateInput), userId } as any,
-    }) as Promise<Record<string, unknown>>;
+      update: mapped,
+      create: { ...mapped, userId },
+    }) as any;
   }
 }

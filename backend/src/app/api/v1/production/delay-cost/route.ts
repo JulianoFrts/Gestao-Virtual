@@ -19,7 +19,7 @@ const delayCostSchema = z.object({
 /**
  * GET - Obtém configuração de custo de atraso do projeto
  */
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
     const { searchParams } = request.nextUrl;
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
     const config = await service.getDelayCostConfig(user.companyId!, projectId);
 
-    return ApiResponse.json(config || { dailyCost: 0, currency: "BRL" });
+    return ApiResponse.json(config || { dailyCost: 0 /* literal */, currency: "BRL" });
   } catch (error) {
     return handleApiError(
       error,
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
 /**
  * POST - Configura custo de atraso
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
 

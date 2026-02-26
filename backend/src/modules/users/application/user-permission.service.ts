@@ -7,8 +7,22 @@ export class UserPermissionService {
 
   async getRankByRole(role: string): Promise<number> {
     try {
-      const roleLower = String(role || "user").toLowerCase();
-      return ROLE_LEVELS[roleLower as keyof typeof ROLE_LEVELS] || 100;
+      const r = String(role || "OPERATIONAL").toUpperCase();
+      
+      // Mapeamento direto de Enum -> Chave de Configuração
+      const map: Record<string, string> = {
+        "HELPER_SYSTEM": "helper_system",
+        "ADMIN": "admin",
+        "COMPANY_ADMIN": "company_admin",
+        "PROJECT_MANAGER": "project_manager",
+        "SITE_MANAGER": "site_manager",
+        "SUPERVISOR": "supervisor",
+        "OPERATIONAL": "operational",
+        "VIEWER": "viewer"
+      };
+
+      const configKey = map[r] || r.toLowerCase();
+      return ROLE_LEVELS[configKey as keyof typeof ROLE_LEVELS] || 100;
     } catch (err) {
       console.error(
         "[UserPermissionService] Failed to get rank for role:",
@@ -29,83 +43,64 @@ export class UserPermissionService {
     try {
       const currentRoleUpper = (role || "WORKER").toUpperCase();
 
-      // 1. Buscar o ID do nível de permissão baseado no nome da role
+      // 1. Matriz de Nível
       const level = await this.repository.findLevelByName(role);
-
       if (level?.id) {
-        // 2. Buscar a matriz de permissões para este nível
         const matrixData = await this.repository.findMatrixByLevelId(level.id);
-
-        // 3. Montar o mapa de permissões
-        if (matrixData) {
-          matrixData.forEach((item: any) => {
-            const moduleCode = item.permissionModule?.code;
-            if (moduleCode) {
-              permissionsMap[moduleCode] = item.isGranted;
-              if (moduleCode.includes(".")) {
-                const [base] = moduleCode.split(".");
-                if (item.isGranted) permissionsMap[base] = true;
-              }
-            }
-          });
-        }
+        this.applyMatrixToMap(matrixData, permissionsMap);
       }
 
-      // 3.4. Garantir acesso básico ao dashboard para todos os logados
+      // 2. Dashboard e Flags Fixas
       permissionsMap["dashboard"] = true;
+      getFlagsForRole(currentRoleUpper).forEach(f => { permissionsMap[f] = true; });
 
-      // 3.5. INJEÇÃO DE FLAGS POR ROLE (ROLE_FLAGS)
-      const roleFlags = getFlagsForRole(currentRoleUpper);
-      roleFlags.forEach(f => { permissionsMap[f] = true; });
-
-      // Escudo Dourado
       if (hasWildcardAccess(currentRoleUpper) || isSystemOwner(currentRoleUpper)) {
         permissionsMap["system.is_protected"] = true;
       }
 
-      // 4. Buscar Permissões Customizadas do Usuário (Overrides Diretos)
+      // 3. Overrides de Usuário
       const user = await this.repository.findUserWithPermissions(userId);
-
-      // 4.1. Aplicar Overrides Individuais
       if (user?.permissions && typeof user.permissions === 'object') {
-        const customPerms = user.permissions as Record<string, any>;
-        Object.entries(customPerms).forEach(([code, isGranted]) => {
-          if (typeof isGranted === 'boolean') {
-            permissionsMap[code] = isGranted;
-            if (isGranted && code.includes(".")) {
-              const [base] = code.split(".");
-              permissionsMap[base] = true;
-            }
-          }
-        });
+        this.applyOverridesToMap(user.permissions as Record<string, any>, permissionsMap);
       }
 
-      // 5. Buscar Permissões Delegadas por Cargo no Projeto
+      // 4. Delegações de Projeto
       if (projectId && userId && user?.functionId) {
-        const delegatedPerms =
-          await this.repository.findProjectDelegations(projectId, user.functionId as string);
-
-        delegatedPerms.forEach((item: any) => {
-          const moduleCode = item.permissionModule?.code;
-          if (moduleCode) {
-            if (item.isGranted) {
-              permissionsMap[moduleCode] = true;
-              if (moduleCode.includes(".")) {
-                const [base] = moduleCode.split(".");
-                permissionsMap[base] = true;
-              }
-            }
-          }
-        });
+        const delegatedPerms = await this.repository.findProjectDelegations(projectId, user.functionId as string);
+        this.applyMatrixToMap(delegatedPerms, permissionsMap);
       }
     } catch (err) {
-      console.error(
-        "[UserPermissionService] Failed to compute permissionsMap:",
-        err,
-      );
+      console.error("[UserPermissionService] Failed to compute permissionsMap:", err);
     }
 
     return permissionsMap;
+  }
+
+  private applyMatrixToMap(matrixData: unknown[], map: Record<string, boolean>): void {
+    if (!matrixData) return;
+
+    for (const element of matrixData) {
+      const moduleCode = element.permissionModule?.code;
+      if (!moduleCode) continue;
+
+      map[moduleCode] = element.isGranted;
+      if (element.isGranted && moduleCode.includes(".")) {
+        map[moduleCode.split(".")[0]] = true;
+      }
+    }
+  }
+
+  private applyOverridesToMap(overrides: Record<string, any>, map: Record<string, boolean>): void {
+    if (!overrides) return;
+
+    for (const [code, isGranted] of Object.entries(overrides)) {
+      if (typeof isGranted !== "boolean") continue;
+
+      map[code] = isGranted;
+      if (isGranted && code.includes(".")) {
+        map[code.split(".")[0]] = true;
+      }
+    }
   }
 
   async getUIFlagsMap(
@@ -115,7 +110,13 @@ export class UserPermissionService {
   ): Promise<Record<string, boolean>> {
     const uiMap: Record<string, boolean> = {};
     const r = (role || "WORKER").toUpperCase();
-    const level = hierarchyLevel || 0;
+    
+    // Garantir rank se hierarchyLevel vier nulo ou zero (comum em refresh parcial)
+    let level = hierarchyLevel || 0;
+    if (level === 0) {
+      level = await this.getRankByRole(r);
+    }
+    
     const perms = permissions || {};
 
     // Flags de Nível Administrativo (Soberania do Backend)

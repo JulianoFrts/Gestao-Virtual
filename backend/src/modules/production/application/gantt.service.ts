@@ -20,7 +20,7 @@ export class GanttService {
 
   public async getGanttData(
     projectId: string,
-    securityContext?: any,
+    securityContext?: unknown,
   ): Promise<GanttNode[]> {
     // Validação de Escopo
     if (securityContext) {
@@ -90,7 +90,7 @@ export class GanttService {
   }
 
   private buildScheduleMap(
-    schedules: any[],
+    schedules: unknown[],
   ): Map<string, { start: Date; end: Date; quantity: number; hhh: number }> {
     const scheduleMap = new Map<
       string,

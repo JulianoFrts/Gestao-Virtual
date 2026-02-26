@@ -11,10 +11,10 @@ const insightService = new SecurityInsightService(repository);
  * GET /api/v1/audit/insights
  * Retorna análise de inteligência forense baseada nos logs de auditoria.
  */
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth(request);
-    const companyId = (user as any).companyId;
+    const companyId = user.companyId;
 
     const insights = await insightService.generateInsights(companyId);
 

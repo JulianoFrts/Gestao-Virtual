@@ -5,10 +5,21 @@ import { requireAuth } from "@/lib/auth/session";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { logger } from "@/lib/utils/logger";
 
+import { z } from "zod";
+
 const repository = new PrismaAssetRepository();
 const assetService = new AssetService(repository);
 
-export async function GET(req: NextRequest) {
+const provisionConstructionSchema = z.object({
+  projectId: z.string().min(1),
+  companyId: z.string().optional(),
+  data: z.array(z.object({
+    towerId: z.string().optional(),
+    id: z.string().optional(),
+  })).min(1),
+});
+
+export async function GET(req: NextRequest): Promise<Response> {
   try {
     await requireAuth(req);
     const { searchParams } = new URL(req.url);
@@ -20,7 +31,7 @@ export async function GET(req: NextRequest) {
 
     const data = await assetService.getConstructionData(projectId);
     return ApiResponse.json(data);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(
       error,
       "src/app/api/v1/tower-construction/route.ts#GET",
@@ -28,27 +39,31 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<Response> {
   try {
-    const session = await requireAuth();
+    const user = await requireAuth();
     const body = await req.json();
 
-    const { projectId, data } = body;
-    const companyId =
-      body.companyId ||
-      (session as any)?.user?.affiliation?.companyId ||
-      (session as any)?.user?.companyId;
+    const validation = provisionConstructionSchema.safeParse(body);
+    if (!validation.success) {
+      return ApiResponse.validationError(validation.error.issues.map(i => i.message));
+    }
 
-    if (!projectId || !companyId || !Array.isArray(data)) {
-      return ApiResponse.badRequest("Missing required fields: projectId or companyId");
+    const { projectId, data } = validation.data;
+    const companyId =
+      validation.data.companyId ||
+      user.companyId;
+
+    if (!companyId) {
+      return ApiResponse.badRequest("companyId is required");
     }
 
     // Extrair apenas os IDs das torres para provisionamento
-    const towerIds = data.map((t: any) => t.towerId || t.id).filter(Boolean);
+    const towerIds = data.map((t) => t.towerId || t.id).filter((id): id is string => !!id);
     const result = await assetService.provisionConstruction(projectId, companyId, towerIds);
     
     return ApiResponse.json({ count: result });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(
       error,
       "src/app/api/v1/tower-construction/route.ts#POST",

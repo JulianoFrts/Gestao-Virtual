@@ -15,10 +15,10 @@ async function diagnose() {
     console.log("Iniciando diagnóstico...");
     console.log(`URL: ${dbUrl.replace(/:[^:@]+@/, ':****@')}`);
 
-    const config: any = {
+    const config: unknown = {
         connectionString: dbUrl,
         ssl: { rejectUnauthorized: false },
-        connectionTimeoutMillis: 10000
+        connectionTimeoutMillis: 10000 /* literal */
     };
 
     // Tentar carregar mTLS se existirem no Windows (para teste local se possível)
@@ -56,7 +56,7 @@ async function diagnose() {
         console.table(permissions.rows);
 
         client.release();
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error("❌ Erro na conexão:", err.message);
         if (err.detail) console.error("Detalhe:", err.detail);
         if (err.hint) console.error("Dica:", err.hint);

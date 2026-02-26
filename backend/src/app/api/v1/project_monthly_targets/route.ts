@@ -8,7 +8,7 @@ import { PrismaProjectRepository } from "@/modules/projects/infrastructure/prism
 const projectRepository = new PrismaProjectRepository();
 const projectService = new ProjectService(projectRepository);
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<Response> {
   try {
     const currentUser = await requireAuth();
     const { isUserAdmin } = await import("@/lib/auth/session");
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get("project_id");
 
-    const where: any = {};
+    const where: unknown = {};
     if (projectId) {
       where.projectId = projectId;
 
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
       if (!isAdmin) {
         try {
           const project = await projectService.getProjectById(projectId);
-          if (project.companyId !== (currentUser as any).companyId) {
+          if (project.companyId !== currentUser.companyId) {
             return ApiResponse.notFound(
               "Projeto não encontrado ou acesso negado",
             );
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     } else if (!isAdmin) {
       // Se não passar projeto, limita aos projetos da empresa
       where.project = {
-        companyId: (currentUser as any).companyId as string,
+        companyId: currentUser.companyId as string,
       };
     }
 
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const body = await req.json();

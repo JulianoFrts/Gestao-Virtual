@@ -32,50 +32,29 @@ async function validateTokenFromQuery(token: string) {
     }
 
     return { id: userId, name, role };
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("[SSE Auth] Erro na validação", { error: error.message });
     throw error;
   }
 }
 
-export async function HEAD() {
+export async function HEAD(): Promise<Response> {
   return ApiResponse.noContent();
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   return handleStreamRequest(request);
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   return handleStreamRequest(request);
 }
 
 async function handleStreamRequest(request: NextRequest) {
   try {
-    const { validateToken } = await import("@/lib/auth/session");
-    let currentUser;
-    let token = request.nextUrl.searchParams.get("token");
+    const user = await requireAuth(request);
 
-    // Se for POST, tenta pegar o token do corpo (JSON)
-    if (request.method === "POST") {
-      try {
-        const body = await request.json();
-        if (body.token) token = body.token;
-      } catch {
-        /* Ignora erro se não houver body JSON */
-      }
-    }
-
-    if (token) {
-      const session = await validateToken(token);
-      if (session?.user) currentUser = session.user;
-    }
-
-    if (!currentUser) {
-      currentUser = await requireAuth(request);
-    }
-
-    const stream = streamService.createScanStream(currentUser.id);
+    const stream = streamService.createScanStream(user.id);
 
     return new Response(stream, {
       headers: {
@@ -85,7 +64,7 @@ async function handleStreamRequest(request: NextRequest) {
         "X-Accel-Buffering": "no",
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     return new Response(JSON.stringify({ error: message }), {
       status: CONSTANTS.HTTP.STATUS.UNAUTHORIZED,

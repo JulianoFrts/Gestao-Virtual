@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { IAuthCredentialRepository } from "../domain/auth-credential.repository";
 import { UserService } from "../../users/application/user.service";
+import { TimeProvider, SystemTimeProvider } from "@/lib/utils/time-provider";
 
 const SALT_ROUNDS = parseInt(process.env.AUTH_SALT_ROUNDS || "12", 10);
 const TOTP_WINDOW = parseInt(process.env.AUTH_TOTP_WINDOW || "30", 10);
@@ -10,7 +11,8 @@ const MFA_ISSUER = process.env.AUTH_MFA_ISSUER || "OrioN";
 export class AuthService {
   constructor(
     private readonly userService: UserService,
-    private readonly authRepo: IAuthCredentialRepository
+    private readonly authRepo: IAuthCredentialRepository,
+    private readonly timeProvider: TimeProvider = new SystemTimeProvider(),
   ) { }
 
   /**
@@ -25,7 +27,7 @@ export class AuthService {
     projectId?: string | null;
     siteId?: string | null;
     registrationNumber?: string | null;
-    [key: string]: any;
+    [key: string]: unknown;
   }) {
     if (!data.password || data.password.length < 6) {
       throw new Error("Senha deve ter no mínimo 6 caracteres");
@@ -44,7 +46,7 @@ export class AuthService {
       siteId: data.siteId || undefined,
       registrationNumber: data.registrationNumber || undefined,
       role: data.role || "USER",
-    } as any);
+    } as unknown);
 
     return newUser;
   }
@@ -57,7 +59,7 @@ export class AuthService {
 
     try {
       credential = await this.authRepo.findByIdentifier(identifier);
-    } catch (dbError: any) {
+    } catch (dbError: unknown) {
       console.error("[AuthService] Erro Prisma ao buscar credencial:", {
         code: dbError?.code,
         message: dbError?.message,
@@ -94,7 +96,7 @@ export class AuthService {
 
     try {
       await this.authRepo.updateLastLogin(credential.userId);
-    } catch (dbError: any) {
+    } catch (dbError: unknown) {
       // Não bloquear login por falha ao atualizar lastLogin
       console.error("[AuthService] Erro ao atualizar lastLogin (não-bloqueante):", {
         code: dbError?.code,
@@ -108,7 +110,7 @@ export class AuthService {
         id: credential.userId,
         email: credential.email,
         name: credential.user?.name || "",
-        role: (credential as any).role || (credential.user as any)?.role || "USER",
+        role: (credential as unknown).role || (credential.user as unknown)?.role || "USER",
         status: credential.status,
       },
     };
@@ -244,7 +246,7 @@ export class AuthService {
     if (!secret || !code) return false;
 
     try {
-      const time = Math.floor(Date.now() / 1000 / TOTP_WINDOW);
+      const time = Math.floor(this.timeProvider.now().getTime() / 1000 / TOTP_WINDOW);
 
       for (let i = -1; i <= 1; i++) {
         const counter = time + i;
@@ -294,9 +296,9 @@ export class AuthService {
     let bits = "";
 
     for (const char of encoded.toUpperCase()) {
-      const val = chars.indexOf(char);
-      if (val === -1) continue;
-      bits += val.toString(2).padStart(5, "0");
+      const schemaInput = chars.indexOf(char);
+      if (schemaInput === -1) continue;
+      bits += input.toString(2).padStart(5, "0");
     }
 
     const bytes: number[] = [];

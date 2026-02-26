@@ -29,7 +29,7 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     await authSession.requireAuth();
     const { id } = await params;
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!team) return ApiResponse.notFound("Equipe não encontrada");
 
     // Validação de Escopo
-    await authSession.requireScope((team as any).companyId, "COMPANY", request);
+    await authSession.requireScope((team as unknown).companyId, "COMPANY", request);
 
     return ApiResponse.json(team);
   } catch (error) {
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     await authSession.requirePermission("teams.manage", request);
     const { id } = await params;
@@ -56,7 +56,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Validação de Escopo
     await authSession.requireScope(
-      (existingTeam as any).companyId,
+      (existingTeam as unknown).companyId,
       "COMPANY",
       request,
     );
@@ -74,7 +74,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     await authSession.requirePermission("teams.manage", request);
     const { id } = await params;
@@ -84,7 +84,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     // Validação de Escopo
     await authSession.requireScope(
-      (existingTeam as any).companyId,
+      (existingTeam as unknown).companyId,
       "COMPANY",
       request,
     );

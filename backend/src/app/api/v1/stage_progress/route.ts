@@ -5,17 +5,33 @@ import { WorkStageProgressService } from "@/modules/work-stages/application/work
 import { PrismaWorkStageProgressRepository } from "@/modules/work-stages/infrastructure/prisma-work-stage-progress.repository";
 import { cacheService } from "@/services/cacheService";
 
+import { z } from "zod";
+
 const service = new WorkStageProgressService(
   new PrismaWorkStageProgressRepository(cacheService),
 );
+
+const upsertProgressSchema = z.object({
+  id: z.string().optional(),
+  stage_id: z.string().min(1, "ID da etapa é obrigatório"),
+  actual_percentage: z.number().min(0).max(100),
+  notes: z.string().optional().nullable(),
+  recorded_at: z.string().optional().nullable(),
+});
 
 export async function POST(req: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const body = await req.json();
-    const { stage_id, actual_percentage, notes, recorded_at } = body;
+    
+    const validation = upsertProgressSchema.safeParse(body);
+    if (!validation.success) {
+      return ApiResponse.validationError(validation.error.issues.map(i => i.message));
+    }
+
+    const { id, stage_id, actual_percentage, notes, recorded_at } = validation.data;
     const progress = await service.upsert({
-      id: body.id,
+      id,
       stageId: stage_id,
       actualPercentage: actual_percentage,
       recordedDate: recorded_at ? new Date(recorded_at) : undefined,

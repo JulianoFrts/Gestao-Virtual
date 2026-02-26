@@ -6,37 +6,42 @@ import { logger } from "@/lib/utils/logger";
 import { GovernanceService } from "@/modules/audit/application/governance.service";
 import { PrismaGovernanceRepository } from "@/modules/audit/infrastructure/prisma-governance.repository";
 import { CONSTANTS } from "@/lib/constants";
+import { Prisma } from "@prisma/client";
+import { z } from "zod";
 
 const governanceService = new GovernanceService(
   new PrismaGovernanceRepository(),
 );
 
-export async function HEAD() {
+export async function HEAD(): Promise<Response> {
   return ApiResponse.noContent();
 }
 
-export async function POST(request: NextRequest) {
+const auditRequestSchema = z.object({
+  stream: z.boolean().optional(),
+  token: z.string().optional(),
+  filters: z.record(z.unknown()).optional(),
+  forensicData: z.record(z.unknown()).optional(),
+});
+
+export async function POST(request: NextRequest): Promise<Response> {
   try {
-    const body = await request.json().catch(() => ({}));
+    const rawBody = await request.json().catch(() => ({}));
+    const validation = auditRequestSchema.safeParse(rawBody);
+    
+    if (!validation.success) {
+      return ApiResponse.validationError(validation.error.issues.map(i => i.message));
+    }
+    
+    const body = validation.data;
 
     // Se houver sinal de stream no corpo, tratamos como requisição de stream
     if (body.stream === true || body.token) {
-      const { validateToken } = await import("@/lib/auth/session");
-      let currentUser;
+      const user = await requireAuth(request);
 
-      const token = body.token;
-      if (token) {
-        const session = await validateToken(token);
-        if (session?.user) currentUser = session.user;
-      }
-
-      if (!currentUser) {
-        currentUser = await requireAuth(request);
-      }
-
-      const companyId = (currentUser as any).companyId;
+      const companyId = user.companyId;
       const where = processAuditFilters(
-        new URLSearchParams(body.filters || {}),
+        new URLSearchParams(body.filters as Record<string, string> || {}),
         companyId,
       );
       const stream = generateAuditStream(where, CONSTANTS);
@@ -61,7 +66,7 @@ export async function POST(request: NextRequest) {
       },
     );
 
-    const companyId = (user as any).companyId;
+    const companyId = user.companyId;
     const auditor = new ArchitecturalAuditor(governanceService);
     const { summary } = await auditor.runFullAudit(user.id, companyId);
 
@@ -84,12 +89,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth(request);
 
     const searchParams = request.nextUrl.searchParams;
-    const companyId = (user as any).companyId;
+    const companyId = user.companyId;
     const where = processAuditFilters(searchParams, companyId);
 
     const stream = generateAuditStream(where, CONSTANTS);
@@ -112,12 +117,12 @@ export async function GET(request: NextRequest) {
 function processAuditFilters(
   searchParams: URLSearchParams,
   companyId?: string,
-): any {
+): Prisma.AuditViolationWhereInput {
   const minSeverity = searchParams.get("minSeverity");
   const startDate = searchParams.get("startDate"); // YYYY-MM-DD
   const endDate = searchParams.get("endDate"); // YYYY-MM-DD
 
-  const where: any = { status: "OPEN" };
+  const where: Prisma.AuditViolationWhereInput = { status: "OPEN" };
   if (companyId) where.companyId = companyId;
 
   if (minSeverity === "MEDIUM") {
@@ -148,12 +153,12 @@ function processAuditFilters(
 /**
  * Função Auxiliar para gerar o Stream de Auditoria (SRP)
  */
-function generateAuditStream(where: any, CONSTANTS: any): ReadableStream {
+function generateAuditStream(where: Prisma.AuditViolationWhereInput, constants: unknown): ReadableStream {
   const encoder = new TextEncoder();
 
   return new ReadableStream({
-    async start(controller) {
-      const sendEvent = (type: string, data: any) => {
+    async start(controller): Promise<unknown> {
+      const sendEvent = (type: string, data: Record<string, unknown>) => {
         try {
           const event = `data: ${JSON.stringify({ type, ...data })}\n\n`;
           controller.enqueue(encoder.encode(event));
@@ -166,7 +171,7 @@ function generateAuditStream(where: any, CONSTANTS: any): ReadableStream {
         const total = await governanceService.countViolations(where);
         sendEvent("start", { total });
 
-        const BATCH_SIZE = CONSTANTS.API.BATCH.SIZE;
+        const BATCH_SIZE = constants.API.BATCH.SIZE;
         let processed = 0;
 
         while (processed < total) {
@@ -178,8 +183,8 @@ function generateAuditStream(where: any, CONSTANTS: any): ReadableStream {
 
           if (violations.length === 0) break;
 
-          const weights = CONSTANTS.AUDIT.WEIGHTS;
-          violations.sort((a: any, b: any) => {
+          const weights = constants.AUDIT.WEIGHTS;
+          violations.sort((a: unknown, b: unknown) => {
             const weightA = weights[a.severity] ?? 0;
             const weightB = weights[b.severity] ?? 0;
             return weightB - weightA;
@@ -196,12 +201,12 @@ function generateAuditStream(where: any, CONSTANTS: any): ReadableStream {
           });
 
           await new Promise((resolve) =>
-            setTimeout(resolve, CONSTANTS.API.THROTTLE.MS),
+            setTimeout(resolve, constants.API.THROTTLE.MS),
           );
         }
 
         sendEvent("complete", { total });
-      } catch (error: any) {
+      } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         sendEvent("error", { message });
       } finally {

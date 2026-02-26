@@ -2,8 +2,11 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma/client";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { HTTP_STATUS } from "@/lib/constants";
+import { SystemTimeProvider } from "@/lib/utils/time-provider";
 
-export async function GET(request: NextRequest) {
+const timeProvider = new SystemTimeProvider();
+
+export async function GET(request: NextRequest): Promise<Response> {
   // Proteção simples: exige uma chave secreta via Header ou Query Param para ver o status real
   const authHeader = request.headers.get("x-health-token");
   const searchParams = request.nextUrl.searchParams;
@@ -19,7 +22,7 @@ export async function GET(request: NextRequest) {
     return ApiResponse.json({
       status: "healthy",
       database: "connected",
-      timestamp: new Date().toISOString(),
+      timestamp: timeProvider.toISOString(),
     });
   } catch (error: unknown) {
     return ApiResponse.errorJson(

@@ -26,7 +26,7 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const parseResult = await parseLoginRequest(request);
 
@@ -45,8 +45,9 @@ export async function POST(request: NextRequest) {
 
     return ApiResponse.json(result.data);
 
-  } catch (error: any) {
-    logger.error("Erro no endpoint de login legado", { error });
+  } catch (error: unknown) {
+    const err = error as Error;
+    logger.error("Erro no endpoint de login legado", { error: err.message });
     return handleApiError(error, "src/app/api/v1/auth/login/route.ts#POST");
   }
 }
@@ -63,11 +64,11 @@ async function executeLogin(email: string, password: string) {
     logger.info("Usuário verificado no banco. Gerando token...", { userId: user.id });
 
     const token = await generateToken({
-      id: user.id as string,
-      email: user.email as string,
-      name: user.name as string,
-      role: (user as any).role as string,
-      status: user.status as string,
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      status: user.status,
       companyId: undefined,
       projectId: undefined,
     });
@@ -79,10 +80,11 @@ async function executeLogin(email: string, password: string) {
         user.id,
         undefined
       );
-    } catch (permError: any) {
+    } catch (permError: unknown) {
+      const err = permError as { code?: string; message?: string };
       logger.warn("Falha ao carregar permissões (não-bloqueante)", {
-        code: permError?.code,
-        message: permError?.message,
+        code: err?.code,
+        message: err?.message,
       });
     }
 
@@ -103,12 +105,13 @@ async function executeLogin(email: string, password: string) {
         expires_in: SESSION_MAX_AGE,
       }
     };
-  } catch (dbError: any) {
+  } catch (dbError: unknown) {
+    const err = dbError as { message: string; code?: string; meta?: unknown; stack?: string };
     logger.error("ERRO CRÍTICO NO BANCO/TOKEN DURANTE LOGIN", {
-      message: dbError.message,
-      code: dbError.code,
-      meta: dbError.meta,
-      stack: dbError.stack?.split("\n").slice(0, CONSTANTS.API.LOGGING.STACK_TRACE_LIMIT).join("\n"),
+      message: err.message,
+      code: err.code,
+      meta: err.meta,
+      stack: err.stack?.split("\n").slice(0, CONSTANTS.API.LOGGING.STACK_TRACE_LIMIT).join("\n"),
     });
     throw dbError;
   }
@@ -125,7 +128,7 @@ async function parseLoginRequest(request: NextRequest) {
     if (!validation.success) {
       return {
         error: "Dados de login inválidos",
-        issues: validation.error.issues.map((e: any) => e.message),
+        issues: validation.error.issues.map((e) => e.message),
       };
     }
 

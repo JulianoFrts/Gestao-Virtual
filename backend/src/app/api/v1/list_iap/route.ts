@@ -6,7 +6,7 @@ import { ProductionFactory } from "@/modules/production/application/production.f
 
 const productionService = ProductionFactory.create();
 
-export async function GET(_request: NextRequest) {
+export async function GET(_request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const iaps = await productionService.listIAPs();

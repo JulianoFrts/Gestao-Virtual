@@ -5,7 +5,7 @@ import { logger } from "@/lib/utils/logger";
 export class DailyReportBulkRejectHandler implements ITaskHandler {
   constructor(private readonly dailyReportService: DailyReportService) {}
 
-  async handle(payload: any): Promise<void> {
+  async handle(payload: unknown): Promise<void> {
     const { ids, reason } = payload;
 
     if (!Array.isArray(ids) || !reason) {

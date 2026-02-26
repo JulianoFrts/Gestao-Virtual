@@ -25,7 +25,7 @@ export interface CreateDailyReportDTO {
   companyId?: string;
   projectId?: string;
   metadata?: Record<string, unknown>;
-  [key: string]: any; // Allow for 'user', 'team', 'company' connect objects
+  [key: string]: unknown; // Allow for 'user', 'team', 'company' connect objects
 }
 
 export interface UpdateDailyReportDTO {

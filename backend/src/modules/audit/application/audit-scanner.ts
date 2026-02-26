@@ -36,9 +36,11 @@ export class AuditScanner {
                 if (entry.isDirectory()) {
                     results = results.concat(await this.getAllFilesAsync(fullPath));
                 } else {
+                    const isTestFile = entry.name.includes(".test.") || entry.name.includes(".spec.");
                     if (
                         (fullPath.endsWith(".ts") || fullPath.endsWith(".tsx")) &&
-                        !fullPath.endsWith(".d.ts")
+                        !fullPath.endsWith(".d.ts") &&
+                        !isTestFile
                     ) {
                         results.push(fullPath);
                     }

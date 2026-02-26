@@ -2,19 +2,19 @@ import { prisma } from "@/lib/prisma/client";
 import { AnchorRepository } from "../domain/anchor.repository";
 
 export class PrismaAnchorRepository implements AnchorRepository {
-  async findFirst(where: any): Promise<any | null> {
+  async findFirst(where: unknown): Promise<any | null> {
     return prisma.model3DAnchor.findFirst({ where });
   }
 
-  async findMany(where: any): Promise<any[]> {
+  async findMany(where: unknown): Promise<any[]> {
     return prisma.model3DAnchor.findMany({ where });
   }
 
-  async upsert(where: any, update: any, create: any): Promise<any> {
+  async upsert(where: unknown, update: unknown, create: unknown): Promise<unknown> {
     return prisma.model3DAnchor.upsert({ where, update, create });
   }
 
-  async delete(where: any): Promise<void> {
+  async delete(where: unknown): Promise<void> {
     await prisma.model3DAnchor.delete({ where });
   }
 
@@ -34,26 +34,26 @@ export class PrismaAnchorRepository implements AnchorRepository {
   }
 
   async upsertTechnicalData(params: {
-    where: any;
-    update: any;
-    create: any;
-  }): Promise<any> {
+    where: unknown;
+    update: unknown;
+    create: unknown;
+  }): Promise<unknown> {
     return prisma.mapElementTechnicalData.upsert(params);
   }
 
   // Legacy support
-  async findLegacyMany(where: any): Promise<any[]> {
-    return (prisma as any).modelAnchors.findMany({
+  async findLegacyMany(where: unknown): Promise<any[]> {
+    return (prisma as unknown).modelAnchors.findMany({
       where,
       orderBy: { createdAt: "desc" },
     });
   }
 
-  async createLegacy(data: any): Promise<any> {
-    return (prisma as any).modelAnchors.create({ data });
+  async createLegacy(data: unknown): Promise<unknown> {
+    return (prisma as unknown).modelAnchors.create({ data });
   }
 
   async deleteLegacy(id: string): Promise<void> {
-    await (prisma as any).modelAnchors.delete({ where: { id } });
+    await (prisma as unknown).modelAnchors.delete({ where: { id } });
   }
 }

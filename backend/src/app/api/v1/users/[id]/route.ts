@@ -37,7 +37,7 @@ function validateUserId(
   return { valid: true, id: result.data };
 }
 
-export async function GET(_request: NextRequest, { params }: RouteParams) {
+export async function GET(_request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     const { id } = await params;
     const idValidation = validateUserId(id);
@@ -47,14 +47,14 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
     const user = await userService.getProfile(idValidation.id);
     return ApiResponse.json(user);
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === "User not found")
       return ApiResponse.notFound(MESSAGES.ERROR.NOT_FOUND);
     return handleApiError(error, "src/app/api/v1/users/[id]/route.ts#GET");
   }
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     const { id } = await params;
     const idValidation = validateUserId(id);
@@ -66,8 +66,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const isAdmin = checkAdmin(
       currentUser.role as string,
-      (currentUser as any).hierarchyLevel,
-      (currentUser as any).permissions,
+      currentUser.hierarchyLevel,
+      (currentUser.permissions as Record<string, boolean>),
     );
 
     const rawBody = await request.json();
@@ -82,7 +82,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       return ApiResponse.validationError(validationResult.errors);
     }
 
-    const updateData: any = validationResult.data;
+    const updateData: unknown = validationResult.data;
 
     // Role normalization
     if (updateData.role && typeof updateData.role === "string") {
@@ -109,7 +109,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     );
 
     return ApiResponse.json(updatedUser, MESSAGES.SUCCESS.UPDATED);
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === "User not found")
       return ApiResponse.notFound(MESSAGES.ERROR.NOT_FOUND);
     if (error.message === "Email already exists")
@@ -119,7 +119,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export async function DELETE(_request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     const { id } = await params;
     const idValidation = validateUserId(id);
@@ -132,7 +132,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     await userService.deleteUser(idValidation.id, admin.id);
 
     return ApiResponse.noContent();
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === "User not found")
       return ApiResponse.notFound(MESSAGES.ERROR.NOT_FOUND);
     if (error.message === "Cannot delete an administrator")
@@ -146,8 +146,8 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
 /**
  * Normaliza campos do body (snake_case -> camelCase e Legislação)
  */
-function normalizeUserBody(rawBody: any): any {
-  const body: any = { ...rawBody };
+function normalizeUserBody(rawBody: unknown): any {
+  const body: unknown = { ...rawBody };
 
   const mapping: Record<string, string> = {
     company_id: "companyId",

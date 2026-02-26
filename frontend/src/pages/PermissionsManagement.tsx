@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { isSidebarOpenSignal } from '@/signals/uiSignals';
@@ -68,9 +69,7 @@ export default function PermissionsManagement() {
         localApi.get('/permission_modules')
       ]);
       
-      const SYSTEM_ROLES = ["SUPER_ADMIN", "SUPER_ADMIN_GOD", "HELPER_SYSTEM"];
-      const levelsData = (Array.isArray(levelsRes.data) ? levelsRes.data : (levelsRes.data as any).data || [])
-        .filter((l: any) => !SYSTEM_ROLES.includes(l.name.toUpperCase()));
+      const levelsData = (Array.isArray(levelsRes.data) ? levelsRes.data : (levelsRes.data as any).data || []);
       const modulesData = Array.isArray(modulesRes.data) ? modulesRes.data : (modulesRes.data as any).data || [];
       
       setLevels(levelsData);
@@ -169,7 +168,7 @@ export default function PermissionsManagement() {
   }
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white p-6 pb-20">
+    <div className="min-h-screen bg-[#050505] text-white p-6 pb-7">
       <header className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
           <Button 
@@ -232,13 +231,26 @@ export default function PermissionsManagement() {
                       className={cn(
                         "w-full flex items-center justify-between p-4 rounded-2xl transition-all group",
                         selectedLevelId === level.id 
-                          ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" 
+                          ? (level.rank >= 1000 ? "bg-amber-500 text-black shadow-lg shadow-amber-500/20" : "bg-primary text-primary-foreground shadow-lg shadow-primary/20")
                           : "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
                       )}
                     >
-                      <div className="text-left">
-                        <span className="text-xs font-black uppercase tracking-widest block opacity-60">Rank {level.rank}</span>
-                        <span className="font-bold text-lg">{level.name}</span>
+                      <div className="text-left flex items-center gap-3">
+                        {level.rank >= 1000 && (
+                          <div className={cn(
+                            "w-10 h-10 rounded-xl flex items-center justify-center border",
+                            selectedLevelId === level.id ? "bg-black/10 border-black/20" : "bg-amber-500/10 border-amber-500/20"
+                          )}>
+                            <ShieldCheck className={cn("w-6 h-6", selectedLevelId === level.id ? "text-black" : "text-amber-500")} />
+                          </div>
+                        )}
+                        <div>
+                          <span className={cn(
+                            "text-[10px] font-black uppercase tracking-widest block opacity-60",
+                            selectedLevelId === level.id && level.rank >= 1000 ? "text-black" : ""
+                          )}>Rank {level.rank}</span>
+                          <span className="font-bold text-lg">{level.name.replace(/_/g, ' ')}</span>
+                        </div>
                       </div>
                       <ChevronRight className={cn("w-5 h-5 transition-transform", selectedLevelId === level.id ? "translate-x-1" : "opacity-0 group-hover:opacity-100")} />
                     </button>
@@ -267,60 +279,59 @@ export default function PermissionsManagement() {
                  </div>
               </div>
             </CardHeader>
-            <CardContent className="p-8">
-               <ScrollArea className="h-[calc(100vh-420px)] pr-6">
-                  <div className="space-y-12">
+            <CardContent className="p-4">
+               <ScrollArea className="h-[calc(100vh-320px)] -mr-4 pr-4">
+                  <Accordion type="multiple" className="space-y-4" defaultValue={Object.keys(groupedModules)}>
                      {Object.entries(groupedModules).map(([category, items]) => (
-                       <div key={category} className="space-y-6">
-                          <h3 className="text-xs font-black uppercase tracking-[0.3em] text-primary/40 border-b border-white/5 pb-2">
-                            {category}
-                          </h3>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                             {items.map((mod, idx) => (
-                               <div 
-                                 key={`${mod.id}-${idx}`} 
-                                 onClick={() => handleTogglePermission(mod.id)}
-                                 className={cn(
-                                   "flex items-center justify-between p-5 rounded-3xl border transition-all cursor-pointer group",
-                                   matrix[mod.id] 
-                                     ? "bg-primary/10 border-primary/30 shadow-[0_0_20px_rgba(var(--primary),0.05)]" 
-                                     : "bg-white/2 border-white/5 hover:border-white/10"
-                                 )}
-                               >
-                                  <div className="flex flex-col gap-1 min-w-0">
-                                     <span className={cn("font-bold text-sm", matrix[mod.id] ? "text-primary" : "text-white")}>
-                                       {mod.name}
-                                     </span>
-                                     <code className="text-[9px] text-slate-500 font-mono tracking-tight bg-white/5 px-2 py-0.5 rounded-full w-fit">
-                                       {mod.code}
-                                     </code>
-                                  </div>
-                                  <Checkbox 
-                                    checked={!!matrix[mod.id]} 
-                                    onCheckedChange={() => handleTogglePermission(mod.id)}
-                                    className="h-6 w-6 rounded-lg border-2 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                                  />
-                               </div>
-                             ))}
-                          </div>
-                       </div>
+                       <AccordionItem key={category} value={category} className="border border-white/5 bg-black/20 rounded-3xl overflow-hidden shadow-lg">
+                          <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-white/5 transition-colors data-[state=open]:border-b data-[state=open]:border-white/5">
+                            <span className="text-sm font-black uppercase tracking-[0.2em] text-primary/80">
+                              {category}
+                            </span>
+                          </AccordionTrigger>
+                          <AccordionContent className="px-4 py-3">
+                            <div className="flex flex-col gap-1">
+                               {items.map((mod, idx) => (
+                                 <div 
+                                   key={`${mod.id}-${idx}`} 
+                                   onClick={() => handleTogglePermission(mod.id)}
+                                   className={cn(
+                                     "flex items-center justify-between px-4 py-2.5 rounded-xl border transition-all cursor-pointer group",
+                                     matrix[mod.id] 
+                                       ? "bg-primary/10 border-primary/30" 
+                                       : "bg-white/2 border-white/5 hover:border-white/10"
+                                   )}
+                                 >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                       <span className={cn("font-bold text-sm", matrix[mod.id] ? "text-primary" : "text-white")}>
+                                         {mod.name}
+                                       </span>
+                                       <code className="text-[9px] text-slate-500 font-mono tracking-tight bg-white/5 px-2 py-0.5 rounded-full shrink-0">
+                                         {mod.code}
+                                       </code>
+                                    </div>
+                                    <Checkbox 
+                                      checked={!!matrix[mod.id]} 
+                                      onCheckedChange={() => handleTogglePermission(mod.id)}
+                                      className="h-5 w-5 rounded-md border-2 data-[state=checked]:bg-primary data-[state=checked]:border-primary shrink-0"
+                                    />
+                                 </div>
+                               ))}
+                            </div>
+                          </AccordionContent>
+                       </AccordionItem>
                      ))}
-                  </div>
+                  </Accordion>
                </ScrollArea>
-               
-               <div className="mt-8 p-6 bg-amber-500/5 rounded-3xl border border-amber-500/10 flex gap-4 items-start">
-                  <AlertTriangle className="w-6 h-6 text-amber-500 shrink-0" />
-                  <div className="space-y-1">
-                     <p className="text-sm font-black uppercase text-amber-500 tracking-wider">Atenção Crítica</p>
-                     <p className="text-xs text-amber-500/60 font-medium leading-relaxed">
-                       Alterar permissões de níveis base pode afetar o acesso de múltiplos usuários simultaneamente. 
-                       Certifique-se de validar as dependências de cada módulo antes de salvar.
-                     </p>
-                  </div>
-               </div>
             </CardContent>
           </Card>
         </div>
+      </div>
+      <div className="mt-2 p-3 bg-amber-500/5 rounded-xl border border-amber-500/10 flex gap-3 items-center">
+        <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+        <p className="text-[11px] text-amber-500/70 font-medium leading-snug">
+          <span className="font-black uppercase tracking-wider">Atenção:</span> Alterar permissões de níveis base pode afetar múltiplos usuários. Valide as dependências antes de salvar.
+        </p>
       </div>
     </div>
   );

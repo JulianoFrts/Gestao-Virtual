@@ -26,11 +26,11 @@ const updateJobFunctionSchema = createJobFunctionSchema.partial();
 
 const querySchema = z.object({
   page: z.preprocess(
-    (val) => (val === null || val === "" ? undefined : val),
+    (rawVal) => (rawVal === null || rawVal === "" ? undefined : rawVal),
     z.coerce.number().min(1).default(1),
   ),
   limit: z.preprocess(
-    (val) => (val === null || val === "" ? undefined : val),
+    (rawVal) => (rawVal === null || rawVal === "" ? undefined : rawVal),
     z.coerce
       .number()
       .min(1)
@@ -42,16 +42,16 @@ const querySchema = z.object({
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => val || undefined),
+    .transform((filterVal) => filterVal || undefined),
   search: z
     .string()
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => val || undefined),
+    .transform((filterVal) => filterVal || undefined),
 });
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
 
@@ -65,9 +65,9 @@ export async function GET(request: NextRequest) {
 
     const { isUserAdmin: checkAdmin } = await import("@/lib/auth/session");
     const isAdmin = checkAdmin(
-      user.role as unknown as string,
-      (user as any).hierarchyLevel,
-      (user as any).permissions,
+      user.role as string,
+      user.hierarchyLevel || 0,
+      (user.permissions as Record<string, boolean>),
     );
 
     const result = await jobFunctionService.listJobFunctions({
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const { can } = await import("@/lib/auth/permissions");
     if (!(await can("functions.manage"))) {
@@ -92,10 +92,10 @@ export async function POST(request: NextRequest) {
     const user = await requireAuth();
 
     const body = await request.json();
-    const data = createJobFunctionSchema.parse(body);
+    const jobFunctionData = createJobFunctionSchema.parse(body);
 
     // Regra de Negócio: Se não tiver companyId, precisa ser gestor global (System Owner)
-    if (!data.companyId) {
+    if (!jobFunctionData.companyId) {
       const isGlobalManager = isSystemOwner(user.role as string);
       if (!isGlobalManager) {
         return ApiResponse.forbidden(
@@ -103,17 +103,16 @@ export async function POST(request: NextRequest) {
         );
       }
     }
-    // ... (omitting for brevity, but I will include full logic in the tool call)
 
     try {
-      const jobFunction = await jobFunctionService.createJobFunction(data);
+      const jobFunction = await jobFunctionService.createJobFunction(jobFunctionData);
       logger.info("Cargo criado", { jobFunctionId: jobFunction.id });
       return ApiResponse.created(jobFunction, "Cargo criado com sucesso");
-    } catch (error: any) {
-      if (error.message === "COMPANY_NOT_FOUND") {
+    } catch (error: unknown) {
+      if (error?.message === "COMPANY_NOT_FOUND") {
         return ApiResponse.badRequest("Empresa não encontrada");
       }
-      if (error.message === "DUPLICATE_NAME") {
+      if (error?.message === "DUPLICATE_NAME") {
         return ApiResponse.conflict(
           "Cargo com este nome já existe nesta empresa ou globalmente",
         );
@@ -126,7 +125,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function PATCH(request: NextRequest) {
+export async function PATCH(request: NextRequest): Promise<Response> {
   try {
     const { can } = await import("@/lib/auth/permissions");
     if (!(await can("functions.manage"))) {
@@ -141,7 +140,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const data = updateJobFunctionSchema.parse(body);
+    const updates = updateJobFunctionSchema.parse(body);
 
     // Business Logic: If updating a global template (companyId is null/missing)
     // Check if user is system owner
@@ -160,14 +159,14 @@ export async function PATCH(request: NextRequest) {
     }
 
     try {
-      const updated = await jobFunctionService.updateJobFunction(id, data);
+      const updated = await jobFunctionService.updateJobFunction(id, updates);
       logger.info("Cargo atualizado (PATCH)", {
         jobFunctionId: id,
         updatedBy: user.id,
       });
       return ApiResponse.json(updated, "Cargo atualizado com sucesso");
-    } catch (error: any) {
-      if (error.message === "DUPLICATE_NAME") {
+    } catch (error: unknown) {
+      if (error?.message === "DUPLICATE_NAME") {
         return ApiResponse.conflict("Já existe um cargo com este nome");
       }
       throw error;
@@ -178,11 +177,11 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-export async function PUT(request: NextRequest) {
+export async function PUT(request: NextRequest): Promise<Response> {
   return PATCH(request);
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<Response> {
   try {
     const { can } = await import("@/lib/auth/permissions");
     if (!(await can("functions.manage"))) {
@@ -200,7 +199,7 @@ export async function DELETE(request: NextRequest) {
       await jobFunctionService.deleteJobFunction(id);
       logger.info("Cargo excluído", { jobFunctionId: id, deletedBy: user.id });
       return ApiResponse.json(null, "Cargo excluído com sucesso");
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error.message === "JOB_FUNCTION_NOT_FOUND") {
         return ApiResponse.notFound("Cargo não encontrado");
       }

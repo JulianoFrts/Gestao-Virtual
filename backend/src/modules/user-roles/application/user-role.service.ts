@@ -7,12 +7,12 @@ export class UserRoleService {
     return this.repository.findByUserId(userId);
   }
 
-  async assignRole(data: any) {
+  async assignRole(data: unknown) {
     // Business logic for role assignment (e.g. check if role already exists)
     return this.repository.create(data);
   }
 
-  async updateRole(id: string, data: any) {
+  async updateRole(id: string, data: unknown) {
     return this.repository.update(id, data);
   }
 

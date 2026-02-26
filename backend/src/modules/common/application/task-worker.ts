@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma/client";
-import { TaskStatus, Prisma } from "@prisma/client";
+import { TaskStatus, Prisma, TaskQueue } from "@prisma/client";
 import { ITaskHandler } from "../domain/task-handler.interface";
 
 export class TaskWorker {
@@ -27,7 +27,8 @@ export class TaskWorker {
       try {
         // Tenta capturar uma tarefa atômica mudando de 'pending' para 'processing' em um único passo
         // Isso evita que dois Workers capturem a mesma tarefa simultaneamente
-        const tasks = (await prisma.$queryRaw(
+        // O uso de Prisma.sql garante a parametrização segura da query
+        const tasks = (await prisma.$queryRaw<TaskQueue[]>(
           Prisma.sql`
             UPDATE "task_queue" 
             SET status = ${TaskStatus.processing}::"TaskStatus", "updated_at" = NOW()
@@ -40,7 +41,7 @@ export class TaskWorker {
             )
             RETURNING *
           `
-        )) as any[];
+        ));
 
         const task = tasks && tasks.length > 0 ? tasks[0] : null;
 
@@ -67,7 +68,7 @@ export class TaskWorker {
     this.isRunning = false;
   }
 
-  private async handleTaskWithStatus(task: any): Promise<void> {
+  private async handleTaskWithStatus(task: TaskQueue): Promise<void> {
     const handler = this.handlers.get(task.type);
 
     if (!handler) {
@@ -80,42 +81,29 @@ export class TaskWorker {
 
     try {
       // Executa o handler
-      await handler.handle(task.payload);
+      await handler.handle(task.payload as Record<string, unknown>);
 
       // Marca como concluído
-      const queue = (prisma as any).taskQueue || (prisma as any).task_queue;
-      if (queue) {
-        await queue.update({
-          where: { id: task.id },
-          data: { status: TaskStatus.completed, updatedAt: new Date() },
-        });
-      } else {
-        await prisma.$executeRaw(
-          Prisma.sql`UPDATE "task_queue" SET status = ${TaskStatus.completed}::"TaskStatus", "updated_at" = NOW() WHERE id = ${task.id}`
-        );
-      }
-    } catch (error: any) {
-      await this.markAsFailed(task.id, error.message);
+      await prisma.taskQueue.update({
+        where: { id: task.id },
+        data: { status: TaskStatus.completed, updatedAt: this.timeProvider ? this.timeProvider.now() : this.timeProvider.now() },
+      });
+    } catch (error: unknown) {
+      const err = error as Error;
+      await this.markAsFailed(task.id, err.message);
     }
   }
 
   private async markAsFailed(id: string, errorMessage: string): Promise<void> {
     try {
-      const queue = (prisma as any).taskQueue || (prisma as any).task_queue;
-      if (queue) {
-        await queue.update({
-          where: { id },
-          data: {
-            status: TaskStatus.failed,
-            error: errorMessage,
-            updatedAt: new Date(),
-          },
-        });
-      } else {
-        await prisma.$executeRaw(
-          Prisma.sql`UPDATE "task_queue" SET status = ${TaskStatus.failed}::"TaskStatus", error = ${errorMessage}, "updated_at" = NOW() WHERE id = ${id}`
-        );
-      }
+      await prisma.taskQueue.update({
+        where: { id },
+        data: {
+          status: TaskStatus.failed,
+          error: errorMessage,
+          updatedAt: this.timeProvider ? this.timeProvider.now() : this.timeProvider.now(),
+        },
+      });
     } catch (err) {
       // Silencioso
     }

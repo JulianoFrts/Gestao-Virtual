@@ -3,6 +3,7 @@ import { type NextRequest } from "next/server";
 import type { Role } from "@/types/database";
 import { getCurrentSession } from "./core";
 import { isUserAdmin, isGlobalAdmin } from "./utils";
+import { HTTP_STATUS } from "@/lib/constants";
 
 /**
  * Obtém o usuário atual ou lança erro
@@ -11,7 +12,7 @@ export async function requireAuth(req?: NextRequest): Promise<Session["user"]> {
   const session = await getCurrentSession(req);
   if (!session?.user) {
     const error = new Error("Não autenticado");
-    (error as any).status = 401;
+    (error as unknown).status = HTTP_STATUS.UNAUTHORIZED;
     throw error;
   }
   return session.user;
@@ -29,7 +30,7 @@ export async function requirePermission(
 
   if (!hasPermission) {
     const error = new Error(`Permissão negada: ${permission}`);
-    (error as any).status = 403;
+    (error as unknown).status = HTTP_STATUS.FORBIDDEN;
     throw error;
   }
 
@@ -46,12 +47,12 @@ export async function requireScope(
   req?: NextRequest,
 ): Promise<Session["user"]> {
   const user = await requireAuth(req);
-  const { role, companyId, id: userId } = user as any;
-  const permissions = (user as any).permissions || {};
+  const { role, companyId, id: userId } = user as unknown;
+  const permissions = (user.permissions as Record<string, boolean>) || {};
 
   // Apenas Administradores Globais (rank 1000+) ignoram travas de escopo.
   // Administradores de Empresa (rank 900) DEVEM ser validados pelo companyId.
-  if (isGlobalAdmin(role, (user as any).hierarchyLevel, permissions)) {
+  if (isGlobalAdmin(role, user.hierarchyLevel || 0, permissions)) {
     return user;
   }
 
@@ -62,11 +63,10 @@ export async function requireScope(
   } else if (type === "USER") {
     isAllowed = userId === targetId;
   }
-  // TODO: Implementar lógica de PROJECT se necessário, buscando no banco ou via cache
 
   if (!isAllowed) {
     const error = new Error("Acesso restrito: Violação de escopo de dados");
-    (error as any).status = 403;
+    (error as unknown).status = HTTP_STATUS.FORBIDDEN;
     throw error;
   }
 
@@ -80,10 +80,10 @@ export async function can(permission: string): Promise<boolean> {
   const session = await getCurrentSession();
   if (!session?.user) return false;
 
-  const { role, hierarchyLevel } = session.user as any;
-  const permissions = (session.user as any).permissions || {};
+  const { role, hierarchyLevel } = session.user as unknown;
+  const permissions = (session.user.permissions as Record<string, boolean>) || {};
 
-  if (isUserAdmin(role, hierarchyLevel, permissions)) return true;
+  if (isUserAdmin(role, hierarchyLevel || 0, permissions)) return true;
 
   return !!permissions[permission] || !!permissions["system.full_access"];
 }
@@ -95,12 +95,12 @@ export async function show(flag: string): Promise<boolean> {
   const session = await getCurrentSession();
   if (!session?.user) return false;
 
-  const ui = (session.user as any).ui || {};
+  const ui = (session.user as unknown).ui || {};
   if (Object.keys(ui).length === 0) {
-    const permissions = (session.user as any).permissions || {};
+    const permissions = (session.user.permissions as Record<string, boolean>) || {};
     return isUserAdmin(
-      session.user.role,
-      (session.user as any).hierarchyLevel,
+      session.user.role as unknown,
+      session.user.hierarchyLevel || 0,
       permissions,
     );
   }
@@ -116,10 +116,10 @@ export async function requireRole(
   req?: NextRequest,
 ): Promise<Session["user"]> {
   const user = await requireAuth(req);
-  const permissions = (user as any).permissions || {};
+  const permissions = (user.permissions as Record<string, boolean>) || {};
   if (
     user.role !== requiredRole &&
-    !isUserAdmin(user.role, (user as any).hierarchyLevel, permissions)
+    !isUserAdmin(user.role, user.hierarchyLevel, permissions)
   ) {
     throw new Error("Sem permissão");
   }
@@ -134,10 +134,10 @@ export async function requireRoles(
   req?: NextRequest,
 ): Promise<Session["user"]> {
   const user = await requireAuth(req);
-  const permissions = (user as any).permissions || {};
+  const permissions = (user.permissions as Record<string, boolean>) || {};
   if (
-    !allowedRoles.includes(user.role as any) &&
-    !isUserAdmin(user.role, (user as any).hierarchyLevel, permissions)
+    !allowedRoles.includes(user.role as unknown) &&
+    !isUserAdmin(user.role, user.hierarchyLevel, permissions)
   ) {
     throw new Error("Sem permissão");
   }
@@ -151,8 +151,8 @@ export async function requireAdmin(
   req?: NextRequest,
 ): Promise<Session["user"]> {
   const user = await requireAuth(req);
-  const permissions = (user as any).permissions || {};
-  if (!isUserAdmin(user.role, (user as any).hierarchyLevel, permissions))
+  const permissions = (user.permissions as Record<string, boolean>) || {};
+  if (!isUserAdmin(user.role, user.hierarchyLevel, permissions))
     throw new Error("Acesso restrito admin");
   return user;
 }
@@ -165,10 +165,10 @@ export async function requireOwnerOrAdmin(
   req?: NextRequest,
 ): Promise<Session["user"]> {
   const user = await requireAuth(req);
-  const permissions = (user as any).permissions || {};
+  const permissions = (user.permissions as Record<string, boolean>) || {};
   if (
     user.id !== resourceOwnerId &&
-    !isGlobalAdmin(user.role, (user as any).hierarchyLevel, permissions)
+    !isGlobalAdmin(user.role, user.hierarchyLevel, permissions)
   ) {
     throw new Error("Sem permissão recurso");
   }
@@ -203,12 +203,12 @@ export async function checkPermission(
     return { allowed: false, user: null, reason: "Não autenticado" };
 
   const { role } = session.user;
-  const hierarchyLevel = (session.user as any).hierarchyLevel;
-  const permissions = (session.user as any).permissions || {};
+  const hierarchyLevel = session.user.hierarchyLevel;
+  const permissions = (session.user.permissions as Record<string, boolean>) || {};
 
   if (requiredRoles.length > 0) {
     const hasRole =
-      requiredRoles.includes(role as any) ||
+      requiredRoles.includes(role as unknown) ||
       isUserAdmin(role, hierarchyLevel, permissions);
     if (!hasRole)
       return {

@@ -50,8 +50,8 @@ export class PrismaTowerRepository implements TowerRepository {
     };
   }
 
-  private mapFromUnified(unified: any): Tower {
-    const meta = unified.metadata as any;
+  private mapFromUnified(unified: unknown): Tower {
+    const meta = unified.metadata as unknown;
     return {
       id: unified.id,
       projectId: unified.projectId,
@@ -86,15 +86,15 @@ export class PrismaTowerRepository implements TowerRepository {
     return this.performUpsert(data);
   }
 
-  private async performUpdate(id: string, data: any): Promise<Tower> {
+  private async performUpdate(id: string, data: unknown): Promise<Tower> {
     const updated = await prisma.mapElementTechnicalData.update({
       where: { id },
-      data: data as any,
+      data: data as unknown,
     });
     return this.mapFromUnified(updated);
   }
 
-  private async performUpsert(data: any): Promise<Tower> {
+  private async performUpsert(data: unknown): Promise<Tower> {
     const upserted = await prisma.mapElementTechnicalData.upsert({
       where: {
         projectId_externalId: {
@@ -102,8 +102,8 @@ export class PrismaTowerRepository implements TowerRepository {
           externalId: data.externalId,
         },
       },
-      update: data as any,
-      create: data as any,
+      update: data as unknown,
+      create: data as unknown,
     });
     return this.mapFromUnified(upserted);
   }

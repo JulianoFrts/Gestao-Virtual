@@ -33,16 +33,16 @@ export class PrismaSiteRepository implements SiteRepository {
     ]);
 
     // Map the responsibles to simpler responsibleIds array for frontend
-    const mappedItems = items.map((item: any) => ({
-      ...item,
-      responsibleIds: item.responsibles?.map((r: any) => r.userId) || [],
+    const mappedItems = items.map((element: unknown) => ({
+      ...element,
+      responsibleIds: element.responsibles?.map((r: unknown) => r.userId) || [],
     }));
 
     return { items: mappedItems, total };
   }
 
   private buildWhereClause(params: FindAllSitesParams): any {
-    const where: any = {};
+    const where: unknown = {};
 
     if (params.projectId) {
       if (!params.isGlobalAccess && params.companyId) {
@@ -68,7 +68,7 @@ export class PrismaSiteRepository implements SiteRepository {
     return where;
   }
 
-  async create(data: any): Promise<any> {
+  async create(data: unknown): Promise<unknown> {
     const { responsibleIds, ...siteData } = data;
 
     return prisma.site.create({
@@ -90,7 +90,7 @@ export class PrismaSiteRepository implements SiteRepository {
     });
   }
 
-  async count(where: any): Promise<number> {
+  async count(where: unknown): Promise<number> {
     return prisma.site.count({ where });
   }
 
@@ -103,7 +103,7 @@ export class PrismaSiteRepository implements SiteRepository {
           include: { supervisor: { select: { id: true, name: true } } },
         },
         userAffiliations: {
-          take: 10,
+          take: 10 /* literal */,
           include: { user: { select: { id: true, name: true } } },
         },
         _count: {
@@ -113,7 +113,7 @@ export class PrismaSiteRepository implements SiteRepository {
     });
   }
 
-  async update(id: string, data: any): Promise<any> {
+  async update(id: string, data: unknown): Promise<unknown> {
     const { responsibleIds, ...siteData } = data;
 
     // If responsibleIds is provided, sync the many-to-many relation

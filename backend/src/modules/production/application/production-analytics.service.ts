@@ -10,7 +10,6 @@ import { prisma } from "@/lib/prisma/client";
 import {
   format,
   startOfDay,
-  endOfDay,
   eachWeekOfInterval,
   eachMonthOfInterval,
   eachQuarterOfInterval,
@@ -37,18 +36,23 @@ import {
   CostDistributionItem,
 } from "./dtos/production-analytics.dto";
 import { ProgressHistoryEntry } from "../domain/production.repository";
+import { TimeProvider, SystemTimeProvider } from "@/lib/utils/time-provider";
+import { RandomProvider, SystemRandomProvider } from "@/lib/utils/random-provider";
 
 export class ProductionAnalyticsService {
+  constructor(
+    private readonly timeProvider: TimeProvider = new SystemTimeProvider(),
+    private readonly randomProvider: RandomProvider = new SystemRandomProvider(),
+  ) {}
+
   /**
    * Gera a Curva S Física baseada em peso unitário (Bottom-up)
-   * Migrado de ProductionDashboard.tsx logic
    */
   async getPhysicalProgressCurve(
     params: AnalyticsParams,
   ): Promise<PhysicalCurveItem[]> {
     const { projectId, granularity, startDate, endDate, activityId } = params;
 
-    // 1. Busca de Dados
     const towers = await prisma.mapElementTechnicalData.findMany({
       where: { projectId, elementType: "TOWER" },
       include: {
@@ -59,131 +63,35 @@ export class ProductionAnalyticsService {
 
     if (towers.length === 0) return [];
 
-    // 2. Processamento das Atividades Relevantes
-    const relevantActivities: {
-      plannedEnd?: Date;
-      history: { date: Date; percent: number }[];
-    }[] = [];
-
-    towers.forEach(
-      (
-        t: MapElementTechnicalData & {
-          activitySchedules: ActivitySchedule[];
-          mapElementProductionProgress: MapElementProductionProgress[];
-        },
-      ) => {
-        const schedules =
-          activityId && activityId !== "all"
-            ? t.activitySchedules.filter(
-                (s: ActivitySchedule) => s.activityId === activityId,
-              )
-            : t.activitySchedules;
-
-        const progresses =
-          activityId && activityId !== "all"
-            ? t.mapElementProductionProgress.filter(
-                (p: MapElementProductionProgress) =>
-                  p.activityId === activityId,
-              )
-            : t.mapElementProductionProgress;
-
-        schedules.forEach((sched: ActivitySchedule) => {
-          const status = progresses.find(
-            (p: MapElementProductionProgress) =>
-              p.activityId === sched.activityId,
-          );
-          const history: { date: Date; percent: number }[] = [];
-
-          if (status?.history && Array.isArray(status.history)) {
-            (status.history as unknown as ProgressHistoryEntry[]).forEach(
-              (h: ProgressHistoryEntry) => {
-                const date = (h.changedAt || h.timestamp) as string;
-                if (date) {
-                  history.push({
-                    date: new Date(date),
-                    percent: Number(h.progressPercent || h.progress || 0),
-                  });
-                }
-              },
-            );
-          } else if (status?.currentStatus === "FINISHED" && status.endDate) {
-            history.push({
-              date: new Date(status.endDate),
-              percent: 100,
-            });
-          }
-
-          relevantActivities.push({
-            plannedEnd: sched.plannedEnd
-              ? new Date(sched.plannedEnd)
-              : undefined,
-            history,
-          });
-        });
-      },
-    );
-
+    const relevantActivities = this.extractRelevantActivities(towers, activityId);
     if (relevantActivities.length === 0) return [];
 
-    // 3. Determinação do Intervalo de Tempo
-    const allDates = [
-      ...relevantActivities.map((i) => i.plannedEnd),
-      ...relevantActivities.flatMap((i) => i.history.map((h) => h.date)),
-    ].filter((d): d is Date => d !== undefined) as Date[];
-
+    const allDates = this.collectAllDates(relevantActivities);
     if (allDates.length === 0) return [];
 
-    const start = startDate
-      ? startOfDay(new Date(startDate))
-      : startOfMonth(min(allDates));
-    const end = endDate
-      ? endOfDay(new Date(endDate))
-      : endOfMonth(max(allDates));
+    const start = startDate ? startOfDay(new Date(startDate)) : startOfMonth(min(allDates));
+    const end = endDate ? startOfDay(new Date(endDate)) : startOfMonth(max(allDates));
 
-    // 4. Geração da Timeline
-    let timeline: Date[];
-    if (granularity === "weekly") {
-      timeline = eachWeekOfInterval(
-        { start, end: addWeeks(end, 1) },
-        { weekStartsOn: 1 },
-      );
-    } else {
-      timeline = eachMonthOfInterval({ start, end: addMonths(end, 1) });
-    }
-
-    // 5. Cálculo Acumulado (Curva S)
+    const timeline = this.generateTimeline(start, end, granularity);
     const totalWeight = relevantActivities.length || 1;
 
     return timeline.map((period) => {
-      const periodEnd =
-        granularity === "weekly"
-          ? endOfWeek(period, { weekStartsOn: 1 })
-          : endOfMonth(period);
+      const periodEnd = granularity === "weekly" 
+        ? endOfWeek(period, { weekStartsOn: 1 }) 
+        : endOfMonth(period);
 
-      // Planejado: quantia de atividades que deveriam estar prontas até periodEnd
-      const plannedSum = relevantActivities.reduce((acc, i) => {
-        return (
-          acc + (i.plannedEnd && isBefore(i.plannedEnd, periodEnd) ? 1 : 0)
-        );
-      }, 0);
+      const plannedSum = relevantActivities.reduce((acc, i) => 
+        acc + (i.plannedEnd && isBefore(i.plannedEnd, periodEnd) ? 1 : 0), 0);
 
-      // Realizado: maior progresso registrado até periodEnd
       const actualSum = relevantActivities.reduce((acc, i) => {
-        const historyBefore = i.history.filter((h) =>
-          isBefore(h.date, periodEnd),
-        );
+        const historyBefore = i.history.filter((h) => isBefore(h.date, periodEnd));
         if (historyBefore.length === 0) return acc;
         const maxProgress = Math.max(...historyBefore.map((h) => h.percent));
         return acc + maxProgress / 100;
       }, 0);
 
-      const label =
-        granularity === "weekly"
-          ? `S${format(period, "ww", { locale: ptBR })} - ${format(period, "dd/MM", { locale: ptBR })}`
-          : format(period, "MMM/yy", { locale: ptBR });
-
       return {
-        period: label,
+        period: this.getPeriodLabel(period, granularity),
         date: period.toISOString(),
         planned: (plannedSum / totalWeight) * 100,
         actual: (actualSum / totalWeight) * 100,
@@ -194,9 +102,72 @@ export class ProductionAnalyticsService {
     });
   }
 
+  private extractRelevantActivities(towers: unknown[], activityId?: string) {
+    const activities: unknown[] = [];
+    
+    for (const tower of towers) {
+      const filteredSchedules = this.filterSchedules(tower.activitySchedules, activityId);
+      const filteredProgress = this.filterProgress(tower.mapElementProductionProgress, activityId);
+
+      for (const schedule of filteredSchedules) {
+        const progress = filteredProgress.find((p: unknown) => p.activityId === schedule.activityId);
+        activities.push({
+          plannedEnd: schedule.plannedEnd ? new Date(schedule.plannedEnd) : undefined,
+          history: this.mapProgressHistory(progress),
+        });
+      }
+    }
+    return activities;
+  }
+
+  private filterSchedules(schedules: unknown[], activityId?: string) {
+    if (!activityId || activityId === "all") return schedules;
+    return schedules.filter((s: unknown) => s.activityId === activityId);
+  }
+
+  private filterProgress(progresses: unknown[], activityId?: string) {
+    if (!activityId || activityId === "all") return progresses;
+    return progresses.filter((p: unknown) => p.activityId === activityId);
+  }
+
+  private mapProgressHistory(status: unknown) {
+    const history: unknown[] = [];
+    if (!status) return history;
+
+    if (status.history && Array.isArray(status.history)) {
+      status.history.forEach((h: unknown) => {
+        const date = h.changedAt || h.timestamp;
+        if (date) history.push({ date: new Date(date), percent: Number(h.progressPercent || h.progress || 0) });
+      });
+    } else if (status.currentStatus === "FINISHED" && status.endDate) {
+      history.push({ date: new Date(status.endDate), percent: 100 });
+    }
+    return history;
+  }
+
+  private collectAllDates(activities: unknown[]): Date[] {
+    return [
+      ...activities.map((i) => i.plannedEnd),
+      ...activities.flatMap((i) => i.history.map((h: unknown) => h.date)),
+    ].filter((d): d is Date => d !== undefined);
+  }
+
+  private generateTimeline(start: Date, end: Date, granularity: string): Date[] {
+    if (granularity === "weekly") {
+      return eachWeekOfInterval({ start, end: addWeeks(end, 1) }, { weekStartsOn: 1 });
+    }
+    return eachMonthOfInterval({ start, end: addMonths(end, 1) });
+  }
+
+  private getPeriodLabel(date: Date, granularity: string): string {
+    if (granularity === "weekly") {
+      return `S${format(date, "ww", { locale: ptBR })} - ${format(date, "dd/MM", { locale: ptBR })}`;
+    }
+    return format(date, "MMM/yy", { locale: ptBR });
+  }
+
   /**
    * Calcula dados financeiros (Curva S Financeira e Pareto)
-   * Migrada de FinancialAnalyticsService.ts
    */
   async getFinancialData(params: {
     projectId: string;
@@ -206,250 +177,180 @@ export class ProductionAnalyticsService {
   }): Promise<FinancialAnalyticsResponse> {
     const { projectId, granularity, startDate, endDate } = params;
 
-    // 1. Busca de Dados
     const [towers, categories, unitCosts] = await Promise.all([
       prisma.mapElementTechnicalData.findMany({
         where: { projectId, elementType: "TOWER" },
-        include: {
-          activitySchedules: true,
-          mapElementProductionProgress: true,
-        },
+        include: { activitySchedules: true, mapElementProductionProgress: true },
       }),
-      prisma.productionCategory.findMany({
-        include: { productionActivities: true },
-      }),
+      prisma.productionCategory.findMany({ include: { productionActivities: true } }),
       prisma.activityUnitCost.findMany({ where: { projectId } }),
     ]);
 
-    const costMap = new Map<string, number>();
-    unitCosts.forEach((uc: ActivityUnitCost) =>
-      costMap.set(uc.activityId, Number(uc.unitPrice || 0)),
-    );
-
-    // 2. Processamento de Itens Individuais
-    const items: {
-      name: string;
-      plannedEnd: Date;
-      actualEnd?: Date;
-      cost: number;
-      isFinished: boolean;
-    }[] = [];
-
-    towers.forEach(
-      (
-        t: MapElementTechnicalData & {
-          activitySchedules: ActivitySchedule[];
-          mapElementProductionProgress: MapElementProductionProgress[];
-        },
-      ) => {
-        categories.forEach(
-          (
-            cat: ProductionCategory & {
-              productionActivities: { id: string; name: string }[];
-            },
-          ) => {
-            cat.productionActivities.forEach(
-              (act: { id: string; name: string }) => {
-                const price = costMap.get(act.id) || 0;
-                if (price <= 0) return;
-
-                const schedule = t.activitySchedules?.find(
-                  (s: ActivitySchedule) => s.activityId === act.id,
-                );
-                const status = t.mapElementProductionProgress?.find(
-                  (s: MapElementProductionProgress) => s.activityId === act.id,
-                );
-
-                if (schedule?.plannedEnd) {
-                  items.push({
-                    name: act.name,
-                    plannedEnd: startOfDay(new Date(schedule.plannedEnd)),
-                    actualEnd: status?.endDate
-                      ? startOfDay(new Date(status.endDate))
-                      : undefined,
-                    cost: Number(schedule.plannedQuantity || 1) * price,
-                    isFinished: status?.currentStatus === "FINISHED",
-                  });
-                }
-              },
-            );
-          },
-        );
-      },
-    );
+    const costMap = new Map(unitCosts.map(uc => [uc.activityId, Number(uc.unitPrice || 0)]));
+    const items = this.extractFinancialItems(towers, categories, costMap);
 
     if (items.length === 0) {
       return { curve: [], stats: { budget: 0, earned: 0 }, pareto: [] };
     }
 
-    // 3. Determinação do Intervalo e Filtros
-    const allDates = items.flatMap(
-      (i: { plannedEnd: Date; actualEnd?: Date }) =>
-        [i.plannedEnd, i.actualEnd].filter((d): d is Date => d !== undefined),
-    );
-    const minDateFound = allDates.reduce((a: Date, b: Date) => (a < b ? a : b));
-    const maxDateFound = allDates.reduce((a: Date, b: Date) => (a > b ? a : b));
+    const allDates = items.flatMap(i => [i.plannedEnd, i.actualEnd].filter((d): d is Date => d !== undefined));
+    const filterStart = startDate ? startOfDay(new Date(startDate)) : min(allDates);
+    const filterEnd = endDate ? startOfDay(new Date(endDate)) : max(allDates);
 
-    const filterStart = startDate
-      ? startOfDay(new Date(startDate))
-      : minDateFound;
-    const filterEnd = endDate ? endOfDay(new Date(endDate)) : maxDateFound;
+    const stats = this.calculateFinancialStats(items, filterStart, filterEnd);
+    const timeline = this.generateFinancialTimeline(filterStart, filterEnd, granularity);
 
-    // 4. Cálculo de Totais e Pareto
-    let totalBudget = 0;
-    let totalEarned = 0;
-    const periodActivityCosts: Record<string, number> = {};
+    const curve = timeline.map(period => {
+      const periodEnd = this.getPeriodEnd(period, granularity, filterEnd);
+      const plannedAcc = items.filter(i => isBefore(i.plannedEnd, periodEnd)).reduce((acc, curr) => acc + curr.cost, 0);
+      const actualAcc = items.filter(i => i.actualEnd && isBefore(i.actualEnd, periodEnd)).reduce((acc, curr) => acc + curr.cost, 0);
 
-    items.forEach((item) => {
-      if (
-        isWithinInterval(item.plannedEnd, {
-          start: filterStart,
-          end: filterEnd,
-        })
-      ) {
-        totalBudget += item.cost;
+      return { period: this.getFinancialLabel(period, granularity), planned: plannedAcc, actual: actualAcc };
+    });
+
+    return { curve, stats: stats.totals, pareto: stats.pareto };
+  }
+
+  private extractFinancialItems(towers: unknown[], categories: unknown[], costMap: Map<string, number>) {
+    const items: unknown[] = [];
+    this.processSubList(tower, categories, (category) => {
+        items.push(...this.processCategoryActivities(tower, category, costMap));
       }
+    }
+    return items;
+  }
 
-      if (item.isFinished && item.actualEnd) {
-        if (
-          isWithinInterval(item.actualEnd, {
-            start: filterStart,
-            end: filterEnd,
-          })
-        ) {
-          totalEarned += item.cost;
-        }
-      }
+  private processCategoryActivities(tower: unknown, category: unknown, costMap: Map<string, number>) {
+    const items: unknown[] = [];
+    for (const activity of category.productionActivities) {
+      const price = costMap.get(activity.id);
+      if (!price || price <= 0) continue;
+
+      const financialItem = this.buildFinancialItem(tower, activity, price);
+      if (financialItem) items.push(financialItem);
+    }
+    return items;
+  }
+
+  private buildFinancialItem(tower: unknown, activity: unknown, price: number) {
+    const schedule = tower.activitySchedules?.find((s: unknown) => s.activityId === activity.id);
+    if (!schedule?.plannedEnd) return null;
+
+    const status = tower.mapElementProductionProgress?.find((s: unknown) => s.activityId === activity.id);
+
+    return {
+      name: activity.name,
+      plannedEnd: startOfDay(new Date(schedule.plannedEnd)),
+      actualEnd: status?.endDate ? startOfDay(new Date(status.endDate)) : undefined,
+      cost: Number(schedule.plannedQuantity || 1) * price,
+      isFinished: status?.currentStatus === "FINISHED",
+    };
+  }
+
+  private calculateFinancialStats(items: unknown[], start: Date, end: Date) {
+    let budget = 0;
+    let earned = 0;
+    const activityCosts: Record<string, number> = {};
+
+    items.forEach(item => {
+      if (isWithinInterval(item.plannedEnd, { start, end })) budget += item.cost;
+      if (item.isFinished && item.actualEnd && isWithinInterval(item.actualEnd, { start, end })) earned += item.cost;
 
       const refDate = item.actualEnd || item.plannedEnd;
-      if (isWithinInterval(refDate, { start: filterStart, end: filterEnd })) {
-        periodActivityCosts[item.name] =
-          (periodActivityCosts[item.name] || 0) + item.cost;
+      if (isWithinInterval(refDate, { start, end })) {
+        activityCosts[item.name] = (activityCosts[item.name] || 0) + item.cost;
       }
     });
 
-    // 5. Geração da Curva
-    let timeline: Date[];
-    if (granularity === "weekly")
-      timeline = eachWeekOfInterval(
-        { start: filterStart, end: filterEnd },
-        { weekStartsOn: 1 },
-      );
-    else if (granularity === "monthly")
-      timeline = eachMonthOfInterval({ start: filterStart, end: filterEnd });
-    else if (granularity === "quarterly")
-      timeline = eachQuarterOfInterval({ start: filterStart, end: filterEnd });
-    else if (granularity === "annual")
-      timeline = eachYearOfInterval({ start: filterStart, end: filterEnd });
-    else timeline = [filterStart];
-
-    const curve = timeline.map((period) => {
-      let periodEnd: Date;
-      if (granularity === "weekly")
-        periodEnd = endOfWeek(period, { weekStartsOn: 1 });
-      else if (granularity === "monthly") periodEnd = endOfMonth(period);
-      else if (granularity === "quarterly") periodEnd = endOfQuarter(period);
-      else if (granularity === "annual") periodEnd = endOfYear(period);
-      else periodEnd = filterEnd;
-
-      const plannedAcc = items
-        .filter((i) => isBefore(i.plannedEnd, periodEnd))
-        .reduce((acc, curr) => acc + curr.cost, 0);
-      const actualAcc = items
-        .filter((i) => i.actualEnd && isBefore(i.actualEnd, periodEnd))
-        .reduce((acc, curr) => acc + curr.cost, 0);
-
-      let label: string;
-      if (granularity === "weekly")
-        label = `S${format(period, "ww")} - ${format(period, "dd/MM")}`;
-      else if (granularity === "monthly")
-        label = format(period, "MMM/yy", { locale: ptBR });
-      else if (granularity === "quarterly")
-        label = `${Math.floor(period.getMonth() / 3) + 1}º Trim/${format(period, "yy")}`;
-      else if (granularity === "annual") label = format(period, "yyyy");
-      else label = "GERAL";
-
-      return { period: label, planned: plannedAcc, actual: actualAcc };
-    });
-
-    const pareto = Object.entries(periodActivityCosts)
+    const pareto = Object.entries(activityCosts)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 10);
 
-    return {
-      curve,
-      stats: { budget: totalBudget, earned: totalEarned },
-      pareto,
-    };
+    return { totals: { budget, earned }, pareto };
+  }
+
+  private generateFinancialTimeline(start: Date, end: Date, granularity: string): Date[] {
+    const interval = { start, end };
+    switch (granularity) {
+      case "weekly": return eachWeekOfInterval(interval, { weekStartsOn: 1 });
+      case "monthly": return eachMonthOfInterval(interval);
+      case "quarterly": return eachQuarterOfInterval(interval);
+      case "annual": return eachYearOfInterval(interval);
+      default: return [start];
+    }
+  }
+
+  private getPeriodEnd(date: Date, granularity: string, defaultEnd: Date): Date {
+    switch (granularity) {
+      case "weekly": return endOfWeek(date, { weekStartsOn: 1 });
+      case "monthly": return endOfMonth(date);
+      case "quarterly": return endOfQuarter(date);
+      case "annual": return endOfYear(date);
+      default: return defaultEnd;
+    }
+  }
+
+  private getFinancialLabel(date: Date, granularity: string): string {
+    switch (granularity) {
+      case "weekly": return `S${format(date, "ww")} - ${format(date, "dd/MM")}`;
+      case "monthly": return format(date, "MMM/yy", { locale: ptBR });
+      case "quarterly": return `${Math.floor(date.getMonth() / 3) + 1}º Trim/${format(date, "yy")}`;
+      case "annual": return format(date, "yyyy");
+      default: return "GERAL";
+    }
   }
 
   /**
    * Obtém as métricas gerais de performance (SPI, CPI, HH)
-   * Migrada de PerformanceAnalyticsService.ts
    */
   async getPerformanceMetrics(projectId: string): Promise<PerformanceMetrics> {
-    const [schedules, unitCosts, productionProgress, timeRecords] =
-      await Promise.all([
-        prisma.activitySchedule.findMany({
-          where: { mapElementTechnicalData: { projectId } },
-        }),
-        prisma.activityUnitCost.findMany({ where: { projectId } }),
-        prisma.mapElementProductionProgress.findMany({ where: { projectId } }),
-        prisma.timeRecord.findMany({
-          where: { team: { site: { projectId } } },
-        }),
-      ]);
+    const [schedules, unitCosts, productionProgress, timeRecords] = await Promise.all([
+      prisma.activitySchedule.findMany({ where: { mapElementTechnicalData: { projectId } } }),
+      prisma.activityUnitCost.findMany({ where: { projectId } }),
+      prisma.mapElementProductionProgress.findMany({ where: { projectId } }),
+      prisma.timeRecord.findMany({ where: { team: { site: { projectId } } } }),
+    ]);
 
-    const costMap = new Map<string, number>();
-    unitCosts.forEach((uc: ActivityUnitCost) =>
-      costMap.set(uc.activityId, Number(uc.unitPrice || 0)),
-    );
-
-    const now = new Date();
+    const costMap = new Map(unitCosts.map(uc => [uc.activityId, Number(uc.unitPrice || 0)]));
+    const now = this.timeProvider.now();
+    
     let totalPV = 0;
-    let totalEV = 0;
     let totalPlannedHH = 0;
 
-    schedules.forEach((sched: ActivitySchedule) => {
+    schedules.forEach((sched: unknown) => {
       const unitPrice = costMap.get(sched.activityId) || 0;
       const plannedQty = Number(sched.plannedQuantity || 0);
       const plannedHH = Number(sched.plannedHhh || 0);
+      const pS = new Date(sched.plannedStart);
+      const pE = new Date(sched.plannedEnd);
 
-      const pS = sched.plannedStart as unknown as string | Date;
-      const pE = sched.plannedEnd as unknown as string | Date;
-
-      if (isBefore(new Date(pE), now)) {
+      if (isBefore(pE, now)) {
         totalPV += plannedQty * unitPrice;
         totalPlannedHH += plannedHH;
-      } else if (isBefore(new Date(pS), now)) {
-        const totalDuration = new Date(pE).getTime() - new Date(pS).getTime();
-        const elapsed = now.getTime() - new Date(pS).getTime();
-        const factor = Math.min(1, elapsed / totalDuration);
+      } else if (isBefore(pS, now)) {
+        const totalDuration = pE.getTime() - pS.getTime();
+        const elapsed = now.getTime() - pS.getTime();
+        const factor = Math.max(0, Math.min(1, elapsed / (totalDuration || 1)));
         totalPV += plannedQty * unitPrice * factor;
         totalPlannedHH += plannedHH * factor;
       }
     });
 
-    const progressMap = new Map<string, number>();
-    productionProgress.forEach((pp: MapElementProductionProgress) => {
-      progressMap.set(
-        `${pp.elementId}-${pp.activityId}`,
-        Number(pp.progressPercent || 0) / 100,
-      );
-    });
+    const progressMap = new Map(productionProgress.map(pp => [`${pp.elementId}-${pp.activityId}`, Number(pp.progressPercent || 0) / 100]));
+    let totalEV = 0;
 
-    schedules.forEach((sched: ActivitySchedule) => {
-      const progress =
-        progressMap.get(`${sched.elementId}-${sched.activityId}`) || 0;
+    schedules.forEach((sched: unknown) => {
+      const progress = progressMap.get(`${sched.elementId}-${sched.activityId}`) || 0;
       const unitPrice = costMap.get(sched.activityId) || 0;
       const plannedQty = Number(sched.plannedQuantity || 0);
       totalEV += plannedQty * unitPrice * progress;
     });
 
+    const HH_COST_FACTOR = 50;
     const totalActualHH = timeRecords.length * 8;
     const spi = totalPV > 0 ? totalEV / totalPV : 1;
-    const cpi = totalActualHH > 0 ? totalEV / (totalActualHH * 50) : 1;
+    const cpi = totalActualHH > 0 ? totalEV / (totalActualHH * HH_COST_FACTOR) : 1;
 
     return {
       spi: Number(spi.toFixed(2)),
@@ -459,7 +360,7 @@ export class ProductionAnalyticsService {
       plannedHH: totalPlannedHH,
       actualHH: totalActualHH,
       plannedCost: totalPV,
-      actualCost: totalActualHH * 50,
+      actualCost: totalActualHH * HH_COST_FACTOR,
     };
   }
 
@@ -470,58 +371,37 @@ export class ProductionAnalyticsService {
     const [teams, production] = await Promise.all([
       prisma.team.findMany({
         where: { site: { projectId } },
-        include: {
-          _count: { select: { timeRecords: true } },
-        },
+        include: { _count: { select: { timeRecords: true } } },
       }),
-      prisma.mapElementProductionProgress.findMany({
-        where: { projectId },
-      }),
+      prisma.mapElementProductionProgress.findMany({ where: { projectId } }),
     ]);
 
-    return (teams as (Team & { _count: { timeRecords: number } })[]).map(
-      (team) => {
-        const teamProduction = production.filter(
-          (p: MapElementProductionProgress) => {
-            const history = p.history as unknown as ProgressHistoryEntry[];
-            return (
-              Array.isArray(history) &&
-              history.some((h: ProgressHistoryEntry) => h.teamId === team.id)
-            );
-          },
-        );
+    return (teams as unknown[]).map(team => {
+      const executedQty = production.filter((p: unknown) => {
+        const history = p.history as ProgressHistoryEntry[];
+        return Array.isArray(history) && history.some(h => h.teamId === team.id);
+      }).length;
 
-        const executedQty = teamProduction.length;
-        const hhReal = (team._count.timeRecords || 0) * 8;
+      const hhReal = (team._count.timeRecords || 0) * 8;
 
-        return {
-          teamId: team.id,
-          teamName: team.name,
-          efficiency: hhReal > 0 ? (executedQty / hhReal) * 100 : 0,
-          executedQuantity: executedQty,
-        };
-      },
-    );
+      return {
+        teamId: team.id,
+        teamName: team.name,
+        efficiency: hhReal > 0 ? (executedQty / hhReal) * 100 : 0,
+        executedQuantity: executedQty,
+      };
+    });
   }
 
   /**
-   * Obtém a distribuição de custos por categoria (Handcrafted Mock Logic)
+   * Obtém a distribuição de custos por categoria
    */
-  async getCostDistribution(
-    projectId: string,
-  ): Promise<CostDistributionItem[]> {
-    const unitCosts = await prisma.activityUnitCost.findMany({
-      where: { projectId },
-    });
+  async getCostDistribution(projectId: string): Promise<CostDistributionItem[]> {
+    const unitCosts = await prisma.activityUnitCost.findMany({ where: { projectId } });
 
-    const categoryMap: Record<string, number> = {
-      "Mão de Obra": 0,
-      Materiais: 0,
-      Equipamentos: 0,
-      Indiretos: 0,
-    };
+    const categoryMap = { "Mão de Obra": 0, "Materiais": 0, "Equipamentos": 0, "Indiretos": 0 };
 
-    unitCosts.forEach((uc: ActivityUnitCost) => {
+    unitCosts.forEach((uc: unknown) => {
       const price = Number(uc.unitPrice || 0);
       categoryMap["Mão de Obra"] += price * 0.45;
       categoryMap["Materiais"] += price * 0.3;

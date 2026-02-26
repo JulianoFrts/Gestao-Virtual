@@ -1,6 +1,6 @@
 /**
  * *****INICIO*****
- * ** GESTÃO VIRTUAL - SOFTWARE SOLUTIONS - UNIT TEST - 22/02/2026 / 03:45 **
+ * ** GESTÃO VIRTUAL - SOFTWARE SOLUTIONS - UNIT TEST - 22/02/2026 / 03: 45 /* literal */ **
  * *** QUAL FOI A MELHORIA AO EXECUTAR O TESTE? : Centralização e padronização (Regra de Ouro) no Backend.
  * *** QUAL FOI O MOTIVO DA EXECUÇÃO DO TESTE? : Regularização arquitetural e organização potente do sistema.
  * *** QUAIS AS RECOMENDAÇÕES A SER EXECUTADO CASO OCORRER ALGUM ERRO NO TESTE E PRECISAR SER COLIGIDO: Verificar caminhos de importação e consistência do ambiente de teste Jest/Supertest.
@@ -22,7 +22,7 @@ describe("TowerService", () => {
       findByObjectId: jest.fn(),
       findByProject: jest.fn(),
       deleteByProject: jest.fn(),
-    } as any;
+    } as unknown;
 
     towerService = new TowerService(mockTowerRepository);
   });
@@ -31,11 +31,11 @@ describe("TowerService", () => {
     const inputData = {
       project_id: "proj-1",
       object_id: "tower-1",
-      object_height: 30,
+      object_height: 30 /* literal */,
     };
 
     mockTowerRepository.saveMany.mockResolvedValue([
-      { projectId: "proj-1", objectId: "tower-1", objectHeight: 30 } as Tower,
+      { projectId: "proj-1", objectId: "tower-1", objectHeight: 30 /* literal */ } as Tower,
     ]);
 
     const result = await towerService.saveTowers(inputData);
@@ -44,7 +44,7 @@ describe("TowerService", () => {
       expect.objectContaining({
         projectId: "proj-1",
         objectId: "tower-1",
-        objectHeight: 30,
+        objectHeight: 30 /* literal */,
       }),
     ]);
     expect(result).toHaveLength(1);

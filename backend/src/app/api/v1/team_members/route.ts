@@ -13,24 +13,24 @@ const teamService = new TeamService(new PrismaTeamRepository());
 
 const querySchema = z.object({
   page: z.preprocess(
-    (val) => (val === "undefined" || !val ? undefined : val),
+    (schemaInput) => (schemaInput === "undefined" || !schemaInput ? undefined : schemaInput),
     z.coerce.number().min(1).default(1),
   ),
   limit: z.preprocess(
-    (val) => (val === "undefined" || !val || val === "0" ? undefined : val),
+    (schemaInput) => (schemaInput === "undefined" || !schemaInput || schemaInput === "0" ? undefined : schemaInput),
     z.coerce.number().min(1).max(API.BATCH.EXTREME).default(API.BATCH.LARGE),
   ),
   teamId: z.preprocess(
-    (val) => (val === "undefined" || !val ? undefined : val),
+    (schemaInput) => (schemaInput === "undefined" || !schemaInput ? undefined : schemaInput),
     z.string().optional(),
   ),
   userId: z.preprocess(
-    (val) => (val === "undefined" || !val ? undefined : val),
+    (schemaInput) => (schemaInput === "undefined" || !schemaInput ? undefined : schemaInput),
     z.string().optional(),
   ),
 });
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
 
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
       userId: searchParams.get("userId"),
     });
 
-    const result = await teamService.listMembers(query as any);
+    const result = await teamService.listMembers(query as unknown);
 
     return ApiResponse.json(result);
   } catch (error) {
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     if (!(await can("teams.manage"))) {
       return ApiResponse.forbidden(
@@ -66,9 +66,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Mapeamento extra de segurança snake_case -> camelCase compatibilizado no serviço
-    const formattedItems = items.map((item) => ({
-      teamId: item.teamId || item.team_id,
-      userId: item.userId || item.user_id,
+    const formattedItems = items.map((record) => ({
+      teamId: element.teamId || element.team_id,
+      userId: element.userId || element.user_id,
     }));
 
     const results = await teamService.addMembersBatch(formattedItems);
@@ -79,12 +79,12 @@ export async function POST(request: NextRequest) {
       Array.isArray(body) ? results : results[0],
       `Processados ${results.length} membros.`,
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(error, "src/app/api/v1/team_members/route.ts#POST");
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<Response> {
   try {
     if (!(await can("teams.manage"))) {
       return ApiResponse.forbidden(
@@ -101,7 +101,7 @@ export async function DELETE(request: NextRequest) {
       const result = await teamService.removeAllMembers(teamId);
       logger.info("Membros removidos da equipe em lote", {
         teamId,
-        count: (result as any).count,
+        count: (result as unknown).count,
       });
       return ApiResponse.noContent();
     }

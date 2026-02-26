@@ -1,50 +1,41 @@
-// =============================================
-// 1. CARGOS DE ELITE (GOD ROLES)
-// =============================================
-export const GOD_ROLES = ["HELPER_SYSTEM", "SUPER_ADMIN_GOD"] as const;
+/**
+ * Constantes de Segurança e Autorização - GESTÃO VIRTUAL
+ * Define roles, ranks e permissões granulares.
+ */
+
+import { ROLE_LEVELS } from "./index";
 
 // =============================================
-// 2. DONOS DO SISTEMA (SYSTEM OWNERS)
+// 1. LISTAS DE CARGOS POR CATEGORIA
 // =============================================
-export const SYSTEM_OWNERS = [
-  "HELPER_SYSTEM",
-  "SUPER_ADMIN_GOD",
-  "SOCIO_DIRETOR",
-  "ADMIN",
-  "TI_SOFTWARE",
-] as const;
+
+export const GOD_ROLES = ["HELPER_SYSTEM", "ADMIN"] as const;
+
+export const SYSTEM_OWNERS = ["HELPER_SYSTEM", "ADMIN"] as const;
 
 export const MANAGEMENT_ROLES = [
   ...SYSTEM_OWNERS,
-  "GESTOR_PROJECT",
-  "GESTOR_CANTEIRO",
-  "MODERATOR",
-  "MANAGER",
+  "COMPANY_ADMIN",
+  "PROJECT_MANAGER",
+  "SITE_MANAGER",
 ] as const;
 
 export const FIELD_ROLES = [
   ...MANAGEMENT_ROLES,
   "SUPERVISOR",
-  "WORKER",
-  "USER",
-  "TECHNICIAN",
-  "OPERATOR",
+  "OPERATIONAL",
+  "VIEWER",
 ] as const;
 
 // =============================================
-// 3. MAPA DE FLAGS POR ROLE INDIVIDUAL
+// 2. MAPA DE FLAGS POR ROLE INDIVIDUAL
 // =============================================
-// Cada role define suas flags exclusivas.
-// Roles God ("*") ignoram toda verificação granular.
-// O helper getFlagsForRole() resolve a herança hierárquica.
 
 export const ROLE_FLAGS: Record<string, readonly string[]> = {
-  // --- GOD TIER (Acesso Total) ---
   HELPER_SYSTEM: ["*"],
-  SUPER_ADMIN_GOD: ["*"],
+  ADMIN: ["*"],
 
-  // --- EXECUTIVE TIER (Diretoria / Gestão Global) ---
-  SOCIO_DIRETOR: [
+  COMPANY_ADMIN: [
     "users.manage",
     "companies.manage",
     "projects.manage",
@@ -52,11 +43,9 @@ export const ROLE_FLAGS: Record<string, readonly string[]> = {
     "db_hub.manage",
     "custom_su.manage",
     "settings.mfa",
-    "gapo.view",
     "showAdminMenu",
     "showMaintenance",
     "functions.manage",
-    // Management flags (herança direta)
     "projects.view",
     "projects.progress",
     "sites.view",
@@ -65,235 +54,98 @@ export const ROLE_FLAGS: Record<string, readonly string[]> = {
     "employees.manage",
     "viewer_3d.view",
     "work_progress.view",
-    // Worker flags (herança direta)
     "clock",
     "daily_reports",
     "time_records.view",
     "settings.profile",
   ],
 
-  ADMIN: [
-    "users.manage",
-    "companies.manage",
-    "projects.manage",
-    "audit_logs.view",
-    "custom_su.manage",
-    "settings.mfa",
-    "gapo.view",
+  PROJECT_MANAGER: [
+    "projects.view",
+    "projects.progress",
+    "sites.view",
+    "team_composition",
+    "employees.manage",
+    "viewer_3d.view",
+    "work_progress.view",
+    "functions.manage",
     "showAdminMenu",
-    "functions.manage",
-    // Management flags
-    "projects.view",
-    "projects.progress",
-    "sites.view",
-    "companies.view",
-    "team_composition",
-    "employees.manage",
-    "viewer_3d.view",
-    "work_progress.view",
-    // Worker flags
     "clock",
     "daily_reports",
     "time_records.view",
     "settings.profile",
   ],
 
-  TI_SOFTWARE: [
-    "users.manage",
-    "db_hub.manage",
-    "audit_logs.view",
-    "custom_su.manage",
-    "settings.mfa",
-    "showAdminMenu",
-    "showMaintenance",
-    "functions.manage",
-    // Management flags
-    "projects.view",
-    "projects.progress",
-    "sites.view",
-    "companies.view",
-    "team_composition",
-    "employees.manage",
-    "viewer_3d.view",
-    "work_progress.view",
-    // Worker flags
-    "clock",
-    "daily_reports",
-    "time_records.view",
-    "settings.profile",
-  ],
-
-  // --- MANAGEMENT TIER (Gestão Operacional) ---
-  MODERATOR: [
-    "projects.view",
-    "projects.progress",
-    "sites.view",
-    "companies.view",
-    "team_composition",
-    "employees.manage",
-    "viewer_3d.view",
-    "work_progress.view",
-    "showAdminMenu",
-    "functions.manage",
-    // Worker flags
-    "clock",
-    "daily_reports",
-    "time_records.view",
-    "settings.profile",
-  ],
-
-  MANAGER: [
-    "projects.view",
-    "projects.progress",
-    "sites.view",
-    "companies.view",
-    "team_composition",
-    "employees.manage",
-    "viewer_3d.view",
-    "work_progress.view",
-    // Worker flags
-    "clock",
-    "daily_reports",
-    "time_records.view",
-    "settings.profile",
-  ],
-
-  GESTOR_PROJECT: [
-    "projects.view",
-    "projects.progress",
-    "sites.view",
-    "team_composition",
-    "employees.manage",
-    "viewer_3d.view",
-    "work_progress.view",
-    "functions.manage",
-    // Worker flags
-    "clock",
-    "daily_reports",
-    "time_records.view",
-    "settings.profile",
-  ],
-
-  GESTOR_CANTEIRO: [
+  SITE_MANAGER: [
     "projects.view",
     "sites.view",
     "team_composition",
     "employees.manage",
     "viewer_3d.view",
     "work_progress.view",
-    // Worker flags
     "clock",
     "daily_reports",
     "time_records.view",
     "settings.profile",
   ],
 
-  // --- OPERATIONAL TIER (Campo / Supervisão) ---
   SUPERVISOR: [
     "team_composition",
     "work_progress.view",
-    // Worker flags
     "clock",
     "daily_reports",
     "time_records.view",
     "settings.profile",
   ],
 
-  TECHNICIAN: [],
-
-  OPERATOR: [],
-
-  // --- BASE TIER ---
-  WORKER: [],
-
-  USER: [],
-
-  VIEWER: [],
-} as const;
-
-// =============================================
-// 4. BACKWARD COMPATIBILITY (deprecated)
-// =============================================
-// Mantém o antigo CAPABILITY_FLAGS para não quebrar imports existentes.
-// Novos consumidores devem usar ROLE_FLAGS + getFlagsForRole().
-
-/** @deprecated Use ROLE_FLAGS e getFlagsForRole() */
-export const CAPABILITY_FLAGS = {
-  GOD: ["*"] as string[],
-  SYSTEM_OWNER: [
-    "users.manage",
-    "companies.manage",
-    "projects.manage",
-    "audit_logs.view",
-    "db_hub.manage",
-    "custom_su.manage",
-    "settings.mfa",
-    "gapo.view",
-    "showAdminMenu",
-    "showMaintenance",
-  ] as string[],
-  MANAGEMENT: [
-    "projects.view",
-    "projects.progress",
-    "sites.view",
-    "companies.view",
-    "team_composition",
-    "employees.manage",
-    "viewer_3d.view",
-    "work_progress.view",
-  ] as string[],
-  WORKER: [
+  OPERATIONAL: [
     "clock",
     "daily_reports",
     "time_records.view",
     "settings.profile",
-  ] as string[],
-};
+  ],
 
-// =============================================
-// 5. NÍVEIS DE SEGURANÇA (RANKS)
-// =============================================
-export const SECURITY_RANKS = {
-  MASTER: 1500,
-  GLOBAL: 1000,
-  ADMIN: 900,
-  MANAGEMENT: 500,
-  OPERATIONAL: 150,
+  VIEWER: [
+    "projects.view",
+    "sites.view",
+    "viewer_3d.view",
+    "work_progress.view",
+    "settings.profile",
+  ],
 } as const;
 
 // =============================================
-// 6. HELPERS
+// 3. NÍVEIS DE SEGURANÇA (RANKS)
 // =============================================
 
-/**
- * Retorna as flags configuradas para uma role específica.
- * Se a role não existir no mapa, retorna array vazio (fail-safe).
- */
+export const SECURITY_RANKS = {
+  MASTER: ROLE_LEVELS.helper_system,
+  GLOBAL: ROLE_LEVELS.admin,
+  ADMIN: ROLE_LEVELS.company_admin,
+  MANAGEMENT: ROLE_LEVELS.project_manager,
+  OPERATIONAL: ROLE_LEVELS.operational,
+} as const;
+
+// =============================================
+// 4. HELPERS
+// =============================================
+
 export const getFlagsForRole = (role: string): readonly string[] => {
   const r = (role || "").toUpperCase();
   return ROLE_FLAGS[r] || [];
 };
 
-/**
- * Verifica se uma role tem acesso total (wildcard).
- */
 export const hasWildcardAccess = (role: string): boolean => {
   const flags = getFlagsForRole(role);
   return flags.includes("*");
 };
 
-/**
- * Verifica se uma ROLE pertence ao grupo GOD
- */
 export const isGodRole = (role: string): boolean => {
   const r = (role || "").toUpperCase();
-  return GOD_ROLES.includes(r as any);
+  return (GOD_ROLES as readonly string[]).includes(r);
 };
 
-/**
- * Verifica se uma ROLE pertence ao grupo de proprietários do sistema
- */
 export const isSystemOwner = (role: string): boolean => {
   const r = (role || "").toUpperCase();
-  return SYSTEM_OWNERS.includes(r as any);
+  return (SYSTEM_OWNERS as readonly string[]).includes(r);
 };

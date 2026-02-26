@@ -14,6 +14,8 @@ import { UserLegacyService } from "./user-legacy.service";
 import { PrismaPermissionRepository } from "../infrastructure/prisma-permission.repository";
 import { UserMapper } from "./user.mapper";
 import { invalidateSessionCache } from "@/lib/auth/session";
+import { RandomProvider, SystemRandomProvider } from "@/lib/utils/random-provider";
+import { TimeProvider, SystemTimeProvider } from "@/lib/utils/time-provider";
 
 interface LogAuditParams {
   action: string;
@@ -24,19 +26,25 @@ interface LogAuditParams {
   performerId?: string;
 }
 
+import { UserAddressService } from "./user-address.service";
+
 export class UserService {
   private readonly permissionService: UserPermissionService;
   private readonly securityService: UserSecurityService;
   private readonly legacyService: UserLegacyService;
+  private readonly addressService: UserAddressService;
 
   constructor(
     private readonly repository: UserRepository,
     private readonly auditRepository?: SystemAuditRepository,
+    private readonly randomProvider: RandomProvider = new SystemRandomProvider(),
+    private readonly timeProvider: TimeProvider = new SystemTimeProvider(),
   ) {
     const permissionRepository = new PrismaPermissionRepository();
     this.permissionService = new UserPermissionService(permissionRepository);
     this.securityService = new UserSecurityService(repository, auditRepository);
     this.legacyService = new UserLegacyService(repository);
+    this.addressService = new UserAddressService(repository);
   }
 
   // =============================================
@@ -91,7 +99,7 @@ export class UserService {
     if (existing) throw new Error("Email already exists");
 
     const passwordToHash =
-      data.password || Math.random().toString(36).slice(-10);
+      data.password || this.randomProvider.nextString(10);
     const hashedPassword =
       await this.securityService.hashPassword(passwordToHash);
 
@@ -114,7 +122,7 @@ export class UserService {
       action: "CREATE",
       entity: "User",
       entityId: newUser.id,
-      newValues: data as any,
+      newValues: data as unknown,
       performerId,
     });
     return newUser;
@@ -185,7 +193,7 @@ export class UserService {
     }
 
     // 4. Persistência Granular
-    const report = await this.processGranularUpdates(id, existing, updateData);
+    const report = await this.addressService.processGranularUpdates(id, existing, updateData);
 
     // 5. AuditLog e Retorno
     const finalUser = await this.repository.findById(id, select);
@@ -193,8 +201,8 @@ export class UserService {
       action: "UPDATE",
       entity: "User",
       entityId: id,
-      newValues: data as any,
-      oldValues: existing as any,
+      newValues: data as unknown,
+      oldValues: existing as unknown,
       performerId,
     });
 
@@ -203,68 +211,6 @@ export class UserService {
       _report: report,
       _partial: report.failed.length > 0,
     };
-  }
-
-  private async processGranularUpdates(
-    id: string,
-    existing: UserEntity,
-    updateData: UpdateUserDTO,
-  ): Promise<{
-    success: string[];
-    failed: { field: string; error: string }[];
-  }> {
-    const report: {
-      success: string[];
-      failed: { field: string; error: string }[];
-    } = {
-      success: [],
-      failed: [],
-    };
-
-    const fieldsToProcess = Object.keys(updateData) as (keyof UpdateUserDTO)[];
-
-    for (const field of fieldsToProcess) {
-      try {
-        let value = updateData[field];
-
-        // Limpeza de CPF e Telefone
-        if (
-          (field === "cpf" || field === "phone") &&
-          typeof value === "string"
-        ) {
-          value = value.replace(/\D/g, "");
-        }
-
-        // Validação de email único
-        if (
-          field === "email" &&
-          typeof value === "string" &&
-          value !== existing.authCredential?.email
-        ) {
-          const emailExists = await this.repository.findByEmail(value);
-          if (emailExists)
-            throw new Error("Email já está sendo usado por outro usuário.");
-        }
-
-        await this.repository.update(id, { [field]: value });
-        report.success.push(field);
-      } catch (error: unknown) {
-        const err = error as Error;
-        const errorMsg = err.message || "Erro desconhecido";
-        console.error(`[GranularUpdate] Falha no campo ${field}:`, errorMsg);
-        report.failed.push({ field, error: errorMsg });
-
-        if (
-          errorMsg.includes("Unique constraint") ||
-          errorMsg.includes("P2002") ||
-          errorMsg.includes("já está sendo usado")
-        ) {
-          throw error;
-        }
-      }
-    }
-
-    return report;
   }
 
   /**
@@ -276,14 +222,14 @@ export class UserService {
     data: UpdateUserDTO,
     performerId: string,
   ): Promise<{ count: number }> {
-    if (!ids.length) return { count: 0 };
+    if (!ids.length) return { count: 0 /* literal */ };
 
     // 1. Auditoria da Ação em Massa
     await this.logAudit({
       action: "BULK_UPDATE",
       entity: "User",
       entityId: `BATCH_${ids.length}`,
-      newValues: data as any,
+      newValues: data as unknown,
       performerId,
     });
 
@@ -329,30 +275,14 @@ export class UserService {
       await this.securityService.validateHierarchySovereignty(
         performerId,
         id,
-        existing.hierarchyLevel || 0,
+        existing.affiliation?.hierarchyLevel || 0,
       );
     }
 
-    // Usando prisma client diretamente para deleções complexas por enquanto
-    // TODO: Mover para repositórios específicos se necessário
-    await prisma.$transaction([
-      prisma.account.deleteMany({ where: { userId: id } }),
-      prisma.session.deleteMany({ where: { userId: id } }),
-      prisma.auditLog.deleteMany({ where: { userId: id } }),
-      prisma.teamMember.deleteMany({ where: { userId: id } }),
-      prisma.timeRecord.deleteMany({ where: { userId: id } }),
-      prisma.dailyReport.deleteMany({ where: { userId: id } }),
-      prisma.constructionDocument.updateMany({
-        where: { createdById: id },
-        data: { createdById: null },
-      }),
-      prisma.activitySchedule.deleteMany({ where: { createdBy: id } }),
-      prisma.team.updateMany({
-        where: { supervisorId: id },
-        data: { supervisorId: null },
-      }),
-    ]);
+    // 1. Limpar relações complexas (Mover para legacy/orchestrator para reduzir SRP)
+    await this.legacyService.deleteUserRelations(id);
 
+    // 2. Deletar entidade principal
     await this.repository.delete(id);
 
     if (performerId) {
@@ -501,13 +431,6 @@ export class UserService {
       hierarchyLevel,
       permissions,
     );
-  }
-
-  async upsertAddress(
-    userId: string,
-    data: Record<string, unknown>,
-  ): Promise<Record<string, unknown>> {
-    return this.repository.upsertAddress(userId, data);
   }
 
   // =============================================

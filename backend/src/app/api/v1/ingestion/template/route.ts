@@ -4,7 +4,7 @@ import { HTTP_STATUS } from "@/lib/constants";
 
 import { requireAuth } from "@/lib/auth/session";
 
-export async function GET(req: Request) {
+export async function GET(req: Request): Promise<Response> {
   try {
     await requireAuth();
     const { searchParams } = new URL(req.url);
@@ -26,7 +26,7 @@ export async function GET(req: Request) {
         "Content-Disposition": `attachment; filename="template_${type}.csv"`,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Template export error:", error);
     return NextResponse.json(
       { error: error.message || "Internal Server Error" },

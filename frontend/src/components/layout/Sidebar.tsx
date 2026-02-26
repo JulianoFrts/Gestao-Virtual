@@ -205,10 +205,10 @@ const menuGroups: SidebarGroup[] = [
     items: [
       { id: "users.manage", icon: Shield, label: "Usuários", path: "/users" },
       {
-        id: "custom_su.manage",
-        icon: Shield,
-        label: "Custom SU",
-        path: "/custom-su",
+        id: "permissions.manage",
+        icon: Settings,
+        label: "Permissões & Cargos",
+        path: "/permissions",
       },
       {
         id: "db_hub.manage",
@@ -222,20 +222,14 @@ const menuGroups: SidebarGroup[] = [
         icon: Box,
         label: "3D Anchor Lab",
         path: "/viewer-3d",
+        devOnly: true,
       },
-
-
       {
         id: "audit_logs.view",
         icon: ShieldCheck,
         label: "Central de Segurança",
         path: "/audit-logs",
-      },
-      {
-        id: "permissions.manage",
-        icon: Settings,
-        label: "Permissões & Cargos",
-        path: "/permissions",
+        devOnly: true,
       },
     ],
   },

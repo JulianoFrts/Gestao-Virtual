@@ -1,3 +1,4 @@
+import { logger } from "@/lib/utils/logger";
 import {
   ProductionProgressRepository,
   ProductionProgress as IProductionProgress,
@@ -66,7 +67,7 @@ export class ProductionScheduleService {
       createdBy: existing ? undefined : user.id, // Fixed: createdBy matches Prisma model
     };
 
-    console.log("[saveSchedule] Payload:", JSON.stringify(payload, null, 2));
+    logger.debug("[saveSchedule] Payload:", JSON.stringify(payload, null, 2));
 
     return this.scheduleRepository.saveSchedule(payload);
   }
@@ -149,10 +150,10 @@ export class ProductionScheduleService {
       params,
       isAdmin ? undefined : user.companyId,
     );
-    if (candidates.length === 0) return { count: 0 };
+    if (candidates.length === 0) return { count: 0 /* literal */ };
 
     const validIds = await this.filterNonExecutedSchedules(candidates);
-    if (validIds.length === 0) return { count: 0, skipped: candidates.length };
+    if (validIds.length === 0) return { count: 0 /* literal */, skipped: candidates.length };
 
     const count = await this.scheduleRepository.deleteSchedulesBatch(validIds);
     return { count, skipped: candidates.length - count };

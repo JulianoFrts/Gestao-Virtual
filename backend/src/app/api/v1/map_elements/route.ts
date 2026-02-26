@@ -7,7 +7,6 @@ import { Validator } from "@/lib/utils/api/validator";
 import { paginationQuerySchema } from "@/modules/common/domain/common.schema";
 import { PrismaAssetRepository } from "@/modules/infrastructure-assets/infrastructure/prisma-asset.repository";
 import { AssetService } from "@/modules/infrastructure-assets/application/asset.service";
-import { API } from "@/lib/constants";
 
 // Injeção de Dependência
 const repository = new PrismaAssetRepository();
@@ -15,23 +14,21 @@ const assetService = new AssetService(repository);
 
 const querySchema = paginationQuerySchema.extend({
   projectId: z.preprocess(
-    (val) =>
-      val === "undefined" || val === "" || val === "null" || !val
+    (schemaInput) => schemaInput === "undefined" || schemaInput === "" || schemaInput === "null" || !schemaInput
         ? undefined
-        : val,
+        : schemaInput,
     z.string().min(1, "ID do projeto inválido").optional(),
   ),
   companyId: z.preprocess(
-    (val) =>
-      val === "undefined" || val === "" || val === "null" || !val
+    (schemaInput) => schemaInput === "undefined" || schemaInput === "" || schemaInput === "null" || !schemaInput
         ? undefined
-        : val,
+        : schemaInput,
     z.string().min(1, "ID da empresa inválido").optional(),
   ),
   type: z.enum(["TOWER", "SPAN", "CABLE", "EQUIPMENT", "STATION"]).optional(),
 });
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
     const params = Object.fromEntries(request.nextUrl.searchParams.entries());
@@ -48,15 +45,24 @@ export async function GET(request: NextRequest) {
       return validation.response;
     }
 
-    const { projectId, companyId, type } = validation.data as any;
+    const {  projectId, companyId, type  } = validation.data;
     const { isGlobalAdmin } = await import("@/lib/auth/session");
     const isGlobal = isGlobalAdmin(
       user.role,
-      (user as any).hierarchyLevel,
-      (user as any).permissions,
+      user.hierarchyLevel,
+      (user.permissions as Record<string, boolean>),
     );
 
     const effectiveCompanyId = companyId || user.companyId;
+
+    if (!isGlobal && !effectiveCompanyId) {
+      logger.warn("Tentativa de buscar ativos sem contexto de empresa", {
+        userId: user.id,
+      });
+      return ApiResponse.badRequest(
+        "Contexto de empresa obrigatório para seu nível de acesso.",
+      );
+    }
 
     if (!isGlobal && effectiveCompanyId !== user.companyId) {
       return ApiResponse.forbidden("Acesso negado a dados de outra empresa.");
@@ -76,7 +82,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
     const body = await request.json();
@@ -84,29 +90,40 @@ export async function POST(request: NextRequest) {
     const urlProjectId = params.projectId || params.project_id;
 
     if (!urlProjectId && !user.companyId) {
-      return ApiResponse.badRequest("Contexto de projeto ou empresa não identificado.");
+      return ApiResponse.badRequest(
+        "Contexto de projeto ou empresa não identificado.",
+      );
     }
 
     const count = await assetService.syncAssetsFromImport(
       user.companyId || "",
       urlProjectId || "",
-      Array.isArray(body) ? body : [body]
+      Array.isArray(body) ? body : [body],
     );
 
-    return ApiResponse.json({ success: true, count }, `${count} ativos processados com sucesso.`);
-  } catch (error: any) {
+    return ApiResponse.json(
+      { success: true, count },
+      `${count} ativos processados com sucesso.`,
+    );
+  } catch (error: unknown) {
     logger.error("Erro ao salvar ativos", { message: error.message });
     return handleApiError(error, "src/app/api/v1/map_elements/route.ts#POST");
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth(request);
     const id = request.nextUrl.searchParams.get("id");
 
     const { isGlobalAdmin } = await import("@/lib/auth/session");
-    if (!isGlobalAdmin(user.role, (user as any).hierarchyLevel, (user as any).permissions)) {
+    if (
+      !isGlobalAdmin(
+        user.role,
+        user.hierarchyLevel,
+        (user.permissions as Record<string, boolean>),
+      )
+    ) {
       return ApiResponse.forbidden("Acesso restrito.");
     }
 

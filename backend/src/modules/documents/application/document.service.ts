@@ -23,7 +23,7 @@ export class ConstructionDocumentService {
     };
   }
 
-  async createDocument(data: any) {
+  async createDocument(data: unknown) {
     // Check for duplicates to prevent multiple folders/files with same name/path in same context
     const existing = await this.repository.findByNameAndPath(
       data.name,
@@ -58,7 +58,7 @@ export class ConstructionDocumentService {
     return document;
   }
 
-  async updateDocument(id: string, data: any) {
+  async updateDocument(id: string, data: unknown) {
     return this.repository.update(id, data);
   }
 

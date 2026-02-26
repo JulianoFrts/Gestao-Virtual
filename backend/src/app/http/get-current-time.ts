@@ -1,15 +1,15 @@
+import { logger } from "@/lib/utils/logger";
 import { NextResponse } from "next/server";
 
 export async function getCurrentTime() {
     const response = await fetch("/", {
         next:{
-            revalidate: 1,
+            revalidate: 1 /* literal */,
         },
     });
 
-    
     const data = await NextResponse.json(response);
-    console.log(data);
+    logger.debug(data);
 
     return data;
 }

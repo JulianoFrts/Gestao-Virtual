@@ -17,8 +17,7 @@ export const optionalIdSchema = z.preprocess(
 
 export const paginationQuerySchema = z.object({
   page: z.preprocess(
-    (val) =>
-      val === null || val === "" || val === "undefined" ? undefined : val,
+    (schemaInput) => schemaInput === null || schemaInput === "" || schemaInput === "undefined" ? undefined : schemaInput,
     z.coerce
       .number()
       .int()
@@ -26,10 +25,9 @@ export const paginationQuerySchema = z.object({
       .default(CONSTANTS.API.PAGINATION.DEFAULT_PAGE),
   ),
   limit: z.preprocess(
-    (val) =>
-      val === null || val === "" || val === "undefined" || val === "0"
+    (schemaInput) => schemaInput === null || schemaInput === "" || schemaInput === "undefined" || schemaInput === "0"
         ? undefined
-        : val,
+        : schemaInput,
     z.coerce
       .number()
       .int()

@@ -31,7 +31,7 @@ export class HashCacheService {
         const hash = this.calculateHash(content);
         this.cache.set(filePath, {
             hash,
-            lastAudit: Date.now(),
+            lastAudit: this.timeProvider ? this.timeProvider.now().getTime() : this.timeProvider.now().getTime(),
             violations: violationCount
         });
     }

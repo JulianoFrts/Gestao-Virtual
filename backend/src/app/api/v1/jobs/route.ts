@@ -4,8 +4,17 @@ import { requireAuth, requireAdmin } from "@/lib/auth/session";
 import { QueueService } from "@/modules/common/application/queue.service";
 import { PrismaTaskRepository } from "@/modules/common/infrastructure/prisma-task.repository";
 
+import { z } from "zod";
+import { SystemTimeProvider } from "@/lib/utils/time-provider";
+
 const taskRepository = new PrismaTaskRepository();
 const queueService = new QueueService(taskRepository);
+const timeProvider = new SystemTimeProvider();
+
+const createJobSchema = z.object({
+  type: z.string().min(1, "Tipo de tarefa é obrigatório"),
+  payload: z.record(z.unknown()).optional().default({}),
+});
 
 /**
  * GET /api/v1/jobs
@@ -13,7 +22,7 @@ const queueService = new QueueService(taskRepository);
  *
  * Lista tarefas ou obtém status de uma específica
  */
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const searchParams = request.nextUrl.searchParams;
@@ -40,18 +49,17 @@ export async function GET(request: NextRequest) {
  *
  * Enfileira uma nova tarefa (Importação, Exportação, etc)
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
     const body = await request.json();
 
-    const { type, payload } = body;
-
-    if (!type) {
-      return ApiResponse.validationError([
-        "Tipo de tarefa (type) é obrigatório",
-      ]);
+    const validation = createJobSchema.safeParse(body);
+    if (!validation.success) {
+      return ApiResponse.validationError(validation.error.issues.map(i => i.message));
     }
+
+    const { type, payload } = validation.data;
 
     // Segurança básica: Apenas Admin pode disparar certos tipos de jobs
     const adminOnlyJobs = ["system_maintenance", "global_export"];
@@ -63,7 +71,7 @@ export async function POST(request: NextRequest) {
     const refinedPayload = {
       ...payload,
       requestedBy: user.id,
-      requestedAt: new Date().toISOString(),
+      requestedAt: timeProvider.toISOString(),
     };
 
     const job = await queueService.enqueue(type, refinedPayload);
@@ -79,7 +87,7 @@ export async function POST(request: NextRequest) {
  *
  * Cancela uma tarefa pendente
  */
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const searchParams = request.nextUrl.searchParams;

@@ -47,14 +47,22 @@ const userService = new UserService(userRepository, systemAuditRepository);
 const authRepo = new PrismaAuthCredentialRepository();
 const authService = new AuthService(userService, authRepo);
 
-export async function POST(request: NextRequest) {
+import { z } from "zod";
+
+const checkMfaSchema = z.object({
+  identifier: z.string().min(1, "Identifier é obrigatório"),
+});
+
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const body = await request.json();
-    const { identifier } = body;
-
-    if (!identifier) {
-      return ApiResponse.badRequest("Identifier é obrigatório");
+    
+    const validation = checkMfaSchema.safeParse(body);
+    if (!validation.success) {
+      return ApiResponse.badRequest(validation.error.issues[0].message);
     }
+
+    const { identifier } = validation.data;
 
     const result = await authService.checkMfaStatus(identifier);
     return ApiResponse.json(result);

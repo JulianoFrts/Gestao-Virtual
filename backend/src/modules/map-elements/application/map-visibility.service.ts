@@ -7,7 +7,7 @@ export class MapVisibilityService {
     return this.repository.findMany({ userId });
   }
 
-  async saveVisibility(userId: string, data: any) {
+  async saveVisibility(userId: string, data: unknown) {
     const { projectId, elementId, documentId, ...visibilityData } = data;
 
     const existing = await this.repository.findFirst({
@@ -31,7 +31,7 @@ export class MapVisibilityService {
     });
   }
 
-  async bulkUpdate(userId: string, projectId: string | null, data: any) {
+  async bulkUpdate(userId: string, projectId: string | null, data: unknown) {
     return this.repository.updateMany(
       {
         userId,

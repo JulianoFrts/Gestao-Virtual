@@ -28,19 +28,19 @@ const COLORS = {
 // =============================================
 
 export const logger = {
-  debug(message: string, context?: any): void {
+  debug(message: string, context?: unknown): void {
     pinoInstance.debug(context || {}, message);
   },
 
-  info(message: string, context?: any): void {
+  info(message: string, context?: unknown): void {
     pinoInstance.info(context || {}, message);
   },
 
-  warn(message: string, context?: any): void {
+  warn(message: string, context?: unknown): void {
     pinoInstance.warn(context || {}, message);
   },
 
-  error(message: string, context?: any): void {
+  error(message: string, context?: unknown): void {
     if (context?.error instanceof Error) {
       pinoInstance.error(context.error, message);
     } else {
@@ -51,14 +51,14 @@ export const logger = {
   /**
    * Log de sucesso (verde no dev)
    */
-  success(message: string, context?: any): void {
+  success(message: string, context?: unknown): void {
     pinoInstance.info({ ...context, logType: "success" }, `✅ ${message}`);
   },
 
   /**
    * Log de teste (branco no dev)
    */
-  test(message: string, context?: any): void {
+  test(message: string, context?: unknown): void {
     pinoInstance.info({ ...context, logType: "test" }, `🧪 ${message}`);
   },
 
@@ -70,7 +70,7 @@ export const logger = {
     path: string,
     statusCode: number,
     durationMs: number,
-    context?: any,
+    context?: unknown,
   ): void {
     const level =
       statusCode >= 500 ? "error" : statusCode >= 400 ? "warn" : "info";
@@ -93,60 +93,58 @@ export const logger = {
     statusCode: number,
     method: string,
     path: string,
-    error?: any,
+    error?: unknown,
     source?: string,
   ): void {
-    let color = COLORS.white;
-    if (statusCode >= 500) color = COLORS.red;
-    else if (statusCode >= 400) color = COLORS.yellow;
-    else if (statusCode >= 300) color = COLORS.cyan;
-    else if (statusCode >= 200) color = COLORS.green;
-
+    const color = this.getStatusCodeColor(statusCode);
     const statusText = `${color}Status(${statusCode})${COLORS.reset}`;
-    const methodText =
-      method !== "N/A" ? `${COLORS.bold}[${method}]${COLORS.reset} ` : "";
+    const methodText = method !== "N/A" ? `${COLORS.bold}[${method}]${COLORS.reset} ` : "";
     const pathText = path !== "N/A" ? path : "";
 
     let logMessage = `${statusText} ${methodText}${pathText}`;
 
     if (error) {
-      const errorDetail =
-        error instanceof Error ? error.message : String(error);
-      const sourceDetail = source
-        ? ` at ${COLORS.bold}${source}${COLORS.reset}`
-        : "";
-      logMessage += ` | ${COLORS.bgRed}${COLORS.white}${COLORS.bold} ERROR ${COLORS.reset} ${COLORS.red}${errorDetail}${sourceDetail}${COLORS.reset}`;
+      logMessage += this.formatErrorMessage(error, source);
     }
 
-    // Usar o console.log diretamente para garantir que as cores apareçam sem interferência do pino-pretty em alguns ambientes
-    // Mas também logar no pino para persistência/auditoria estruturada
     if (process.env.NODE_ENV === "development") {
-      console.log(logMessage);
+      pinoInstance.debug(logMessage);
     } else {
-      pinoInstance.info(
-        { statusCode, method, path, source, error },
-        logMessage,
-      );
+      pinoInstance.info({ statusCode, method, path, source, error }, logMessage);
     }
+  },
+
+  getStatusCodeColor(statusCode: number): string {
+    if (statusCode >= 500) return COLORS.red;
+    if (statusCode >= 400) return COLORS.yellow;
+    if (statusCode >= 300) return COLORS.cyan;
+    if (statusCode >= 200) return COLORS.green;
+    return COLORS.white;
+  },
+
+  formatErrorMessage(error: unknown, source?: string): string {
+    const errorDetail = error instanceof Error ? error.message : String(error);
+    const sourceDetail = source ? ` at ${COLORS.bold}${source}${COLORS.reset}` : "";
+    return ` | ${COLORS.bgRed}${COLORS.white}${COLORS.bold} ERROR ${COLORS.reset} ${COLORS.red}${errorDetail}${sourceDetail}${COLORS.reset}`;
   },
 
   /**
    * Cria logger com contexto fixo
    */
-  child(defaultContext: any) {
+  child(defaultContext: unknown) {
     const childPino = pinoInstance.child(defaultContext);
     return {
-      debug: (message: string, context?: any) =>
+      debug: (message: string, context?: unknown) =>
         childPino.debug(context || {}, message),
-      info: (message: string, context?: any) =>
+      info: (message: string, context?: unknown) =>
         childPino.info(context || {}, message),
-      warn: (message: string, context?: any) =>
+      warn: (message: string, context?: unknown) =>
         childPino.warn(context || {}, message),
-      error: (message: string, context?: any) =>
+      error: (message: string, context?: unknown) =>
         childPino.error(context || {}, message),
-      success: (message: string, context?: any) =>
+      success: (message: string, context?: unknown) =>
         childPino.info({ ...context, logType: "success" }, `✅ ${message}`),
-      test: (message: string, context?: any) =>
+      test: (message: string, context?: unknown) =>
         childPino.info({ ...context, logType: "test" }, `🧪 ${message}`),
     };
   },

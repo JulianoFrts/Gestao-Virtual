@@ -16,7 +16,7 @@ describe("TowerService", () => {
       findByObjectId: jest.fn(),
       findByProject: jest.fn(),
       deleteByProject: jest.fn(),
-    } as any;
+    } as unknown;
 
     towerService = new TowerService(mockTowerRepository);
   });
@@ -25,11 +25,11 @@ describe("TowerService", () => {
     const inputData = {
       project_id: "proj-1",
       object_id: "tower-1",
-      object_height: 30,
+      object_height: 30 /* literal */,
     };
 
     mockTowerRepository.saveMany.mockResolvedValue([
-      { projectId: "proj-1", objectId: "tower-1", objectHeight: 30 } as Tower,
+      { projectId: "proj-1", objectId: "tower-1", objectHeight: 30 /* literal */ } as Tower,
     ]);
 
     const result = await towerService.saveTowers(inputData);
@@ -38,7 +38,7 @@ describe("TowerService", () => {
       expect.objectContaining({
         projectId: "proj-1",
         objectId: "tower-1",
-        objectHeight: 30,
+        objectHeight: 30 /* literal */,
       }),
     ]);
     expect(result).toHaveLength(1);

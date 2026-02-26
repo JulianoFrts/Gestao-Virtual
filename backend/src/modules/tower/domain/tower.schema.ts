@@ -59,7 +59,7 @@ export const towerSchema = z.object({
 export type TowerDTO = z.infer<typeof towerSchema>;
 
 export function mapDtoToEntity(dto: TowerDTO): any {
-  const data: any = {
+  const data: unknown = {
     id: dto.id || undefined,
     projectId: dto.projectId || dto.project_id || undefined,
     companyId: dto.companyId || dto.company_id || undefined,

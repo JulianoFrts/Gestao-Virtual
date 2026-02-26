@@ -2,7 +2,7 @@ import { ParserStrategy, ParsingResult } from './ParserStrategy';
 import { parseStringPromise } from 'xml2js';
 
 export class SvgParser implements ParserStrategy {
-  async parse(buffer: Buffer, options?: any): Promise<ParsingResult> {
+  async parse(buffer: Buffer, options?: unknown): Promise<ParsingResult> {
     const xmlContent = buffer.toString('utf-8');
     const result = await parseStringPromise(xmlContent);
 

@@ -1125,8 +1125,8 @@ enum RecordType {
 }
 
 enum Role {
-  SUPER_ADMIN_GOD // Suporte total / Desenvolvedor
-  SYSTEM_ADMIN    // Administrador Global do Software
+  HELPER_SYSTEM   // Suporte total / Desenvolvedor (Rank 2000)
+  ADMIN           // Administrador Global do Software (Rank 1500)
   COMPANY_ADMIN   // Gestor Principal da Empresa (Dono/Diretor)
   PROJECT_MANAGER // Gestor de Obra (Acesso total ao projeto)
   SITE_MANAGER    // Gestor de Canteiro

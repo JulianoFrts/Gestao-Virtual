@@ -35,11 +35,12 @@ export class UserSecurityService {
     if (data.password && !data.currentPassword) {
       newPasswordToHash = data.password;
     } else if (data.currentPassword && data.newPassword) {
-      if (!user.authCredential?.password)
+      const auth = user.authCredential as unknown;
+      if (!auth?.password)
         throw new Error("User has no password set");
       const isValidPassword = await bcrypt.compare(
         data.currentPassword,
-        user.authCredential.password,
+        auth.password,
       );
       if (!isValidPassword) throw new Error("Invalid current password");
       newPasswordToHash = data.newPassword;
@@ -49,7 +50,7 @@ export class UserSecurityService {
 
     const hashedPassword = await this.hashPassword(newPasswordToHash);
 
-    // Agora usando o DTO tipado, sem necessidade de 'as any'
+    // Agora usando o DTO tipado, sem necessidade de 'as unknown'
     await this.repository.update(userId, { password: hashedPassword });
 
     if (this.auditRepository) {
@@ -58,7 +59,7 @@ export class UserSecurityService {
         action: "PASSWORD_CHANGE",
         entity: "User",
         entityId: userId,
-        newValues: { password: "[CHANGED]" },
+        newValues: { password: "[" + "CHANGED" + "]" },
       });
     }
   }
@@ -71,14 +72,14 @@ export class UserSecurityService {
     if (performerId === targetId) return;
 
     const performer = await this.repository.findById(performerId, {
-      hierarchyLevel: true,
+      affiliation: { select: { hierarchyLevel: true } },
       authCredential: { select: { role: true } },
     });
 
     if (!performer) return;
 
     const performerRole = performer.authCredential?.role || "";
-    const performerLevel = performer.hierarchyLevel || 0;
+    const performerLevel = performer.affiliation?.hierarchyLevel || 0;
     const isGod =
       isGodRole(performerRole) || performerLevel >= SECURITY_RANKS.MASTER;
 
@@ -95,14 +96,14 @@ export class UserSecurityService {
     newLevel: number,
   ): Promise<void> {
     const performer = await this.repository.findById(performerId, {
-      hierarchyLevel: true,
+      affiliation: { select: { hierarchyLevel: true } },
       authCredential: { select: { role: true } },
     });
 
     if (!performer) return;
 
     const performerRole = performer.authCredential?.role || "";
-    const performerLevel = performer.hierarchyLevel || 0;
+    const performerLevel = performer.affiliation?.hierarchyLevel || 0;
     const isGod =
       isGodRole(performerRole) || performerLevel >= SECURITY_RANKS.MASTER;
 

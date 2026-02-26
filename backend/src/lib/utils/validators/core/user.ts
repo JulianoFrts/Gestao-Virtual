@@ -1,0 +1,82 @@
+import { z } from "zod";
+import { emailSchema, nameSchema, passwordSchema, cuidSchema, cpfSchema, phoneSchema, emptyToNull, emptyToUndefined, stripOperator } from "./base";
+import { roleSchema, roleFilterSchema, accountStatusSchema } from "./common";
+
+export const createUserSchema = z.object({
+  email: emailSchema,
+  name: nameSchema.optional(),
+  password: passwordSchema,
+  role: roleSchema.optional().default("USER"),
+  companyId: z.preprocess(emptyToNull, z.string().nullable()).optional(),
+  registrationNumber: z.preprocess(emptyToNull, z.string().max(50).nullable()).optional(),
+  cpf: z.preprocess(emptyToNull, cpfSchema.optional().nullable()),
+  phone: z.preprocess(emptyToNull, phoneSchema.optional().nullable()),
+  functionId: z.string().optional().nullable(),
+  projectId: z.string().optional().nullable(),
+  siteId: z.string().optional().nullable(),
+  hierarchyLevel: z.coerce.number().int().min(0).default(0),
+  laborType: z.string().optional().nullable(),
+  image: z.string().optional().nullable(),
+  iapName: z.string().optional().nullable(),
+  gender: z.string().optional().nullable(),
+  birthDate: z.string().optional().nullable(),
+  zipCode: z.string().optional().nullable(),
+  street: z.string().optional().nullable(),
+  number: z.string().optional().nullable(),
+  neighborhood: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
+});
+
+export const updateUserSchema = z
+  .object({
+    id: cuidSchema.optional(),
+    email: emailSchema.optional(),
+    name: nameSchema.optional(),
+    fullName: nameSchema.optional(),
+    password: passwordSchema.optional(),
+    role: roleSchema.optional(),
+    status: accountStatusSchema.optional(),
+    companyId: z.preprocess(emptyToNull, z.string().optional().nullable()),
+    registrationNumber: z.preprocess(emptyToNull, z.string().optional().nullable()),
+    cpf: z.preprocess(emptyToNull, cpfSchema.optional().nullable()),
+    phone: z.preprocess(emptyToNull, phoneSchema.optional().nullable()),
+    functionId: z.preprocess(emptyToNull, z.string().optional().nullable()),
+    projectId: z.preprocess(emptyToNull, z.string().optional().nullable()),
+    siteId: z.string().optional().nullable(),
+    hierarchyLevel: z.preprocess(emptyToUndefined, z.coerce.number().int().min(0).optional()),
+    laborType: z.string().optional().nullable(),
+    mfa_enabled: z.boolean().optional(),
+    mfa_secret: z.string().optional().nullable(),
+    image: z.string().optional().nullable(),
+    iapName: z.string().optional().nullable(),
+    gender: z.string().optional().nullable(),
+    birthDate: z.string().optional().nullable(),
+    isSystemAdmin: z.boolean().optional(),
+    permissions: z.unknown().optional().nullable(),
+    zipCode: z.string().optional().nullable(),
+    street: z.string().optional().nullable(),
+    number: z.string().optional().nullable(),
+    neighborhood: z.string().optional().nullable(),
+    city: z.string().optional().nullable(),
+    state: z.string().optional().nullable(),
+  })
+  .refine((d) => Object.keys(d).length > 0, {
+    message: "Pelo menos um campo deve ser fornecido",
+  });
+
+export const userFiltersSchema = z.object({
+  id: z.preprocess(stripOperator, z.string().optional()),
+  search: z.preprocess(emptyToUndefined, z.string().max(100).optional()),
+  role: z.preprocess(emptyToUndefined, roleFilterSchema.optional()),
+  status: z.preprocess(emptyToUndefined, accountStatusSchema.optional()),
+  emailVerified: z.preprocess(emptyToUndefined, z.coerce.boolean().optional()),
+  createdAfter: z.preprocess(emptyToUndefined, z.coerce.date().optional()),
+  createdBefore: z.preprocess(emptyToUndefined, z.coerce.date().optional()),
+  projectId: z.preprocess(stripOperator, z.string().optional()),
+  siteId: z.preprocess(stripOperator, z.string().optional()),
+  companyId: z.preprocess(stripOperator, z.string().optional()),
+  onlyCorporate: z.preprocess((input) => input === "true" || input === true, z.boolean().optional()),
+  excludeCorporate: z.preprocess((input) => input === "true" || input === true, z.boolean().optional()),
+  or: z.preprocess(emptyToUndefined, z.string().optional()),
+});

@@ -11,25 +11,25 @@ export class TowerProductionService {
     projectId: string,
     companyId: string,
     siteId: string | null,
-    data: any[],
-  ): Promise<any> {
+    data: Record<string, unknown>[],
+  ): Promise<unknown> {
     logger.info(
       `[TowerProductionService] Importing ${data.length} towers for project ${projectId}`,
     );
 
-    const elements: TowerProductionData[] = data.map((item, index) => ({
+    const elements: TowerProductionData[] = data.map((element, index) => ({
       projectId,
       companyId,
       siteId,
-      towerId: String(item.towerId || item.externalId || index + 1),
-      sequencia: Number(item.objectSeq || item.sequencia || 0),
+      towerId: String(element.towerId || element.externalId || index + 1),
+      sequencia: Number(element.objectSeq || element.sequencia || 0),
       metadata: {
-        trecho: item.trecho || "",
-        towerType: item.towerType || "Autoportante",
-        tipificacaoEstrutura: item.tipificacaoEstrutura || "",
-        tramoLancamento: item.tramoLancamento || "",
-        circuito: item.circuito || "",
-        ...item.metadata,
+        trecho: element.trecho || "",
+        towerType: element.towerType || "Autoportante",
+        tipificacaoEstrutura: element.tipificacaoEstrutura || "",
+        tramoLancamento: element.tramoLancamento || "",
+        circuito: element.circuito || "",
+        ...element.metadata,
       },
     }));
 

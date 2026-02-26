@@ -1,5 +1,5 @@
 export interface AuditLogRepository {
-  findMany(where: any, take: number, skip: number, orderBy: any): Promise<any[]>;
-  count(where: any): Promise<number>;
-  create(data: any): Promise<any>;
+  findMany(where: unknown, take: number, skip: number, orderBy: unknown): Promise<any[]>;
+  count(where: unknown): Promise<number>;
+  create(data: unknown): Promise<unknown>;
 }

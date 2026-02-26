@@ -5,7 +5,7 @@ export class WorkStageSecurityService {
 
   async validateAccess(
     params: { siteId?: string | null; projectId?: string | null },
-    securityContext: any,
+    securityContext: unknown,
   ): Promise<void> {
     if (!securityContext) return;
 
@@ -39,7 +39,7 @@ export class WorkStageSecurityService {
 
   async validateStageAccess(
     stageId: string,
-    securityContext: any,
+    securityContext: unknown,
   ): Promise<void> {
     if (!securityContext) return;
 
@@ -62,7 +62,7 @@ export class WorkStageSecurityService {
 
   async validateStageAccessBulk(
     stageIds: string[],
-    securityContext: any,
+    securityContext: unknown,
   ): Promise<void> {
     if (!securityContext) return;
 
@@ -85,7 +85,7 @@ export class WorkStageSecurityService {
       );
   }
 
-  async isGlobal(securityContext: any): Promise<boolean> {
+  async isGlobal(securityContext: unknown): Promise<boolean> {
     if (!securityContext) return true; // Default to global if no context (internal call)
     const { isGlobalAdmin } = await import("@/lib/auth/session");
     return isGlobalAdmin(

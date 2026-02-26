@@ -45,10 +45,10 @@ describe("ContextValidationService", () => {
       expect(result.error).toBe("Usuário não encontrado.");
     });
 
-    it("should allow access for GLOBAL management roles (e.g., ADMIN)", async () => {
+    it("should allow access for GLOBAL management roles (e.g., SYSTEM_ADMIN)", async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
         id: userId,
-        authCredential: { role: "ADMIN" as Role },
+        authCredential: { role: "SYSTEM_ADMIN" as Role },
         affiliation: null,
       });
 
@@ -57,10 +57,10 @@ describe("ContextValidationService", () => {
       expect(result.isValid).toBe(true);
     });
 
-    it("should allow GESTOR_PROJECT within their own company", async () => {
+    it("should allow PROJECT_MANAGER within their own company", async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
         id: userId,
-        authCredential: { role: "GESTOR_PROJECT" as Role },
+        authCredential: { role: "PROJECT_MANAGER" as Role },
         affiliation: { companyId: "comp-1" },
       });
 
@@ -70,10 +70,10 @@ describe("ContextValidationService", () => {
       expect(result.isValid).toBe(true);
     });
 
-    it("should block GESTOR_PROJECT if no projectId is provided", async () => {
+    it("should block PROJECT_MANAGER if no projectId is provided", async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
         id: userId,
-        authCredential: { role: "GESTOR_PROJECT" as Role },
+        authCredential: { role: "PROJECT_MANAGER" as Role },
         affiliation: { companyId: "comp-1" },
       });
 
@@ -83,10 +83,10 @@ describe("ContextValidationService", () => {
       expect(result.error).toBe("Projeto é obrigatório para Gestor de Projeto.");
     });
 
-    it("should block GESTOR_CANTEIRO trying to access another project", async () => {
+    it("should block SITE_MANAGER trying to access another project", async () => {
         mockPrisma.user.findUnique.mockResolvedValue({
           id: userId,
-          authCredential: { role: "GESTOR_CANTEIRO" as Role },
+          authCredential: { role: "SITE_MANAGER" as Role },
           affiliation: { companyId: "comp-1", projectId: "proj-1" },
         });
   

@@ -15,7 +15,7 @@ const getCircuitsSchema = z.object({
 });
 
 // GET /api/v1/circuits?projectId=...
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const validation = Validator.validateQuery(
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/v1/circuits
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const body = await request.json();
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
 }
 
 // DELETE /api/v1/circuits?id=...
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const id = request.nextUrl.searchParams.get("id");

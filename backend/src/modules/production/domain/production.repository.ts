@@ -30,24 +30,46 @@ export interface ActivityReference {
   [key: string]: unknown;
 }
 
-export interface ProductionProgress {
+/** Dados de identificação do progresso */
+export interface ProductionProgressIdentity {
   id?: string;
-  projectId: string;
+  projectId?: string | null;
   elementId: string;
   activityId: string;
+}
+
+/** Dados de estado atual do progresso */
+export interface ProductionProgressState {
   currentStatus: ActivityStatus;
   progressPercent: number;
-  history: ProgressHistoryEntry[]; // Historical logs
-  dailyProduction: Record<string, DailyProductionRecord>; // Keyed by date
-  requiresApproval?: boolean;
-  approvalReason?: string | null;
   startDate?: Date | null;
   endDate?: Date | null;
+}
+
+/** Dados de governança e aprovação */
+export interface ProductionProgressGovernance {
+  requiresApproval?: boolean;
+  approvalReason?: string | null;
+  updatedAt?: Date;
+  createdAt?: Date;
+}
+
+/** Relacionamentos do progresso */
+export interface ProductionProgressRelations {
   activity?: ActivityReference;
   element?: Record<string, unknown>;
   project?: Record<string, unknown>;
-  updatedAt?: Date;
-  createdAt?: Date;
+}
+
+/** Interface Principal (Composição) */
+export interface ProductionProgress extends 
+  ProductionProgressIdentity, 
+  ProductionProgressState, 
+  ProductionProgressGovernance,
+  ProductionProgressRelations 
+{
+  history: ProgressHistoryEntry[];
+  dailyProduction: Record<string, DailyProductionRecord>;
 }
 
 export interface ProductionProgressRepository {

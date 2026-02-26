@@ -1,5 +1,6 @@
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { ROLE_LEVELS } from "@/lib/constants";
+import { requireAuth } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -9,8 +10,9 @@ export const dynamic = "force-dynamic";
  * Retorna os níveis de hierarquia de cargos para uso no frontend.
  * Fonte única de verdade.
  */
-export async function GET() {
+export async function GET(): Promise<Response> {
   try {
+    await requireAuth();
     // Retorna a constante ROLE_LEVELS definida no constants/index.ts
     return ApiResponse.json(ROLE_LEVELS);
   } catch (error) {

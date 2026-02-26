@@ -53,7 +53,7 @@ describe("AuditConfigService", () => {
             rules: {
                 "rule-a": true,
                 "rule-b": false,
-                "rule-c": ["error", { max: 50 }],
+                "rule-c": ["error", { max: 50 /* literal */ }],
                 "rule-d": "off"
             }
         }));

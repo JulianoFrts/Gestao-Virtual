@@ -5,7 +5,8 @@ export type MapElementType =
   | "EQUIPMENT"
   | "STATION";
 
-export interface MapElementTechnicalData {
+/** Dados de identificação e contexto do elemento */
+export interface MapElementIdentity {
   id?: string;
   companyId: string;
   siteId: string | null;
@@ -13,16 +14,24 @@ export interface MapElementTechnicalData {
   documentId?: string | null;
   elementType: MapElementType;
   externalId: string;
-  name?: string | null;
-  description?: string | null;
+}
+
+/** Dados espaciais e geográficos do elemento */
+export interface MapElementGeospatial {
   sequence: number;
   latitude?: number | null;
   longitude?: number | null;
   elevation?: number | null;
-  path?: any | null;
-  geometry?: any | null;
-  metadata: Record<string, any>;
-  displaySettings?: any;
+  path?: unknown | null;
+  geometry?: unknown | null;
+}
+
+/** Dados técnicos e metadados flexíveis */
+export interface MapElementTechnicalData extends MapElementIdentity, MapElementGeospatial {
+  name?: string | null;
+  description?: string | null;
+  metadata: Record<string, unknown>;
+  displaySettings?: unknown;
   createdAt?: Date;
   updatedAt?: Date;
 }

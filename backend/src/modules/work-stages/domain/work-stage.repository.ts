@@ -46,19 +46,7 @@ export interface CreateWorkStageBulkItem {
   children?: CreateWorkStageBulkItem[];
 }
 
-export interface WorkStageReadRepository {
-  findLinkedStagesBySite(
-    siteId: string,
-    companyId?: string,
-  ): Promise<WorkStage[]>;
-  findLinkedStagesByProjectId(
-    projectId: string,
-    companyId?: string,
-  ): Promise<WorkStage[]>;
-  findProgressByDate(
-    stageId: string,
-    date: Date,
-  ): Promise<WorkStageProgress | null>;
+export interface WorkStageFinder {
   findAll(params: {
     siteId?: string | null;
     projectId?: string | null;
@@ -67,7 +55,17 @@ export interface WorkStageReadRepository {
   }): Promise<WorkStage[]>;
   findAllBySiteId(siteId: string): Promise<WorkStage[]>;
   findAllByProjectId(projectId: string): Promise<WorkStage[]>;
+  findById(id: string): Promise<WorkStage | null>;
+  findLinkedStagesBySite(siteId: string, companyId?: string): Promise<WorkStage[]>;
+  findLinkedStagesByProjectId(projectId: string, companyId?: string): Promise<WorkStage[]>;
+}
+
+export interface WorkStageProgressReader {
+  findProgressByDate(stageId: string, date: Date): Promise<WorkStageProgress | null>;
   listProgress(stageId?: string): Promise<WorkStageProgress[]>;
+}
+
+export interface WorkStageProductionReader {
   findProductionElements(
     projectId: string,
     activityId: string,
@@ -84,11 +82,17 @@ export interface WorkStageReadRepository {
     executedCount: number;
   }>;
   verifyActivityExists(activityId: string): Promise<boolean>;
-  findById(id: string): Promise<WorkStage | null>;
+}
+
+export interface WorkStageAccessVerifier {
   verifySiteAccess(siteId: string, companyId: string): Promise<boolean>;
   verifyProjectAccess(projectId: string, companyId: string): Promise<boolean>;
   verifyStageAccess(stageId: string, companyId: string): Promise<boolean>;
   verifyStageAccessBulk(ids: string[], companyId: string): Promise<boolean>;
+}
+
+export interface WorkStageReadRepository 
+  extends WorkStageFinder, WorkStageProgressReader, WorkStageProductionReader, WorkStageAccessVerifier {
   getMetadata(id: string): Promise<Record<string, unknown>>;
   findGoalsByProject(projectId: string): Promise<Record<string, unknown>[]>;
 }

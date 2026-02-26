@@ -10,10 +10,10 @@ export class PrismaGovernanceRepository implements GovernanceRepository {
     limit: number,
     companyId?: string,
   ): Promise<GovernanceAuditHistory[]> {
-    const where: any = {};
+    const where: Record<string, unknown> = {};
     if (companyId) where.companyId = companyId;
 
-    return (prisma as any).governanceAuditHistory.findMany({
+    return (prisma as unknown).governanceAuditHistory.findMany({
       where,
       take: limit,
       orderBy: { lastDetectedAt: "desc" },
@@ -33,10 +33,10 @@ export class PrismaGovernanceRepository implements GovernanceRepository {
     limit: number,
     companyId?: string,
   ): Promise<RouteHealthHistory[]> {
-    const where: any = {};
+    const where: Record<string, unknown> = {};
     if (companyId) where.companyId = companyId;
 
-    return (prisma as any).routeHealthHistory.findMany({
+    return (prisma as unknown).routeHealthHistory.findMany({
       where,
       take: limit,
       orderBy: { checkedAt: "desc" },
@@ -52,8 +52,8 @@ export class PrismaGovernanceRepository implements GovernanceRepository {
     });
   }
 
-  async findOpenViolation(file: string, violation: string): Promise<any> {
-    return (prisma as any).governanceAuditHistory.findFirst({
+  async findOpenViolation(file: string, violation: string): Promise<GovernanceAuditHistory | null> {
+    return (prisma as unknown).governanceAuditHistory.findFirst({
       where: {
         file,
         violation,
@@ -62,31 +62,31 @@ export class PrismaGovernanceRepository implements GovernanceRepository {
     });
   }
 
-  async createViolation(data: any): Promise<any> {
-    return (prisma as any).governanceAuditHistory.create({
-      data,
+  async createViolation(data: Partial<GovernanceAuditHistory>): Promise<GovernanceAuditHistory> {
+    return (prisma as unknown).governanceAuditHistory.create({
+      data: data as unknown,
     });
   }
 
-  async updateViolation(id: string, data: any): Promise<any> {
-    return (prisma as any).governanceAuditHistory.update({
+  async updateViolation(id: string, data: Partial<GovernanceAuditHistory>): Promise<GovernanceAuditHistory> {
+    return (prisma as unknown).governanceAuditHistory.update({
       where: { id },
-      data,
+      data: data as unknown,
     });
   }
 
-  async findOpenViolations(): Promise<any[]> {
-    return (prisma as any).governanceAuditHistory.findMany({
+  async findOpenViolations(): Promise<GovernanceAuditHistory[]> {
+    return (prisma as unknown).governanceAuditHistory.findMany({
       where: { status: "OPEN" },
     });
   }
 
   async findViolationsWithFilters(
-    filters: any,
+    filters: Record<string, unknown>,
     take: number = 100,
     skip: number = 0,
   ): Promise<GovernanceAuditHistory[]> {
-    return (prisma as any).governanceAuditHistory.findMany({
+    return (prisma as unknown).governanceAuditHistory.findMany({
       where: filters,
       take,
       skip,
@@ -103,7 +103,7 @@ export class PrismaGovernanceRepository implements GovernanceRepository {
     });
   }
 
-  async countViolations(filters: any): Promise<number> {
-    return (prisma as any).governanceAuditHistory.count({ where: filters });
+  async countViolations(filters: Record<string, unknown>): Promise<number> {
+    return (prisma as unknown).governanceAuditHistory.count({ where: filters });
   }
 }

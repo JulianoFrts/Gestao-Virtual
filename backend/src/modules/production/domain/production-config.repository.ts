@@ -1,7 +1,7 @@
 export interface DelayCostConfig {
   companyId: string;
   projectId: string;
-  dailyCost: any;
+  dailyCost: unknown;
   currency: string;
   description?: string | null;
   updatedById?: string | null;
@@ -15,6 +15,6 @@ export interface ProductionConfigRepository {
   upsertDelayCostConfig(data: DelayCostConfig): Promise<DelayCostConfig>;
 
   listDelayReasons(projectId: string): Promise<any[]>;
-  createDelayReason(data: any): Promise<any>;
+  createDelayReason(data: unknown): Promise<unknown>;
   deleteDelayReason(id: string): Promise<void>;
 }

@@ -10,15 +10,15 @@ export interface FindAllDocumentsParams {
 }
 
 export interface DocumentsListResult {
-  items: any[];
+  items: unknown[];
   total: number;
 }
 
 export interface DocumentRepository {
   findAll(params: FindAllDocumentsParams): Promise<DocumentsListResult>;
-  create(data: any): Promise<any>;
+  create(data: unknown): Promise<unknown>;
   findById(id: string): Promise<any | null>;
-  update(id: string, data: any): Promise<any>;
+  update(id: string, data: unknown): Promise<unknown>;
   delete(id: string): Promise<void>;
   findByNameAndPath(
     name: string,

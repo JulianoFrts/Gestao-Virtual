@@ -10,7 +10,21 @@ const accessService = new AccessControlService(
   new PrismaAccessControlRepository(),
 );
 
-export async function GET(request: NextRequest) {
+import { z } from "zod";
+
+const permissionUpdateSchema = z.object({
+  levelId: z.string().min(1),
+  moduleId: z.string().min(1),
+  canView: z.boolean().optional(),
+  canCreate: z.boolean().optional(),
+  canUpdate: z.boolean().optional(),
+  canDelete: z.boolean().optional(),
+  canManage: z.boolean().optional(),
+});
+
+const permissionUpdatesSchema = z.array(permissionUpdateSchema);
+
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
 
@@ -28,17 +42,22 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
-    const admin = await requireAdmin();
+    const user = await requireAdmin();
     const body = await request.json();
 
-    const updates = Array.isArray(body) ? body : [];
+    const validation = permissionUpdatesSchema.safeParse(body);
+    if (!validation.success) {
+      return ApiResponse.validationError(validation.error.issues.map(i => i.message));
+    }
+
+    const updates = validation.data;
 
     const result = await accessService.queueMatrixUpdate(updates);
 
     logger.info("Permission Matrix update queued", {
-      adminId: admin.id,
+      adminId: user.id,
       itemCount: updates.length,
     });
 

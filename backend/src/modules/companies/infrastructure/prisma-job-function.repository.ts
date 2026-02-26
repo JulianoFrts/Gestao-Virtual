@@ -3,10 +3,10 @@ import { JobFunctionRepository } from "../domain/job-function.repository";
 
 export class PrismaJobFunctionRepository implements JobFunctionRepository {
   async findAll(
-    where: any,
+    where: unknown,
     skip: number,
     take: number,
-    orderBy: any,
+    orderBy: unknown,
   ): Promise<any[]> {
     return prisma.jobFunction.findMany({
       where,
@@ -15,27 +15,27 @@ export class PrismaJobFunctionRepository implements JobFunctionRepository {
       orderBy,
       include: {
         company: { select: { id: true, name: true } },
-        _count: { select: { users: true } },
+        _count: { select: { userAffiliations: true } },
       },
     });
   }
 
-  async count(where: any): Promise<number> {
+  async count(where: unknown): Promise<number> {
     return prisma.jobFunction.count({ where });
   }
 
-  async findFirst(where: any): Promise<any | null> {
+  async findFirst(where: unknown): Promise<any | null> {
     return prisma.jobFunction.findFirst({ where });
   }
 
-  async create(data: any): Promise<any> {
+  async create(data: unknown): Promise<unknown> {
     return prisma.jobFunction.create({
       data,
       include: { company: { select: { id: true, name: true } } },
     });
   }
 
-  async update(id: string, data: any): Promise<any> {
+  async update(id: string, data: unknown): Promise<unknown> {
     return prisma.jobFunction.update({
       where: { id },
       data,

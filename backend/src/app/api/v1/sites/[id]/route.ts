@@ -17,23 +17,23 @@ const updateSiteSchema = z.object({
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => (val === "" ? null : val)),
+    .transform((val) => (schemaInput === "" ? null : val)),
   locationDetails: z
     .string()
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => (val === "" ? null : val)),
+    .transform((val) => (schemaInput === "" ? null : val)),
   plannedHours: z.preprocess(
-    (val) => (val === "" || val === null ? undefined : val),
+    (val) => (schemaInput === "" || schemaInput === null ? undefined : val),
     z.coerce.number().optional(),
   ),
   xLat: z.preprocess(
-    (val) => (val === "" || val === null ? undefined : val),
+    (val) => (schemaInput === "" || schemaInput === null ? undefined : val),
     z.coerce.number().optional(),
   ),
   yLa: z.preprocess(
-    (val) => (val === "" || val === null ? undefined : val),
+    (val) => (schemaInput === "" || schemaInput === null ? undefined : val),
     z.coerce.number().optional(),
   ),
 });
@@ -42,7 +42,7 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     const { id } = await params;
     const user = await authSession.requireAuth();
@@ -53,17 +53,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     // Validação de Escopo: Canteiro -> Projeto -> Empresa
     const { prisma } = await import("@/lib/prisma/client");
     const project = await prisma.project.findUnique({
-      where: { id: (site as any).projectId },
+      where: { id: (site as unknown).projectId },
       select: { companyId: true },
     });
 
     if (
       project &&
-      project.companyId !== (user as any).companyId &&
+      project.companyId !== user.companyId &&
       !authSession.isGlobalAdmin(
-        (user as any).role,
-        (user as any).hierarchyLevel,
-        (user as any).permissions,
+        user.role,
+        user.hierarchyLevel || 0,
+        (user.permissions as Record<string, boolean>),
       )
     ) {
       return ApiResponse.forbidden("Você não tem acesso a este canteiro");
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     const { id } = await params;
     const user = await authSession.requirePermission("sites.manage", request);
@@ -86,17 +86,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // Validação de Escopo
     const { prisma } = await import("@/lib/prisma/client");
     const project = await prisma.project.findUnique({
-      where: { id: (existingSite as any).projectId },
+      where: { id: (existingSite as unknown).projectId },
       select: { companyId: true },
     });
 
     if (
       project &&
-      project.companyId !== (user as any).companyId &&
+      project.companyId !== user.companyId &&
       !authSession.isGlobalAdmin(
-        (user as any).role,
-        (user as any).hierarchyLevel,
-        (user as any).permissions,
+        user.role,
+        user.hierarchyLevel || 0,
+        (user.permissions as Record<string, boolean>),
       )
     ) {
       return ApiResponse.forbidden(
@@ -105,9 +105,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     const body = await request.json();
-    const data = updateSiteSchema.parse(body);
+    const siteData = updateSiteSchema.parse(body);
 
-    const site = await siteService.updateSite(id, data);
+    const site = await siteService.updateSite(id, siteData);
 
     logger.info("Site atualizado", { siteId: site.id });
 
@@ -117,7 +117,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     const { id } = await params;
     const user = await authSession.requirePermission("sites.manage", request);
@@ -128,17 +128,17 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // Validação de Escopo
     const { prisma } = await import("@/lib/prisma/client");
     const project = await prisma.project.findUnique({
-      where: { id: (existingSite as any).projectId },
+      where: { id: (existingSite as unknown).projectId },
       select: { companyId: true },
     });
 
     if (
       project &&
-      project.companyId !== (user as any).companyId &&
+      project.companyId !== user.companyId &&
       !authSession.isGlobalAdmin(
-        (user as any).role,
-        (user as any).hierarchyLevel,
-        (user as any).permissions,
+        user.role,
+        user.hierarchyLevel || 0,
+        (user.permissions as Record<string, boolean>),
       )
     ) {
       return ApiResponse.forbidden(

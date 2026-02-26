@@ -1,11 +1,13 @@
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { prisma } from "@/lib/prisma/client";
+import { requireAdmin } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
+    await requireAdmin();
     const data = await prisma.mapElementTechnicalData.findMany({
       where: { elementType: "TOWER" },
       orderBy: { sequence: "asc" },
@@ -13,7 +15,7 @@ export async function GET(request: NextRequest) {
     });
 
     const missing = [];
-    const seqs = data.map((d: any) => d.sequence);
+    const seqs = data.map((d: unknown) => d.sequence);
 
     if (seqs.length > 0) {
       let last = seqs[0] - 1;
@@ -35,7 +37,7 @@ export async function GET(request: NextRequest) {
       jumpsSample: missing.slice(0, 10),
       first100: data.slice(0, 100),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(error, "src/app/api/v1/debug/sequences/route.ts#GET");
   }
 }

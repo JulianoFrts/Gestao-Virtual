@@ -1,7 +1,7 @@
 import { z } from "zod";
-import * as fs from "fs";
-import * as path from "path";
 import { logger } from "@/lib/utils/logger";
+import { IFileSystem } from "@/modules/common/domain/file-system.interface";
+import { NodeFileSystem } from "@/modules/common/infrastructure/node-file-system";
 
 const auditConfigSchema = z.object({
     rules: z.record(z.string(), z.union([z.boolean(), z.string(), z.array(z.any())])),
@@ -12,19 +12,23 @@ export type AuditConfig = z.infer<typeof auditConfigSchema>;
 
 export class AuditConfigService {
     private config: AuditConfig | null = null;
-    private readonly configPath = path.join(process.cwd(), ".auditrc.json");
+    private readonly configPath: string;
+
+    constructor(private readonly fs: IFileSystem = new NodeFileSystem()) {
+        this.configPath = this.fs.join(this.fs.cwd(), ".auditrc.json");
+    }
 
     public loadConfig(): AuditConfig {
         if (this.config) return this.config;
 
         try {
-            if (!fs.existsSync(this.configPath)) {
+            if (!this.fs.exists(this.configPath)) {
                 logger.info("Nenhum arquivo .auditrc.json encontrado. Usando padrões.");
                 this.config = this.getDefaultConfig();
                 return this.config;
             }
 
-            const content = fs.readFileSync(this.configPath, "utf-8");
+            const content = this.fs.readFile(this.configPath, "utf-8");
             const parsed = JSON.parse(content);
 
             const validation = auditConfigSchema.safeParse(parsed);

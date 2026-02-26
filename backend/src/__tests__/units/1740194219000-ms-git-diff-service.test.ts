@@ -1,6 +1,6 @@
 /**
  * *****INICIO*****
- * ** GESTÃO VIRTUAL - SOFTWARE SOLUTIONS - UNIT TEST - 22/02/2026 / 03:40 **
+ * ** GESTÃO VIRTUAL - SOFTWARE SOLUTIONS - UNIT TEST - 22/02/2026 / 03: 40 /* literal */ **
  * *** QUAL FOI A MELHORIA AO EXECUTAR O TESTE? : Centralização e padronização (Regra de Ouro) no Backend.
  * *** QUAL FOI O MOTIVO DA EXECUÇÃO DO TESTE? : Regularização arquitetural e organização potente do sistema.
  * *** QUAIS AS RECOMENDAÇÕES A SER EXECUTADO CASO OCORRER ALGUM ERRO NO TESTE E PRECISAR SER COLIGIDO: Verificar caminhos de importação e consistência do ambiente de teste Jest/Supertest.
@@ -16,7 +16,7 @@ jest.mock("@/lib/utils/logger");
 
 describe("GitDiffService", () => {
   let service: GitDiffService;
-  const mockExec = child_process.exec as unknown as jest.Mock;
+  const mockExec = child_process.exec as jest.Mock;
 
   beforeEach(() => {
     service = new GitDiffService();
@@ -25,7 +25,7 @@ describe("GitDiffService", () => {
 
   it("should return changed files correctly", async () => {
     // Mock successful git execution
-    mockExec.mockImplementation((cmd: string, callback: any) => {
+    mockExec.mockImplementation((cmd: string, callback: unknown) => {
       if (cmd.includes("rev-parse")) return callback(null, { stdout: "true" });
       if (cmd.includes("git diff"))
         return callback(null, { stdout: "file1.ts\nfile2.ts" });
@@ -42,7 +42,7 @@ describe("GitDiffService", () => {
   });
 
   it("should return empty array if git fails", async () => {
-    mockExec.mockImplementation((cmd: string, callback: any) => {
+    mockExec.mockImplementation((cmd: string, callback: unknown) => {
       return callback(new Error("Git not found"));
     });
 

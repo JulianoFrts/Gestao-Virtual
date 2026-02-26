@@ -35,7 +35,7 @@ export class PrismaCompanyRepository implements CompanyRepository {
     const pages = Math.ceil(total / limit);
 
     return {
-      items: items as unknown as CompanyEntity[],
+      items: items as CompanyEntity[],
       pagination: {
         page,
         limit,
@@ -95,8 +95,8 @@ export class PrismaCompanyRepository implements CompanyRepository {
       phone: data.phone,
       logoUrl: data.logoUrl,
       isActive: data.isActive,
-      metadata: (data.metadata || {}) as any,
-    } as any;
+      metadata: (data.metadata || {}) as unknown,
+    } as unknown;
     return prisma.company.create({
       data: createData,
     }) as Promise<CompanyEntity>;
@@ -110,8 +110,8 @@ export class PrismaCompanyRepository implements CompanyRepository {
       phone: data.phone,
       logoUrl: data.logoUrl,
       isActive: data.isActive,
-      metadata: data.metadata as any
-    } as any;
+      metadata: data.metadata as unknown
+    } as unknown;
     return prisma.company.update({
       where: { id },
       data: updateData,

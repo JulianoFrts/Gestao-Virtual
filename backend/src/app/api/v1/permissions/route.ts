@@ -4,13 +4,10 @@ import { z } from "zod";
 import { AccessControlService } from "@/modules/access-control/application/access-control.service";
 import { PrismaAccessControlRepository } from "@/modules/access-control/infrastructure/prisma-access-control.repository";
 import { VALIDATION } from "@/lib/constants";
+import { requireAdmin } from "@/lib/auth/session";
 
 // DI
 const service = new AccessControlService(new PrismaAccessControlRepository());
-
-const querySchema = z.object({
-  name: z.string().optional(),
-});
 
 const createPermissionSchema = z.object({
   name: z.string().min(2).max(VALIDATION.STRING.MAX_NAME),
@@ -19,20 +16,22 @@ const createPermissionSchema = z.object({
   power: z.number().int().optional(), // Alias for rank
 });
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
+    await requireAdmin();
     const searchParams = request.nextUrl.searchParams;
     const name = searchParams.get("name") || undefined;
 
     const result = await service.listLevels(name);
     return ApiResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(error, "src/app/api/v1/permissions/route.ts#GET");
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
+    await requireAdmin();
     const body = await request.json();
     const validation = createPermissionSchema.safeParse(body);
     if (!validation.success) {
@@ -48,8 +47,8 @@ export async function POST(request: NextRequest) {
     });
 
     return ApiResponse.created(result, "Permission level created successfully");
-  } catch (error: any) {
-    if (error.message === "LEVEL_ALREADY_EXISTS") {
+  } catch (error: unknown) {
+    if (error?.message === "LEVEL_ALREADY_EXISTS") {
       return ApiResponse.conflict(
         "Permission level with this name already exists",
       );

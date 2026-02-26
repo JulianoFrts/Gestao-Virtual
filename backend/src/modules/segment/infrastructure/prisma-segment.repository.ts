@@ -18,8 +18,8 @@ export class PrismaSegmentRepository implements TowerSegmentRepository {
 
   private async handleUpdate(
     id: string,
-    data: any,
-    conductors: any[] | undefined,
+    data: unknown,
+    conductors: unknown[] | undefined,
   ): Promise<Segment> {
     await prisma.segment.update({
       where: { id },
@@ -36,12 +36,12 @@ export class PrismaSegmentRepository implements TowerSegmentRepository {
     if (conductors) {
       await this.updateConductors(id, conductors);
     }
-    return this.findById(id) as unknown as Promise<Segment>;
+    return this.findById(id) as Promise<Segment>;
   }
 
   private async handleUpsert(
-    data: any,
-    conductors: any[] | undefined,
+    data: unknown,
+    conductors: unknown[] | undefined,
   ): Promise<Segment> {
     const whereInput = {
       projectId_fromTowerId_toTowerId: {
@@ -65,7 +65,7 @@ export class PrismaSegmentRepository implements TowerSegmentRepository {
       if (conductors) {
         await this.updateConductors(existing.id, conductors);
       }
-      return this.findById(existing.id) as unknown as Promise<Segment>;
+      return this.findById(existing.id) as Promise<Segment>;
     } else {
       const created = await prisma.segment.create({
         data: {
@@ -84,7 +84,7 @@ export class PrismaSegmentRepository implements TowerSegmentRepository {
     }
   }
 
-  private async updateConductors(segmentId: string, conductors: any[]) {
+  private async updateConductors(segmentId: string, conductors: unknown[]) {
     await prisma.conductor.deleteMany({ where: { segmentId } });
 
     // Using individual creates or a loop since createMany doesn't handle IDs automatically if not defined in schema
@@ -103,7 +103,7 @@ export class PrismaSegmentRepository implements TowerSegmentRepository {
     }
   }
 
-  private mapConductorsForCreate(conductors?: any[]) {
+  private mapConductorsForCreate(conductors?: unknown[]) {
     return conductors?.map((c) => ({
       id: c.id || randomUUID(),
       phase: c.phase,
@@ -152,7 +152,7 @@ export class PrismaSegmentRepository implements TowerSegmentRepository {
     return results.map((r) => this.mapFromPrisma(r));
   }
 
-  private mapFromPrisma(prismaSegment: any): Segment {
+  private mapFromPrisma(prismaSegment: unknown): Segment {
     return {
       id: prismaSegment.id,
       projectId: prismaSegment.projectId,
@@ -164,7 +164,7 @@ export class PrismaSegmentRepository implements TowerSegmentRepository {
       elevationStart: prismaSegment.groundLevel
         ? Number(prismaSegment.groundLevel)
         : undefined,
-      conductors: prismaSegment.conductors?.map((c: any) => ({
+      conductors: prismaSegment.conductors?.map((c: unknown) => ({
         id: c.id,
         segmentId: c.segmentId,
         phase: c.phase,

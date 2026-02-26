@@ -35,7 +35,7 @@ export class SiteService {
     return site;
   }
 
-  async createSite(data: any) {
+  async createSite(data: unknown) {
     // Validação de existência do projeto
     const project = await prisma.project.findUnique({
       where: { id: data.projectId },
@@ -47,7 +47,7 @@ export class SiteService {
     return this.repository.create(data);
   }
 
-  async updateSite(id: string, data: any) {
+  async updateSite(id: string, data: unknown) {
     const existing = await this.repository.findById(id);
     if (!existing) throw new Error("Site não encontrado");
     return this.repository.update(id, data);

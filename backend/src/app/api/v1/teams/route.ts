@@ -44,11 +44,11 @@ const querySchema = paginationQuerySchema.extend({
 });
 
 // ===== HEAD (Health Check) =====
-export async function HEAD() {
+export async function HEAD(): Promise<Response> {
   return ApiResponse.noContent();
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await authSession.requireAuth();
 
@@ -58,24 +58,24 @@ export async function GET(request: NextRequest) {
     );
     if (!validation.success) return validation.response;
 
-    const {
+    const { 
       page = API.PAGINATION.DEFAULT_PAGE,
       limit = API.PAGINATION.DEFAULT_LIMIT,
       companyId,
       siteId,
       projectId,
       isActive,
-    } = validation.data as any;
+     } = validation.data;
 
     const { isGlobalAdmin } = await import("@/lib/auth/session");
     const isGlobal = isGlobalAdmin(
       user.role,
-      (user as any).hierarchyLevel,
-      (user as any).permissions,
+      user.hierarchyLevel,
+      (user.permissions as Record<string, boolean>),
     );
 
     // Parametros para o Service
-    const serviceParams: any = {
+    const serviceParams: unknown = {
       page,
       limit,
       companyId: isGlobal
@@ -95,17 +95,17 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const user = await authSession.requirePermission("teams.manage", request);
     const body = await request.json();
     const validation = Validator.validate(createTeamSchema, body);
     if (!validation.success) return validation.response;
 
-    const data = validation.data as any;
+    const data = validation.data as unknown;
 
     // Validação de Escopo: Usuário só pode criar equipe para sua própria empresa (se não for admin sistêmico)
-    const targetCompanyId = data.companyId || (user as any).companyId;
+    const targetCompanyId = data.companyId || user.companyId;
     await authSession.requireScope(targetCompanyId, "COMPANY", request);
 
     // Garantir que a equipe seja criada vinculada à empresa correta

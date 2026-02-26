@@ -3,23 +3,37 @@ import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth } from "@/lib/auth/session";
 import { AuditLogService } from "@/modules/audit/application/audit-log.service";
 import { PrismaAuditLogRepository } from "@/modules/audit/infrastructure/prisma-audit-log.repository";
+import type { Session } from "next-auth";
+
+import { z } from "zod";
 
 // DI
 const auditLogService = new AuditLogService(new PrismaAuditLogRepository());
 
-export async function HEAD() {
+const createLogSchema = z.object({
+  action: z.string().min(1),
+  entity: z.string().min(1),
+  entityId: z.string().optional().nullable(),
+  details: z.record(z.unknown()).optional(),
+  metadata: z.record(z.unknown()).optional().nullable(),
+  route: z.string().optional(),
+  stream: z.boolean().optional(),
+  token: z.string().optional(),
+});
+
+export async function HEAD(): Promise<Response> {
   return ApiResponse.noContent();
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const { isGlobalAdmin } = await import("@/lib/auth/session");
     const currentUser = await requireAuth(request);
 
     const isGlobal = isGlobalAdmin(
       currentUser.role,
-      (currentUser as any).hierarchyLevel,
-      (currentUser as any).permissions,
+      currentUser.hierarchyLevel,
+      currentUser.permissions as Record<string, boolean>,
     );
     const { CONSTANTS } = await import("@/lib/constants");
     const stream = generateAuditLogsStream(currentUser, isGlobal, CONSTANTS);
@@ -37,34 +51,32 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
-    const body = await request.json();
+    const rawBody = await request.json();
+    const validation = createLogSchema.safeParse(rawBody);
+    
+    if (!validation.success) {
+      return ApiResponse.validationError(validation.error.issues.map(i => i.message));
+    }
+    
+    const body = validation.data;
     const { HTTP_STATUS, CONSTANTS } = await import("@/lib/constants");
 
     // Lógica para Iniciar Stream via POST (Auth via JSON)
     if (body.stream === true || body.token) {
-      const { validateToken, isGlobalAdmin } =
+      const { isGlobalAdmin } =
         await import("@/lib/auth/session");
-      let currentUser;
-
-      const token = body.token;
-      if (token) {
-        const session = await validateToken(token);
-        if (session?.user) currentUser = session.user;
-      }
-
-      if (!currentUser) {
-        currentUser = await requireAuth(request);
-      }
+      
+      const user = await requireAuth(request);
 
       const isGlobal = isGlobalAdmin(
-        currentUser.role,
-        (currentUser as any).hierarchyLevel,
-        (currentUser as any).permissions,
+        user.role,
+        user.hierarchyLevel,
+        user.permissions as Record<string, boolean>,
       );
 
-      const stream = generateAuditLogsStream(currentUser, isGlobal, CONSTANTS);
+      const stream = generateAuditLogsStream(user, isGlobal, CONSTANTS);
 
       return new Response(stream, {
         headers: {
@@ -79,7 +91,7 @@ export async function POST(request: NextRequest) {
     // Lógica Original: Registro de Log Manual
     const user = await requireAuth(request);
     const clientIp = getClientIp(request);
-    const userAgent = request.headers.get("user-agent");
+    const userAgent = request.headers.get("user-agent") || "";
 
     const log = await auditLogService.createLog({
       userId: user.id,
@@ -109,25 +121,25 @@ function getClientIp(request: NextRequest): string {
   if (forwardedFor) {
     ip = forwardedFor.split(",")[0]?.trim();
   } else {
-    ip = request.headers.get("x-real-ip") || (request as any).ip || "127.0.0.1";
+    ip = request.headers.get("x-real-ip") || (request as unknown).ip || "127.0.0.1";
   }
 
-  return ip === "::1" ? "127.0.0.1" : ip;
+  return ip === ":: 1 /* literal */" ? "127.0.0.1" : ip;
 }
 
 /**
  * Função Auxiliar para gerar o Stream de Logs (SRP)
  */
 function generateAuditLogsStream(
-  currentUser: any,
+  currentUser: Session["user"],
   isGlobal: boolean,
-  CONSTANTS: any,
+  constants: unknown,
 ): ReadableStream {
   const encoder = new TextEncoder();
 
   return new ReadableStream({
-    async start(controller) {
-      const sendEvent = (type: string, data: any) => {
+    async start(controller): Promise<unknown> {
+      const sendEvent = (type: string, data: Record<string, unknown>) => {
         try {
           const event = `data: ${JSON.stringify({ type, ...data })}\n\n`;
           controller.enqueue(encoder.encode(event));
@@ -144,7 +156,7 @@ function generateAuditLogsStream(
 
         sendEvent("start", { total });
 
-        const BATCH_SIZE = CONSTANTS.API.BATCH.SIZE;
+        const BATCH_SIZE = constants.API.BATCH.SIZE;
         let processed = 0;
 
         while (processed < total) {
@@ -168,12 +180,12 @@ function generateAuditLogsStream(
           });
 
           await new Promise((resolve) =>
-            setTimeout(resolve, CONSTANTS.API.THROTTLE.MS),
+            setTimeout(resolve, constants.API.THROTTLE.MS),
           );
         }
 
         sendEvent("complete", { total });
-      } catch (err: any) {
+      } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         sendEvent("error", { message });
       } finally {

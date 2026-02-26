@@ -4,9 +4,10 @@ import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma/client";
 import { logger } from "@/lib/utils/logger";
 import { NextRequest } from "next/server";
-
-// Cache for session results within the same request
+import { SystemTimeProvider } from "@/lib/utils/time-provider";
 import { cache } from "react";
+
+const timeProvider = new SystemTimeProvider();
 
 /**
  * Obtém a sessão atual com cache por request e suporte a Bearer token
@@ -16,35 +17,11 @@ export const getCurrentSession = cache(
     try {
       let session = await auth();
 
-      // 2. Fallback: Se não houver sessão via cookie, tentar extrair token (Bearer ou Query)
       if (!session) {
-        // [DEV ONLY] Bypass para testes locais
-        if (process.env.NODE_ENV === "development" && req) {
-          const bypass = req.nextUrl.searchParams.get("bypass") === "true";
-          const isLocal =
-            req.nextUrl.hostname === "localhost" ||
-            req.nextUrl.hostname === "127.0.0.1";
+        session = await handleDevBypass(req);
+      }
 
-          if (bypass && isLocal) {
-            logger.warn(
-              "[AUTH] Bypass de segurança ativado para desenvolvimento local (Localhost Only)",
-            );
-            return {
-              user: {
-                id: "dev-god-user",
-                name: "God Developer",
-                email: "god@agente.internal",
-                role: "SUPER_ADMIN_GOD",
-                status: "ACTIVE",
-                isSystemAdmin: true,
-                hierarchyLevel: 2500,
-                permissions: { "*": true },
-              } as any,
-              expires: new Date(Date.now() + 3600000).toISOString(),
-            };
-          }
-        }
-
+      if (!session) {
         const token = await getAuthToken(req);
         if (token) {
           const { validateToken } = await import("./validators");
@@ -62,6 +39,41 @@ export const getCurrentSession = cache(
     }
   },
 );
+
+/**
+ * Lógica de bypass para desenvolvimento local
+ */
+async function handleDevBypass(req?: NextRequest): Promise<Session | null> {
+  if (process.env.NODE_ENV !== "development" || !req) return null;
+
+  const bypass = req.nextUrl.searchParams.get("bypass") === "true";
+  const isLocal =
+    req.nextUrl.hostname === "localhost" ||
+    req.nextUrl.hostname === "127.0.0.1";
+
+  if (bypass && isLocal) {
+    logger.warn(
+      "[AUTH] Bypass de segurança ativado para desenvolvimento local (Localhost Only)",
+    );
+    const DEV_GOD_LEVEL = 2500;
+    const ONE_HOUR_MS = 3600000;
+    
+    return {
+      user: {
+        id: "dev-god-user",
+        name: "God Developer",
+        email: "god@agente.internal",
+        role: "SUPER_ADMIN_GOD",
+        status: "ACTIVE",
+        isSystemAdmin: true,
+        hierarchyLevel: DEV_GOD_LEVEL,
+        permissions: { "*": true },
+      } as any,
+      expires: new Date(timeProvider.now().getTime() + ONE_HOUR_MS).toISOString(),
+    };
+  }
+  return null;
+}
 
 /**
  * Reconstrói objeto de sessão a partir do payload do JWT
@@ -100,32 +112,7 @@ async function reconstructSessionFromPayload(
   if (!user || !user.authCredential) return null;
 
   const userRole = user.authCredential.role || "OPERATIONAL";
-  const hierarchyLevel = user.affiliation?.hierarchyLevel || 0;
-
-  // Fetch role-based permissions from Matrix
-  const grantedModules = await prisma.permissionMatrix.findMany({
-    where: {
-      levelId: userRole,
-      isGranted: true,
-    },
-    include: {
-      permissionModule: {
-        select: { code: true },
-      },
-    },
-  });
-
-  const matrixPermissions: Record<string, boolean> = {};
-  grantedModules.forEach((m: any) => {
-    if (m.permissionModule?.code) {
-      matrixPermissions[m.permissionModule.code] = true;
-    }
-  });
-
-  // Merge with user direct permissions (Now in AuthCredential)
-  const directPermissions = (user.authCredential.permissions as any) || {};
-  const mergedPermissions = { ...matrixPermissions, ...directPermissions };
-
+  const permissions = await resolveMergedPermissions(user, userRole);
   const { getTokenExpiration } = await import("./validators");
 
   return {
@@ -138,12 +125,48 @@ async function reconstructSessionFromPayload(
       companyId: user.affiliation?.companyId,
       projectId: user.affiliation?.projectId,
       siteId: user.affiliation?.siteId,
-      hierarchyLevel: hierarchyLevel,
-      permissions: mergedPermissions,
+      hierarchyLevel: user.affiliation?.hierarchyLevel || 0,
+      permissions,
       isSystemAdmin: !!user.authCredential.isSystemAdmin,
     } as any,
     expires: getTokenExpiration(payload),
   };
+}
+
+/**
+ * Consolida permissões da matriz e overrides do usuário
+ */
+async function resolveMergedPermissions(user: any, role: string): Promise<Record<string, boolean>> {
+  // Buscar o ID do nível de permissão associado a esta Role string/enum
+  const permissionLevel = await prisma.permissionLevel.findFirst({
+    where: { name: role },
+    select: { id: true },
+  });
+
+  const matrixPermissions: Record<string, boolean> = {};
+
+  if (permissionLevel) {
+    const grantedModules = await prisma.permissionMatrix.findMany({
+      where: {
+        levelId: permissionLevel.id,
+        isGranted: true,
+      },
+      include: {
+        permissionModule: {
+          select: { code: true },
+        },
+      },
+    });
+
+    grantedModules.forEach((m: any) => {
+      if (m.permissionModule?.code) {
+        matrixPermissions[m.permissionModule.code] = true;
+      }
+    });
+  }
+
+  const directPermissions = (user.authCredential.permissions as any) || {};
+  return { ...matrixPermissions, ...directPermissions };
 }
 
 /**
@@ -154,26 +177,28 @@ export async function getAuthToken(req?: NextRequest): Promise<string | null> {
     const headerList = req ? req.headers : await headers();
     const authHeader = headerList.get("authorization");
 
-    if (authHeader?.startsWith("Bearer ")) {
-      return authHeader.substring(7);
+    const BEARER_PREFIX = "Bearer ";
+    if (authHeader?.startsWith(BEARER_PREFIX)) {
+      return authHeader.substring(BEARER_PREFIX.length);
     }
 
     if (req) {
-      return (
+      const queryToken = 
         req.nextUrl.searchParams.get("token") ||
         req.nextUrl.searchParams.get("access_token") ||
-        req.nextUrl.searchParams.get("orion_token")
-      );
+        req.nextUrl.searchParams.get("orion_token");
+      
+      if (queryToken) return queryToken;
     }
 
-    try {
-      const urlHeader = headerList.get("x-url") || headerList.get("referer");
-      if (urlHeader) {
+    const urlHeader = headerList.get("x-url") || headerList.get("referer");
+    if (urlHeader) {
+      try {
         const url = new URL(urlHeader);
         return url.searchParams.get("token");
+      } catch {
+        // Silently ignore URL parsing errors
       }
-    } catch {
-      /* empty */
     }
 
     return null;
@@ -183,8 +208,8 @@ export async function getAuthToken(req?: NextRequest): Promise<string | null> {
 }
 
 /**
- * Invalida cache de sessão (Não precisa mais fazer nada manualmente, pois o react.cache() dura apenas o request)
+ * Invalida cache de sessão
  */
-export async function invalidateSessionCache() {
-  // void
+export async function invalidateSessionCache(): Promise<void> {
+  // Void - Cache do React dura apenas o ciclo da request
 }

@@ -11,8 +11,8 @@ export class AuditStreamService {
     let isStreamClosed = false;
 
     return new ReadableStream({
-      async start(controller) {
-        const sendEvent = (type: string, data: any) => {
+      async start(controller): Promise<unknown> {
+        const sendEvent = (type: string, data: unknown) => {
           if (isStreamClosed) return;
           try {
             const event = `data: ${JSON.stringify({ type, ...data })}\n\n`;
@@ -73,7 +73,7 @@ export class AuditStreamService {
             bySeverity: summary.bySeverity,
             topIssues: summary.topIssues,
           });
-        } catch (error: any) {
+        } catch (error: unknown) {
           const message =
             error instanceof Error ? error.message : String(error);
           logger.error("Erro durante stream de auditoria", { error, userId });

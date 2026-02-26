@@ -19,7 +19,7 @@ export class PrismaUserRoleRepository implements UserRoleRepository {
 
     const mapped = {
       id: user.id,
-      role: (user as any).authCredential?.role || "WORKER",
+      role: (user as unknown).authCredential?.role || "OPERATIONAL",
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
@@ -28,7 +28,7 @@ export class PrismaUserRoleRepository implements UserRoleRepository {
     return [this.mapToUserRole(mapped)];
   }
 
-  async create(data: any): Promise<any> {
+  async create(data: unknown): Promise<unknown> {
     // Assume data contains userId and role
     const authCred = await prisma.authCredential.update({
       where: { userId: data.userId },
@@ -60,11 +60,11 @@ export class PrismaUserRoleRepository implements UserRoleRepository {
     const userId = this.extractUserId(id);
     await prisma.authCredential.update({
       where: { userId: userId },
-      data: { role: "WORKER" }, // Reset to default
+      data: { role: "OPERATIONAL" }, // Reset to default
     });
   }
 
-  async update(id: string, data: any): Promise<any> {
+  async update(id: string, data: unknown): Promise<unknown> {
     const userId = this.extractUserId(id);
 
     const authCred = await prisma.authCredential.update({
@@ -96,7 +96,7 @@ export class PrismaUserRoleRepository implements UserRoleRepository {
     return id.startsWith("role-") ? id.substring(5) : id;
   }
 
-  private mapToUserRole(user: any): any {
+  private mapToUserRole(user: unknown): any {
     return {
       id: `role-${user.id}`,
       userId: user.id,

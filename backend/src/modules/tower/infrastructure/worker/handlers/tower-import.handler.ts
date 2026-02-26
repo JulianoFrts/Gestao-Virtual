@@ -5,7 +5,7 @@ import { logger } from "@/lib/utils/logger";
 export class TowerImportHandler implements ITaskHandler {
   constructor(private readonly importService: TowerImportService) {}
 
-  async handle(payload: any): Promise<void> {
+  async handle(payload: unknown): Promise<void> {
     logger.info("[Worker] Iniciando processamento de importação de torres...");
 
     if (!payload.data || !Array.isArray(payload.data)) {

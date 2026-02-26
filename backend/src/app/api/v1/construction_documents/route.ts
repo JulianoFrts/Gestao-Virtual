@@ -27,10 +27,9 @@ const createDocumentSchema = z.object({
   fileUrl: z
     .string()
     .refine(
-      (val) =>
-        val.startsWith("file://") ||
-        val.startsWith("http://") ||
-        val.startsWith("https://"),
+      (url) => url.startsWith("file://") ||
+        url.startsWith("http://") ||
+        url.startsWith("https://"),
       { message: "URL do arquivo inválida" },
     ),
   fileSize: z.number().optional().default(0),
@@ -73,7 +72,7 @@ const querySchema = paginationQuerySchema.extend({
     .transform((val) => val || undefined),
 });
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
 
@@ -83,7 +82,7 @@ export async function GET(request: NextRequest) {
     );
     if (!validation.success) return validation.response;
 
-    const result = await documentService.listDocuments(validation.data as any);
+    const result = await documentService.listDocuments(validation.data as unknown);
 
     return ApiResponse.json(result);
   } catch (error) {
@@ -94,7 +93,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
     const body = await request.json();
@@ -122,7 +121,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function PUT(request: NextRequest) {
+export async function PUT(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
     const body = await request.json();
@@ -149,7 +148,7 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
     const { searchParams } = new URL(request.url);

@@ -16,7 +16,7 @@ import { SESSION_MAX_AGE } from "@/lib/constants";
 const userService = new UserService(new PrismaUserRepository());
 const authService = new AuthService(userService, new PrismaAuthCredentialRepository());
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const body = await parseRequestBody(request);
     if (!body) return ApiResponse.badRequest("JSON inválido ou corpo vazio");
@@ -35,11 +35,11 @@ export async function POST(request: NextRequest) {
       credentials.identifier,
     );
 
-    if (!user || !(user as any).password) {
+    if (!user || !(user as unknown).password) {
       return ApiResponse.unauthorized("Usuário não encontrado ou sem senha");
     }
 
-    const isValid = await (authService as any).verifyCredentials(
+    const isValid = await (authService as unknown).verifyCredentials(
       credentials.identifier,
       credentials.password,
     );
@@ -52,8 +52,8 @@ export async function POST(request: NextRequest) {
     const token = await generateToken({
       id: user.userId as string,
       email: user.email as string,
-      name: (user as any).user?.name || "Funcionário",
-      role: (user as any).user?.role || "USER",
+      name: (user as unknown).user?.name || "Funcionário",
+      role: (user as unknown).user?.role || "USER",
       status: user.status as string,
       companyId: undefined,
       projectId: undefined,
@@ -63,10 +63,10 @@ export async function POST(request: NextRequest) {
       user: {
         id: user.userId,
         email: user.email,
-        name: (user as any).user?.name,
-        role: (user as any).user?.role || "USER",
-        registrationNumber: (user as any).user?.registrationNumber,
-        cpf: (user as any).user?.cpf,
+        name: (user as unknown).user?.name,
+        role: (user as unknown).user?.role || "USER",
+        registrationNumber: (user as unknown).user?.registrationNumber,
+        cpf: (user as unknown).user?.cpf,
         companyId: undefined,
         projectId: undefined,
       },
@@ -89,7 +89,7 @@ async function parseRequestBody(request: NextRequest) {
   }
 }
 
-function extractCredentials(body: any) {
+function extractCredentials(body: unknown) {
   return {
     identifier:
       body.identifier ||

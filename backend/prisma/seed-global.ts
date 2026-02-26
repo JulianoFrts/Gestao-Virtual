@@ -7,25 +7,19 @@ const GLOBAL_USERS = [
   {
     email: "juliano@gestaovirtual.com",
     name: "Juliano Freitas",
-    role: "SUPER_ADMIN_GOD",
-    password: "$2a$10$I5IAYCJuF3AY.Oed/DriWOottOlNGsqxi.Kpnp8w1TqzIEWnjEopi" // Senha padrão backup
+    role: "ADMIN", // Atualizado de SUPER_ADMIN_GOD
+    password: "$2a$10$I5IAYCJuF3AY.Oed/DriWOottOlNGsqxi.Kpnp8w1TqzIEWnjEopi" 
   },
   {
-    email: "socio@gestaovirtual.com",
-    name: "Socio (Gestão Global)",
-    role: "SOCIO_DIRETOR",
+    email: "helper@gestaovirtual.com",
+    name: "Sistema (Helper)",
+    role: "HELPER_SYSTEM",
     password: "$2a$10$I5IAYCJuF3AY.Oed/DriWOottOlNGsqxi.Kpnp8w1TqzIEWnjEopi"
   },
   {
-    email: "admin@gestaovirtual.com",
-    name: "Admin (Gestão Global)",
-    role: "ADMIN",
-    password: "$2a$12$ElBnrtRGHWu/J1QdDbgwKu9z2ByVAm4z.6h8nVWiHHpwBRe9oTbKy"
-  },
-  {
-    email: "ti@gestaovirtual.com",
-    name: "Suporte Técnico (Gestão Global)",
-    role: "TI_SOFTWARE",
+    email: "socio@gestaovirtual.com",
+    name: "Diretoria (Gestão Global)",
+    role: "COMPANY_ADMIN", // Atualizado de SOCIO_DIRETOR
     password: "$2a$10$I5IAYCJuF3AY.Oed/DriWOottOlNGsqxi.Kpnp8w1TqzIEWnjEopi"
   }
 ];
@@ -72,15 +66,4 @@ export async function seedGlobalUsers(prismaClient: PrismaClient = prisma) {
   }
 
   console.log("✅ Seed de usuários globais concluída!");
-}
-
-if (process.argv[1].endsWith("seed-global.ts")) {
-  seedGlobalUsers()
-    .catch((e) => {
-      console.error("❌ Erro no seed-global:", e);
-      process.exit(1);
-    })
-    .finally(async () => {
-      await prisma.$disconnect();
-    });
 }

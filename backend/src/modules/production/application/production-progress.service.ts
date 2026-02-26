@@ -342,7 +342,7 @@ export class ProductionProgressService {
       elements.map((e) => [e.id, e]),
     );
     const schedulesMap = new Map<string, ActivitySchedule>(
-      schedules.map((s) => [`${s.elementId}:${s.activityId}`, s as any]),
+      schedules.map((s) => [`${s.elementId}:${s.activityId}`, s as unknown]),
     );
 
     // Agrupar progressos existentes por elementId:activityId
@@ -421,7 +421,7 @@ export class ProductionProgressService {
           elementId,
           activityId,
           currentStatus: PRODUCTION_STATUS.PENDING,
-          progressPercent: 0,
+          progressPercent: 0 /* literal */,
           startDate: finalStartDate ? new Date(finalStartDate) : null,
           endDate: finalEndDate ? new Date(finalEndDate) : null,
           history: [],
@@ -529,7 +529,7 @@ export class ProductionProgressService {
       elementId,
       activityId,
       currentStatus: PRODUCTION_STATUS.PENDING,
-      progressPercent: 0,
+      progressPercent: 0 /* literal */,
       startDate: startDate ? new Date(startDate) : null,
       endDate: endDate ? new Date(endDate) : null,
       history: [],

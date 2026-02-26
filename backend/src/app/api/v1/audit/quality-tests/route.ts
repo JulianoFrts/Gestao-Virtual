@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const testRunnerService = new QualityTestRunnerService();
 
-export async function GET(_request: NextRequest) {
+export async function GET(_request: NextRequest): Promise<Response> {
   try {
     // Garante que apenas administradores possam disparar o executor
     const user = await requireAdmin();

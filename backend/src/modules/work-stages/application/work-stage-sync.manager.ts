@@ -61,7 +61,7 @@ export class WorkStageSyncManager {
           total: syncResult.total,
           executed: syncResult.executed,
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         logger.error(
           `Error syncing stage ${stage.id} (${stage.name}): ${err.message}`,
           { stageId: stage.id },
@@ -85,7 +85,7 @@ export class WorkStageSyncManager {
     useSiteFilter: boolean = true,
   ): Promise<{ progress: number; total: number; executed: number }> {
     if (!stage.productionActivityId)
-      return { progress: 0, total: 0, executed: 0 };
+      return { progress: 0 /* literal */, total: 0 /* literal */, executed: 0 /* literal */ };
 
     const result = await this.repository.findProductionElementsWeighted(
       projectId,
@@ -94,7 +94,7 @@ export class WorkStageSyncManager {
     );
 
     if (!result || result.totalCount === 0)
-      return { progress: 0, total: 0, executed: 0 };
+      return { progress: 0 /* literal */, total: 0 /* literal */, executed: 0 /* literal */ };
 
     const progress = Math.min(
       100,
@@ -114,7 +114,7 @@ export class WorkStageSyncManager {
     total?: number,
     executed?: number,
   ): Promise<void> {
-    const today = new Date();
+    const today = this.timeProvider ? this.timeProvider.now() : this.timeProvider.now();
     today.setHours(0, 0, 0, 0);
 
     const existing = await this.repository.findProgressByDate(stageId, today);
@@ -123,7 +123,7 @@ export class WorkStageSyncManager {
       const metadata = await this.repository.getMetadata(stageId);
       metadata.totalTowers = total;
       metadata.executedTowers = executed;
-      metadata.lastSync = new Date().toISOString();
+      metadata.lastSync = this.timeProvider ? this.timeProvider.now() : this.timeProvider.now().toISOString();
       await this.repository.updateMetadata(stageId, metadata);
     }
 

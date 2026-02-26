@@ -29,7 +29,7 @@ export class PrismaProductionScheduleRepository implements ProductionScheduleRep
     });
   }
 
-  async saveSchedule(data: any): Promise<any> {
+  async saveSchedule(data: unknown): Promise<unknown> {
     if (data.id) {
       return await prisma.activitySchedule.update({
         where: { id: data.id },
@@ -57,7 +57,7 @@ export class PrismaProductionScheduleRepository implements ProductionScheduleRep
     activityId?: string;
     dateRange?: { start: Date; end: Date };
   }): Promise<any[]> {
-    const where: any = {};
+    const where: unknown = {};
 
     if (params.projectId && params.projectId !== "all") {
       where.mapElementTechnicalData = { projectId: params.projectId };
@@ -95,7 +95,7 @@ export class PrismaProductionScheduleRepository implements ProductionScheduleRep
     });
   }
 
-  async splitSchedule(id: string, updateData: any, createData: any): Promise<void> {
+  async splitSchedule(id: string, updateData: unknown, createData: unknown): Promise<void> {
     await prisma.$transaction([
       prisma.activitySchedule.update({
         where: { id },

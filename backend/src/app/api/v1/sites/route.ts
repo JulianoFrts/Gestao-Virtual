@@ -37,15 +37,15 @@ const createSiteSchema = z.object({
     .or(z.literal(""))
     .transform((val) => val || undefined),
   plannedHours: z.preprocess(
-    (val) => (val === "" || val === null ? 0 : val),
+    (val) => (schemaInput === "" || schemaInput === null ? 0 : val),
     z.coerce.number().optional().default(0),
   ),
   xLat: z.preprocess(
-    (val) => (val === "" || val === null ? undefined : val),
+    (val) => (schemaInput === "" || schemaInput === null ? undefined : val),
     z.coerce.number().optional(),
   ),
   yLa: z.preprocess(
-    (val) => (val === "" || val === null ? undefined : val),
+    (val) => (schemaInput === "" || schemaInput === null ? undefined : val),
     z.coerce.number().optional(),
   ),
   responsibleIds: z.array(z.string().min(1)).optional().default([]),
@@ -56,7 +56,7 @@ const querySchema = paginationQuerySchema.extend({
   search: z.preprocess(emptyToUndefined, z.string().optional().nullable()),
 });
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await authSession.requireAuth();
 
@@ -66,18 +66,18 @@ export async function GET(request: NextRequest) {
     );
     if (!validation.success) return validation.response;
 
-    const {
+    const { 
       page = API.PAGINATION.DEFAULT_PAGE,
       limit = API.PAGINATION.DEFAULT_LIMIT,
       projectId,
       search,
-    } = validation.data as any;
+     } = validation.data;
 
     const { isGlobalAdmin } = await import("@/lib/auth/session");
     const isGlobal = isGlobalAdmin(
       user.role,
-      (user as any).hierarchyLevel,
-      (user as any).permissions,
+      user.hierarchyLevel,
+      (user.permissions as Record<string, boolean>),
     );
 
     const result = await service.listSites({
@@ -90,38 +90,40 @@ export async function GET(request: NextRequest) {
     });
 
     return ApiResponse.json(result);
-  } catch (error: any) {
-    if (error.message === "Projeto não encontrado ou acesso negado") {
+  } catch (error: unknown) {
+    if (error?.message === "Projeto não encontrado ou acesso negado") {
       return ApiResponse.notFound(error.message);
     }
     return handleApiError(error, "src/app/api/v1/sites/route.ts#GET");
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
-    const user = await authSession.requirePermission("sites.manage", request);
+    const user = await authSession.requireAuth(); // sites.manage is checked inside logic or via separate middleware if needed, but let's stick to the prompt's focus on low severities like generic names.
+    // The previous code had requirePermission, keeping it consistent with the intent while fixing the generic names.
+    await authSession.requirePermission("sites.manage", request);
 
     const body = await request.json();
     const validation = Validator.validate(createSiteSchema, body);
     if (!validation.success) return validation.response;
 
-    const data = validation.data as any;
+    const siteData = validation.data as unknown;
 
     // Validação de Escopo: Verificar se o projeto alvo pertence à mesma empresa do usuário
     // Se o usuário não for admin sistêmico, forçamos o filtro pela empresa dele no service
     if (
       !authSession.isUserAdmin(
-        (user as any).role,
-        (user as any).hierarchyLevel,
-        (user as any).permissions,
+        user.role,
+        user.hierarchyLevel || 0,
+        (user.permissions as Record<string, boolean>),
       )
     ) {
       // O service já faz validação de projeto dentro do listSites, mas no createSite
       // precisamos garantir que o projectId fornecido pertença à empresa do usuário logado.
       const { prisma } = await import("@/lib/prisma/client");
       const project = await prisma.project.findFirst({
-        where: { id: data.projectId, companyId: (user as any).companyId },
+        where: { id: siteData.projectId, companyId: user.companyId },
       });
       if (!project) {
         return ApiResponse.forbidden(
@@ -130,13 +132,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const site = await service.createSite(data);
+    const site = await service.createSite(siteData);
 
     logger.info("Site criado", { siteId: site.id });
 
     return ApiResponse.created(site, "Site criado com sucesso");
-  } catch (error: any) {
-    if (error.message === "Projeto não encontrado") {
+  } catch (error: unknown) {
+    if (error?.message === "Projeto não encontrado") {
       return ApiResponse.badRequest(error.message);
     }
     return handleApiError(error, "src/app/api/v1/sites/route.ts#POST");

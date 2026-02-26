@@ -129,7 +129,7 @@ function mapRole(role: string | null): any {
     OPERATOR: "OPERATOR",
   };
 
-  return (roleMap[(role || "USER").toUpperCase()] || "USER") as any;
+  return (roleMap[(role || "USER").toUpperCase()] || "USER") as unknown;
 }
 
 /**

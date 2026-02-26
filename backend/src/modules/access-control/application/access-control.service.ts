@@ -27,11 +27,11 @@ export class AccessControlService {
     });
   }
 
-  async listModules() {
+  async listModules(): Promise<unknown> {
     return this.repository.findAllModules();
   }
 
-  async processModules(items: any[]) {
+  async processModules(items: unknown[]) {
     const dataToInsert = items.map((m) => ({
       id: m.id || undefined,
       code: m.code,

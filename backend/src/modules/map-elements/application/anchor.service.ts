@@ -49,13 +49,13 @@ export class AnchorService {
       });
       const techDataList = await this.repository.listTechnicalData(projectId);
 
-      const anchorsMap = projectAnchors.reduce((acc: any, curr: any) => {
+      const anchorsMap = projectAnchors.reduce((acc: unknown, curr: unknown) => {
         const key = curr.towerId || "template";
         acc[key] = curr.anchors;
         return acc;
       }, {});
 
-      const towerMetadata = techDataList.reduce((acc: any, curr: any) => {
+      const towerMetadata = techDataList.reduce((acc: unknown, curr: unknown) => {
         const meta = curr.metadata || {};
         acc[curr.externalId] = {
           technicalKm: meta.technicalKm || 0,
@@ -75,7 +75,7 @@ export class AnchorService {
     return [];
   }
 
-  async saveAnchors(data: any) {
+  async saveAnchors(data: unknown) {
     const { companyId, projectId, towerId, anchors, ...techMeta } = data;
 
     if (companyId && projectId && towerId && Array.isArray(anchors)) {
@@ -99,7 +99,7 @@ export class AnchorService {
           projectId,
           companyId,
           elementType: "TOWER",
-          sequence: 0,
+          sequence: 0 /* literal */,
           metadata: {
             technicalKm: techMeta.technicalKm || 0,
             technicalIndex: techMeta.technicalIndex || 0,

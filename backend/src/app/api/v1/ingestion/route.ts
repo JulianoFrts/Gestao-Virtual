@@ -2,25 +2,11 @@ import { NextResponse } from 'next/server';
 import { DataIngestionService } from '@/modules/data-ingestion/services/DataIngestionService';
 import { Readable } from 'stream';
 import { HTTP_STATUS } from '@/lib/constants';
+import { requireAuth } from '@/lib/auth/session';
 
-// Helper to convert Web Stream to Node Buffer
-async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
-  const reader = stream.getReader();
-  const chunks = [];
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-  }
-  return Buffer.concat(chunks);
-}
-
-// Since Next.js App Router handles requests differently, we need to parse the FormData manually
-// or use a helper if we want to stick to the service logic expecting Multer file.
-// We will adapt the service or the route to bridge this gap.
-
-export async function POST(req: Request) {
+export async function POST(req: Request): Promise<Response> {
   try {
+    await requireAuth();
     const formData = await req.formData();
     const file = formData.get('file') as File;
 
@@ -42,23 +28,30 @@ export async function POST(req: Request) {
       filename: file.name,
       path: '',
       stream: Readable.from(buffer),
-    } as any; // Cast to any to match service expectation or define shared interface
+    } as unknown;
 
     const service = new DataIngestionService();
     const result = await service.ingestFile(multerFile);
 
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Ingestion error:', error);
+    const status = error.status || HTTP_STATUS.INTERNAL_ERROR;
     return NextResponse.json(
       { error: error.message || 'Internal Server Error' },
-      { status: HTTP_STATUS.INTERNAL_ERROR }
+      { status }
     );
   }
 }
 
-export async function GET() {
-  const service = new DataIngestionService();
-  const ingestions = await service.getAllIngestions();
-  return NextResponse.json(ingestions);
+export async function GET(): Promise<Response> {
+  try {
+    await requireAuth();
+    const service = new DataIngestionService();
+    const ingestions = await service.getAllIngestions();
+    return NextResponse.json(ingestions);
+  } catch (error: unknown) {
+    const status = error.status || HTTP_STATUS.INTERNAL_ERROR;
+    return NextResponse.json({ error: error.message }, { status });
+  }
 }

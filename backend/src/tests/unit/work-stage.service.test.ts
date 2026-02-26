@@ -35,7 +35,7 @@ describe("WorkStageService", () => {
       reorder: jest.fn(),
       deleteBySite: jest.fn(),
       createBulk: jest.fn(),
-    } as any;
+    } as unknown;
 
     service = new WorkStageService(mockRepo);
   });
@@ -55,7 +55,7 @@ describe("WorkStageService", () => {
           siteId: "site-1",
           projectId: "proj-1",
           productionActivityId: null,
-          displayOrder: 1,
+          displayOrder: 1 /* literal */,
         },
       ];
       mockRepo.findAll.mockResolvedValue(stages);
@@ -78,7 +78,7 @@ describe("WorkStageService", () => {
   describe("createStage", () => {
     it("should throw error if name is missing", async () => {
       await expect(
-        service.createStage({ name: "", siteId: "site-1", displayOrder: 0 }),
+        service.createStage({ name: "", siteId: "site-1", displayOrder: 0 /* literal */ }),
       ).rejects.toThrow("Name is required");
     });
 
@@ -88,13 +88,13 @@ describe("WorkStageService", () => {
           name: "Test",
           siteId: "",
           projectId: "",
-          displayOrder: 0,
+          displayOrder: 0 /* literal */,
         }),
       ).rejects.toThrow("Site ID or Project ID is required");
     });
 
     it("should create stage correctly when valid", async () => {
-      const dto = { name: "Test", siteId: "site-1", displayOrder: 1 };
+      const dto = { name: "Test", siteId: "site-1", displayOrder: 1 /* literal */ };
       const created: WorkStage = {
         id: "new-id",
         ...dto,
@@ -119,7 +119,7 @@ describe("WorkStageService", () => {
       const dto = {
         name: "Test",
         siteId: "site-1",
-        displayOrder: 1,
+        displayOrder: 1 /* literal */,
         productionActivityId: "invalid-uuid",
       };
       const created: WorkStage = {
@@ -144,7 +144,7 @@ describe("WorkStageService", () => {
       const dto = {
         name: "Test",
         siteId: "site-1",
-        displayOrder: 1,
+        displayOrder: 1 /* literal */,
         productionActivityId: validUuid,
       };
 

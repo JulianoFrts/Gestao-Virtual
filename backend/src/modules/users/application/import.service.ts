@@ -1,10 +1,11 @@
+import { logger } from "@/lib/utils/logger";
 import { PrismaUserRepository } from "../infrastructure/prisma-user.repository";
 import { PrismaSystemAuditRepository } from "../../audit/infrastructure/prisma-system-audit.repository";
 import { UserService } from "./user.service";
 import { JobFunctionService } from "@/modules/companies/application/job-function.service";
 import { PrismaJobFunctionRepository } from "@/modules/companies/infrastructure/prisma-job-function.repository";
-
-const generateId = () => Math.random().toString(36).substring(2, 15);
+import { RandomProvider, SystemRandomProvider } from "@/lib/utils/random-provider";
+import { TimeProvider, SystemTimeProvider } from "@/lib/utils/time-provider";
 
 export interface ImportEmployeeData {
   fullName: string;
@@ -30,37 +31,53 @@ export interface ImportFunctionData {
   companyId?: string | null;
 }
 
+export interface ImportResults {
+  total: number;
+  imported: number;
+  failed: number;
+  errors: unknown[];
+}
+
 export class ImportService {
   private userService: UserService;
   private jobFunctionService: JobFunctionService;
 
-  constructor() {
+  constructor(
+    private readonly randomProvider: RandomProvider = new SystemRandomProvider(),
+    private readonly timeProvider: TimeProvider = new SystemTimeProvider(),
+  ) {
     const userRepository = new PrismaUserRepository();
     const auditRepository = new PrismaSystemAuditRepository();
-    this.userService = new UserService(userRepository, auditRepository);
+    this.userService = new UserService(
+      userRepository,
+      auditRepository,
+      randomProvider,
+      timeProvider,
+    );
     this.jobFunctionService = new JobFunctionService(
       new PrismaJobFunctionRepository(),
+      randomProvider,
     );
   }
 
   /**
    * Processa um lote de funcionários para importação
    */
-  async processEmployeeImport(data: ImportEmployeeData[]) {
-    const results = {
+  async processEmployeeImport(data: ImportEmployeeData[]): Promise<ImportResults> {
+    const results: ImportResults = {
       total: data.length,
       imported: 0,
       failed: 0,
-      errors: [] as any[],
+      errors: [],
     };
 
     for (const employee of data) {
       try {
         // Validações básicas e campos padrão
         const registrationNumber =
-          employee.registrationNumber || generateId().slice(0, 8).toUpperCase();
+          employee.registrationNumber || this.randomProvider.string(8).toUpperCase();
         const password = employee.password || "123456";
-        const role = "WORKER"; // Papel padrão para importação de campo
+        const role = "OPERATIONAL"; // Papel padrão para importação de campo
 
         await this.userService.createUser({
           name: employee.fullName,
@@ -80,11 +97,11 @@ export class ImportService {
         });
 
         results.imported++;
-      } catch (error: any) {
+      } catch (error: unknown) {
         results.failed++;
         results.errors.push({
           employee: employee.fullName || "Desconhecido",
-          error: error.message || "Erro desconhecido",
+          error: error?.message || "Erro desconhecido",
         });
       }
     }
@@ -95,12 +112,12 @@ export class ImportService {
   /**
    * Processa um lote de funções para importação
    */
-  async processFunctionImport(data: ImportFunctionData[]) {
-    const results = {
+  async processFunctionImport(data: ImportFunctionData[]): Promise<ImportResults> {
+    const results: ImportResults = {
       total: data.length,
       imported: 0,
       failed: 0,
-      errors: [] as any[],
+      errors: [],
     };
 
     for (const func of data) {
@@ -117,17 +134,17 @@ export class ImportService {
         });
 
         results.imported++;
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Se for erro de duplicidade, não contamos como falha crítica, apenas ignoramos
-        if (error.message === 'DUPLICATE_NAME') {
-          console.log(`[Import] Cargo duplicado ignorado: ${func.name}`);
+        if (error?.message === 'DUPLICATE_NAME') {
+          logger.debug(`[Import] Cargo duplicado ignorado: ${func.name}`);
           continue; 
         }
 
         results.failed++;
         results.errors.push({
           function: func.name || "Desconhecido",
-          error: error.message || "Erro desconhecido",
+          error: error?.message || "Erro desconhecido",
         });
       }
     }

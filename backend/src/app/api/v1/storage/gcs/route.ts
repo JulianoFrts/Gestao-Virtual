@@ -1,20 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bucket } from "@/infrastructure/gcs/gcs.client";
+import { HTTP_STATUS } from "@/lib/constants";
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const searchParams = request.nextUrl.searchParams;
     const path = searchParams.get("path");
 
     if (!path) {
-      return new NextResponse("Missing path parameter", { status: 400 });
+      return new NextResponse("Missing path parameter", { status: HTTP_STATUS.BAD_REQUEST });
     }
 
     const file = bucket.file(path);
     const [exists] = await file.exists();
 
     if (!exists) {
-      return new NextResponse("File not found", { status: 404 });
+      return new NextResponse("File not found", { status: HTTP_STATUS.NOT_FOUND });
     }
 
     // Baixa o arquivo diretamente (buffer). 
@@ -29,32 +30,31 @@ export async function GET(request: NextRequest) {
     // 1. Block direct navigation (referer is empty AND sec-fetch-dest is document)
     // When a user types the URL in the browser, sec-fetch-dest is usually "document" and referer is empty
     if (!referer && secFetchDest === "document") {
-      const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-      return NextResponse.redirect(`${frontendUrl.replace(/\/$/, '')}/dashboard`, 302);
+      const frontendUrl = process.env.FRONTEND_URL || "https://orion.gestaovirtual.com";
+      return NextResponse.redirect(`${frontendUrl.replace(/\/$/, '')}/dashboard`, HTTP_STATUS.FOUND);
     }
 
-    // 2. Allow if it's explicitly loaded as an image/media from the frontend
     const isImageRequest = secFetchDest === "image" || secFetchDest === "video" || secFetchDest === "audio";
     
-    // 3. Validate origin/referer belongs to our app
-    const allowedOriginDomain = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).hostname : "localhost";
+    const allowedOriginDomain = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).hostname : "orion.gestaovirtual.com";
     const isAllowedReferer = referer.includes(allowedOriginDomain) || (process.env.NODE_ENV === "development" && referer.includes("localhost"));
 
     if (!isImageRequest && !isAllowedReferer) {
       if (process.env.NODE_ENV === "production") {
-         return new NextResponse("Forbidden: Invalid request origin", { status: 403 });
+         return new NextResponse("Forbidden: Invalid request origin", { status: HTTP_STATUS.FORBIDDEN });
       }
     }
 
-    return new NextResponse(buffer as any, {
-      status: 200,
+    const ONE_YEAR_IN_SECONDS = 31536000;
+    return new NextResponse(buffer as unknown, {
+      status: HTTP_STATUS.OK,
       headers: {
         "Content-Type": metadata.contentType || "image/jpeg",
-        "Cache-Control": "public, max-age=31536000, immutable",
+        "Cache-Control": `public, max-age=${ONE_YEAR_IN_SECONDS}, immutable`,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("GCS Proxy Error:", error);
-    return new NextResponse("Internal Server Error", { status: 500 });
+    return new NextResponse("Internal Server Error", { status: HTTP_STATUS.INTERNAL_ERROR });
   }
 }

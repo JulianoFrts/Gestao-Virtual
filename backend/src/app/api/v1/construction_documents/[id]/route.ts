@@ -10,10 +10,20 @@ const documentService = new ConstructionDocumentService(
   new PrismaDocumentRepository(),
 );
 
+import { z } from "zod";
+
+const updateDocumentSchema = z.object({
+  name: z.string().min(1).optional(),
+  type: z.string().optional(),
+  description: z.string().optional().nullable(),
+  status: z.string().optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
+): Promise<Response> {
   try {
     const user = await requireAuth();
     const { id } = await params;
@@ -45,7 +55,7 @@ export async function DELETE(
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
+): Promise<Response> {
   try {
     const user = await requireAuth();
     const { id } = await params;
@@ -55,7 +65,12 @@ export async function PUT(
       return ApiResponse.badRequest("ID do documento é obrigatório");
     }
 
-    const { id: bodyId, ...updates } = body;
+    const validation = updateDocumentSchema.safeParse(body);
+    if (!validation.success) {
+      return ApiResponse.validationError(validation.error.issues.map(i => i.message));
+    }
+
+    const updates = validation.data;
 
     const document = await documentService.updateDocument(id, updates);
 
@@ -74,7 +89,7 @@ export async function PUT(
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
-) {
+): Promise<Response> {
   try {
     await requireAuth();
     const { id } = await params;

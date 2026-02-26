@@ -11,7 +11,7 @@ export class AuditLogService {
   }) {
     const { limit, skip = 0, isGlobalAccess, companyId } = params;
 
-    const where: any = {};
+    const where: unknown = {};
     if (!isGlobalAccess && companyId) {
       where.user = { affiliation: { companyId } };
     }
@@ -39,14 +39,14 @@ export class AuditLogService {
 
   async countLogs(params: { isGlobalAccess: boolean; companyId?: string }) {
     const { isGlobalAccess, companyId } = params;
-    const where: any = {};
+    const where: unknown = {};
     if (!isGlobalAccess && companyId) {
       where.user = { affiliation: { companyId } };
     }
     return this.repository.count(where);
   }
 
-  async createLog(data: any) {
+  async createLog(data: unknown) {
     return this.repository.create(data);
   }
 }

@@ -151,13 +151,17 @@ export async function seedPersonnel(prisma: PrismaClient = globalPrisma) {
         where: { id: user.id },
         data: {
           name: actualNome,
-          registrationNumber: person.matricula,
-          functionId: func?.id,
-          hierarchyLevel: func?.hierarchyLevel || JOB_HIERARCHY.DEFAULT,
+          authCredential: {
+            update: {
+              role: person.moe === "MOI" ? "PROJECT_MANAGER" : "OPERATIONAL"
+            }
+          },
           affiliation: {
-            upsert: {
-              create: { projectId: project.id, companyId },
-              update: { projectId: project.id },
+            update: {
+              projectId: project.id,
+              registrationNumber: person.matricula,
+              functionId: func?.id,
+              hierarchyLevel: func?.hierarchyLevel || JOB_HIERARCHY.DEFAULT,
             },
           },
         },
@@ -166,15 +170,12 @@ export async function seedPersonnel(prisma: PrismaClient = globalPrisma) {
       user = await prisma.user.create({
         data: {
           name: actualNome,
-          registrationNumber: person.matricula,
-          functionId: func?.id,
-          hierarchyLevel: func?.hierarchyLevel || JOB_HIERARCHY.DEFAULT,
           // role e status movidos para AuthCredential
           authCredential: {
             create: {
               email,
               password: PASSWORD_HASHES.DEFAULT_SEED,
-              role: person.moe === "MOI" ? "MANAGER" : "USER", // Role enum usually has USER, ADMIN, etc. Assuming USER for WORKER equivalent or verify Enum
+              role: person.moe === "MOI" ? "PROJECT_MANAGER" : "OPERATIONAL",
               status: "ACTIVE",
             },
           },
@@ -182,6 +183,9 @@ export async function seedPersonnel(prisma: PrismaClient = globalPrisma) {
             create: {
               projectId: project.id,
               companyId: companyId,
+              registrationNumber: person.matricula,
+              functionId: func?.id,
+              hierarchyLevel: func?.hierarchyLevel || JOB_HIERARCHY.DEFAULT,
             },
           },
         },

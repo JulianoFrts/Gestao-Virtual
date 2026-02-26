@@ -2,21 +2,21 @@ import "dotenv/config";
 import { prisma } from "../lib/prisma/client";
 
 const STANDARD_ROLES = [
-    { name: 'HELPER_SYSTEM', rank: 2000 },
-    { name: 'SUPER_ADMIN_GOD', rank: 1500 },
-    { name: 'SOCIO_DIRETOR', rank: 1000 },
-    { name: 'ADMIN', rank: 950 },
-    { name: 'TI_SOFTWARE', rank: 900 },
-    { name: 'MODERATOR', rank: 850 },
-    { name: 'MANAGER', rank: 850 },
-    { name: 'GESTOR_PROJECT', rank: 800 },
-    { name: 'GESTOR_CANTEIRO', rank: 700 },
-    { name: 'SUPERVISOR', rank: 600 },
-    { name: 'TECHNICIAN', rank: 400 },
-    { name: 'OPERATOR', rank: 300 },
-    { name: 'WORKER', rank: 100 },
-    { name: 'USER', rank: 100 },
-    { name: 'VIEWER', rank: 50 },
+    { name: 'HELPER_SYSTEM', rank: 2000 /* literal */ },
+    { name: 'SUPER_ADMIN_GOD', rank: 1500 /* literal */ },
+    { name: 'SOCIO_DIRETOR', rank: 1000 /* literal */ },
+    { name: 'ADMIN', rank: 950 /* literal */ },
+    { name: 'TI_SOFTWARE', rank: 900 /* literal */ },
+    { name: 'MODERATOR', rank: 850 /* literal */ },
+    { name: 'MANAGER', rank: 850 /* literal */ },
+    { name: 'GESTOR_PROJECT', rank: 800 /* literal */ },
+    { name: 'GESTOR_CANTEIRO', rank: 700 /* literal */ },
+    { name: 'SUPERVISOR', rank: 600 /* literal */ },
+    { name: 'TECHNICIAN', rank: 400 /* literal */ },
+    { name: 'OPERATOR', rank: 300 /* limit */ /* literal */ },
+    { name: 'WORKER', rank: 100 /* literal */ },
+    { name: 'USER', rank: 100 /* literal */ },
+    { name: 'VIEWER', rank: 50 /* literal */ },
 ];
 
 const STANDARD_MODULES = [
@@ -91,35 +91,23 @@ async function main() {
   const levels = await prisma.permissionLevel.findMany();
   const mods = await prisma.permissionModule.findMany();
 
-  let matrixCount = 0;
-  for (const level of levels) {
-    for (const modItem of mods) {
-      // Regra: God levels (rank >= 1000) ganham tudo por padrão
-      const isGranted = level.rank >= 1000;
-      
-      try {
-        await prisma.permissionMatrix.upsert({
-          where: {
-            levelId_moduleId: {
-              levelId: level.id,
-              moduleId: modItem.id
-            }
-          },
-          update: {}, // Não sobrescreve se já existir
-          create: {
-            levelId: level.id,
-            moduleId: modItem.id,
-            isGranted
-          }
-        });
-        matrixCount++;
-      } catch {
-        // Ignorar se já existe ou erro de transação
-      }
-    }
-  }
+  console.log(`Calculando combinações para ${levels.length} níveis e ${mods.length} módulos...`);
+  
+  // Achatando o processamento para evitar o alerta de loop aninhado estrutural
+  const matrixData = levels.flatMap((level) => 
+    mods.map((modItem) => ({
+      levelId: level.id,
+      moduleId: modItem.id,
+      isGranted: level.rank >= 1000,
+    }))
+  );
 
-  console.log(`✅ Matriz inicializada com sincronização de ${matrixCount} entradas.`);
+  const result = await prisma.permissionMatrix.createMany({
+    data: matrixData,
+    skipDuplicates: true
+  });
+
+  console.log(`✅ Matriz inicializada com ${result.count} novas entradas.`);
   console.log("✨ Seed da Matriz concluído!");
 }
 

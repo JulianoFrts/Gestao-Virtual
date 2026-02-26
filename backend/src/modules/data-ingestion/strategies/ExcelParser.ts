@@ -2,7 +2,7 @@ import { ParserStrategy, ParsingResult } from './ParserStrategy';
 import * as xlsx from 'xlsx';
 
 export class ExcelParser implements ParserStrategy {
-  async parse(buffer: Buffer, options?: any): Promise<ParsingResult> {
+  async parse(buffer: Buffer, options?: unknown): Promise<ParsingResult> {
     const workbook = xlsx.read(buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];

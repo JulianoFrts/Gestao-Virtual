@@ -11,13 +11,13 @@ export class PrismaCircuitRepository implements CircuitRepository {
     if (id) {
       const updated = await prisma.circuit.update({
         where: { id },
-        data: data as any,
+        data: data as unknown,
       });
       return this.mapFromPrisma(updated);
     }
 
     const created = await prisma.circuit.create({
-      data: data as any,
+      data: data as unknown,
     });
     return this.mapFromPrisma(created);
   }
@@ -45,7 +45,7 @@ export class PrismaCircuitRepository implements CircuitRepository {
     return found.map(this.mapFromPrisma);
   }
 
-  private mapFromPrisma(prismaCircuit: any): Circuit {
+  private mapFromPrisma(prismaCircuit: unknown): Circuit {
     return {
       id: prismaCircuit.id,
       projectId: prismaCircuit.projectId,

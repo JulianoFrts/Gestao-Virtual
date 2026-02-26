@@ -3,44 +3,66 @@ import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth, requireOwnerOrAdmin } from "@/lib/auth/session";
 import { MapVisibilityService } from "@/modules/map-elements/application/map-visibility.service";
 import { PrismaMapVisibilityRepository } from "@/modules/map-elements/infrastructure/prisma-map-visibility.repository";
+import { z } from "zod";
 
 // DI
 const visibilityService = new MapVisibilityService(
   new PrismaMapVisibilityRepository(),
 );
 
+// Schemas Zod para Validação e Transformação
+const visibilityBaseSchema = z.object({
+  elementName: z.string().optional(),
+  element_name: z.string().optional(),
+  name: z.string().optional(),
+  isHidden: z.boolean().optional(),
+  is_hidden: z.boolean().optional(),
+  elementColor: z.string().optional(),
+  element_color: z.string().optional(),
+  color: z.string().optional(),
+  elementHeight: z.number().optional(),
+  element_height: z.number().optional(),
+  height: z.number().optional(),
+  elementElevation: z.number().optional(),
+  element_elevation: z.number().optional(),
+  elevation: z.number().optional(),
+  elementAngle: z.number().optional(),
+  element_angle: z.number().optional(),
+  angle: z.number().optional(),
+  customModelUrl: z.string().optional().nullable(),
+  custom_model_url: z.string().optional().nullable(),
+  customModelTransform: z.record(z.unknown()).optional().nullable(),
+  custom_model_transform: z.record(z.unknown()).optional().nullable(),
+});
+
+const postVisibilitySchema = visibilityBaseSchema.extend({
+  projectId: z.string().optional(),
+  project_id: z.string().optional(),
+  elementId: z.string().optional(),
+  element_id: z.string().optional(),
+  documentId: z.string().optional().nullable(),
+  document_id: z.string().optional().nullable(),
+}).refine(payload => (data.projectId || data.project_id) && (data.elementId || data.element_id), {
+  message: "projectId e elementId são obrigatórios",
+});
+
 /**
- * Mapeia os campos do corpo da requisição (que podem vir em camelCase ou snake_case)
- * para o formato esperado pelo modelo MapElementVisibility no Prisma.
+ * Normaliza os campos do corpo da requisição (camelCase ou snake_case) O(1)
  */
-function mapBodyToVisibilityData(body: any) {
-  const data: any = {};
-
-  // Mapeamento de campos com fallback para snake_case
-  const mappings: Record<string, string[]> = {
-    elementName: ["elementName", "element_name", "name"],
-    isHidden: ["isHidden", "is_hidden"],
-    elementColor: ["elementColor", "element_color", "color"],
-    elementHeight: ["elementHeight", "element_height", "height"],
-    elementElevation: ["elementElevation", "element_elevation", "elevation"],
-    elementAngle: ["elementAngle", "element_angle", "angle"],
-    customModelUrl: ["customModelUrl", "custom_model_url"],
-    customModelTransform: ["customModelTransform", "custom_model_transform"],
+function normalizeVisibilityData(body: z.infer<typeof visibilityBaseSchema>) {
+  return {
+    elementName: body.elementName ?? body.element_name ?? body.name,
+    isHidden: body.isHidden ?? body.is_hidden,
+    elementColor: body.elementColor ?? body.element_color ?? body.color,
+    elementHeight: body.elementHeight ?? body.element_height ?? body.height,
+    elementElevation: body.elementElevation ?? body.element_elevation ?? body.elevation,
+    elementAngle: body.elementAngle ?? body.element_angle ?? body.angle,
+    customModelUrl: body.customModelUrl ?? body.custom_model_url,
+    customModelTransform: body.customModelTransform ?? body.custom_model_transform,
   };
-
-  for (const [targetField, sourceFields] of Object.entries(mappings)) {
-    for (const sourceField of sourceFields) {
-      if (body[sourceField] !== undefined) {
-        data[targetField] = body[sourceField];
-        break;
-      }
-    }
-  }
-
-  return data;
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
     const { searchParams } = request.nextUrl;
@@ -57,24 +79,26 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
-    const body = await request.json();
+    const rawBody = await request.json();
 
-    const projectId = body.project_id || body.projectId;
-    const elementId = body.element_id || body.elementId;
-    const documentId = body.document_id || body.documentId || null;
-
-    if (!projectId || !elementId) {
-      return ApiResponse.badRequest("projectId e elementId são obrigatórios");
+    const validation = postVisibilitySchema.safeParse(rawBody);
+    if (!validation.success) {
+      return ApiResponse.validationError(validation.error.issues.map(i => i.message));
     }
 
-    const visibilityData = mapBodyToVisibilityData(body);
+    const body = validation.data;
+    const projectId = body.projectId || body.project_id;
+    const elementId = body.elementId || body.element_id;
+    const documentId = body.documentId || body.document_id || null;
+
+    const visibilityData = normalizeVisibilityData(body);
 
     const result = await visibilityService.saveVisibility(user.id, {
-      projectId,
-      elementId,
+      projectId: projectId!,
+      elementId: elementId!,
       documentId,
       ...visibilityData,
     });
@@ -88,19 +112,24 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function PUT(request: NextRequest) {
+export async function PUT(request: NextRequest): Promise<Response> {
   return handleBulkUpdate(request);
 }
 
-export async function PATCH(request: NextRequest) {
+export async function PATCH(request: NextRequest): Promise<Response> {
   return handleBulkUpdate(request);
 }
 
-async function handleBulkUpdate(request: NextRequest) {
+async function handleBulkUpdate(request: NextRequest): Promise<Response> {
   try {
-    const user = await requireAuth();
-    const body = await request.json();
+    const user = await requireAuth(); // Utilizado para validação de contexto na função requireOwnerOrAdmin
+    const rawBody = await request.json();
     const { searchParams } = request.nextUrl;
+
+    const validation = visibilityBaseSchema.safeParse(rawBody);
+    if (!validation.success) {
+      return ApiResponse.validationError(validation.error.issues.map(i => i.message));
+    }
 
     const targetUserId =
       searchParams.get("userId") || searchParams.get("user_id");
@@ -115,8 +144,8 @@ async function handleBulkUpdate(request: NextRequest) {
 
     await requireOwnerOrAdmin(targetUserId);
 
-    const updateData = mapBodyToVisibilityData(body);
-    delete updateData.elementName;
+    const updateData = normalizeVisibilityData(validation.data);
+    delete updateData.elementName; // Conforme lógica original
 
     const result = await visibilityService.bulkUpdate(
       targetUserId,

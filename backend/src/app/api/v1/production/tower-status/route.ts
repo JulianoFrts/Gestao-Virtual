@@ -1,3 +1,4 @@
+import { logger } from "@/lib/utils/logger";
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth, can } from "@/lib/auth/session";
@@ -32,14 +33,14 @@ export const dynamic = "force-dynamic";
 /**
  * HEAD - Health Check
  */
-export async function HEAD() {
+export async function HEAD(): Promise<Response> {
   return ApiResponse.noContent();
 }
 
 /**
  * GET - Lista o status de atividades das torres de um projeto
  */
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
     const { searchParams } = request.nextUrl;
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
       const limit = parseInt(limitParam, 10);
       if (!isNaN(page) && !isNaN(limit)) {
         take = limit;
-        skip = (page > 0 ? page - 1 : 0) * limit;
+        skip = (page > 0 ? page - 1 : 0 /* literal */) * limit;
       }
     }
 
@@ -97,7 +98,7 @@ export async function GET(request: NextRequest) {
     );
 
     return ApiResponse.json(towers);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(
       error,
       "src/app/api/v1/production/tower-status/route.ts#GET",
@@ -108,7 +109,7 @@ export async function GET(request: NextRequest) {
 /**
  * POST - Atualiza o status de uma atividade em um elemento (anteriormente torre)
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
 
@@ -119,12 +120,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    console.log("[tower-status] POST Body:", JSON.stringify(body, null, 2));
+    logger.debug("[tower-status] POST Body:", JSON.stringify(body, null, 2));
 
     let validatedData;
     try {
       validatedData = updateStatusSchema.parse(body);
-    } catch (zodError: any) {
+    } catch (zodError: unknown) {
       console.error("[tower-status] Validation Error:", zodError.errors);
       return ApiResponse.badRequest(
         "Erro de validação dos dados",
@@ -159,7 +160,7 @@ export async function POST(request: NextRequest) {
       projectId: bodyProjectId, // Pass if provided, service will look up if null
       status,
       progress: progressPercent || 0,
-      metadata: { ...((metadata as any) || {}), foremanName, notes },
+      metadata: { ...((metadata as unknown) || {}), foremanName, notes },
       userId: user.id,
       dates: { start: startDate, end: endDate },
     });

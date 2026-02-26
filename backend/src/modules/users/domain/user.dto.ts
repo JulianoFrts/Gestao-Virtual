@@ -66,52 +66,25 @@ export interface UserFiltersDTO {
   or?: string | null;
 }
 
-export interface CreateUserDTO {
-  // Pessoal
-  name: string;
-  cpf?: string | null;
-  phone?: string | null;
-  birthDate?: string | null;
-  gender?: string | null;
-  image?: string | null;
-
-  // Segurança
-  email: string;
-  password?: string;
-  role?: string;
-  status?: string;
-  isSystemAdmin?: boolean;
-  permissions?: Record<string, unknown>;
-
-  // Obra
-  companyId?: string;
-  projectId?: string;
-  siteId?: string;
-  registrationNumber?: string;
-  hierarchyLevel?: number;
-  laborType?: string;
-  functionId?: string;
-  iapName?: string;
-}
-
-export interface UpdateUserDTO {
-  // Pessoal
+export interface UserPersonalInfo {
   name?: string;
   cpf?: string | null;
   phone?: string | null;
   birthDate?: string | null;
   gender?: string | null;
   image?: string | null;
+}
 
-  // Segurança
+export interface UserSecurityInfo {
   email?: string;
   password?: string;
   role?: string;
   status?: string;
   isSystemAdmin?: boolean;
   permissions?: Record<string, unknown>;
+}
 
-  // Obra
+export interface UserWorkInfo {
   companyId?: string;
   projectId?: string;
   siteId?: string;
@@ -121,3 +94,15 @@ export interface UpdateUserDTO {
   functionId?: string;
   iapName?: string;
 }
+
+export interface CreateUserDTO extends UserPersonalInfo, UserWorkInfo {
+  name: string; // Required for create
+  email: string; // Required for create
+  password?: string;
+  role?: string;
+  status?: string;
+  isSystemAdmin?: boolean;
+  permissions?: Record<string, unknown>;
+}
+
+export interface UpdateUserDTO extends UserPersonalInfo, UserSecurityInfo, UserWorkInfo {}

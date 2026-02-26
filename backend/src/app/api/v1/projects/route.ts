@@ -15,6 +15,7 @@ import { ProjectService } from "@/modules/projects/application/project.service";
 import { PrismaProjectRepository } from "@/modules/projects/infrastructure/prisma-project.repository";
 import { PrismaCompanyRepository } from "@/modules/companies/infrastructure/prisma-company.repository";
 import { VALIDATION } from "@/lib/constants";
+import type { Session } from "next-auth";
 
 // DI
 const projectRepository = new PrismaProjectRepository();
@@ -72,27 +73,27 @@ const querySchema = paginationQuerySchema.extend({
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => val || undefined),
+    .transform((resultVal) => resultVal || undefined),
   status: z
     .string()
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => val || undefined),
+    .transform((resultVal) => resultVal || undefined),
   search: z
     .string()
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => val || undefined),
+    .transform((resultVal) => resultVal || undefined),
 });
 
 // ===== HEAD (Health Check) =====
-export async function HEAD() {
+export async function HEAD(): Promise<Response> {
   return ApiResponse.noContent();
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await authSession.requireAuth();
 
@@ -102,19 +103,19 @@ export async function GET(request: NextRequest) {
     );
     if (!validation.success) return validation.response;
 
-    const {
+    const { 
       page = 1,
       limit = 10,
       companyId,
       status,
       search,
-    } = validation.data as any;
+     } = validation.data;
 
     const { isGlobalAdmin } = await import("@/lib/auth/session");
     const isGlobal = isGlobalAdmin(
       user.role,
-      (user as any).hierarchyLevel,
-      (user as any).permissions,
+      user.hierarchyLevel,
+      (user.permissions as Record<string, boolean>),
     );
 
     const where = buildProjectFilters(user, isGlobal, {
@@ -139,7 +140,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     await authSession.requirePermission("projects.manage", request);
 
@@ -147,21 +148,21 @@ export async function POST(request: NextRequest) {
     const validation = Validator.validate(createProjectSchema, body);
     if (!validation.success) return validation.response;
 
-    const data = validation.data as any;
+    const projectData = validation.data as unknown;
 
     // Validação de Escopo: Usuário só pode criar projeto para sua própria empresa (se não for admin sistêmico)
-    await authSession.requireScope(data.companyId, "COMPANY", request);
+    await authSession.requireScope(projectData.companyId, "COMPANY", request);
 
     // Verificar se empresa existe
-    const company = await companyRepository.findById(data.companyId);
+    const company = await companyRepository.findById(projectData.companyId);
     if (!company) {
       return ApiResponse.badRequest("Empresa não encontrada");
     }
 
     const project = await projectService.createProject({
-      ...data,
-      startDate: data.startDate ? new Date(data.startDate) : undefined,
-      endDate: data.endDate ? new Date(data.endDate) : undefined,
+      ...projectData,
+      startDate: projectData.startDate ? new Date(projectData.startDate) : undefined,
+      endDate: projectData.endDate ? new Date(projectData.endDate) : undefined,
     });
 
     logger.info("Projeto criado", { projectId: project.id });
@@ -173,10 +174,10 @@ export async function POST(request: NextRequest) {
 }
 
 function buildProjectFilters(
-  user: any,
+  user: Session["user"],
   isGlobal: boolean,
   filters: { companyId?: string; status?: string; search?: string },
-) {
+): Record<string, any> {
   const where: Record<string, any> = {};
 
   // Enforcement de multitenancy: Apenas Admins Globais (rank 1000+) podem trocar de empresa

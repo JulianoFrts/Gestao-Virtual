@@ -38,12 +38,12 @@ export class PrismaTowerActivityRepository implements TowerActivityRepository {
       return prisma.towerActivityGoal.update({
         where: { id: data.id },
         data: prismaData,
-      }) as any;
+      }) as unknown;
     }
 
     return prisma.towerActivityGoal.create({
       data: prismaData,
-    }) as any;
+    }) as unknown;
   }
 
   async saveMany(
@@ -63,14 +63,14 @@ export class PrismaTowerActivityRepository implements TowerActivityRepository {
     return (await prisma.towerActivityGoal.findUnique({
       where: { id },
       include: { children: true },
-    })) as unknown as TowerActivityGoalData | null;
+    })) as TowerActivityGoalData | null;
   }
 
   async findByProject(projectId: string): Promise<TowerActivityGoalData[]> {
     return (await prisma.towerActivityGoal.findMany({
       where: { projectId },
       orderBy: [{ level: "asc" }, { order: "asc" }],
-    })) as unknown as TowerActivityGoalData[];
+    })) as TowerActivityGoalData[];
   }
 
   async findHierarchy(projectId: string): Promise<TowerActivityGoalData[]> {
@@ -84,10 +84,10 @@ export class PrismaTowerActivityRepository implements TowerActivityRepository {
       parentId: string | null = null,
     ): TowerActivityGoalData[] => {
       return all
-        .filter((item: any) => (item.parentId ?? null) === parentId)
-        .map((item: any) => ({
-          ...(item as unknown as TowerActivityGoalData),
-          children: buildTree(item.id),
+        .filter((element: unknown) => (element.parentId ?? null) === parentId)
+        .map((element: unknown) => ({
+          ...(element as TowerActivityGoalData),
+          children: buildTree(element.id),
         }));
     };
 
@@ -112,6 +112,6 @@ export class PrismaTowerActivityRepository implements TowerActivityRepository {
     return (await prisma.towerActivityGoal.update({
       where: { id },
       data: { parentId: newParentId, order: newOrder },
-    })) as unknown as TowerActivityGoalData;
+    })) as TowerActivityGoalData;
   }
 }

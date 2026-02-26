@@ -4,10 +4,19 @@ import { requireAdmin } from "@/lib/auth/session";
 import { DatabaseDiagramService } from "@/modules/common/application/database-diagram.service";
 import { PrismaDatabaseDiagramRepository } from "@/modules/common/infrastructure/prisma-database-diagram.repository";
 
+import { z } from "zod";
+
 // DI
 const diagramService = new DatabaseDiagramService(
   new PrismaDatabaseDiagramRepository(),
 );
+
+const updateDiagramSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional().nullable(),
+  tables: z.array(z.string()).optional(),
+  layout: z.record(z.unknown()).optional(),
+});
 
 interface RouteParams {
   params: Promise<{
@@ -15,7 +24,7 @@ interface RouteParams {
   }>;
 }
 
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     await requireAdmin();
     const { id } = await params;
@@ -23,8 +32,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     try {
       const diagram = await diagramService.getDiagram(id);
       return ApiResponse.json(diagram);
-    } catch (error: any) {
-      if (error.message === "NOT_FOUND") {
+    } catch (error: unknown) {
+      const err = error as Error;
+      if (err.message === "NOT_FOUND") {
         return ApiResponse.notFound("Diagrama não encontrado");
       }
       throw error;
@@ -34,13 +44,18 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     await requireAdmin();
     const { id } = await params;
     const body = await request.json();
 
-    const diagram = await diagramService.updateDiagram(id, body);
+    const validation = updateDiagramSchema.safeParse(body);
+    if (!validation.success) {
+      return ApiResponse.validationError(validation.error.issues.map(i => i.message));
+    }
+
+    const diagram = await diagramService.updateDiagram(id, validation.data);
 
     return ApiResponse.json(diagram);
   } catch (error) {
@@ -48,7 +63,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: RouteParams): Promise<Response> {
   try {
     await requireAdmin();
     const { id } = await params;

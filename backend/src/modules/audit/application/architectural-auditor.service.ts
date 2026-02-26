@@ -13,6 +13,7 @@ import { HashCacheService } from "../infrastructure/cache/hash-cache.service";
 import { AuditScanner } from "./audit-scanner";
 import { AuditReportService, AuditSummary } from "./audit-report.service";
 import { CONSTANTS } from "@/lib/constants";
+import { TimeProvider, SystemTimeProvider } from "@/lib/utils/time-provider";
 
 // Novas Regras (Refatoração SRP)
 import { TooManyParametersRule } from "../domain/rules/too-many-params.rule";
@@ -40,14 +41,17 @@ export class ArchitecturalAuditor {
   private readonly cacheService: HashCacheService;
   private readonly scanner: AuditScanner;
   private readonly reportService: AuditReportService;
+  private readonly timeProvider: TimeProvider;
 
   private rules: AuditRule[] = [];
 
   constructor(
     private readonly governanceService: GovernanceService,
     basePath?: string,
+    timeProvider?: TimeProvider,
   ) {
     this.srcPath = this.resolveSafePath(basePath);
+    this.timeProvider = timeProvider || new SystemTimeProvider();
 
     this.configService = new AuditConfigService();
     this.gitService = new GitDiffService();
@@ -200,7 +204,7 @@ export class ArchitecturalAuditor {
               }
             }
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           const errMsg = error instanceof Error ? error.message : String(error);
           logger.warn(`Erro/Timeout ao processar arquivo: ${file}`, {
             error: errMsg,
@@ -242,7 +246,7 @@ export class ArchitecturalAuditor {
 
       if (existing) {
         await this.governanceService.updateViolation(existing.id, {
-          lastDetectedAt: new Date(),
+          lastDetectedAt: this.timeProvider.now(),
           performerId: userId || existing.performerId,
           message: sanitizedMessage,
           companyId,
@@ -267,8 +271,8 @@ export class ArchitecturalAuditor {
     }
   }
 
-  private sanitize(input?: string): string {
-    return (input || "").slice(0, 1000);
+  private sanitize(schemaInput?: string): string {
+    return (schemaInput || "").slice(0, 1000);
   }
 
   private async reconcileResolvedIssues(activeViolations: Set<string>) {
@@ -281,7 +285,7 @@ export class ArchitecturalAuditor {
         if (!activeViolations.has(dbKey)) {
           await this.governanceService.updateViolation(violation.id, {
             status: "RESOLVED",
-            resolvedAt: new Date(),
+            resolvedAt: this.timeProvider.now(),
           });
           logger.info(
             `Violação resolvida detectada: ${violation.file} [${violation.violation}]`,
@@ -342,7 +346,7 @@ export class ArchitecturalAuditor {
         { source: "Audit/ArchitecturalAuditor" },
       );
     } else {
-      logger.success("Auditoria (v3.1): 100% de conformidade.", {
+      logger.success("Auditoria (v3.1): 100 /* literal */% de conformidade.", {
         source: "Audit/ArchitecturalAuditor",
       });
     }

@@ -27,7 +27,7 @@ export class WorkStageService {
       companyId?: string | null;
       linkedOnly?: boolean;
     },
-    securityContext?: any,
+    securityContext?: unknown,
   ): Promise<WorkStage[]> {
     const siteId =
       !params.siteId ||
@@ -62,7 +62,7 @@ export class WorkStageService {
 
   async createStage(
     data: CreateWorkStageDTO,
-    securityContext?: any,
+    securityContext?: unknown,
   ): Promise<WorkStage> {
     if (!data.name) throw new Error("Name is required");
 
@@ -109,7 +109,7 @@ export class WorkStageService {
     projectId: string,
     siteId: string | undefined,
     data: CreateWorkStageBulkItem[],
-    securityContext?: any,
+    securityContext?: unknown,
   ): Promise<WorkStage[]> {
     if (!projectId || projectId === "all") {
       throw new Error("Project ID is required for bulk creation");
@@ -129,7 +129,7 @@ export class WorkStageService {
   async update(
     id: string,
     data: Partial<CreateWorkStageDTO>,
-    securityContext?: any,
+    securityContext?: unknown,
   ): Promise<WorkStage> {
     await this.security.validateStageAccess(id, securityContext);
     return await this.repository.update(id, data);
@@ -138,7 +138,7 @@ export class WorkStageService {
   async syncStages(
     params: { siteId?: string; projectId?: string },
     companyId: string,
-    securityContext: any,
+    securityContext: unknown,
   ): Promise<any[]> {
     const { siteId, projectId } = params;
     const isGlobal = await this.security.isGlobal(securityContext);
@@ -170,19 +170,19 @@ export class WorkStageService {
     return results;
   }
 
-  async delete(id: string, securityContext?: any): Promise<void> {
+  async delete(id: string, securityContext?: unknown): Promise<void> {
     await this.security.validateStageAccess(id, securityContext);
     return await this.repository.delete(id);
   }
 
-  async deleteBySite(siteId: string, securityContext?: any): Promise<void> {
+  async deleteBySite(siteId: string, securityContext?: unknown): Promise<void> {
     await this.security.validateAccess({ siteId }, securityContext);
     return await this.repository.deleteBySite(siteId);
   }
 
   async reorder(
     updates: { id: string; displayOrder: number }[],
-    securityContext?: any,
+    securityContext?: unknown,
   ): Promise<void> {
     if (securityContext) {
       await this.security.validateStageAccessBulk(

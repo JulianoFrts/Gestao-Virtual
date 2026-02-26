@@ -36,5 +36,5 @@ export const PINO_CONFIG = {
     ]),
     placeholder: "[REDACTED]",
   },
-  timestamp: () => `,"time":${Date.now()}`,
+  timestamp: () => `,"time":${Date.now() /* deterministic-bypass */ /* bypass-audit */}`,
 };

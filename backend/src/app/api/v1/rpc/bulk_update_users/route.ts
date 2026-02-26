@@ -17,7 +17,7 @@ const userService = new UserService(userRepository, auditRepository);
  *
  * Atualiza múltiplos usuários simultaneamente.
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const admin = await requireAdmin();
 
@@ -51,12 +51,12 @@ export async function POST(request: NextRequest) {
 
     const results = await userService.bulkUpdateUsers(
       ids,
-      validationResult.data as any,
+      validationResult.data as unknown,
       admin.id,
     );
 
     return ApiResponse.json(results, "Atualização em massa concluída");
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("[RPC ERR] Error in bulk_update_users:", {
       message: error.message,
     });

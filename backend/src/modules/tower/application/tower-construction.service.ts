@@ -27,7 +27,7 @@ export interface TowerImportItem {
 }
 
 export interface SyncableProductionRepository extends TowerProductionRepository {
-  syncTechnicalData(projectId: string, updates: any[]): Promise<number>;
+  syncTechnicalData(projectId: string, updates: unknown[]): Promise<number>;
 }
 
 export class TowerConstructionService {
@@ -58,24 +58,24 @@ export class TowerConstructionService {
     );
 
     // 1. Montar dados de Construção (Dados Técnicos)
-    const elements: TowerConstructionData[] = data.map((item) => ({
+    const elements: TowerConstructionData[] = data.map((entry) => ({
       projectId,
       companyId,
-      towerId: String(item.towerId),
-      sequencia: Number(item.sequencia || 0),
+      towerId: String(element.towerId),
+      sequencia: Number(element.sequencia || 0),
       metadata: {
-        distancia_vao: Number(item.vao || 0),
-        elevacao: Number(item.elevacao || 0),
-        latitude: Number(item.lat || 0),
-        longitude: Number(item.lng || 0),
-        zona: item.zona || "",
-        peso_estrutura: Number(item.pesoEstrutura || 0),
-        peso_concreto: Number(item.pesoConcreto || 0),
-        peso_escavacao: Number(item.pesoEscavacao || 0),
-        peso_aco_1: Number(item.aco1 || 0),
-        peso_aco_2: Number(item.aco2 || 0),
-        peso_aco_3: Number(item.aco3 || 0),
-        ...item.metadata,
+        distancia_vao: Number(element.vao || 0),
+        elevacao: Number(element.elevacao || 0),
+        latitude: Number(element.lat || 0),
+        longitude: Number(element.lng || 0),
+        zona: element.zona || "",
+        peso_estrutura: Number(element.pesoEstrutura || 0),
+        peso_concreto: Number(element.pesoConcreto || 0),
+        peso_escavacao: Number(element.pesoEscavacao || 0),
+        peso_aco_1: Number(element.aco1 || 0),
+        peso_aco_2: Number(element.aco2 || 0),
+        peso_aco_3: Number(element.aco3 || 0),
+        ...element.metadata,
       },
     }));
 
@@ -96,7 +96,7 @@ export class TowerConstructionService {
       );
 
       const newTowers = data.filter(
-        (item: any) => !existingSet.has(String(item.towerId)),
+        (element: unknown) => !existingSet.has(String(element.towerId)),
       );
 
       // Etapa 2a: Criar torres NOVAS na Produção
@@ -107,19 +107,19 @@ export class TowerConstructionService {
           );
 
           const productionElements: TowerProductionData[] = newTowers.map(
-            (item: any) => ({
+            (element: unknown) => ({
               projectId,
               companyId,
-              towerId: String(item.towerId),
-              sequencia: Number(item.sequencia || 0),
+              towerId: String(element.towerId),
+              sequencia: Number(element.sequencia || 0),
               metadata: {
                 trecho: "",
                 towerType: "Autoportante",
                 // Já incluir dados técnicos nas novas torres
-                goForward: Number(item.vao || 0),
-                pesoEstrutura: Number(item.pesoEstrutura || 0),
-                totalConcreto: Number(item.pesoConcreto || 0),
-                pesoArmacao: Number(item.aco1 || 0),
+                goForward: Number(element.vao || 0),
+                pesoEstrutura: Number(element.pesoEstrutura || 0),
+                totalConcreto: Number(element.pesoConcreto || 0),
+                pesoArmacao: Number(element.aco1 || 0),
               },
             }),
           );
@@ -143,8 +143,8 @@ export class TowerConstructionService {
 
       // Etapa 2b: Sincronizar dados técnicos para torres EXISTENTES
       // Isso garante que campos como vão, peso, concreto sejam atualizados na Produção
-      const existingTowerItems = data.filter((item) =>
-        existingSet.has(String(item.towerId)),
+      const existingTowerItems = data.filter((entry) =>
+        existingSet.has(String(element.towerId)),
       );
 
       if (
@@ -156,18 +156,18 @@ export class TowerConstructionService {
             `[TowerConstructionService] Syncing technical data for ${existingTowerItems.length} existing towers`,
           );
 
-          const updates = existingTowerItems.map((item) => ({
-            towerId: String(item.towerId),
+          const updates = existingTowerItems.map((entry) => ({
+            towerId: String(element.towerId),
             technicalMetadata: {
-              distancia_vao: Number(item.vao || 0),
-              peso_estrutura: Number(item.pesoEstrutura || 0),
-              peso_concreto: Number(item.pesoConcreto || 0),
-              peso_aco_1: Number(item.aco1 || 0),
+              distancia_vao: Number(element.vao || 0),
+              peso_estrutura: Number(element.pesoEstrutura || 0),
+              peso_concreto: Number(element.pesoConcreto || 0),
+              peso_aco_1: Number(element.aco1 || 0),
             },
           }));
 
           const syncedCount = await (
-            this.productionRepository as unknown as SyncableProductionRepository
+            this.productionRepository as SyncableProductionRepository
           ).syncTechnicalData(projectId, updates);
           logger.info(
             `[TowerConstructionService] Technical data synced for ${syncedCount} towers`,

@@ -14,8 +14,8 @@ export class TowerActivityService {
   async importGoals(
     projectId: string,
     companyId: string,
-    data: any[],
-  ): Promise<any> {
+    data: Record<string, unknown>[],
+  ): Promise<unknown> {
     if (!projectId || projectId === "all") {
       throw new Error("Project ID is required and cannot be 'all'");
     }
@@ -38,30 +38,30 @@ export class TowerActivityService {
     );
 
     // Phase 1: Save parent activities (level 1) first
-    const parents = data.filter((item) => item.level === 1);
-    const children = data.filter((item) => item.level > 1);
+    const parents = data.filter((entry) => element.level === 1);
+    const children = data.filter((entry) => element.level > 1);
 
     const parentElementsToCreate: TowerActivityGoalData[] = [];
     const parentNameToId = new Map<string, string>();
 
-    for (const item of parents) {
-      const key = `${item.name.trim().toUpperCase()}-root`;
+    for (const element of parents) {
+      const key = `${element.name.trim().toUpperCase()}-root`;
       const existingId = existingMap.get(key);
 
       if (existingId) {
-        parentNameToId.set(item.name, existingId);
-        parentNameToId.set(item.name.trim().toUpperCase(), existingId);
+        parentNameToId.set(element.name, existingId);
+        parentNameToId.set(element.name.trim().toUpperCase(), existingId);
         // Optional: Update existing parent metadata?
       } else {
         parentElementsToCreate.push({
           projectId,
           companyId,
-          towerId: item.towerId || null,
-          name: item.name,
-          description: item.description || "",
-          level: 1,
-          order: Number(item.order || 0),
-          metadata: item.metadata || {},
+          towerId: element.towerId || null,
+          name: element.name,
+          description: element.description || "",
+          level: 1 /* literal */,
+          order: Number(element.order || 0),
+          metadata: element.metadata || {},
           parentId: null,
         });
       }
@@ -71,7 +71,7 @@ export class TowerActivityService {
       const savedParents = await this.repository.saveMany(
         parentElementsToCreate,
       );
-      savedParents.forEach((p: any) => {
+      savedParents.forEach((p: unknown) => {
         parentNameToId.set(p.name, p.id);
         parentNameToId.set(p.name.trim().toUpperCase(), p.id);
       });
@@ -82,17 +82,17 @@ export class TowerActivityService {
     if (children.length > 0) {
       const childElementsToCreate: TowerActivityGoalData[] = [];
 
-      for (const item of children) {
+      for (const element of children) {
         // Resolve parent
         let parentNamePlaceholder = "";
         if (
-          typeof item.parentId === "string" &&
-          item.parentId.startsWith("__parent_")
+          typeof element.parentId === "string" &&
+          element.parentId.startsWith("__parent_")
         ) {
-          parentNamePlaceholder = item.parentId.replace(/__parent_|__/g, "");
+          parentNamePlaceholder = element.parentId.replace(/__parent_|__/g, "");
         }
         const parentName =
-          item.metadata?.parentName || parentNamePlaceholder || null;
+          element.metadata?.parentName || parentNamePlaceholder || null;
 
         let resolvedParentId = null;
         if (parentName) {
@@ -103,17 +103,17 @@ export class TowerActivityService {
         }
 
         if (resolvedParentId) {
-          const childKey = `${item.name.trim().toUpperCase()}-${resolvedParentId}`;
+          const childKey = `${element.name.trim().toUpperCase()}-${resolvedParentId}`;
           if (!existingMap.has(childKey)) {
             childElementsToCreate.push({
               projectId,
               companyId,
-              towerId: item.towerId || null,
-              name: item.name,
-              description: item.description || "",
-              level: Number(item.level || 2),
-              order: Number(item.order || 0),
-              metadata: item.metadata || {},
+              towerId: element.towerId || null,
+              name: element.name,
+              description: element.description || "",
+              level: Number(element.level || 2),
+              order: Number(element.order || 0),
+              metadata: element.metadata || {},
               parentId: resolvedParentId,
             });
           }

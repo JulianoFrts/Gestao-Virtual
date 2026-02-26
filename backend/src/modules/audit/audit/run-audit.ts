@@ -13,8 +13,8 @@ async function main() {
 
     const count = auditResults.length;
     if (count > 0) {
-      console.log("\n---  RESUMO DA AUDITORIA  ---");
-      console.log(`Total de apontamentos: ${count}`);
+      logger.debug("\n---  RESUMO DA AUDITORIA  ---");
+      logger.debug(`Total de apontamentos: ${count}`);
     }
   } catch (error) {
     logger.error("Falha crítica na execução da auditoria", {

@@ -26,11 +26,11 @@ const createTimeRecordSchema = z.object({
 
 const querySchema = z.object({
   page: z.preprocess(
-    (val) => (val === null || val === "" ? undefined : val),
+    (schemaInput) => (schemaInput === null || schemaInput === "" ? undefined : schemaInput),
     z.coerce.number().min(1).default(1),
   ),
   limit: z.preprocess(
-    (val) => (val === null || val === "" ? undefined : val),
+    (schemaInput) => (schemaInput === null || schemaInput === "" ? undefined : schemaInput),
     z.coerce
       .number()
       .min(1)
@@ -42,36 +42,36 @@ const querySchema = z.object({
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => val || undefined),
+    .transform((schemaInput) => schemaInput || undefined),
   teamId: z
     .string()
     .uuid()
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => val || undefined),
+    .transform((schemaInput) => schemaInput || undefined),
   companyId: z
     .string()
     .uuid()
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => val || undefined),
+    .transform((schemaInput) => schemaInput || undefined),
   startDate: z
     .string()
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => val || undefined),
+    .transform((schemaInput) => schemaInput || undefined),
   endDate: z
     .string()
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => val || undefined),
+    .transform((schemaInput) => schemaInput || undefined),
 });
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await authSession.requireAuth();
 
@@ -89,8 +89,8 @@ export async function GET(request: NextRequest) {
     const result = await timeRecordService.listRecords(query, {
       role: user.role,
       companyId: user.companyId,
-      hierarchyLevel: (user as any).hierarchyLevel,
-      permissions: (user as any).permissions,
+      hierarchyLevel: user.hierarchyLevel,
+      permissions: (user.permissions as Record<string, boolean>),
     });
 
     return ApiResponse.json(result);
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const user = await authSession.requireAuth();
 
@@ -109,8 +109,8 @@ export async function POST(request: NextRequest) {
     const timeRecord = await timeRecordService.createRecord(data, {
       role: user.role,
       companyId: user.companyId,
-      hierarchyLevel: (user as any).hierarchyLevel,
-      permissions: (user as any).permissions,
+      hierarchyLevel: user.hierarchyLevel,
+      permissions: (user.permissions as Record<string, boolean>),
     });
 
     logger.info("Registro de ponto criado", {
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function PUT(request: NextRequest) {
+export async function PUT(request: NextRequest): Promise<Response> {
   try {
     const user = await authSession.requirePermission(
       "production.manage",
@@ -146,8 +146,8 @@ export async function PUT(request: NextRequest) {
     const timeRecord = await timeRecordService.updateRecord(id, body, {
       role: user.role,
       companyId: user.companyId,
-      hierarchyLevel: (user as any).hierarchyLevel,
-      permissions: (user as any).permissions,
+      hierarchyLevel: user.hierarchyLevel,
+      permissions: (user.permissions as Record<string, boolean>),
     });
 
     logger.info("Registro de ponto atualizado", {
@@ -167,7 +167,7 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<Response> {
   try {
     const user = await authSession.requirePermission(
       "production.manage",
@@ -186,8 +186,8 @@ export async function DELETE(request: NextRequest) {
     await timeRecordService.deleteRecord(id, {
       role: user.role,
       companyId: user.companyId,
-      hierarchyLevel: (user as any).hierarchyLevel,
-      permissions: (user as any).permissions,
+      hierarchyLevel: user.hierarchyLevel,
+      permissions: (user.permissions as Record<string, boolean>),
     });
 
     logger.info("Registro de ponto excluído", {

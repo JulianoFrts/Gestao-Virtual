@@ -1,7 +1,7 @@
 import { ParserStrategy, ParsingResult } from './ParserStrategy';
 
 export class TxtParser implements ParserStrategy {
-  async parse(buffer: Buffer, options?: any): Promise<ParsingResult> {
+  async parse(buffer: Buffer, options?: unknown): Promise<ParsingResult> {
     const content = buffer.toString('utf-8');
     const lines = content.split(/\r?\n/).filter((line) => line.trim() !== '');
 

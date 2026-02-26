@@ -2279,15 +2279,10 @@ export default function Users() {
                               <Select
                                 value={user.laborType || "none"}
                                 onValueChange={async (val) => {
-                                  const newLaborType = val === "none" ? "" : val;
+                                  const newLaborType = val === "none" ? null : val;
                                   try {
-                                    const { error } = await db
-                                      .from("users")
-                                      .update({ labor_type: newLaborType || null })
-                                      .eq("id", user.id);
-                                    if (error) throw error;
+                                    await updateUser(user.id, { laborType: newLaborType });
                                     toast({ title: "Mão de Obra atualizada", description: `${user.fullName}: ${newLaborType || "Nenhuma"}` });
-                                    window.location.reload();
                                   } catch {
                                     toast({ title: "Erro ao atualizar", variant: "destructive" });
                                   }
@@ -2352,22 +2347,22 @@ export default function Users() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col sm:items-end gap-2 shrink-0">
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                      {/* Ações Administrativas - Botões Diretos */}
-                      <div className="flex items-center gap-1">
-                        {/* Editar */}
-                        {canUpdate && (
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8 shrink-0 border-white/10 hover:bg-white/5"
-                            onClick={() => handleEditUser(user)}
-                            title="Editar Dados"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </Button>
-                        )}
+                    <div className="flex flex-col sm:items-end gap-2 shrink-0">
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        {/* Ações Administrativas - Botões Diretos */}
+                        <div className="flex items-center gap-1">
+                          {/* Editar */}
+                          {canUpdate && (
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8 shrink-0 border-white/10 hover:bg-white/5"
+                              onClick={() => handleEditUser(user)}
+                              title="Editar Dados"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
 
                         {/* Alterar Senha */}
                         {canUpdate && (

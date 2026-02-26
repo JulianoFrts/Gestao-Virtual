@@ -11,7 +11,7 @@ export class PrismaProductionConfigRepository implements ProductionConfigReposit
       where: { companyId_projectId: { companyId, projectId } },
     });
     if (!config) return null;
-    return config as unknown as DelayCostConfig;
+    return config as DelayCostConfig;
   }
 
   async upsertDelayCostConfig(data: DelayCostConfig): Promise<DelayCostConfig> {
@@ -37,7 +37,7 @@ export class PrismaProductionConfigRepository implements ProductionConfigReposit
         description: data.description,
         updatedBy: data.updatedById,
       },
-    })) as unknown as DelayCostConfig;
+    })) as DelayCostConfig;
   }
 
   async listDelayReasons(projectId: string): Promise<any[]> {
@@ -47,7 +47,7 @@ export class PrismaProductionConfigRepository implements ProductionConfigReposit
     });
   }
 
-  async createDelayReason(data: any): Promise<any> {
+  async createDelayReason(data: unknown): Promise<unknown> {
     return await prisma.projectDelayReason.create({
       data: {
         id: crypto.randomUUID(),

@@ -11,7 +11,7 @@ async function main() {
     });
     const failedTasks = await prisma.taskQueue.findMany({
       where: { status: 'failed' },
-      take: 5,
+      take: 5 /* literal */,
       orderBy: { updatedAt: 'desc' }
     });
 

@@ -10,6 +10,7 @@ import { invalidateSessionCache } from "@/lib/auth/session";
 import { publicUserSelect, buildUserWhereClause } from "@/types/database";
 import { CONSTANTS } from "@/lib/constants";
 import { UserService } from "@/modules/users/application/user.service";
+import { CreateUserDTO, UpdateUserDTO } from "@/modules/users/domain/user.dto";
 import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user.repository";
 import { PrismaSystemAuditRepository } from "@/modules/audit/infrastructure/prisma-system-audit.repository";
 
@@ -29,39 +30,30 @@ const systemAuditRepository = new PrismaSystemAuditRepository();
 const userService = new UserService(userRepository, systemAuditRepository);
 
 // ===== HEAD (Health Check) =====
-export async function HEAD() {
+export async function HEAD(): Promise<Response> {
   return ApiResponse.noContent();
 }
 
 // ===== GET USERS =====
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const currentUser = await authSession.requireAuth();
     const isAdmin = authSession.isUserAdmin(
       currentUser.role,
-      (currentUser as any).hierarchyLevel,
-      (currentUser as any).permissions,
+      currentUser.hierarchyLevel,
+      currentUser.permissions as Record<string, boolean>,
     );
 
     const searchParams = request.nextUrl.searchParams;
-
-    // 1. Validação de Parâmetros
     const pagination = parsePagination(searchParams);
-    if ("errors" in pagination)
-      return ApiResponse.validationError(pagination.errors as string[]);
+    if ("errors" in pagination) return ApiResponse.validationError(pagination.errors as string[]);
 
-    const filters = parseFilters(searchParams) as UserFilters;
-    if ((filters as any).errors)
-      return ApiResponse.validationError((filters as any).errors as string[]);
+    const filters = parseFilters(searchParams) as UserFilters & { errors?: string[] };
+    if (filters.errors) return ApiResponse.validationError(filters.errors);
 
     // 2. Lógica de Perfil Único (Short-circuit)
     if (filters.id && !filters.search) {
-      const singleUserResponse = await handleSingleUserFetch(
-        filters.id,
-        currentUser,
-        isAdmin,
-        userService,
-      );
+      const singleUserResponse = await handleSingleUserFetch(filters.id, currentUser, isAdmin, userService);
       if (singleUserResponse) return singleUserResponse;
     }
 
@@ -69,49 +61,58 @@ export async function GET(request: NextRequest) {
     const where = buildUserWhereClause(filters);
     applyHierarchySecurity(where, currentUser, isAdmin);
 
-    // 4. Resposta (Streaming ou Normal)
-    const { page, limit, sortBy, sortOrder } = pagination as any;
-
-    if (limit > CONSTANTS.API.STREAM.THRESHOLD) {
-      const total = await userRepository.count(where as any);
-      const stream = generateUsersStream({
-        where: where as any,
-        page,
-        limit,
-        total,
-        sortBy,
-        sortOrder,
-        CONSTANTS,
-        userRepository,
-        userService,
-      });
-      return new Response(stream, {
-        headers: {
-          "Content-Type": "application/json",
-          "Transfer-Encoding": "chunked",
-        },
-      });
-    }
-
-    const result = await userService.listUsers({
-      where: where as any,
-      page,
-      limit,
-      sortBy,
-      sortOrder,
-      select: publicUserSelect as any,
-    });
-
-    return ApiResponse.json(result);
+    // 4. Execução e Resposta
+    return await executeUserList(where, pagination as unknown, userRepository, userService);
   } catch (error) {
     return handleApiError(error, "src/app/api/v1/users/route.ts#GET");
   }
 }
 
+async function executeUserList(
+  where: Record<string, any>,
+  pagination: { page: number; limit: number; sortBy?: string; sortOrder?: "asc" | "desc" },
+  repository: PrismaUserRepository,
+  service: UserService,
+): Promise<Response> {
+  const { page, limit, sortBy, sortOrder } = pagination;
+
+  if (limit > CONSTANTS.API.STREAM.THRESHOLD) {
+    const total = await repository.count(where);
+    const stream = generateUsersStream({
+      where,
+      page,
+      limit,
+      total,
+      sortBy,
+      sortOrder,
+      CONSTANTS,
+      userRepository: repository,
+      userService: service,
+    });
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "application/json",
+        "Transfer-Encoding": "chunked",
+      },
+    });
+  }
+
+  const result = await service.listUsers({
+    where,
+    page,
+    limit,
+    sortBy,
+    sortOrder,
+    select: publicUserSelect,
+  });
+
+  return ApiResponse.json(result);
+}
+
 // ===== CREATE USER =====
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
-    const currentUser = await authSession.requireAuth();
+    const user = await authSession.requireAuth();
     if (!(await authSession.can("users.manage"))) {
       return ApiResponse.forbidden("Sem permissão para gerenciar usuários");
     }
@@ -122,14 +123,15 @@ export async function POST(request: NextRequest) {
       return ApiResponse.validationError(validationResult.errors);
     }
 
-    const user = await userService.createUser(
-      validationResult.data as any,
-      publicUserSelect as any,
-      currentUser.id,
+    const createdUser = await userService.createUser(
+      validationResult.data as CreateUserDTO,
+      publicUserSelect,
+      user.id,
     );
     return ApiResponse.created(user, CONSTANTS.HTTP.MESSAGES.SUCCESS.CREATED);
-  } catch (error: any) {
-    if (error.message === "Email already exists") {
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message === "Email already exists") {
       return ApiResponse.conflict(CONSTANTS.HTTP.MESSAGES.ERROR.CONFLICT);
     }
     return handleApiError(error, "src/app/api/v1/users/route.ts#POST");
@@ -137,15 +139,15 @@ export async function POST(request: NextRequest) {
 }
 
 // ===== UPDATE USER =====
-export async function PUT(request: NextRequest) {
+export async function PUT(request: NextRequest): Promise<Response> {
   try {
     const body = await request.json();
     const currentUser = await authSession.requireAuth();
 
     const isAdmin = authSession.isUserAdmin(
       currentUser.role,
-      (currentUser as any).hierarchyLevel,
-      (currentUser as any).permissions,
+      currentUser.hierarchyLevel,
+      currentUser.permissions as Record<string, boolean>,
     );
     const canManage = await authSession.can("users.manage");
     const hasFullAccess = await authSession.can("system.full_access");
@@ -157,7 +159,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Validação e Normalização
-    const payload = prepareUpdatePayload(body, {
+    const payload = prepareUpdatePayload(body as Record<string, unknown>, {
       isAdmin,
       canManage,
       hasFullAccess,
@@ -174,8 +176,8 @@ export async function PUT(request: NextRequest) {
 
     const updatedUser = await userService.updateUser(
       targetUserId,
-      validation.data as any,
-      publicUserSelect as any,
+      validation.data as UpdateUserDTO,
+      publicUserSelect,
       currentUser.id,
     );
 
@@ -190,9 +192,9 @@ export async function PUT(request: NextRequest) {
 }
 
 // ===== DELETE USER =====
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<Response> {
   try {
-    const currentUser = await authSession.requireAuth();
+    const user = await authSession.requireAuth();
     if (!(await authSession.can("users.manage"))) {
       return ApiResponse.forbidden("Sem permissão para excluir usuários");
     }
@@ -209,12 +211,12 @@ export async function DELETE(request: NextRequest) {
     }
 
     const results = await Promise.allSettled(
-      ids.map((id) => userService.deleteUser(id, currentUser.id)),
+      ids.map((id) => userService.deleteUser(id, user.id)),
     );
 
     const errors = results
-      .filter((r) => r.status === "rejected")
-      .map((r) => (r as PromiseRejectedResult).reason.message);
+      .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+      .map((r) => r.reason.message);
 
     if (errors.length === ids.length) {
       // All failed
@@ -226,7 +228,7 @@ export async function DELETE(request: NextRequest) {
       return ApiResponse.json(
         {
           success: true,
-          message: `Deleted ${ids.length - errors.length} users. ${errors.length} failed.`,
+          message: `Removed ${ids.length - errors.length} users. ${errors.length} failed.`,
           errors,
         },
         "Partial Success",
@@ -243,15 +245,15 @@ export async function DELETE(request: NextRequest) {
 }
 
 // ===== BULK UPDATE USERS =====
-export async function PATCH(request: NextRequest) {
+export async function PATCH(request: NextRequest): Promise<Response> {
   try {
-    const currentUser = await authSession.requireAuth();
+    const session = await authSession.requireAuth();
     if (!(await authSession.can("users.manage"))) {
       return ApiResponse.forbidden("Sem permissão para gerenciar usuários");
     }
 
     const body = await request.json();
-    const { ids, data } = body;
+    const { ids, data } = body as { ids: string[]; data: Record<string, unknown> };
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return ApiResponse.validationError([
@@ -263,10 +265,11 @@ export async function PATCH(request: NextRequest) {
       return ApiResponse.validationError(["Update data is required"]);
     }
 
+    const currentUser = await authSession.requireAuth();
     const isAdmin = authSession.isUserAdmin(
       currentUser.role,
-      (currentUser as any).hierarchyLevel,
-      (currentUser as any).permissions,
+      currentUser.hierarchyLevel,
+      currentUser.permissions as Record<string, boolean>,
     );
     const canManage = await authSession.can("users.manage");
     const hasFullAccess = await authSession.can("system.full_access");
@@ -281,7 +284,7 @@ export async function PATCH(request: NextRequest) {
     // Nota: O Service.bulkUpdateUsers agora usa transação otimizada
     const result = await userService.bulkUpdateUsers(
       ids,
-      payload,
+      payload as UpdateUserDTO,
       currentUser.id,
     );
 
@@ -290,3 +293,4 @@ export async function PATCH(request: NextRequest) {
     return handleApiError(error, "src/app/api/v1/users/route.ts#PATCH");
   }
 }
+

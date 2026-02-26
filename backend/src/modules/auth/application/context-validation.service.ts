@@ -41,6 +41,7 @@ export class ContextValidationService {
 
     // 1. Gestão Global: Pode escolher qualquer um
     if (this.GLOBAL_MANAGEMENT_ROLES.includes(role) || isGodRole(role)) {
+      // Registrar qual foi o contexto escolhido para fins de auditoria
       return { isValid: true };
     }
 
@@ -130,7 +131,7 @@ export class ContextValidationService {
   private async logSecurityIncident(
     userId: string,
     action: string,
-    details: any,
+    details: unknown,
   ) {
     await prisma.auditLog.create({
       data: {
@@ -183,10 +184,7 @@ export class ContextValidationService {
     }
 
     // Gestor de Canteiro/Supervisor: Canteiros do seu projeto
-    if (
-      (role === "SITE_MANAGER" || role === "SUPERVISOR") &&
-      aff?.projectId
-    ) {
+    if ((role === "SITE_MANAGER" || role === "SUPERVISOR") && aff?.projectId) {
       const sites = await prisma.site.findMany({
         where: { projectId: aff.projectId },
         select: { id: true, name: true, projectId: true },
@@ -221,7 +219,7 @@ export class ContextValidationService {
         userId,
         action: "CONTEXT_SELECTED",
         entity: "Auth",
-        newValues: context as any,
+        newValues: context as unknown,
         ipAddress: "SystemAuth",
       },
     });

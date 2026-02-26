@@ -3,7 +3,7 @@ import { TimeRecordRepository } from "../domain/time-record.repository";
 export class TimeRecordService {
   constructor(private readonly repository: TimeRecordRepository) {}
 
-  async listRecords(params: any, securityContext?: any) {
+  async listRecords(params: unknown, securityContext?: unknown) {
     const {
       page = 1,
       limit = 20,
@@ -63,7 +63,7 @@ export class TimeRecordService {
     };
   }
 
-  async createRecord(data: any, securityContext?: any) {
+  async createRecord(data: unknown, securityContext?: unknown) {
     let finalCompanyId = data.companyId;
 
     // Se vier do segurança de contexto e não for global admin, forçar a própria empresa
@@ -91,7 +91,7 @@ export class TimeRecordService {
     });
   }
 
-  async updateRecord(id: string, data: any, securityContext?: any) {
+  async updateRecord(id: string, data: unknown, securityContext?: unknown) {
     const existing = await this.repository.findById(id);
     if (!existing) throw new Error("Registro de ponto não encontrado");
 
@@ -119,7 +119,7 @@ export class TimeRecordService {
     return this.repository.update(id, updateData);
   }
 
-  async deleteRecord(id: string, securityContext?: any) {
+  async deleteRecord(id: string, securityContext?: unknown) {
     const existing = await this.repository.findById(id);
     if (!existing) throw new Error("Registro de ponto não encontrado");
 

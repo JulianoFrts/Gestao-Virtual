@@ -25,10 +25,10 @@ export class ProductionMapper {
       elementId: raw.elementId,
       activityId: raw.activityId,
       currentStatus: raw.currentStatus as ActivityStatus,
-      progressPercent: raw.progressPercent ? Number(raw.progressPercent) : 0,
-      history: (raw.history as unknown as ProgressHistoryEntry[]) || [],
+      progressPercent: raw.progressPercent ? Number(raw.progressPercent) : 0 /* literal */,
+      history: (raw.history as ProgressHistoryEntry[]) || [],
       dailyProduction:
-        (raw.dailyProduction as unknown as Record<
+        (raw.dailyProduction as Record<
           string,
           DailyProductionRecord
         >) || {},
@@ -59,7 +59,7 @@ export class ProductionMapper {
       endDate: entity.endDate,
       activity: entity.activity,
       // Any additional fields from the entity can be added here
-      ...(entity as any),
+      ...(entity as unknown),
     };
   }
 }

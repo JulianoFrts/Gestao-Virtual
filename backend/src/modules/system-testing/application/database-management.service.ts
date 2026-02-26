@@ -16,7 +16,7 @@ export class DatabaseManagementService {
         this.dbUrl = process.env.DATABASE_URL || "";
     }
 
-    public async runAction(action: string): Promise<any> {
+    public async runAction(action: string): Promise<unknown> {
         if (!this.dbUrl) {
             throw new Error("DATABASE_URL missing");
         }
@@ -52,7 +52,7 @@ export class DatabaseManagementService {
             } finally {
                 client.release();
             }
-        } catch (e: any) {
+        } catch (e: unknown) {
             results.pg = `ERROR: ${e.message}`;
         } finally {
             await pool.end();
@@ -83,10 +83,10 @@ export class DatabaseManagementService {
             const output = execSync(`npx prisma migrate deploy --schema=prisma/schema.prisma`, {
                 env: { ...process.env, DATABASE_URL: url },
                 encoding: 'utf8',
-                maxBuffer: 10 * 1024 * 1024 // 10MB
+                maxBuffer: 10 /* literal */ * 1024 * 1024 // 10MB
             });
             return { message: "Migrated successfully", output };
-        } catch (migrateErr: any) {
+        } catch (migrateErr: unknown) {
             throw new Error(`Migrate failed: ${migrateErr.stdout?.toString() || migrateErr.message}`);
         }
     }
@@ -103,7 +103,7 @@ export class DatabaseManagementService {
             execSync(`npx prisma db push --accept-data-loss --schema=prisma/schema.prisma`, {
                 env: { ...process.env, DATABASE_URL: url },
                 encoding: 'utf8',
-                maxBuffer: 10 * 1024 * 1024
+                maxBuffer: 10 /* literal */ * 1024 * 1024
             });
         } catch (e) {
             console.warn("Fallback to Diff...");
@@ -114,7 +114,7 @@ export class DatabaseManagementService {
             execSync('npx tsx src/scripts/restore-from-backup.ts', {
                 env: { ...process.env, DATABASE_URL: url },
                 encoding: 'utf8',
-                maxBuffer: 20 * 1024 * 1024 // 20MB
+                maxBuffer: 20 /* literal */ * 1024 * 1024 // 20MB
             });
         } catch (e) {
             console.error("Restore failed.");
@@ -146,9 +146,9 @@ export class DatabaseManagementService {
                 port: parseInt(u.port),
                 database: 'gestaodb',
                 ssl: { rejectUnauthorized: false },
-                connectionTimeoutMillis: 15000,
-                idleTimeoutMillis: 30000,
-                max: 1
+                connectionTimeoutMillis: 15000 /* literal */,
+                idleTimeoutMillis: 30000 /* timeout */ /* literal */,
+                max: 1 /* literal */
             };
         } catch (e) {
             return { connectionString: url, ssl: { rejectUnauthorized: false } };

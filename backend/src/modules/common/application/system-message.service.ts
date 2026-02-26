@@ -3,7 +3,7 @@ import { SystemMessageRepository } from "../domain/system-message.repository";
 export class SystemMessageService {
   constructor(private readonly repository: SystemMessageRepository) {}
 
-  async listMessages(params: any) {
+  async listMessages(params: unknown) {
     const {
       page,
       limit,
@@ -46,7 +46,7 @@ export class SystemMessageService {
     };
   }
 
-  async createMessage(data: any, sender: { id: string; email: string }) {
+  async createMessage(data: unknown, sender: { id: string; email: string }) {
     return this.repository.create({
       ...data,
       senderId: sender.id,

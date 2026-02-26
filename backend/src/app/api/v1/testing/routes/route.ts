@@ -6,7 +6,7 @@ import { PrismaRouteHealthRepository } from "@/modules/system-testing/infrastruc
 const repository = new PrismaRouteHealthRepository();
 const service = new SystemTestingService(repository);
 
-export async function GET() {
+export async function GET(): Promise<Response> {
   try {
     const user = await requireAdmin();
 

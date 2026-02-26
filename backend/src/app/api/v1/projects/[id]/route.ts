@@ -6,6 +6,7 @@ import { z } from "zod";
 import { ProjectService } from "@/modules/projects/application/project.service";
 import { PrismaProjectRepository } from "@/modules/projects/infrastructure/prisma-project.repository";
 import { VALIDATION } from "@/lib/constants";
+import { ProjectEntity, UpdateProjectDTO } from "@/modules/projects/domain/project.dto";
 
 const updateProjectSchema = z.object({
   companyId: z.string().optional(),
@@ -61,17 +62,17 @@ const defaultInclude = {
   _count: { select: { userAffiliations: true, constructionDocuments: true } },
 };
 
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(request: NextRequest, { params }: RouteParams): Promise<Response> {
   const { id } = await params;
   try {
     await authSession.requireAuth();
 
-    const project = await projectService.getProjectById(id, defaultInclude);
+    const project = await projectService.getProjectById(id, defaultInclude) as ProjectEntity | null;
     if (!project) return ApiResponse.notFound("Projeto não encontrado");
 
     // Validação de Escopo
     await authSession.requireScope(
-      (project as any).companyId,
+      project.companyId,
       "COMPANY",
       request,
     );
@@ -83,37 +84,37 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(request: NextRequest, { params }: RouteParams): Promise<Response> {
   const { id } = await params;
   try {
     await authSession.requirePermission("projects.manage", request);
 
-    const existingProject = await projectService.getProjectById(id);
+    const existingProject = await projectService.getProjectById(id) as ProjectEntity | null;
     if (!existingProject) return ApiResponse.notFound("Projeto não encontrado");
 
     // Validação de Escopo
     await authSession.requireScope(
-      (existingProject as any).companyId,
+      existingProject.companyId,
       "COMPANY",
       request,
     );
 
     const body = await request.json();
-    const data = updateProjectSchema.parse(body);
+    const projectData = updateProjectSchema.parse(body);
 
-    const updateData = {
-      ...data,
-      startDate: data.startDate
-        ? new Date(data.startDate)
-        : data.startDate === null
-          ? null
+    const updateData: UpdateProjectDTO = {
+      ...projectData,
+      startDate: projectData.startDate
+        ? new Date(projectData.startDate as string)
+        : projectData.startDate === null
+          ? undefined
           : undefined,
-      endDate: data.endDate
-        ? new Date(data.endDate)
-        : data.endDate === null
-          ? null
+      endDate: projectData.endDate
+        ? new Date(projectData.endDate as string)
+        : projectData.endDate === null
+          ? undefined
           : undefined,
-    } as any;
+    };
 
     const project = await projectService.updateProject(
       id,
@@ -130,17 +131,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: RouteParams): Promise<Response> {
   const { id } = await params;
   try {
     await authSession.requireAdmin(); // Deletar projeto exige admin sistêmico ou alta hierarquia
 
-    const existingProject = await projectService.getProjectById(id);
+    const existingProject = await projectService.getProjectById(id) as ProjectEntity | null;
     if (!existingProject) return ApiResponse.notFound("Projeto não encontrado");
 
     // Validação de Escopo (redundante se requireAdmin for GodRole, mas bom para defesa em profundidade)
     await authSession.requireScope(
-      (existingProject as any).companyId,
+      existingProject.companyId,
       "COMPANY",
       request,
     );

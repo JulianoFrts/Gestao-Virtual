@@ -22,7 +22,7 @@ const dailyProductionSchema = z.object({
 /**
  * POST - Registra produção diária (HHH e quantidade) no JSON unificado
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
     const body = await request.json();
@@ -39,8 +39,8 @@ export async function POST(request: NextRequest) {
     if (
       !isGlobalAdmin(
         user.role,
-        (user as any).hierarchyLevel,
-        (user as any).permissions,
+        user.hierarchyLevel,
+        (user.permissions as Record<string, boolean>),
       ) &&
       elementCompanyId !== user.companyId
     ) {
@@ -66,10 +66,10 @@ export async function POST(request: NextRequest) {
         plannedQuantity: data.plannedQuantity,
       },
       userId: user.id,
-    } as any);
+    } as unknown);
 
     return ApiResponse.json(updated, "Produção diária registrada com sucesso");
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("Erro ao registrar produção diária", {
       error,
       source: "src/app/api/v1/production/daily",
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
 /**
  * GET - Lista produção diária a partir do JSON unificado
  */
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
     const { searchParams } = request.nextUrl;
@@ -99,12 +99,12 @@ export async function GET(request: NextRequest) {
     const result = await service.listDailyProduction(towerId, activityId, {
       role: user.role,
       companyId: user.companyId,
-      hierarchyLevel: (user as any).hierarchyLevel,
-      permissions: (user as any).permissions,
-    } as any);
+      hierarchyLevel: user.hierarchyLevel,
+      permissions: (user.permissions as Record<string, boolean>),
+    } as unknown);
 
     return ApiResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message.includes("Forbidden"))
       return ApiResponse.forbidden(error.message);
     logger.error("Erro ao listar produção diária", {

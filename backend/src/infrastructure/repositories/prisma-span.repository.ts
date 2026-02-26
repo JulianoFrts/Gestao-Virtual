@@ -1,20 +1,21 @@
 import { prisma } from "@/lib/prisma/client";
+import { Prisma } from "@prisma/client";
 import { Span, SpanRepository } from "@/modules/span/domain/span.repository";
 
 export class PrismaSpanRepository implements SpanRepository {
   async save(span: Span): Promise<Span> {
     const { id, ...data } = span;
 
-    const prismaData = this.buildPrismaData(data);
+    const prismaData = this.buildPrismaData(data as Span);
 
     if (id) {
       return this.performUpdate(id, prismaData);
     }
 
-    return this.performUpsert(data, prismaData);
+    return this.performUpsert(data as Span, prismaData);
   }
 
-  private buildPrismaData(data: any): any {
+  private buildPrismaData(data: Span): Prisma.SegmentUpdateInput {
     return {
       projectId: data.projectId,
       fromTowerId: data.towerStartId,
@@ -24,7 +25,7 @@ export class PrismaSpanRepository implements SpanRepository {
     };
   }
 
-  private async performUpdate(id: string, prismaData: any): Promise<Span> {
+  private async performUpdate(id: string, prismaData: Prisma.SegmentUpdateInput): Promise<Span> {
     const updated = await prisma.segment.update({
       where: { id },
       data: prismaData,
@@ -32,14 +33,14 @@ export class PrismaSpanRepository implements SpanRepository {
     return this.mapToSpan(updated);
   }
 
-  private async performUpsert(data: any, prismaData: any): Promise<Span> {
+  private async performUpsert(data: Span, prismaData: Prisma.SegmentUpdateInput): Promise<Span> {
     // Upsert by Unique Constraint (projectId, fromTowerId, toTowerId)
     const existing = await prisma.segment.findUnique({
       where: {
         projectId_fromTowerId_toTowerId: {
           projectId: data.projectId!,
-          fromTowerId: data.towerStartId,
-          toTowerId: data.towerEndId,
+          fromTowerId: data.towerStartId!,
+          toTowerId: data.towerEndId!,
         },
       },
     });
@@ -53,7 +54,7 @@ export class PrismaSpanRepository implements SpanRepository {
     }
 
     const created = await prisma.segment.create({
-      data: prismaData,
+      data: prismaData as Prisma.SegmentCreateInput,
     });
     return this.mapToSpan(created);
   }
@@ -134,7 +135,7 @@ export class PrismaSpanRepository implements SpanRepository {
     return result.count;
   }
 
-  private mapToSpan(prismaSegment: any): Span {
+  private mapToSpan(prismaSegment: unknown): Span {
     return {
       id: prismaSegment.id,
       projectId: prismaSegment.projectId,
@@ -144,6 +145,6 @@ export class PrismaSpanRepository implements SpanRepository {
       elevationStart: Number(prismaSegment.groundLevel || 0),
       createdAt: prismaSegment.createdAt,
       updatedAt: prismaSegment.updatedAt,
-    } as Span;
+    };
   }
 }

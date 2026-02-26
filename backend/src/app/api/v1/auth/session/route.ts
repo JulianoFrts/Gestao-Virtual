@@ -3,7 +3,7 @@ import { getCurrentSession } from "@/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(): Promise<Response> {
   try {
     const session = await getCurrentSession();
     return NextResponse.json(session || {});

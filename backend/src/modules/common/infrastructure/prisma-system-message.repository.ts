@@ -3,10 +3,10 @@ import { SystemMessageRepository } from "../domain/system-message.repository";
 
 export class PrismaSystemMessageRepository implements SystemMessageRepository {
   async findAll(
-    where: any,
+    where: unknown,
     skip: number,
     take: number,
-    orderBy: any,
+    orderBy: unknown,
   ): Promise<any[]> {
     return prisma.systemMessage.findMany({
       where,
@@ -27,11 +27,11 @@ export class PrismaSystemMessageRepository implements SystemMessageRepository {
     });
   }
 
-  async count(where: any): Promise<number> {
+  async count(where: unknown): Promise<number> {
     return prisma.systemMessage.count({ where });
   }
 
-  async create(data: any): Promise<any> {
+  async create(data: unknown): Promise<unknown> {
     return prisma.systemMessage.create({
       data,
       include: {

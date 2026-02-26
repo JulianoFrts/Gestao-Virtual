@@ -1,3 +1,4 @@
+import { logger } from "@/lib/utils/logger";
 import dotenv from "dotenv";
 import path from "path";
 import fs from "fs";
@@ -19,7 +20,7 @@ export function loadEnv() {
   for (const envPath of possiblePaths) {
     if (fs.existsSync(envPath)) {
       dotenv.config({ path: envPath });
-      console.log(`[Env] Carregado: ${envPath}`);
+      logger.debug(`[Env] Carregado: ${envPath}`);
       return;
     }
   }

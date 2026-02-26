@@ -6,13 +6,28 @@ import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 
 import { PrismaWorkStageRepository } from "@/modules/work-stages/infrastructure/prisma-work-stage.repository";
 
+import { z } from "zod";
+
 const repository = new PrismaTowerActivityRepository();
 const workStageRepository = new PrismaWorkStageRepository();
 const service = new TowerActivityService(repository, workStageRepository);
 
-export async function GET(req: NextRequest) {
+const saveGoalSchema = z.object({
+  projectId: z.string().min(1),
+  companyId: z.string().min(1),
+  data: z.array(z.record(z.unknown())).optional(),
+  single: z.boolean().optional(),
+}).passthrough();
+
+const moveGoalSchema = z.object({
+  id: z.string().min(1),
+  parentId: z.string().optional().nullable(),
+  order: z.number().int().optional(),
+});
+
+export async function GET(req: NextRequest): Promise<Response> {
   try {
-    const user = await requireAuth(req);
+    await requireAuth(req);
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get("projectId");
 
@@ -22,7 +37,7 @@ export async function GET(req: NextRequest) {
 
     const hierarchy = await service.getHierarchy(projectId);
     return ApiResponse.json(hierarchy);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(
       error,
       "src/app/api/v1/tower-activity-goals/route.ts#GET",
@@ -30,62 +45,74 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<Response> {
   try {
-    const user = await requireAuth(req);
+    await requireAuth(req);
     const body = await req.json();
-    const { projectId, companyId, data, single } = body;
+    
+    const validation = saveGoalSchema.safeParse(body);
+    if (!validation.success) {
+      return ApiResponse.validationError(validation.error.issues.map(i => i.message));
+    }
+
+    const { projectId, companyId, data, single } = validation.data;
 
     // Support single save or bulk import
     if (single) {
       // Destructure only the 'single' flag to avoid passing it to Prisma
-      const { single: _, ...cleanData } = body;
-      const result = await service.saveGoal(cleanData as any);
+      const { single: _, ...cleanData } = validation.data;
+      const result = await service.saveGoal(cleanData as unknown);
       return NextResponse.json(result);
     }
 
     if (!projectId || !companyId || !Array.isArray(data)) {
       return NextResponse.json(
         { error: "Missing required fields" },
-        { status: 400 },
+        { status: HTTP_STATUS.BAD_REQUEST /* BAD_REQUEST */ },
       );
     }
 
     const result = await service.importGoals(projectId, companyId, data);
     return NextResponse.json(result);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error as Error;
+    return NextResponse.json({ error: err.message }, { status: HTTP_STATUS.INTERNAL_ERROR /* INTERNAL_SERVER_ERROR */ });
   }
 }
 
-export async function PATCH(req: NextRequest) {
+export async function PATCH(req: NextRequest): Promise<Response> {
   try {
-    const user = await requireAuth(req);
+    await requireAuth(req);
     const body = await req.json();
-    const { id, parentId, order } = body;
+    
+    const validation = moveGoalSchema.safeParse(body);
+    if (!validation.success) {
+      return ApiResponse.validationError(validation.error.issues.map(i => i.message));
+    }
 
-    if (!id)
-      return NextResponse.json({ error: "id is required" }, { status: 400 });
+    const { id, parentId, order } = validation.data;
 
-    const result = await service.moveGoal(id, parentId, order);
+    const result = await service.moveGoal(id, parentId || undefined, order);
     return NextResponse.json(result);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error as Error;
+    return NextResponse.json({ error: err.message }, { status: HTTP_STATUS.INTERNAL_ERROR /* INTERNAL_SERVER_ERROR */ });
   }
 }
 
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req: NextRequest): Promise<Response> {
   try {
-    const user = await requireAuth(req);
+    await requireAuth(req);
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
     if (!id)
-      return NextResponse.json({ error: "id is required" }, { status: 400 });
+      return NextResponse.json({ error: "id is required" }, { status: HTTP_STATUS.BAD_REQUEST /* BAD_REQUEST */ });
 
     await service.deleteGoal(id);
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error as Error;
+    return NextResponse.json({ error: err.message }, { status: HTTP_STATUS.INTERNAL_ERROR /* INTERNAL_SERVER_ERROR */ });
   }
 }

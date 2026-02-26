@@ -21,6 +21,8 @@ const customJestConfig = {
   testMatch: [
     "<rootDir>/src/tests/**/*.test.ts",
     "<rootDir>/src/tests/**/*.spec.ts",
+    "<rootDir>/src/__tests__/**/*.test.ts",
+    "<rootDir>/src/__tests__/**/*.spec.ts",
   ],
 
   // Arquivos a ignorar
@@ -71,6 +73,11 @@ const customJestConfig = {
       },
     ],
   },
+
+  // Permitir que o Jest transforme alguns módulos ESM do node_modules
+  transformIgnorePatterns: [
+    "/node_modules/(?!(jose|next-auth|@auth/core|@panva/hkdf|uuid|nanoid)/)",
+  ],
 };
 
 export default createJestConfig(customJestConfig);

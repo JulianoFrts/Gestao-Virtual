@@ -46,7 +46,7 @@ export class ProductionConfigService {
 
     return this.configRepo.createDelayReason({
       ...data,
-      category: data.category as any,
+      category: data.category as unknown,
     });
   }
 
@@ -58,7 +58,7 @@ export class ProductionConfigService {
   // CATEGORIES
   // ==========================================
 
-  async listCategories() {
+  async listCategories(): Promise<unknown> {
     return this.catalogueRepo.listCategories();
   }
 
@@ -96,7 +96,7 @@ export class ProductionConfigService {
     return this.catalogueRepo.listUnitCosts(projectId);
   }
 
-  async upsertUnitCosts(projectId: string, costs: any[]) {
+  async upsertUnitCosts(projectId: string, costs: unknown[]) {
     return this.catalogueRepo.upsertUnitCosts(projectId, costs);
   }
 }

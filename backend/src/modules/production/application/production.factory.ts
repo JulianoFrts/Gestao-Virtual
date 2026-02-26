@@ -12,13 +12,19 @@ import { PrismaTaskRepository } from "@/modules/common/infrastructure/prisma-tas
 export class ProductionFactory {
   private static instance: ProductionService;
 
-  static create(): ProductionService {
+  static create(deps?: {
+    progressRepo?: unknown;
+    elementRepo?: unknown;
+    syncRepo?: unknown;
+    scheduleRepo?: unknown;
+    catalogueRepo?: unknown;
+  }): ProductionService {
     if (!this.instance) {
-      const progressRepository = new PrismaProductionProgressRepository();
-      const elementRepository = new PrismaProjectElementRepository();
-      const syncRepository = new PrismaProductionSyncRepository();
-      const scheduleRepository = new PrismaProductionScheduleRepository();
-      const catalogueRepository = new PrismaProductionCatalogueRepository();
+      const progressRepository = deps?.progressRepo || new PrismaProductionProgressRepository();
+      const elementRepository = deps?.elementRepo || new PrismaProjectElementRepository();
+      const syncRepository = deps?.syncRepo || new PrismaProductionSyncRepository();
+      const scheduleRepository = deps?.scheduleRepo || new PrismaProductionScheduleRepository();
+      const catalogueRepository = deps?.catalogueRepo || new PrismaProductionCatalogueRepository();
 
       this.instance = new ProductionService(
         progressRepository,
@@ -31,13 +37,17 @@ export class ProductionFactory {
     return this.instance;
   }
 
-  static createDailyReportService(): DailyReportService {
+  static createDailyReportService(deps?: {
+    reportRepo?: unknown;
+    queueService?: QueueService;
+  }): DailyReportService {
     const production = this.create();
-    const taskRepository = new PrismaTaskRepository();
-    const queueService = new QueueService(taskRepository);
+    
+    const reportRepository = deps?.reportRepo || new PrismaDailyReportRepository();
+    const queueService = deps?.queueService || new QueueService(new PrismaTaskRepository());
     
     return new DailyReportService(
-      new PrismaDailyReportRepository(),
+      reportRepository,
       production.progressService,
       queueService
     );

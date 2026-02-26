@@ -3,10 +3,10 @@ import { TimeRecordRepository } from "../domain/time-record.repository";
 
 export class PrismaTimeRecordRepository implements TimeRecordRepository {
   async findAll(
-    where: any,
+    where: unknown,
     skip: number,
     take: number,
-    orderBy: any,
+    orderBy: unknown,
   ): Promise<any[]> {
     return prisma.timeRecord.findMany({
       where,
@@ -20,11 +20,11 @@ export class PrismaTimeRecordRepository implements TimeRecordRepository {
     });
   }
 
-  async count(where: any): Promise<number> {
+  async count(where: unknown): Promise<number> {
     return prisma.timeRecord.count({ where });
   }
 
-  async create(data: any): Promise<any> {
+  async create(data: unknown): Promise<unknown> {
     return prisma.timeRecord.create({
       data,
       include: {
@@ -61,7 +61,7 @@ export class PrismaTimeRecordRepository implements TimeRecordRepository {
     return null;
   }
 
-  async update(id: string, data: any): Promise<any> {
+  async update(id: string, data: unknown): Promise<unknown> {
     const { id: _, user: __, ...updateData } = data;
     return prisma.timeRecord.update({
       where: { id },

@@ -1,26 +1,37 @@
-export interface Tower {
+export interface TowerIdentification {
   id?: string;
   projectId?: string;
   companyId?: string;
   objectId: string;
   objectSeq?: number;
+}
+
+export interface TowerTechnical {
   towerType?: string;
   objectHeight?: number;
+  fixConductor?: string;
+  circuitId?: string;
+  trecho?: string;
+}
+
+export interface TowerGeospatial {
   objectElevation?: number;
   xCoordinate?: number;
   yCoordinate?: number;
   deflection?: string;
   goForward?: number;
   fusoObject?: string;
-  fixConductor?: string;
   technicalKm?: number;
   technicalIndex?: number;
-  circuitId?: string;
-  trecho?: string;
-  metadata?: any;
+}
+
+export interface TowerSystem {
+  metadata?: unknown;
   createdAt?: Date;
   updatedAt?: Date;
 }
+
+export interface Tower extends TowerIdentification, TowerTechnical, TowerGeospatial, TowerSystem {}
 
 export interface TowerRepository {
   save(tower: Tower): Promise<Tower>;

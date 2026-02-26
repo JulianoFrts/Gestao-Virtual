@@ -1,4 +1,5 @@
 import { JobFunctionRepository } from "../domain/job-function.repository";
+import { RandomProvider, SystemRandomProvider } from "@/lib/utils/random-provider";
 
 export interface ListJobFunctionsParams {
   page: number;
@@ -10,13 +11,16 @@ export interface ListJobFunctionsParams {
 }
 
 export class JobFunctionService {
-  constructor(private readonly repository: JobFunctionRepository) {}
+  constructor(
+    private readonly repository: JobFunctionRepository,
+    private readonly randomProvider: RandomProvider = new SystemRandomProvider(),
+  ) {}
 
-  async getJobFunctionById(id: string) {
+  async getJobFunctionById(id: string): Promise<any> {
     return this.repository.findFirst({ id });
   }
 
-  async listJobFunctions(params: ListJobFunctionsParams) {
+  async listJobFunctions(params: ListJobFunctionsParams): Promise<any> {
     const { page, limit, companyId, search, isAdmin, currentUserCompanyId } =
       params;
     const skip = (page - 1) * limit;
@@ -24,14 +28,10 @@ export class JobFunctionService {
     const where: Record<string, any> = {};
 
     // Se não for admin, vê as da sua empresa + as globais (templates)
-    // Se for admin e pediu uma empresa específica, vê essa empresa + globais?
-    // O usuário disse: "qualquer empresas copiar e usar em sua empresa"
     if (!isAdmin) {
       where.OR = [{ companyId: currentUserCompanyId }, { companyId: null }];
     } else if (companyId) {
       where.OR = [{ companyId: companyId }, { companyId: null }];
-    } else {
-      // Admin sem filtro vê tudo (incluindo modelos)
     }
 
     if (search) {
@@ -61,7 +61,7 @@ export class JobFunctionService {
     };
   }
 
-  async createJobFunction(data: any) {
+  async createJobFunction(data: unknown): Promise<any> {
     // Se tiver companyId, verifica se empresa existe
     if (data.companyId) {
       const companyExists = await this.repository.checkCompanyExists(
@@ -82,15 +82,15 @@ export class JobFunctionService {
       throw new Error("DUPLICATE_NAME");
     }
 
-    // Se o ID não for enviado (comum em importações ou criação manual simples), geramos um
+    // Se o ID não for enviado, geramos um de forma determinística via provedor
     if (!data.id) {
-      data.id = `jf_${Math.random().toString(36).substring(2, 11)}`;
+      data.id = `jf_${this.randomProvider.string(9)}`;
     }
 
     return this.repository.create(data);
   }
 
-  async deleteJobFunction(id: string) {
+  async deleteJobFunction(id: string): Promise<any> {
     const existing = await this.repository.findFirst({ id });
     if (!existing) {
       throw new Error("JOB_FUNCTION_NOT_FOUND");
@@ -99,7 +99,7 @@ export class JobFunctionService {
     return this.repository.delete(id);
   }
 
-  async updateJobFunction(id: string, data: any) {
+  async updateJobFunction(id: string, data: unknown): Promise<any> {
     const existing = await this.repository.findFirst({ id });
     if (!existing) {
       throw new Error("JOB_FUNCTION_NOT_FOUND");

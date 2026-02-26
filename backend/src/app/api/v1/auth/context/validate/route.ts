@@ -5,7 +5,7 @@ import { ContextValidationService } from "@/modules/auth/application/context-val
 
 const contextService = new ContextValidationService();
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const sessionUser = await requireAuth();
     const body = await request.json();
@@ -42,9 +42,13 @@ export async function POST(request: NextRequest) {
 
     return ApiResponse.json({
       success: true,
-      context: { companyId, projectId, siteId },
+      context: {
+        companyId,
+        projectId,
+        siteId: siteId === "all" ? "" : siteId,
+      },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(
       error,
       "src/app/api/v1/auth/context/validate/route.ts#POST",

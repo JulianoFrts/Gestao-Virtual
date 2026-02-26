@@ -16,7 +16,7 @@ async function debugPermissions() {
 
     console.log(`📡 URL detectada: ${dbUrl.replace(/:.*@/, ':****@')}`);
 
-    const ssl: any = { rejectUnauthorized: false };
+    const ssl: unknown = { rejectUnauthorized: false };
     const certPath = path.join(process.cwd(), 'client.crt');
     const keyPath = path.join(process.cwd(), 'client.key');
     const caPath = path.join(process.cwd(), 'ca.crt');
@@ -44,7 +44,7 @@ async function debugPermissions() {
         try {
             const resSchema = await client.query("SELECT has_schema_privilege(current_user, 'public', 'USAGE') as has_usage");
             console.log(`✅ Permissão USAGE no 'public': ${resSchema.rows[0].has_usage}`);
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error(`❌ Falha ao checar schema public: ${e.message}`);
         }
 
@@ -52,12 +52,12 @@ async function debugPermissions() {
         try {
             const resTables = await client.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' LIMIT 5");
             console.log("📋 Tabelas encontradas:", resTables.rows.map(r => r.table_name));
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error(`❌ Falha ao listar tabelas: ${e.message}`);
         }
 
         client.release();
-    } catch (err: any) {
+    } catch (err: unknown) {
         console.error("🚨 ERRO FATAL NO DRIVER PG:", err.message);
         if (err.stack) console.log(err.stack);
     } finally {

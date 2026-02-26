@@ -8,16 +8,16 @@ export class TowerService {
     return this.towerRepository.findByProject(projectId);
   }
 
-  async saveTowers(data: any): Promise<Tower[]> {
+  async saveTowers(data: unknown): Promise<Tower[]> {
     const items = Array.isArray(data) ? data : [data];
-    const towersToSave: Tower[] = items.map((item) =>
-      this.validateAndMapTower(item),
+    const towersToSave: Tower[] = items.map((entry) =>
+      this.validateAndMapTower(element),
     );
 
     return this.towerRepository.saveMany(towersToSave);
   }
 
-  private validateAndMapTower(data: any): Tower {
+  private validateAndMapTower(data: unknown): Tower {
     const parseResult = towerSchema.safeParse(data);
     if (!parseResult.success) {
       throw new Error(

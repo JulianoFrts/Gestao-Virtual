@@ -33,10 +33,10 @@ const querySchema = z.object({
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((val) => val || undefined),
+    .transform((filterName) => filterName || undefined),
 });
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
 
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       name: searchParams.get("name"),
     });
 
-    const result = await accessService.listLevels(query as any);
+    const result = await accessService.listLevels(query as unknown);
 
     return ApiResponse.json(result);
   } catch (error) {
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     await requireAdmin();
 
@@ -64,21 +64,21 @@ export async function POST(request: NextRequest) {
     
     // Suporte para inserção em lote (Array) ou única (Objeto)
     const dataArray = Array.isArray(body) ? body : [body];
-    const results = [];
+    const levels = [];
 
-    for (const item of dataArray) {
-       const data = createPermissionLevelSchema.parse(item);
-       const level = await accessService.createLevel(data);
+    for (const rawItem of dataArray) {
+       const levelData = createPermissionLevelSchema.parse(rawItem);
+       const level = await accessService.createLevel(levelData);
        logger.info("Nível de permissão criado", { levelId: level.id });
-       results.push(level);
+       levels.push(level);
     }
 
     // Se for apenas 1 (Objeto Original), retorna o primeiro
     if (!Array.isArray(body)) {
-      return ApiResponse.json(results[0], "Nível de permissão criado com sucesso");
+      return ApiResponse.json(levels[0], "Nível de permissão criado com sucesso");
     }
 
-    return ApiResponse.json(results, `${results.length} níveis criados com sucesso`);
+    return ApiResponse.json(levels, `${levels.length} níveis criados com sucesso`);
   } catch (error) {
 
     return handleApiError(error, "src/app/api/v1/permission_levels/route.ts#POST");

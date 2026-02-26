@@ -10,6 +10,14 @@ import { storageService } from "@/services/storageService";
 import { logError } from "@/lib/errorHandler";
 import logger from "@/lib/logger";
 import { localApi } from "@/integrations/orion/client";
+import {
+  permissionsSignal,
+  uiSignal,
+  currentUserSignal,
+  realPermissionsSignal,
+  realUiSignal,
+  simulationRoleSignal,
+} from "@/signals/authSignals";
 
 interface Profile {
   id: string;
@@ -207,9 +215,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setProfile(newProfile);
         
+        // Hydrate Preact signals directly (no useEffect needed)
+        currentUserSignal.value = {
+          id: newProfile.id,
+          role: newProfile.role,
+          hierarchyLevel: newProfile.hierarchyLevel,
+          isSystemAdmin: newProfile.isSystemAdmin,
+          permissions,
+          ui,
+        };
+
         if (simulationRole) {
             setRealPermissions(permissions);
             setRealUi(ui);
+            realPermissionsSignal.value = permissions;
+            realUiSignal.value = ui;
+            simulationRoleSignal.value = simulationRole;
             setProfile({
                 ...newProfile,
                 role: simulationRole as any,
@@ -220,20 +241,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
             setPermissions(permissions);
             setUiFlags(ui);
+            permissionsSignal.value = permissions;
+            uiSignal.value = ui;
         }
 
         const cacheKey = `profile_cache_${newProfile.id}`;
         await storageService.setItem(cacheKey, newProfile);
-
-        if (!selectedContext && newProfile.companyId) {
-            const initialContext = {
-                companyId: newProfile.companyId,
-                projectId: newProfile.projectId,
-                siteId: newProfile.siteId || undefined
-            };
-            setSelectedContext(initialContext);
-            await storageService.setItem("selected_context", initialContext);
-        }
 
         return newProfile;
       } catch (error) {

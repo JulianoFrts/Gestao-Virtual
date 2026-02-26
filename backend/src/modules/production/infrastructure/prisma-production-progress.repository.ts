@@ -14,8 +14,8 @@ export class PrismaProductionProgressRepository implements ProductionProgressRep
       progressPercent: progress.progressPercent,
       startDate: progress.startDate,
       endDate: progress.endDate,
-      history: progress.history as any, // Prisma expects JsonValue, compatible with our ProgressHistoryEntry[]
-      dailyProduction: progress.dailyProduction as any,
+      history: progress.history as unknown, // Prisma expects JsonValue, compatible with our ProgressHistoryEntry[]
+      dailyProduction: progress.dailyProduction as unknown,
       requiresApproval: progress.requiresApproval,
       approvalReason: progress.approvalReason,
     };
@@ -46,8 +46,8 @@ export class PrismaProductionProgressRepository implements ProductionProgressRep
         progressPercent: progress.progressPercent,
         startDate: progress.startDate,
         endDate: progress.endDate,
-        history: progress.history as any,
-        dailyProduction: progress.dailyProduction as any,
+        history: progress.history as unknown,
+        dailyProduction: progress.dailyProduction as unknown,
         requiresApproval: progress.requiresApproval,
         approvalReason: progress.approvalReason,
         projectId: progress.projectId,
@@ -88,14 +88,14 @@ export class PrismaProductionProgressRepository implements ProductionProgressRep
 
       const res = await prisma.mapElementProductionProgress.update({
         where: { id: existing.id },
-        data: updateData as any,
+        data: updateData as unknown,
         include: { productionActivity: true },
       });
       return ProductionMapper.toDomain(res);
     }
 
     const res = await prisma.mapElementProductionProgress.create({
-      data: data as any,
+      data: data as unknown,
       include: { productionActivity: true },
     });
     return ProductionMapper.toDomain(res);
@@ -191,6 +191,6 @@ export class PrismaProductionProgressRepository implements ProductionProgressRep
     return ProductionMapper.toDomain({
       ...res,
       projectId: res.mapElementTechnicalData?.projectId || res.projectId,
-    } as any);
+    } as unknown);
   }
 }

@@ -1,9 +1,9 @@
 export interface TimeRecordRepository {
-  findAll(where: any, skip: number, take: number, orderBy: any): Promise<any[]>;
-  count(where: any): Promise<number>;
-  create(data: any): Promise<any>;
+  findAll(where: unknown, skip: number, take: number, orderBy: unknown): Promise<any[]>;
+  count(where: unknown): Promise<number>;
+  create(data: unknown): Promise<unknown>;
   findById(id: string): Promise<any | null>;
   findUserCompanyId(userId: string): Promise<string | null>;
-  update(id: string, data: any): Promise<any>;
+  update(id: string, data: unknown): Promise<unknown>;
   delete(id: string): Promise<void>;
 }

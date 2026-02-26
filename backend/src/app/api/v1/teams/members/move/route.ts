@@ -18,7 +18,7 @@ const moveMemberSchema = z.object({
  * POST /api/v1/teams/members/move
  * Atomic movement of an employee between teams or to talent pool.
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     await requireAdmin();
 

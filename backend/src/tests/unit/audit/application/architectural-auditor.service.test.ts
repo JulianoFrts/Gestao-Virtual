@@ -19,7 +19,7 @@ describe("ArchitecturalAuditor v3.0", () => {
     let mockCacheService: jest.Mocked<HashCacheService>;
 
     beforeEach(() => {
-        mockGovernanceService = new GovernanceService(null as any) as any;
+        mockGovernanceService = new GovernanceService(null as unknown) as unknown;
 
         // Setup Mocks
         (AuditConfigService as jest.Mock).mockImplementation(() => ({

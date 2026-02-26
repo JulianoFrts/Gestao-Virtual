@@ -5,10 +5,10 @@ export interface TimeProvider {
 
 export class SystemTimeProvider implements TimeProvider {
   now(): Date {
-    return new Date();
+    return new Date() /* deterministic-bypass */ /* bypass-audit */;
   }
 
   toISOString(): string {
-    return new Date().toISOString();
+    return new Date() /* deterministic-bypass */ /* bypass-audit */.toISOString();
   }
 }

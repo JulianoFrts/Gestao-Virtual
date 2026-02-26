@@ -13,7 +13,7 @@ const userService = new UserService(
   new PrismaSystemAuditRepository(),
 );
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const admin = await requireAdmin();
     const body = await request.json();
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: "Usuário removido com sucesso",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === "User not found")
       return ApiResponse.notFound("Usuário não encontrado");
     if (error.message === "Cannot delete an administrator")

@@ -1,27 +1,31 @@
 import { PrismaClient } from "@prisma/client";
+import { logger } from "@/lib/utils/logger";
+import { SystemTimeProvider } from "@/lib/utils/time-provider";
+
+const timeProvider = new SystemTimeProvider();
 
 // Estender o tipo do PrismaClient para incluir os novos modelos se o gerador falhar no reconhecimento
 export type ExtendedPrismaClient = PrismaClient & {
-  governanceAuditHistory: any;
-  routeHealthHistory: any;
-  projectPermissionDelegation: any;
-  permissionMatrix: any;
-  permissionLevel: any;
-  permissionModule: any;
-  taskQueue: any;
-  dataIngestion: any;
-  activityUnitCost: any;
-  activitySchedule: any;
-  activityStatus: any;
-  productionCategory: any;
-  mapElementTechnicalData: any;
-  mapElementProductionProgress: any;
-  tower: any;
-  activity: any;
-  project: any;
-  towerProduction: any;
-  towerConstruction: any;
-  towerActivityGoal: any;
+  governanceAuditHistory: unknown;
+  routeHealthHistory: unknown;
+  projectPermissionDelegation: unknown;
+  permissionMatrix: unknown;
+  permissionLevel: unknown;
+  permissionModule: unknown;
+  taskQueue: unknown;
+  dataIngestion: unknown;
+  activityUnitCost: unknown;
+  activitySchedule: unknown;
+  activityStatus: unknown;
+  productionCategory: unknown;
+  mapElementTechnicalData: unknown;
+  mapElementProductionProgress: unknown;
+  tower: unknown;
+  activity: unknown;
+  project: unknown;
+  towerProduction: unknown;
+  towerConstruction: unknown;
+  towerActivityGoal: unknown;
 };
 
 declare global {
@@ -39,7 +43,7 @@ const createPrismaClient = () => {
   }
 
   const maskedOriginal = connectionString.split("@")[1] || "oculta";
-  console.log(
+  logger.debug(
     `[Prisma] Inicializando Standard Client (sem Adapter) com URL: ${maskedOriginal}`,
   );
 
@@ -52,7 +56,7 @@ const createPrismaClient = () => {
 };
 
 // Singleton seguro
-const globalForPrisma = global as unknown as { prisma: ExtendedPrismaClient };
+const globalForPrisma = global as { prisma: ExtendedPrismaClient };
 
 export const prisma = globalForPrisma.prisma || createPrismaClient();
 
@@ -71,11 +75,11 @@ export async function checkDatabaseConnection(): Promise<{
   error?: string;
   dbName?: string;
 }> {
-  const startTime = Date.now();
+  const startTime = timeProvider.now().getTime();
   try {
     await prisma.$queryRaw`SELECT 1`;
-    return { connected: true, latency: Date.now() - startTime };
-  } catch (error: any) {
+    return { connected: true, latency: timeProvider.now().getTime() - startTime };
+  } catch (error: unknown) {
     return {
       connected: false,
       error: error instanceof Error ? error.message : "Erro desconhecido",

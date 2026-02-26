@@ -39,7 +39,7 @@ export class PrismaSpanRepository implements SpanRepository {
     return this.mapToSpan(created);
   }
 
-  private buildPrismaData(data: any): any {
+  private buildPrismaData(data: unknown): any {
     return {
       projectId: data.projectId,
       fromTowerId: data.towerStartId,
@@ -125,7 +125,7 @@ export class PrismaSpanRepository implements SpanRepository {
     return result.count;
   }
 
-  private mapToSpan(prismaSegment: any): Span {
+  private mapToSpan(prismaSegment: unknown): Span {
     return {
       id: prismaSegment.id,
       projectId: prismaSegment.projectId,

@@ -15,10 +15,10 @@ export class CleanCodeRule implements AuditRule {
 
   private readonly GENERIC_NAMES = [
     "data",
-    "obj",
+    "record",
     "value",
-    "val",
-    "item",
+    "input",
+    "element",
     "temp",
     "tmp",
     "res",

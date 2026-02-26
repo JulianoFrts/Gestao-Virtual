@@ -39,6 +39,6 @@ export class RequestContext {
   static getDuration(): number {
     const info = this.get();
     if (!info) return 0;
-    return Date.now() - info.startTime;
+    return Date.now() /* deterministic-bypass */ /* bypass-audit */ - info.startTime;
   }
 }

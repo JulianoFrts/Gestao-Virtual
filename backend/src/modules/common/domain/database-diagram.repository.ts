@@ -1,7 +1,7 @@
 export interface DatabaseDiagramRepository {
-  findAll(orderBy: any): Promise<any[]>;
+  findAll(orderBy: unknown): Promise<any[]>;
   findById(id: string): Promise<any | null>;
-  create(data: any): Promise<any>;
-  update(id: string, data: any): Promise<any>;
+  create(data: unknown): Promise<unknown>;
+  update(id: string, data: unknown): Promise<unknown>;
   delete(id: string): Promise<void>;
 }

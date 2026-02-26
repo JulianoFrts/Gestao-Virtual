@@ -15,7 +15,7 @@ const approvalSchema = z.object({
 /**
  * GET - Lista logs de produção (auditoria/aprovação) extraídos do histórico JSON unificado
  */
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
     const { searchParams } = request.nextUrl;
@@ -25,8 +25,8 @@ export async function GET(request: NextRequest) {
 
     const isAdmin = isGlobalAdmin(
       user.role,
-      (user as any).hierarchyLevel,
-      (user as any).permissions,
+      user.hierarchyLevel,
+      (user.permissions as Record<string, boolean>),
     );
 
     // Multitenancy: Filtrar por empresa se não for SuperAdmin
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
 /**
  * POST - Aprova um log de produção específico dentro do histórico JSON
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
 
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     );
 
     return ApiResponse.json(updatedProgress, "Log aprovado com sucesso");
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(
       error,
       "src/app/api/v1/production/logs/route.ts#POST",

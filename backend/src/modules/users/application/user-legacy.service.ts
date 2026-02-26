@@ -1,14 +1,38 @@
 import { UserRepository } from "../domain/user.repository";
 import { UserEntity } from "../domain/user.dto";
+import { prisma as globalPrisma } from "@/lib/prisma/client";
 
 export class UserLegacyService {
-  constructor(private readonly repository: UserRepository) {}
+  constructor(
+    private readonly repository: UserRepository,
+    private readonly prisma = globalPrisma,
+  ) {}
+
+  async deleteUserRelations(id: string): Promise<void> {
+    await this.prisma.$transaction([
+      this.prisma.account.deleteMany({ where: { userId: id } }),
+      this.prisma.session.deleteMany({ where: { userId: id } }),
+      this.prisma.auditLog.deleteMany({ where: { userId: id } }),
+      this.prisma.teamMember.deleteMany({ where: { userId: id } }),
+      this.prisma.timeRecord.deleteMany({ where: { userId: id } }),
+      this.prisma.dailyReport.deleteMany({ where: { userId: id } }),
+      this.prisma.constructionDocument.updateMany({
+        where: { createdById: id },
+        data: { createdById: null },
+      }),
+      this.prisma.activitySchedule.deleteMany({ where: { createdBy: id } }),
+      this.prisma.team.updateMany({
+        where: { supervisorId: id },
+        data: { supervisorId: null },
+      }),
+    ]);
+  }
 
   async listLegacyEmployees(): Promise<Record<string, unknown>[]> {
     const users = await this.repository.findAll({
       where: {},
-      skip: 0,
-      take: 100,
+      skip: 0 /* literal */,
+      take: 100 /* literal */,
       orderBy: { name: "asc" },
       select: {
         id: true,
@@ -32,31 +56,34 @@ export class UserLegacyService {
       },
     });
 
-    return users.map((user: UserEntity) => ({
-      id: user.id,
-      full_name: user.name,
-      email: user.authCredential?.email || "",
-      registration_number: user.registrationNumber,
-      cpf: user.cpf,
-      phone: user.phone,
-      company_id: user.affiliation?.companyId,
-      project_id: user.affiliation?.projectId,
-      labor_type: user.laborType,
-      site_id: user.affiliation?.siteId,
-      function_id: user.functionId,
-      hierarchy_level: user.hierarchyLevel,
-      status: user.authCredential?.status || "ACTIVE",
-      role: user.authCredential?.role || "WORKER",
-      created_at: user.createdAt,
-      updated_at: user.updatedAt,
-      job_functions: user.jobFunction
-        ? {
-            name: user.jobFunction.name,
-            level: user.jobFunction.hierarchyLevel,
-            can_lead_team: user.jobFunction.canLeadTeam,
-          }
-        : null,
-    }));
+    return users.map((user: UserEntity) => {
+      const aff = user.affiliation || ({} as unknown);
+      return {
+        id: user.id,
+        full_name: user.name,
+        email: user.authCredential?.email || "",
+        registration_number: aff.registrationNumber,
+        cpf: user.cpf,
+        phone: user.phone,
+        company_id: aff.companyId,
+        project_id: aff.projectId,
+        labor_type: aff.laborType,
+        site_id: aff.siteId,
+        function_id: aff.functionId,
+        hierarchy_level: aff.hierarchyLevel,
+        status: user.authCredential?.status || "ACTIVE",
+        role: user.authCredential?.role || "OPERATIONAL",
+        created_at: user.createdAt,
+        updated_at: user.updatedAt,
+        job_functions: aff.jobFunction
+          ? {
+              name: aff.jobFunction.name,
+              level: aff.hierarchyLevel,
+              can_lead_team: aff.jobFunction.canLeadTeam,
+            }
+          : null,
+      };
+    });
   }
 
   async listLegacyProfiles(params: {
@@ -91,23 +118,26 @@ export class UserLegacyService {
     // Import dinâmico para evitar dependência circular se necessário
     const { Role: LegacyRole } = await import("@/types/database");
 
-    return users.map((user: UserEntity) => ({
-      id: user.id,
-      full_name: user.name,
-      email: user.authCredential?.email || "",
-      registration_number: user.registrationNumber,
-      phone: user.phone,
-      company_id: user.affiliation?.companyId,
-      project_id: user.affiliation?.projectId,
-      labor_type: user.laborType,
-      site_id: user.affiliation?.siteId,
-      function_id: user.functionId,
-      hierarchy_level: user.hierarchyLevel,
-      is_blocked: (user.authCredential?.status || "ACTIVE") !== "ACTIVE",
-      is_system_admin:
-        (user.authCredential?.role || "WORKER") === LegacyRole.ADMIN,
-      created_at: user.createdAt,
-      updated_at: user.updatedAt,
-    }));
+    return users.map((user: UserEntity) => {
+      const aff = user.affiliation || ({} as unknown);
+      return {
+        id: user.id,
+        full_name: user.name,
+        email: user.authCredential?.email || "",
+        registration_number: aff.registrationNumber,
+        phone: user.phone,
+        company_id: aff.companyId,
+        project_id: aff.projectId,
+        labor_type: aff.laborType,
+        site_id: aff.siteId,
+        function_id: aff.functionId,
+        hierarchy_level: aff.hierarchyLevel,
+        is_blocked: (user.authCredential?.status || "ACTIVE") !== "ACTIVE",
+        is_system_admin:
+          (user.authCredential?.role || "OPERATIONAL") === LegacyRole.SYSTEM_ADMIN || user.authCredential?.isSystemAdmin,
+        created_at: user.createdAt,
+        updated_at: user.updatedAt,
+      };
+    });
   }
 }

@@ -4,6 +4,6 @@ describe("Smoke Test", () => {
     it("should pass", () => {
         logger.info("Smoke test logger check");
         expect(true).toBe(true);
-        console.log("SMOKE TEST OK");
+        logger.debug("SMOKE TEST OK");
     });
 });

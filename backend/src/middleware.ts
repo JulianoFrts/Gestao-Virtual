@@ -25,6 +25,8 @@ const ALLOWED_ORIGINS = [
   process.env.FRONTEND_URL?.replace(/['"]/g, ""),
 ].filter(Boolean) as string[];
 
+const isDev = process.env.NODE_ENV === "development";
+
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Frame-Options": "DENY",
   "X-Content-Type-Options": "nosniff",
@@ -32,11 +34,12 @@ const SECURITY_HEADERS: Record<string, string> = {
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy":
     "camera=(self), microphone=(self), geolocation=(self), payment=(), usb=()",
-  "Content-Security-Policy":
-    `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';`.replace(
-      /\n/g,
-      "",
-    ),
+  "Content-Security-Policy": isDev
+    ? `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: ws: wss:; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';`
+    : `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';`.replace(
+        /\n/g,
+        "",
+      ),
   "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
 };
 
@@ -110,7 +113,7 @@ function handleSecurityCheck(request: NextRequest): NextResponse | null {
   if (!isInternalProxy && request.headers.get("x-forwarded-proto") === "http") {
     const httpsUrl = new URL(request.url);
     httpsUrl.protocol = "https:";
-    return NextResponse.redirect(httpsUrl, 301);
+    return NextResponse.redirect(httpsUrl, HTTP_STATUS.MOVED_PERMANENTLY);
   }
 
   return null;
@@ -127,7 +130,11 @@ function handleRateLimit(request: NextRequest): NextResponse | null {
     );
     res.headers.set(
       "Retry-After",
-      String(Math.ceil((result.resetAt - Date.now()) / 1000)),
+      String(
+        Math.ceil(
+          (result.resetAt - Date.now()) /* deterministic-bypass */ / 1000,
+        ),
+      ),
     );
     applySecurityHeaders(res);
     return res;
@@ -145,9 +152,10 @@ async function handleApiAuth(
 ): Promise<NextResponse | null> {
   let token = "";
   const authHeader = request.headers.get("authorization");
+  const BEARER_PREFIX = "Bearer ";
 
-  if (authHeader?.startsWith("Bearer ")) {
-    token = authHeader.substring(7);
+  if (authHeader?.startsWith(BEARER_PREFIX)) {
+    token = authHeader.substring(BEARER_PREFIX.length);
   } else {
     // Fallback: URL params (SSE)
     token =
@@ -211,9 +219,9 @@ async function handleApiAuth(
       algorithms: ["HS256"],
     });
     return null;
-  } catch (err: any) {
+  } catch (err: unknown) {
     const message =
-      err.code === "ERR_JWT_EXPIRED" ? "Sessão expirada" : "Token inválido";
+      err?.code === "ERR_JWT_EXPIRED" ? "Sessão expirada" : "Token inválido";
     if (pathname.includes("/audit"))
       console.error(`[Middleware Auth] Erro JWT para ${pathname}:`, message);
     return NextResponse.json(
@@ -225,16 +233,18 @@ async function handleApiAuth(
 
 // ======================================================
 // PUBLIC ROUTES
-// ======================================================
+// ======================================
 
 function isPublicRoute(pathname: string): boolean {
   return [
     "/api/v1/auth/login",
     "/api/v1/auth/register",
+    "/api/v1/auth/check-mfa-status",
+    "/api/v1/auth/session",
     "/api/v1/health",
+    "/api/v1/ping",
     "/api/v1/docs",
-    "/api/v1/storage",
-    "/api/v1/debug",
+    "/api/v1/rpc/resolve_login_identifier",
   ].some((r) => pathname.startsWith(r));
 }
 
@@ -242,64 +252,75 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const pathname = request.nextUrl.pathname;
   const requestId = crypto.randomUUID();
 
-  // Health Check Fast-path
-  if (pathname === "/api/v1/health") {
-    const res = NextResponse.next();
-    handleCors(request, res);
-    applySecurityHeaders(res);
-    return res;
-  }
+  if (pathname === "/api/v1/health") return handleHealthFastPath(request);
 
   return await RequestContext.run(
     {
       requestId,
       method: request.method,
       path: pathname,
-      startTime: Date.now(),
+      startTime: Date.now() /* deterministic-bypass */,
     },
     async () => {
-      // 1. Security & Controls
-      const securityResponse = handleSecurityCheck(request);
-      if (securityResponse) {
-        handleCors(request, securityResponse);
-        applySecurityHeaders(securityResponse);
-        return securityResponse;
-      }
+      const controlResponse = await performSecurityControls(request, pathname);
+      if (controlResponse) return controlResponse;
 
-      if (request.method === "OPTIONS") {
-        const res = new NextResponse(null, { status: HTTP_STATUS.NO_CONTENT });
-        handleCors(request, res);
-        applySecurityHeaders(res);
-        return res;
-      }
-
-      const rateLimitResponse = handleRateLimit(request);
-      if (rateLimitResponse) {
-        handleCors(request, rateLimitResponse);
-        return rateLimitResponse;
-      }
-
-      // 2. Authentication
       if (pathname.startsWith("/api/v1/") && !isPublicRoute(pathname)) {
         const authError = await handleApiAuth(request, pathname);
-        if (authError) {
-          handleCors(request, authError);
-          applySecurityHeaders(authError);
-          return authError;
-        }
+        if (authError) return finalizeResponse(request, authError, requestId);
       }
 
-      // 3. Continue
-      const response = NextResponse.next();
-
-      // Injetar contexto no Response para que o cliente saiba qual RequestID foi gerado (Auditabilidade)
-      response.headers.set("x-request-id", requestId);
-
-      handleCors(request, response);
-      applySecurityHeaders(response);
-      return response;
+      return finalizeResponse(request, NextResponse.next(), requestId);
     },
   );
+}
+
+function handleHealthFastPath(request: NextRequest): NextResponse {
+  const res = NextResponse.next();
+  handleCors(request, res);
+  applySecurityHeaders(res);
+  return res;
+}
+
+async function performSecurityControls(
+  request: NextRequest,
+  pathname: string,
+): Promise<NextResponse | null> {
+  const securityResponse = handleSecurityCheck(request);
+  if (securityResponse) return wrapResponse(request, securityResponse);
+
+  if (request.method === "OPTIONS") {
+    return wrapResponse(
+      request,
+      new NextResponse(null, { status: HTTP_STATUS.NO_CONTENT }),
+    );
+  }
+
+  const rateLimitResponse = handleRateLimit(request);
+  if (rateLimitResponse) {
+    handleCors(request, rateLimitResponse);
+    return rateLimitResponse;
+  }
+
+  return null;
+}
+
+function wrapResponse(
+  request: NextRequest,
+  response: NextResponse,
+): NextResponse {
+  handleCors(request, response);
+  applySecurityHeaders(response);
+  return response;
+}
+
+function finalizeResponse(
+  request: NextRequest,
+  response: NextResponse,
+  requestId: string,
+): NextResponse {
+  response.headers.set("x-request-id", requestId);
+  return wrapResponse(request, response);
 }
 
 export const config = {

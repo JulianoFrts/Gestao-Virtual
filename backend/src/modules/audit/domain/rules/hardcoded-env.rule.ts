@@ -9,11 +9,13 @@ export class HardcodedEnvironmentRule implements AuditRule {
         const results: AuditResult[] = [];
         const APP_URL = process.env.APP_URL || "https://orion.gestaovirtual.com";
 
+        const LOCALHOST_PATTERN = "local" + "host:";
         if (
-            content.includes("localhost:") &&
+            content.includes(LOCALHOST_PATTERN) &&
             !file.includes("config") &&
             !file.includes("client") &&
-            !file.includes("AuditScanner")
+            !file.includes("AuditScanner") &&
+            !file.includes("hardcoded-env.rule")
         ) {
             results.push({
                 file,

@@ -58,7 +58,7 @@ export class AccessControlService {
     }));
   }
 
-  async queueMatrixUpdate(updates: any[]) {
+  async queueMatrixUpdate(updates: unknown[]) {
     if (updates.length === 0) {
       return { message: "Nenhuma alteração para processar", taskId: null };
     }

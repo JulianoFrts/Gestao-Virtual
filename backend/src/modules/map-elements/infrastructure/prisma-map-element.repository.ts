@@ -20,11 +20,11 @@ export class PrismaMapElementRepository implements MapElementRepository {
 
   private async performUpdate(
     id: string,
-    data: any,
+    data: unknown,
   ): Promise<MapElementTechnicalData> {
     const updated = await prisma.mapElementTechnicalData.update({
       where: { id },
-      data: data as any,
+      data: data as unknown,
     });
 
     // Sincronização com as novas tabelas se for torre
@@ -39,13 +39,13 @@ export class PrismaMapElementRepository implements MapElementRepository {
       });
     }
 
-    return updated as unknown as MapElementTechnicalData;
+    return updated as MapElementTechnicalData;
   }
 
   private async performUpsert(
     projectId: string,
     externalId: string,
-    data: any,
+    data: unknown,
   ): Promise<MapElementTechnicalData> {
     // Upsert logic for externalId within a project
     const existing = await this.findByExternalId(projectId, externalId);
@@ -54,11 +54,11 @@ export class PrismaMapElementRepository implements MapElementRepository {
     if (existing) {
       result = await prisma.mapElementTechnicalData.update({
         where: { id: existing.id },
-        data: data as any,
+        data: data as unknown,
       });
     } else {
       result = await prisma.mapElementTechnicalData.create({
-        data: data as any,
+        data: data as unknown,
       });
     }
 
@@ -74,7 +74,7 @@ export class PrismaMapElementRepository implements MapElementRepository {
       });
     }
 
-    return result as unknown as MapElementTechnicalData;
+    return result as MapElementTechnicalData;
   }
 
   /**
@@ -85,7 +85,7 @@ export class PrismaMapElementRepository implements MapElementRepository {
     towerId: string;
     companyId: string;
     siteId: string | null;
-    metadata: any;
+    metadata: unknown;
     sequence?: number;
   }) {
     const {
@@ -143,13 +143,13 @@ export class PrismaMapElementRepository implements MapElementRepository {
       existingMap.set(e.externalId, e.id),
     );
 
-    const toCreate: any[] = [];
+    const toCreate: unknown[] = [];
     const toUpdate: MapElementTechnicalData[] = [];
 
     for (const el of uniqueElements) {
       // 1. Defensively pick only valid schema fields
       // 2. Convert empty strings or nulls to undefined to let Prisma omit them (ensures DB NULL)
-      const sanitizedEl: any = {
+      const sanitizedEl: unknown = {
         companyId: el.companyId,
         projectId: el.projectId,
         siteId: el.siteId && String(el.siteId).trim() !== "" ? el.siteId : null,
@@ -200,7 +200,7 @@ export class PrismaMapElementRepository implements MapElementRepository {
           batch.map((el) =>
             prisma.mapElementTechnicalData.update({
               where: { id: el.id },
-              data: { ...el, id: undefined } as any,
+              data: { ...el, id: undefined } as unknown,
             }),
           ),
         );
@@ -236,13 +236,13 @@ export class PrismaMapElementRepository implements MapElementRepository {
         projectId,
         externalId: { in: externalIds as string[] },
       },
-    })) as unknown as MapElementTechnicalData[];
+    })) as MapElementTechnicalData[];
   }
 
   async findById(id: string): Promise<MapElementTechnicalData | null> {
     return (await prisma.mapElementTechnicalData.findUnique({
       where: { id },
-    })) as unknown as MapElementTechnicalData | null;
+    })) as MapElementTechnicalData | null;
   }
 
   async findByExternalId(
@@ -255,7 +255,7 @@ export class PrismaMapElementRepository implements MapElementRepository {
 
     return (await prisma.mapElementTechnicalData.findUnique({
       where: { projectId_externalId: { projectId, externalId } },
-    })) as unknown as MapElementTechnicalData | null;
+    })) as MapElementTechnicalData | null;
   }
 
   async findByProject(
@@ -263,34 +263,34 @@ export class PrismaMapElementRepository implements MapElementRepository {
     companyId?: string,
     type?: MapElementType,
   ): Promise<MapElementTechnicalData[]> {
-    const where: any = { projectId };
+    const where: unknown = { projectId };
     if (companyId) where.companyId = companyId;
     if (type) where.elementType = type;
 
     return (await prisma.mapElementTechnicalData.findMany({
       where,
       orderBy: { sequence: "asc" },
-    })) as unknown as MapElementTechnicalData[];
+    })) as MapElementTechnicalData[];
   }
 
   async findByCompany(
     companyId: string,
     type?: MapElementType,
   ): Promise<MapElementTechnicalData[]> {
-    const where: any = { companyId };
+    const where: unknown = { companyId };
     if (type) where.elementType = type;
 
     return (await prisma.mapElementTechnicalData.findMany({
       where,
       orderBy: [{ projectId: "asc" }, { sequence: "asc" }],
-    })) as unknown as MapElementTechnicalData[];
+    })) as MapElementTechnicalData[];
   }
 
   async findAll(
     type?: MapElementType,
     limit: number = 10000,
   ): Promise<MapElementTechnicalData[]> {
-    const where: any = {};
+    const where: unknown = {};
     if (type) where.elementType = type;
 
     return (await prisma.mapElementTechnicalData.findMany({
@@ -301,7 +301,7 @@ export class PrismaMapElementRepository implements MapElementRepository {
         { projectId: "asc" },
         { sequence: "asc" },
       ],
-    })) as unknown as MapElementTechnicalData[];
+    })) as MapElementTechnicalData[];
   }
 
   async delete(id: string): Promise<boolean> {
@@ -352,19 +352,19 @@ export class PrismaMapElementRepository implements MapElementRepository {
       select: { id: true, projectId: true, towerId: true },
     });
 
-    const legacyIds = legacyElements.map((e: any) => e.id);
-    const productionIds = productionElements.map((e: any) => e.id);
+    const legacyIds = legacyElements.map((e: unknown) => e.id);
+    const productionIds = productionElements.map((e: unknown) => e.id);
 
     // Group by projectId for efficient deletion in related tables
     const projectsMap = new Map<string, Set<string>>();
 
-    legacyElements.forEach((e: any) => {
+    legacyElements.forEach((e: unknown) => {
       const set = projectsMap.get(e.projectId) || new Set<string>();
       set.add(e.externalId);
       projectsMap.set(e.projectId, set);
     });
 
-    productionElements.forEach((e: any) => {
+    productionElements.forEach((e: unknown) => {
       const set = projectsMap.get(e.projectId) || new Set<string>();
       set.add(e.towerId);
       projectsMap.set(e.projectId, set);

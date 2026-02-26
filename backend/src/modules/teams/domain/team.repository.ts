@@ -11,23 +11,23 @@ export interface FindAllTeamsParams {
 }
 
 export interface TeamsListResult {
-  items: any[];
+  items: unknown[];
   total: number;
 }
 
 export interface TeamRepository {
   findAll(params: FindAllTeamsParams): Promise<TeamsListResult>;
   findById(id: string): Promise<any | null>;
-  create(data: any): Promise<any>;
-  update(id: string, data: any): Promise<any>;
-  delete(id: string): Promise<any>;
-  setSupervisorAtomic(teamId: string, supervisorId: string): Promise<any>;
-  moveMemberAtomic(employeeId: string, toTeamId: string | null): Promise<any>;
-  listMembers(params: any): Promise<any>;
-  removeMember(teamId: string, userId: string): Promise<any>;
-  removeAllMembers(teamId: string): Promise<any>;
+  create(data: unknown): Promise<unknown>;
+  update(id: string, data: unknown): Promise<unknown>;
+  delete(id: string): Promise<unknown>;
+  setSupervisorAtomic(teamId: string, supervisorId: string): Promise<unknown>;
+  moveMemberAtomic(employeeId: string, toTeamId: string | null): Promise<unknown>;
+  listMembers(params: unknown): Promise<unknown>;
+  removeMember(teamId: string, userId: string): Promise<unknown>;
+  removeAllMembers(teamId: string): Promise<unknown>;
   addMembersBatch(items: { teamId: string; userId: string }[]): Promise<any[]>;
 
   // Optional count method if needed separately, but findAll returns total
-  count?(where: any): Promise<number>;
+  count?(where: unknown): Promise<number>;
 }

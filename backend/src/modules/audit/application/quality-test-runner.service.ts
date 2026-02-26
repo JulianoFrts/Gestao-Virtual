@@ -32,8 +32,8 @@ export class QualityTestRunnerService {
                         shell: false,
                     });
 
-                    testProcess.stdout.on("data", (data) => this.processLog(data, 'stdout', sendEvent));
-                    testProcess.stderr.on("data", (data) => this.processLog(data, 'stderr', sendEvent));
+                    testProcess.stdout.on("data", (result) => this.processLog(data, 'stdout', sendEvent));
+                    testProcess.stderr.on("data", (result) => this.processLog(data, 'stderr', sendEvent));
 
                     testProcess.on("error", (err) => {
                         sendEvent({ type: 'error', message: `Falha ao iniciar o executor de testes: ${err.message}` });
@@ -48,7 +48,7 @@ export class QualityTestRunnerService {
                         });
                         controller.close();
                     });
-                } catch (error: any) {
+                } catch (error: unknown) {
                     sendEvent({ type: 'error', message: `Erro fatal no executor: ${error.message}` });
                     controller.close();
                 }

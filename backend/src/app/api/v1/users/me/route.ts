@@ -4,7 +4,7 @@ import { PrismaUserRepository } from "@/modules/users/infrastructure/prisma-user
 import { PrismaSystemAuditRepository } from "@/modules/audit/infrastructure/prisma-system-audit.repository";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 
-export async function GET() {
+export async function GET(): Promise<Response> {
   try {
     const userId = await requireAuth().then(u => u.id);
 
@@ -16,7 +16,7 @@ export async function GET() {
     const profile = await userService.getProfile(userId);
 
     return ApiResponse.json(profile);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(error, "src/app/api/v1/users/me/route.ts#GET");
   }
 }

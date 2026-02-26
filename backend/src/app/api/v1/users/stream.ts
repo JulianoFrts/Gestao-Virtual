@@ -2,15 +2,20 @@ import { UserRepository } from "@/modules/users/domain/user.repository";
 import { UserService } from "@/modules/users/application/user.service";
 import { publicUserSelect } from "@/types/database";
 import { logger } from "@/lib/utils/logger";
+import { SystemTimeProvider } from "@/lib/utils/time-provider";
+
+import { Prisma } from "@prisma/client";
+
+const timeProvider = new SystemTimeProvider();
 
 export interface UserStreamParams {
-  where: any;
+  where: Prisma.UserWhereInput;
   page: number;
   limit: number;
   total: number;
   sortBy?: string;
-  sortOrder?: string;
-  CONSTANTS: any;
+  sortOrder?: "asc" | "desc";
+  CONSTANTS: unknown;
   userRepository: UserRepository;
   userService: UserService;
 }
@@ -25,7 +30,7 @@ export function generateUsersStream(params: UserStreamParams): ReadableStream {
   const pages = Math.ceil(total / limit);
 
   return new ReadableStream({
-    async start(controller) {
+    async start(controller): Promise<unknown> {
       try {
         // Início do JSON
         controller.enqueue(encoder.encode('{"success":true,"data":{"items":['));
@@ -43,14 +48,14 @@ export function generateUsersStream(params: UserStreamParams): ReadableStream {
             skip: skipStart + totalSent,
             take: takeBatch,
             orderBy: sortBy
-              ? ({ [sortBy]: sortOrder || "asc" } as any)
+              ? ({ [sortBy]: sortOrder || "asc" } as unknown)
               : [{ hierarchyLevel: "desc" }, { name: "asc" }],
             select: publicUserSelect,
           });
 
           if (users.length === 0) break;
 
-          const flattenedUsers = users.map((u: any) => (userService as any).flattenUser(u));
+          const flattenedUsers = users.map((u) => (userService as unknown).flattenUser(u));
           const usersJson = flattenedUsers.map((u) => JSON.stringify(u)).join(",");
           
           const prefix = totalSent > 0 ? "," : "";
@@ -75,7 +80,7 @@ export function generateUsersStream(params: UserStreamParams): ReadableStream {
         });
 
         controller.enqueue(
-          encoder.encode(`],"pagination":${paginationJson}},"timestamp":"${new Date().toISOString()}"}`)
+          encoder.encode(`],"pagination":${paginationJson}},"timestamp":"${timeProvider.toISOString()}"}`)
         );
         
         controller.close();

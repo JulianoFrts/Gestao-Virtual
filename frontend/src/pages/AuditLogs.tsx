@@ -307,17 +307,28 @@ export default function AuditLogs() {
   // Estados para Relatório de Segurança (Real-Time)
   const [securityReport, setSecurityReport] = useState<{
       summary: {
-          protectedRoutes: ReactNode;
+          protectedRoutes: number;
           totalRoutes: number;
           score: number;
           vulnerabilities: number;
+          vulnerabilityDetails?: Array<{
+              id: string;
+              title: string;
+              severity: string;
+              description: string;
+              recommendation: string;
+              affected: string[];
+          }>;
           checks: {
               https: boolean;
               strongSecret: boolean;
+              dbSecure: boolean;
               mode: string;
           }
       }
   } | null>(null);
+
+  const [selectedChecklistItem, setSelectedChecklistItem] = useState<any | null>(null);
 
   useEffect(() => {
     const fetchSecurityReport = async () => {
@@ -2307,7 +2318,17 @@ export default function AuditLogs() {
                         {securityReport ? (
                             <>
                                 {/* ITEM 1: HTTPS & ENV */}
-                                <div className="p-6 space-y-4 hover:bg-white/2 transition-all group">
+                                <div 
+                                    className="p-6 space-y-4 hover:bg-white/2 transition-all group cursor-pointer"
+                                    onClick={() => setSelectedChecklistItem(securityReport.summary.vulnerabilityDetails?.find(v => v.id === 'https') || {
+                                        id: 'https',
+                                        title: 'Ambiente & Criptografia',
+                                        description: securityReport.summary.checks.https ? 'O ambiente está operando sob protocolo seguro HTTPS.' : 'O ambiente está operando sob protocolo inseguro HTTP.',
+                                        severity: securityReport.summary.checks.https ? 'LOW' : 'HIGH',
+                                        recommendation: 'Force o uso de HTTPS em produção para garantir o sigilo dos dados.',
+                                        affected: ['Configuração do Servidor']
+                                    })}
+                                >
                                     <div className="flex items-start justify-between">
                                         <div className="flex items-center gap-3">
                                             <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-black text-xs">01</div>
@@ -2332,7 +2353,17 @@ export default function AuditLogs() {
                                 </div>
 
                                 {/* ITEM 2: JWT SECRET */}
-                                <div className="p-6 space-y-4 hover:bg-white/2 transition-all group">
+                                <div 
+                                    className="p-6 space-y-4 hover:bg-white/2 transition-all group cursor-pointer"
+                                    onClick={() => setSelectedChecklistItem(securityReport.summary.vulnerabilityDetails?.find(v => v.id === 'jwt') || {
+                                        id: 'jwt',
+                                        title: 'Segurança de Tokens (JWT)',
+                                        description: securityReport.summary.checks.strongSecret ? 'O segredo JWT utilizado é robusto e segue as recomendações de segurança.' : 'O segredo JWT é muito curto ou fraco.',
+                                        severity: securityReport.summary.checks.strongSecret ? 'LOW' : 'HIGH',
+                                        recommendation: 'Atualize o JWT_SECRET no arquivo .env para uma string aleatória de 64 caracteres.',
+                                        affected: ['.env / NEXTAUTH_SECRET']
+                                    })}
+                                >
                                     <div className="flex items-start justify-between">
                                         <div className="flex items-center gap-3">
                                             <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-black text-xs">02</div>
@@ -2349,17 +2380,21 @@ export default function AuditLogs() {
                                                 Segredo JWT Forte ({">"} 32 chars)
                                             </div>
                                         </div>
-                                        {!securityReport.summary.checks.strongSecret && (
-                                            <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 text-primary-foreground text-xs font-bold flex items-start gap-3">
-                                                <Zap className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                                                <p className="leading-relaxed"><span className="text-primary mr-2 uppercase tracking-widest text-[9px]">Correção sugerida:</span> Aumente a complexidade do JWT_SECRET no .env.</p>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
 
                                 {/* ITEM 3: EXPOSIÇÃO DE ROTAS */}
-                                <div className="p-6 space-y-4 hover:bg-white/2 transition-all group">
+                                <div 
+                                    className="p-6 space-y-4 hover:bg-white/2 transition-all group cursor-pointer"
+                                    onClick={() => setSelectedChecklistItem(securityReport.summary.vulnerabilityDetails?.find(v => v.id === 'routes') || {
+                                        id: 'routes',
+                                        title: 'Exposição de Rotas',
+                                        description: `O sistema possui ${securityReport.summary.protectedRoutes} rotas protegidas.`,
+                                        severity: 'INFO',
+                                        recommendation: 'Verifique se as rotas públicas deveriam ser realmente públicas.',
+                                        affected: []
+                                    })}
+                                >
                                     <div className="flex items-start justify-between">
                                         <div className="flex items-center gap-3">
                                             <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-black text-xs">03</div>
@@ -2378,6 +2413,91 @@ export default function AuditLogs() {
                                         </div>
                                     </div>
                                 </div>
+
+                                {/* ITEM 4: BANCO DE DADOS */}
+                                <div 
+                                    className="p-6 space-y-4 hover:bg-white/2 transition-all group cursor-pointer"
+                                    onClick={() => setSelectedChecklistItem(securityReport.summary.vulnerabilityDetails?.find(v => v.id === 'db') || {
+                                        id: 'db',
+                                        title: 'Banco de Dados',
+                                        description: securityReport.summary.checks.dbSecure ? 'Conexão com o banco de dados está estável e funcional.' : 'Detectada instabilidade ou falha crítica na conexão com o banco.',
+                                        severity: securityReport.summary.checks.dbSecure ? 'LOW' : 'CRITICAL',
+                                        recommendation: 'Verifique os logs do Prisma e as configurações de rede do banco de dados.',
+                                        affected: ['Prisma / PostgreSQL']
+                                    })}
+                                >
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-black text-xs">04</div>
+                                            <h3 className="font-bold text-lg tracking-tight group-hover:text-primary transition-colors">Conexão com Banco de Dados</h3>
+                                        </div>
+                                        <Badge className={`font-black text-[10px] tracking-widest ${securityReport.summary.checks.dbSecure ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'}`}>
+                                            {securityReport.summary.checks.dbSecure ? 'ESTÁVEL' : 'INSTÁVEL'}
+                                        </Badge>
+                                    </div>
+                                    <div className="pl-11 space-y-3">
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                {securityReport.summary.checks.dbSecure ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" /> : <XCircle className="w-3.5 h-3.5 text-red-500" />}
+                                                Conexão Ativa & Segura
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* MODAL DE DETALHES DO CHECKLIST */}
+                                <Dialog open={!!selectedChecklistItem} onOpenChange={(open) => !open && setSelectedChecklistItem(null)}>
+                                    <DialogContent className="max-w-3xl glass-card border-white/5 bg-background/95 backdrop-blur-xl">
+                                        <DialogHeader>
+                                            <div className="flex items-center gap-4 mb-2">
+                                                <div className={cn("p-3 rounded-2xl", 
+                                                    selectedChecklistItem?.severity === 'CRITICAL' || selectedChecklistItem?.severity === 'HIGH' ? 'bg-red-500/10 text-red-500' : 
+                                                    selectedChecklistItem?.severity === 'MEDIUM' ? 'bg-amber-500/10 text-amber-500' : 'bg-blue-500/10 text-blue-500'
+                                                )}>
+                                                    <ShieldCheck className="w-6 h-6" />
+                                                </div>
+                                                <div>
+                                                    <DialogTitle className="text-2xl font-black uppercase tracking-tight">
+                                                        {selectedChecklistItem?.title}
+                                                    </DialogTitle>
+                                                    <DialogDescription className="font-medium">
+                                                        Relatório de Conformidade Técnica
+                                                    </DialogDescription>
+                                                </div>
+                                            </div>
+                                        </DialogHeader>
+
+                                        <div className="space-y-6 pt-4">
+                                            <div className="p-6 rounded-2xl bg-black/40 border border-white/5 space-y-3">
+                                                <h4 className="text-[10px] font-black uppercase text-primary tracking-widest">Descrição do Diagnóstico</h4>
+                                                <p className="text-sm font-medium leading-relaxed">{selectedChecklistItem?.description}</p>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="p-6 rounded-2xl bg-primary/5 border border-primary/10 space-y-3">
+                                                    <h4 className="text-[10px] font-black uppercase text-primary tracking-widest flex items-center gap-2">
+                                                        <Zap className="w-3 h-3" /> Plano de Correção
+                                                    </h4>
+                                                    <p className="text-xs font-bold leading-relaxed">{selectedChecklistItem?.recommendation}</p>
+                                                </div>
+                                                <div className="p-6 rounded-2xl bg-black/20 border border-white/5 space-y-3">
+                                                    <h4 className="text-[10px] font-black uppercase text-muted-foreground tracking-widest flex items-center gap-2">
+                                                        <Search className="w-3 h-3" /> Caminhos Afetados
+                                                    </h4>
+                                                    <div className="max-h-32 overflow-y-auto space-y-1">
+                                                        {selectedChecklistItem?.affected?.length > 0 ? (
+                                                            selectedChecklistItem.affected.map((path: string, i: number) => (
+                                                                <div key={i} className="text-[10px] font-mono bg-white/5 p-1.5 rounded truncate" title={path}>{path}</div>
+                                                            ))
+                                                        ) : (
+                                                            <p className="text-[10px] text-muted-foreground italic">Nenhum caminho específico listado.</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </DialogContent>
+                                </Dialog>
                             </>
                         ) : (
                              <div className="p-10 text-center space-y-3">

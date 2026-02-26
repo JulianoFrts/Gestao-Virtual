@@ -57,7 +57,7 @@ export class DataIngestionService {
           metadata: result.metadata || {},
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       // Update record with error
       await prisma.dataIngestion.update({
         where: { id: ingestionRecord.id },
@@ -85,7 +85,7 @@ export class DataIngestionService {
     return "UNKNOWN";
   }
 
-  async getAllIngestions() {
+  async getAllIngestions(): Promise<unknown> {
     return prisma.dataIngestion.findMany({
       orderBy: { createdAt: "desc" },
     });

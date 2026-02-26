@@ -2,7 +2,7 @@ import * as ts from "typescript";
 import { AuditRule, AuditResult } from "./audit-rule.interface";
 
 /**
- * Detecta problemas de tipagem TypeScript: any, non-null assertion, casts inseguros
+ * Detecta problemas de tipagem TypeScript: unknown, non-null assertion, casts inseguros
  * Severidade: MEDIUM — risco de manutenibilidade e segurança de tipos
  */
 export class TypeSafetyRule implements AuditRule {

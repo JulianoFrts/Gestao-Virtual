@@ -15,7 +15,7 @@ const teamService = new TeamService(new PrismaTeamRepository());
  *
  * Move um funcionário de uma equipe para outra ou remove de uma equipe.
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     await requireAdmin();
 
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     await teamService.moveMember(p_employee_id, p_to_team_id ?? null);
 
     return ApiResponse.json(null, "Membro movido com sucesso");
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error("[RPC ERR] Error in move_team_member:", {
       message: error.message,
     });

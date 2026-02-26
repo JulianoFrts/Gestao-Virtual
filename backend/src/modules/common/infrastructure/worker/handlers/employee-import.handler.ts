@@ -5,7 +5,7 @@ import { logger } from "@/lib/utils/logger";
 export class EmployeeImportHandler implements ITaskHandler {
   constructor(private readonly importService: ImportService) {}
 
-  async handle(payload: any): Promise<void> {
+  async handle(payload: unknown): Promise<void> {
     logger.info("[Worker] Iniciando processamento de importação de funcionários...");
 
     if (!payload.data || !Array.isArray(payload.data)) {

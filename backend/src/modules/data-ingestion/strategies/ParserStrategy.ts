@@ -1,9 +1,9 @@
 
 export interface ParsingResult {
-  data: any[];
-  metadata?: any;
+  data: Record<string, unknown>[];
+  metadata?: unknown;
 }
 
 export interface ParserStrategy {
-  parse(buffer: Buffer, options?: any): Promise<ParsingResult>;
+  parse(buffer: Buffer, options?: unknown): Promise<ParsingResult>;
 }

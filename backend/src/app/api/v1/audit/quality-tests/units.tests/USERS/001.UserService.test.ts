@@ -13,7 +13,7 @@ import { UserService } from '@/modules/users/application/user.service';
 // Início do bloco de testes para o UserService
 describe('UserService - Qualidade Total 001', () => {
   // Definição da variável do repositório mock
-  let mockRepo: any;
+  let mockRepo: unknown;
   // Definição da variável da instância do serviço
   let service: UserService;
 

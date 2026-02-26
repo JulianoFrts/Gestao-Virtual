@@ -27,7 +27,7 @@ export class TeamService {
     return team;
   }
 
-  async createTeam(data: any) {
+  async createTeam(data: unknown) {
     const team = await this.repository.create(data);
 
     if (data.supervisorId) {
@@ -38,7 +38,7 @@ export class TeamService {
     return team;
   }
 
-  async updateTeam(id: string, data: any) {
+  async updateTeam(id: string, data: unknown) {
     const { supervisorId, ...updateData } = data;
     let result;
 

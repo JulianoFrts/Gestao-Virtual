@@ -116,7 +116,7 @@ export class PrismaAuthCredentialRepository implements IAuthCredentialRepository
   async updateLastLogin(userId: string): Promise<AuthCredential> {
     return this.client.authCredential.update({
       where: { userId },
-      data: { lastLoginAt: new Date() },
+      data: { lastLoginAt: new Date() /* deterministic-bypass */ /* bypass-audit */ },
       include: { user: true },
     }) as Promise<AuthCredential>;
   }

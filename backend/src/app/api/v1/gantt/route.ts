@@ -11,7 +11,7 @@ const service = new GanttService(repository);
  * GET /api/v1/gantt
  * Retorna a estrutura de EAP (WBS) + dados de cronograma para visualização de Gantt
  */
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
     const { searchParams } = new URL(req.url);
@@ -24,8 +24,8 @@ export async function GET(req: NextRequest) {
     const roots = await service.getGanttData(projectId, {
       role: user.role,
       companyId: user.companyId,
-      hierarchyLevel: (user as any).hierarchyLevel,
-      permissions: (user as any).permissions,
+      hierarchyLevel: user.hierarchyLevel,
+      permissions: (user.permissions as Record<string, boolean>),
     });
 
     return ApiResponse.json({

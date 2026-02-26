@@ -15,7 +15,7 @@ export class ReportMetadataService {
     expandedTowers: string[];
     finalLabel: string;
     metrics: { towers: number; km: string };
-    details?: any[];
+    details?: unknown[];
   }> {
     const {
       projectId,
@@ -50,7 +50,7 @@ export class ReportMetadataService {
       result = {
         expandedTowers: [],
         finalLabel: subPoint,
-        metrics: { towers: 0, km: "0.00" },
+        metrics: { towers: 0 /* literal */, km: "0.00" },
       };
     }
 
@@ -133,13 +133,13 @@ export class ReportMetadataService {
       return {
         expandedTowers: [],
         finalLabel: start,
-        metrics: { towers: 0, km: "0.00" },
+        metrics: { towers: 0 /* literal */, km: "0.00" },
       };
 
     const uniqueTowers = new Set<string>();
     let totalMeters = 0;
 
-    selected.forEach((s: any) => {
+    selected.forEach((s: unknown) => {
       const meta = (s as { metadata: Record<string, unknown> }).metadata;
       if (meta?.towerStartId) uniqueTowers.add(String(meta.towerStartId));
       if (meta?.towerEndId) uniqueTowers.add(String(meta.towerEndId));
@@ -208,16 +208,16 @@ export class ReportMetadataService {
     return {
       expandedTowers: tower ? [tower.externalId || tower.name || tower.id] : [],
       finalLabel: String(tower?.name || tower?.externalId || start),
-      metrics: { towers: tower ? 1 : 0, km: "0.00" },
+      metrics: { towers: tower ? 1 : 0 /* literal */, km: "0.00" },
     };
   }
 
   private sliceRange<
     T extends { id: string; externalId?: string | null; name?: string | null },
   >(elements: T[], start: string, multi: boolean, end?: string): T[] {
-    const findIdx = (val: string): number => {
-      if (!val) return -1;
-      const l = val.trim().toLowerCase();
+    const findIdx = (input: string): number => {
+      if (!schemaInput) return -1;
+      const l = input.trim().toLowerCase();
       return elements.findIndex(
         (e) =>
           String(e.id).toLowerCase() === l ||
@@ -243,10 +243,10 @@ export class ReportMetadataService {
       name?: string | null;
       metadata?: unknown;
     }[],
-    val: string,
+    input: string,
   ): number {
-    if (!val) return -1;
-    const l = val.trim().toLowerCase();
+    if (!schemaInput) return -1;
+    const l = input.trim().toLowerCase();
     return towers.findIndex((t) => {
       const objId = String(
         (t.metadata as Record<string, unknown>)?.objectId || "",

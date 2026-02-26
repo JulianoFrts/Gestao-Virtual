@@ -10,6 +10,11 @@ declare module "next-auth" {
       status: AccountStatus;
       companyId?: string | null;
       projectId?: string | null;
+      siteId?: string | null;
+      hierarchyLevel?: number;
+      permissions?: Record<string, boolean>;
+      ui?: Record<string, boolean>;
+      isSystemAdmin?: boolean;
     } & DefaultSession["user"];
   }
 
@@ -19,6 +24,9 @@ declare module "next-auth" {
     status: AccountStatus;
     companyId?: string | null;
     projectId?: string | null;
+    siteId?: string | null;
+    hierarchyLevel?: number;
+    isSystemAdmin?: boolean;
   }
 }
 
@@ -29,5 +37,10 @@ declare module "next-auth/jwt" {
     status: AccountStatus;
     companyId?: string | null;
     projectId?: string | null;
+    siteId?: string | null;
+    hierarchyLevel?: number;
+    permissions?: Record<string, boolean>;
+    ui?: Record<string, boolean>;
+    isSystemAdmin?: boolean;
   }
 }

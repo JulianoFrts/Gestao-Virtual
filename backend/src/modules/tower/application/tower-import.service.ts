@@ -2,36 +2,52 @@ import { TowerProductionService } from "./tower-production.service";
 import { TowerConstructionService } from "./tower-construction.service";
 import { TowerActivityService } from "./tower-activity.service";
 import { MapElementRepository } from "@/modules/map-elements/domain/map-element.repository";
+import { TimeProvider, SystemTimeProvider } from "@/lib/utils/time-provider";
 
-export interface TowerImportItem {
+export interface TowerImportBasicInfo {
   number?: string;
-  externalId?: string; // Suporte para o que vem do frontend
+  externalId?: string;
+  sequence?: number;
+  objectSeq?: number;
+}
+
+export interface TowerImportTechnicalInfo {
   trecho?: string;
   towerType?: string;
   foundationType?: string;
   concreteVolume?: number;
-  totalConcreto?: number; // Suporte frontend
+  totalConcreto?: number;
   steelWeight?: number;
-  pesoArmacao?: number; // Suporte frontend
+  pesoArmacao?: number;
   structureWeight?: number;
-  pesoEstrutura?: number; // Suporte frontend
+  pesoEstrutura?: number;
   spanLength?: number;
-  goForward?: number; // Suporte frontend
-  sequence?: number;
-  objectSeq?: number; // Suporte frontend
-  tramoLancamento?: string; // Suporte frontend
-  tipificacaoEstrutura?: string; // Suporte frontend
+  goForward?: number;
+  tramoLancamento?: string;
+  tipificacaoEstrutura?: string;
+}
+
+export interface TowerImportGeospatialInfo {
   lat?: number;
   lng?: number;
   alt?: number;
-  siteId?: string; // Suporte para vinculação a canteiro
 }
+
+export interface TowerImportMetadata {
+  siteId?: string;
+}
+
+export interface TowerImportItem 
+  extends TowerImportBasicInfo, 
+          TowerImportTechnicalInfo, 
+          TowerImportGeospatialInfo, 
+          TowerImportMetadata {}
 
 export interface ImportResults {
   total: number;
   imported: number;
   failed: number;
-  errors: Array<{ item: string; error: string }>;
+  errors: Array<{ element: string; error: string }>;
 }
 
 export class TowerImportService {
@@ -40,6 +56,7 @@ export class TowerImportService {
     private readonly constructionService: TowerConstructionService,
     private readonly activityService: TowerActivityService,
     private readonly mapElementRepository: MapElementRepository,
+    private readonly timeProvider: TimeProvider = new SystemTimeProvider(),
   ) {}
 
   /**
@@ -72,9 +89,9 @@ export class TowerImportService {
         defaultSiteId && defaultSiteId !== "none" ? defaultSiteId : null;
 
       // 1. Preparar dados para TowerProduction (Lista mestre)
-      const productionData = data.map((item, index) => {
+      const productionData = data.map((element, index) => {
         const id = String(
-          item.externalId || item.number || item.objectSeq || index + 1,
+          element.externalId || element.number || element.objectSeq || index + 1,
         );
         return {
           projectId,
@@ -82,15 +99,15 @@ export class TowerImportService {
           siteId,
           towerId: id,
           metadata: {
-            trecho: item.trecho || "",
-            towerType: item.towerType || "Autoportante",
-            tramoLancamento: item.tramoLancamento || "",
-            siteId: item.siteId || siteId,
+            trecho: element.trecho || "",
+            towerType: element.towerType || "Autoportante",
+            tramoLancamento: element.tramoLancamento || "",
+            siteId: element.siteId || siteId,
             // Campos Técnicos para o Grid de Produção
-            goForward: item.goForward ?? 0,
-            totalConcreto: item.totalConcreto ?? 0,
-            pesoArmacao: item.pesoArmacao ?? 0,
-            pesoEstrutura: item.pesoEstrutura ?? 0,
+            goForward: element.goForward ?? 0,
+            totalConcreto: element.totalConcreto ?? 0,
+            pesoArmacao: element.pesoArmacao ?? 0,
+            pesoEstrutura: element.pesoEstrutura ?? 0,
           },
         };
       });
@@ -99,32 +116,32 @@ export class TowerImportService {
       // Eles vêm exclusivamente do import de Dados Técnicos (ConstructionImportModal).
 
       // 4. Skeleton Sync (MapElementTechnicalData) para suporte a progresso legado
-      const skeletonData = data.map((item, index) => {
+      const skeletonData = data.map((element, index) => {
         const id = String(
-          item.externalId || item.number || item.objectSeq || index + 1,
+          element.externalId || element.number || element.objectSeq || index + 1,
         );
         return {
           projectId,
           companyId,
-          siteId: item.siteId || siteId,
+          siteId: element.siteId || siteId,
           externalId: id,
           name: `Torre ${id}`,
-          elementType: "TOWER" as any,
-          sequence: item.objectSeq ?? item.sequence ?? index + 1,
+          elementType: "TOWER" as unknown,
+          sequence: element.objectSeq ?? element.sequence ?? index + 1,
           metadata: {
-            trecho: item.trecho || "",
-            towerType: item.towerType || "Autoportante",
-            tramoLancamento: item.tramoLancamento || "",
-            tipoFundacao: item.foundationType || "",
-            totalConcreto: item.totalConcreto ?? item.concreteVolume ?? 0,
-            pesoArmacao: item.steelWeight ?? 0,
-            pesoEstrutura: item.pesoEstrutura ?? 0,
-            goForward: item.goForward ?? item.spanLength ?? 0,
-            latitude: item.lat || 0,
-            longitude: item.lng || 0,
-            elevation: item.alt || 0,
+            trecho: element.trecho || "",
+            towerType: element.towerType || "Autoportante",
+            tramoLancamento: element.tramoLancamento || "",
+            tipoFundacao: element.foundationType || "",
+            totalConcreto: element.totalConcreto ?? element.concreteVolume ?? 0,
+            pesoArmacao: element.steelWeight ?? 0,
+            pesoEstrutura: element.pesoEstrutura ?? 0,
+            goForward: element.goForward ?? element.spanLength ?? 0,
+            latitude: element.lat || 0,
+            longitude: element.lng || 0,
+            elevation: element.alt || 0,
             _legacy: true,
-            importedAt: new Date().toISOString(),
+            importedAt: this.timeProvider.toISOString(),
           },
         };
       });
@@ -142,16 +159,16 @@ export class TowerImportService {
         ),
         // Removido importação automática de metas individuais para evitar poluir a EAP
         // this.activityService.importGoals(projectId, companyId, activityData),
-        this.mapElementRepository.saveMany(skeletonData as any),
+        this.mapElementRepository.saveMany(skeletonData as unknown),
       ]);
 
       results.imported = data.length;
-    } catch (error: any) {
+    } catch (error: unknown) {
       results.failed = data.length;
       results.errors.push({
-        item: "3-Table Batch Process",
+        element: "3-Table Batch Process",
         error:
-          error.message || "Erro desconhecido na persistência das 3 tabelas",
+          error?.message || "Erro desconhecido na persistência das 3 tabelas",
       });
     }
 

@@ -137,34 +137,42 @@ export function buildUserWhereClause(
   // 4. Filtros de Afiliação (Empresa, Projeto, Canteiro)
   Object.assign(where, buildAffiliationFilter(filters));
 
-  // 5. Filtro OR Manual (PostgREST style: col.eq.val,col.is.null)
+  // 5. Filtro OR Manual (PostgREST style: col.eq.input,col.is.null)
   if (filters.or) {
+    const ALLOWED_OR_COLS = ["projectId", "siteId", "companyId", "role", "status", "name", "email"];
     const orConditions = filters.or
       .split(",")
-      .map((cond) => {
-        const [col, op, val] = cond.split(".");
+      .map((cond): Prisma.UserWhereInput | null => {
+        const [col, op, input] = cond.split(".");
+        if (!ALLOWED_OR_COLS.includes(col)) return null;
+
         if (op === "eq") {
           if (["projectId", "siteId", "companyId"].includes(col)) {
-            return { affiliation: { [col]: val } };
+            return { affiliation: { [col]: input } as Prisma.UserAffiliationWhereInput };
           }
-          return { [col]: val };
+          // Para colunas que pertencem ao User (name)
+          if (col === "name") return { name: input };
+          // Para colunas que pertencem ao AuthCredential (role, status, email)
+          return { authCredential: { [col]: input } as Prisma.AuthCredentialWhereInput };
         }
-        if (op === "is" && val === "null") {
+        if (op === "is" && input === "null") {
           if (["projectId", "siteId", "companyId"].includes(col)) {
-            // This covers users with affiliation record but null project/site
-            // To also cover users without any affiliation record, we'd need more complex OR
             return {
-              OR: [{ affiliation: { [col]: null } }, { affiliation: null }],
+              OR: [
+                { affiliation: { [col]: null } as Prisma.UserAffiliationWhereInput },
+                { affiliation: null }
+              ],
             };
           }
-          return { [col]: null };
+          if (col === "name") return { name: null };
+          return { authCredential: { [col]: null } as Prisma.AuthCredentialWhereInput };
         }
         return null;
       })
-      .filter(Boolean);
+      .filter((c): c is Prisma.UserWhereInput => c !== null);
 
     if (orConditions.length > 0) {
-      where.OR = ((where.OR as any[]) || []).concat(orConditions);
+      where.OR = ((where.OR as Prisma.UserWhereInput[]) || []).concat(orConditions);
     }
   }
 
@@ -190,7 +198,7 @@ function buildSearchFilter(search?: string | null): Prisma.UserWhereInput {
 
 function buildAccountFilters(filters: UserFilters): Prisma.UserWhereInput {
   const where: Prisma.UserWhereInput = {};
-  const authWhere: any = {};
+  const authWhere: Prisma.AuthCredentialWhereInput = {};
 
   if (filters.role && (filters.role as string) !== "") {
     const roles = (filters.role as string).split(",").map((r) => r.trim());
@@ -210,10 +218,8 @@ function buildAccountFilters(filters: UserFilters): Prisma.UserWhereInput {
   if (!filters.search || filters.search.trim() === "") {
     const corporateRoles: Role[] = [
       "SUPER_ADMIN_GOD",
-      "SOCIO_DIRETOR",
-      "ADMIN",
-      "TI_SOFTWARE",
-      "HELPER_SYSTEM",
+      "SYSTEM_ADMIN",
+      "COMPANY_ADMIN",
     ];
     if (filters.onlyCorporate) {
       authWhere.role = { in: corporateRoles };
@@ -243,7 +249,7 @@ function buildDateFilter(
 }
 
 function buildAffiliationFilter(filters: UserFilters): Prisma.UserWhereInput {
-  const affWhere: any = {};
+  const affWhere: Prisma.UserAffiliationWhereInput = {};
   if (filters.projectId) affWhere.projectId = filters.projectId;
   if (filters.siteId) affWhere.siteId = filters.siteId;
   if (filters.companyId) affWhere.companyId = filters.companyId;

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma/client";
 import { DatabaseDiagramRepository } from "../domain/database-diagram.repository";
 
 export class PrismaDatabaseDiagramRepository implements DatabaseDiagramRepository {
-  async findAll(orderBy: any): Promise<any[]> {
+  async findAll(orderBy: unknown): Promise<any[]> {
     return prisma.databaseDiagram.findMany({
       orderBy,
     });
@@ -14,13 +14,13 @@ export class PrismaDatabaseDiagramRepository implements DatabaseDiagramRepositor
     });
   }
 
-  async create(data: any): Promise<any> {
+  async create(data: unknown): Promise<unknown> {
     return prisma.databaseDiagram.create({
       data,
     });
   }
 
-  async update(id: string, data: any): Promise<any> {
+  async update(id: string, data: unknown): Promise<unknown> {
     return prisma.databaseDiagram.update({
       where: { id },
       data,

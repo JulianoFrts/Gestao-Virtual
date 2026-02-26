@@ -1,14 +1,23 @@
+import { logger } from "@/lib/utils/logger";
 import { prisma } from "@/lib/prisma/client";
 import { ProjectElementRepository } from "../domain/project-element.repository";
 
+interface ProjectFilters {
+  projectId: string;
+  companyId?: string | null;
+  siteId?: string;
+  skip?: number;
+  take?: number;
+}
+
 export class PrismaProjectElementRepository implements ProjectElementRepository {
-  async findById(id: string): Promise<any | null> {
+  async findById(id: string): Promise<unknown | null> {
     return prisma.mapElementTechnicalData.findUnique({
       where: { id },
     });
   }
 
-  async findByIds(ids: string[]): Promise<any[]> {
+  async findByIds(ids: string[]): Promise<unknown[]> {
     return prisma.mapElementTechnicalData.findMany({
       where: { id: { in: ids } },
     });
@@ -20,73 +29,68 @@ export class PrismaProjectElementRepository implements ProjectElementRepository 
     siteId?: string,
     skip?: number,
     take?: number,
-  ): Promise<any[]> {
-    const mapWhere: any = { elementType: "TOWER" };
-    if (projectId && projectId !== "all") mapWhere.projectId = projectId;
-    if (companyId) mapWhere.companyId = companyId;
-    if (siteId) mapWhere.siteId = siteId;
+  ): Promise<unknown[]> {
+    const filters: ProjectFilters = { projectId, companyId, siteId, skip, take };
+    const { mapWhere, towerWhere } = this.buildWhereClauses(filters);
 
-    const towerWhere: any = {};
-    if (projectId && projectId !== "all") towerWhere.projectId = projectId;
-    if (companyId) towerWhere.companyId = companyId;
-    if (siteId) towerWhere.siteId = siteId;
+    const [mapElements, towerProductions, towerConstructions] = await this.fetchAllSources(mapWhere, towerWhere);
 
-    // 1. Fetch from all three sources to ensure no tower is left behind
-    const [mapElements, towerProductions, towerConstructions] =
-      await Promise.all([
-        prisma.mapElementTechnicalData.findMany({
-          where: mapWhere,
-          orderBy: { sequence: "asc" },
-          include: {
-            mapElementProductionProgress: {
-              include: { productionActivity: true },
-            },
-            activitySchedules: true,
-          },
-        }),
-        prisma.towerProduction.findMany({
-          where: towerWhere,
-        }),
-        prisma.towerConstruction.findMany({
-          where: towerWhere,
-        }),
-      ]);
+    const allExternalIds = this.extractUniqueExternalIds(mapElements, towerProductions, towerConstructions);
+    const virtualIds = Array.from(allExternalIds).map(extId => `virtual-${extId}`);
 
-    console.log(`[findByProjectId] Counts for ${projectId}:`, {
-      mapElements: mapElements.length,
-      towerProductions: towerProductions.length,
-      towerConstructions: towerConstructions.length,
-    });
+    const { progressMap, scheduleMap } = await this.fetchProgressAndSchedules(virtualIds);
 
-    const normalizeId = (id: string | null | undefined) => {
-      if (!id) return "";
-      return id.replace(/^Torre\s+/i, "").trim();
+    const mergedResults = this.mergeTowerData(
+      allExternalIds,
+      mapElements,
+      towerProductions,
+      towerConstructions,
+      progressMap,
+      scheduleMap
+    );
+
+    return this.sortAndPaginate(mergedResults, skip, take);
+  }
+
+  private buildWhereClauses(filters: ProjectFilters) {
+    const base: Record<string, unknown> = {};
+    if (filters.projectId && filters.projectId !== "all") base.projectId = filters.projectId;
+    if (filters.companyId) base.companyId = filters.companyId;
+    if (filters.siteId) base.siteId = filters.siteId;
+
+    return {
+      mapWhere: { ...base, elementType: "TOWER" },
+      towerWhere: base
     };
+  }
 
-    const mapElementsMap = new Map(
-      mapElements.map((el: any) => [normalizeId(el.externalId), el]),
-    );
-    const productionsMap = new Map(
-      towerProductions.map((tp: any) => [normalizeId(tp.towerId), tp]),
-    );
-    const constructionsMap = new Map(
-      towerConstructions.map((tc: any) => [normalizeId(tc.towerId), tc]),
-    );
+  private async fetchAllSources(mapWhere: Record<string, unknown>, towerWhere: Record<string, unknown>) {
+    return Promise.all([
+      prisma.mapElementTechnicalData.findMany({
+        where: mapWhere as unknown,
+        orderBy: { sequence: "asc" },
+        include: {
+          mapElementProductionProgress: { include: { productionActivity: true } },
+          activitySchedules: true,
+        },
+      }),
+      prisma.towerProduction.findMany({ where: towerWhere as unknown }),
+      prisma.towerConstruction.findMany({ where: towerWhere as unknown }),
+    ]);
+  }
 
-    // 2. Union by ID (normalized)
-    const allExternalIds = new Set(
-      [
-        ...Array.from(mapElementsMap.keys()),
-        ...Array.from(productionsMap.keys()),
-        ...Array.from(constructionsMap.keys()),
-      ].filter((id) => id !== null && id !== undefined && id !== ""),
-    );
+  private extractUniqueExternalIds(mapElements: unknown[], productions: unknown[], constructions: unknown[]) {
+    const normalize = (id?: string | null) => id?.replace(/^Torre\s+/i, "").trim() || "";
+    const ids = new Set<string>();
+    mapElements.forEach(el => ids.add(normalize(el.externalId)));
+    productions.forEach(tp => ids.add(normalize(tp.towerId)));
+    constructions.forEach(tc => ids.add(normalize(tc.towerId)));
+    ids.delete("");
+    return ids;
+  }
 
-    const virtualIds = Array.from(allExternalIds).map(
-      (extId) => `virtual-${extId}`,
-    );
-
-    const [progressRecords, scheduleRecords] = await Promise.all([
+  private async fetchProgressAndSchedules(virtualIds: string[]) {
+    const [progress, schedules] = await Promise.all([
       prisma.mapElementProductionProgress.findMany({
         where: { elementId: { in: virtualIds } },
         include: { productionActivity: true },
@@ -97,142 +101,87 @@ export class PrismaProjectElementRepository implements ProjectElementRepository 
     ]);
 
     const progressMap = new Map<string, any[]>();
-    for (const record of progressRecords) {
-      if (!progressMap.has(record.elementId)) {
-        progressMap.set(record.elementId, []);
-      }
-      progressMap.get(record.elementId)?.push({
-        ...record,
-        activity: record.productionActivity,
-      });
-    }
+    progress.forEach(p => {
+      if (!progressMap.has(p.elementId)) progressMap.set(p.elementId, []);
+      progressMap.get(p.elementId)?.push({ ...p, activity: p.productionActivity });
+    });
 
     const scheduleMap = new Map<string, any[]>();
-    for (const record of scheduleRecords) {
-      if (!scheduleMap.has(record.elementId!)) {
-        // Safe non-null assertion since we queried by it
-        scheduleMap.set(record.elementId!, []);
+    schedules.forEach(s => {
+      if (s.elementId) {
+        if (!scheduleMap.has(s.elementId)) scheduleMap.set(s.elementId, []);
+        scheduleMap.get(s.elementId)?.push(s);
       }
-      scheduleMap.get(record.elementId!)?.push(record);
-    }
+    });
 
-    // 3. Merge results
-    const mergedResults = Array.from(allExternalIds as Set<string>).map(
-      (extId: string, index: number) => {
-        const legacy = mapElementsMap.get(extId) as any;
-        const production = productionsMap.get(extId) as any;
-        const construction = constructionsMap.get(extId) as any;
-        const virtualId = `virtual-${extId}`;
+    return { progressMap, scheduleMap };
+  }
 
-        const prodMetadata =
-          production && typeof production.metadata === "string"
-            ? JSON.parse(production.metadata as string)
-            : (production?.metadata as any) || {};
+  private mergeTowerData(
+    allExternalIds: Set<string>,
+    mapElements: unknown[],
+    productions: unknown[],
+    constructions: unknown[],
+    progressMap: Map<string, any[]>,
+    scheduleMap: Map<string, any[]>
+  ) {
+    const normalize = (id?: string | null) => id?.replace(/^Torre\s+/i, "").trim() || "";
+    const mapElementsMap = new Map(mapElements.map(el => [normalize(el.externalId), el]));
+    const productionsMap = new Map(productions.map(tp => [normalize(tp.towerId), tp]));
+    const constructionsMap = new Map(constructions.map(tc => [normalize(tc.towerId), tc]));
 
-        const constrMetadata = construction
-          ? typeof construction.metadata === "string"
-            ? JSON.parse(construction.metadata as string)
-            : (construction.metadata as any) || {}
-          : {};
+    return Array.from(allExternalIds).map((extId, index) => {
+      const legacy = mapElementsMap.get(extId);
+      const prod = productionsMap.get(extId);
+      const constr = constructionsMap.get(extId);
+      const virtualId = `virtual-${extId}`;
 
-        const legacyMetadata =
-          legacy && typeof legacy.metadata === "string"
-            ? JSON.parse(legacy.metadata as string)
-            : (legacy?.metadata as any) || {};
+      const mergedMetadata = this.resolveMetadata(prod, constr, legacy);
 
-        // Unified metadata following project standards
-        const mergedMetadata = {
-          ...prodMetadata,
-          ...constrMetadata,
-          ...legacyMetadata,
-          trecho:
-            prodMetadata.trecho ||
-            constrMetadata.trecho ||
-            legacyMetadata?.trecho ||
-            "",
-          towerType:
-            legacy?.towerType ||
-            prodMetadata.towerType ||
-            prodMetadata.tower_type ||
-            constrMetadata.towerType ||
-            legacyMetadata?.towerType ||
-            "Autoportante",
-          tipificacaoEstrutura:
-            legacyMetadata?.tipificacaoEstrutura ||
-            constrMetadata.tipificacaoEstrutura ||
-            prodMetadata.tipificacaoEstrutura ||
-            "",
-          totalConcreto:
-            constrMetadata.peso_concreto || constrMetadata.pesoConcreto || 0,
-          pesoArmacao:
-            constrMetadata.peso_aco_1 ||
-            constrMetadata.pesoAco1 ||
-            constrMetadata.aco1 ||
-            0,
-          pesoEstrutura:
-            constrMetadata.peso_estrutura || constrMetadata.pesoEstrutura || 0,
-          goForward: constrMetadata.distancia_vao || constrMetadata.vao || 0,
-        };
+      return {
+        id: (legacy as unknown)?.id || virtualId,
+        elementId: (legacy as unknown)?.id || virtualId,
+        externalId: extId,
+        name: (legacy as unknown)?.name || (prod as unknown)?.metadata?.name || (constr as unknown)?.metadata?.name || extId,
+        elementType: "TOWER",
+        sequence: (legacy as unknown)?.sequence || (prod as unknown)?.sequencia || (constr as unknown)?.sequencia || (index + 1000),
+        latitude: (legacy as unknown)?.latitude || (constr as unknown)?.metadata?.latitude || (prod as unknown)?.metadata?.latitude || null,
+        longitude: (legacy as unknown)?.longitude || (constr as unknown)?.metadata?.longitude || (prod as unknown)?.metadata?.longitude || null,
+        elevation: (legacy as unknown)?.elevation || (constr as unknown)?.metadata?.elevation || (prod as unknown)?.metadata?.elevation || null,
+        metadata: mergedMetadata,
+        productionProgress: progressMap.get(virtualId) || (legacy as unknown)?.mapElementProductionProgress || [],
+        activitySchedules: scheduleMap.get(virtualId) || (legacy as unknown)?.activitySchedules || [],
+      };
+    });
+  }
 
-        return {
-          id: legacy?.id || virtualId,
-          elementId: legacy?.id || virtualId,
-          externalId: extId,
-          name:
-            legacy?.name ||
-            prodMetadata.name ||
-            constrMetadata.name ||
-            `${extId}`,
-          elementType: "TOWER",
-          sequence:
-            legacy?.sequence ||
-            production?.sequencia ||
-            construction?.sequencia ||
-            index + 1000,
-          latitude:
-            legacy?.latitude ||
-            constrMetadata.latitude ||
-            constrMetadata.lat ||
-            prodMetadata.latitude ||
-            prodMetadata.lat ||
-            null,
-          longitude:
-            legacy?.longitude ||
-            constrMetadata.longitude ||
-            constrMetadata.lng ||
-            prodMetadata.longitude ||
-            prodMetadata.lng ||
-            null,
-          elevation:
-            legacy?.elevation ||
-            constrMetadata.elevacao ||
-            constrMetadata.elevation ||
-            prodMetadata.elevacao ||
-            prodMetadata.elevation ||
-            null,
-          metadata: mergedMetadata,
-          productionProgress:
-            progressMap.get(virtualId) ||
-            (legacy?.mapElementProductionProgress || []).map((p: any) => ({
-              ...p,
-              activity: p.productionActivity,
-            })),
-          activitySchedules:
-            scheduleMap.get(virtualId) || legacy?.activitySchedules || [],
-        };
-      },
-    );
+  private resolveMetadata(prod: unknown, constr: unknown, legacy: unknown) {
+    const parse = (m: unknown) => {
+        if (!m) return {};
+        if (typeof m === "string") {
+            try { return JSON.parse(m); } catch { return {}; }
+        }
+        return m;
+    };
+    const pMeta = parse(prod?.metadata);
+    const cMeta = parse(constr?.metadata);
+    const lMeta = parse(legacy?.metadata);
 
-    // 4. Sort and apply pagination if needed
-    const sorted = mergedResults.sort((a, b) => a.sequence - b.sequence);
+    return {
+      ...pMeta, ...cMeta, ...lMeta,
+      trecho: pMeta.trecho || cMeta.trecho || lMeta.trecho || "",
+      towerType: legacy?.towerType || pMeta.towerType || cMeta.towerType || "Autoportante",
+      totalConcreto: cMeta.peso_concreto || cMeta.pesoConcreto || 0,
+      pesoArmacao: cMeta.peso_aco_1 || cMeta.aco1 || 0,
+      pesoEstrutura: cMeta.peso_estrutura || cMeta.pesoEstrutura || 0,
+      goForward: cMeta.distancia_vao || cMeta.vao || 0,
+    };
+  }
 
-    if (skip !== undefined && take !== undefined) {
-      return sorted.slice(skip, skip + take);
-    }
-    if (take !== undefined) {
-      return sorted.slice(0, take);
-    }
-
+  private sortAndPaginate(results: unknown[], skip?: number, take?: number): unknown[] {
+    const sorted = results.sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+    if (skip !== undefined && take !== undefined) return sorted.slice(skip, skip + take);
+    if (take !== undefined) return sorted.slice(0, take);
     return sorted;
   }
 
@@ -240,7 +189,7 @@ export class PrismaProjectElementRepository implements ProjectElementRepository 
     projectId: string,
     siteId?: string,
   ): Promise<string[]> {
-    const where: any = {
+    const where: Record<string, unknown> = {
       productionActivityId: { not: null },
     };
 
@@ -251,13 +200,13 @@ export class PrismaProjectElementRepository implements ProjectElementRepository 
     }
 
     const stages = await prisma.workStage.findMany({
-      where,
+      where: where as unknown,
       select: { productionActivityId: true },
     });
 
     return stages
-      .map((s: any) => s.productionActivityId)
-      .filter((id: any): id is string => !!id);
+      .map((s: unknown) => s.productionActivityId)
+      .filter((id: string | null): id is string => !!id);
   }
 
   async findProjectId(elementId: string): Promise<string | null> {
@@ -268,24 +217,25 @@ export class PrismaProjectElementRepository implements ProjectElementRepository 
 
     if (element?.projectId) return element.projectId;
 
-    // Se for virtual, tenta materializar para garantir que o ID exista e retorne o projeto
     if (elementId.startsWith("virtual-")) {
-      try {
-        const materializedId = await this.materializeVirtualElement(elementId);
-        const retry = await prisma.mapElementTechnicalData.findUnique({
-          where: { id: materializedId || elementId },
-          select: { projectId: true },
-        });
-        return retry?.projectId || null;
-      } catch (error) {
-        console.error(
-          `[PrismaProjectElementRepository] Error materializing ${elementId}:`,
-          error,
-        );
-      }
+      return this.handleVirtualProjectId(elementId);
     }
 
     return null;
+  }
+
+  private async handleVirtualProjectId(elementId: string): Promise<string | null> {
+    try {
+      const materializedId = await this.materializeVirtualElement(elementId);
+      const retry = await prisma.mapElementTechnicalData.findUnique({
+        where: { id: materializedId || elementId },
+        select: { projectId: true },
+      });
+      return retry?.projectId || null;
+    } catch (error) {
+      logger.error(`[PrismaProjectElementRepository] Error materializing ${elementId}:`, { error });
+      return null;
+    }
   }
 
   async findCompanyId(elementId: string): Promise<string | null> {
@@ -297,22 +247,24 @@ export class PrismaProjectElementRepository implements ProjectElementRepository 
     if (element?.companyId) return element.companyId;
 
     if (elementId.startsWith("virtual-")) {
-      try {
-        const materializedId = await this.materializeVirtualElement(elementId);
-        const retry = await prisma.mapElementTechnicalData.findUnique({
-          where: { id: materializedId || elementId },
-          select: { companyId: true },
-        });
-        return retry?.companyId || null;
-      } catch (error) {
-        console.error(
-          `[PrismaProjectElementRepository] Error materializing ${elementId}:`,
-          error,
-        );
-      }
+      return this.handleVirtualCompanyId(elementId);
     }
 
     return null;
+  }
+
+  private async handleVirtualCompanyId(elementId: string): Promise<string | null> {
+    try {
+      const materializedId = await this.materializeVirtualElement(elementId);
+      const retry = await prisma.mapElementTechnicalData.findUnique({
+        where: { id: materializedId || elementId },
+        select: { companyId: true },
+      });
+      return retry?.companyId || null;
+    } catch (error) {
+      logger.error(`[PrismaProjectElementRepository] Error materializing ${elementId}:`, { error });
+      return null;
+    }
   }
 
   async materializeVirtualElement(elementId: string): Promise<string | null> {
@@ -320,41 +272,24 @@ export class PrismaProjectElementRepository implements ProjectElementRepository 
 
     const externalId = elementId.replace("virtual-", "");
 
-    // 1. Buscar dados de origem em TowerProduction ou TowerConstruction
     const [production, construction] = await Promise.all([
-      prisma.towerProduction.findFirst({
-        where: { towerId: externalId },
-      }),
-      prisma.towerConstruction.findFirst({
-        where: { towerId: externalId },
-      }),
+      prisma.towerProduction.findFirst({ where: { towerId: externalId } }),
+      prisma.towerConstruction.findFirst({ where: { towerId: externalId } }),
     ]);
 
     const source = production || construction;
-    if (!source) {
-      console.warn(
-        `[materializeVirtualElement] Source data not found for ${elementId}`,
-      );
-      return null;
-    }
+    if (!source) return null;
 
-    // 2. Verificar se já existe por (projectId, externalId) - Prevenção de duplicados e conflitos de ID
     const existing = await prisma.mapElementTechnicalData.findFirst({
-      where: {
-        projectId: source.projectId,
-        externalId: source.towerId,
-      },
+      where: { projectId: source.projectId, externalId: source.towerId },
     });
 
-    if (existing) {
-      // Se já existe mas com ID diferente, retornamos o ID real para que as tabelas de progresso/cronograma usem a FK correta.
-      console.log(
-        `[materializeVirtualElement] Element ${externalId} already exists with ID ${existing.id}`,
-      );
-      return existing.id;
-    }
+    if (existing) return existing.id;
 
-    // 3. Criar o registro definitivo no repositório de elementos
+    return this.createMaterializedElement(elementId, source);
+  }
+
+  private async createMaterializedElement(elementId: string, source: unknown): Promise<string | null> {
     try {
       const created = await prisma.mapElementTechnicalData.create({
         data: {
@@ -366,21 +301,14 @@ export class PrismaProjectElementRepository implements ProjectElementRepository 
           sequence: source.sequencia,
           elementType: "TOWER",
           name: source.towerId,
-          metadata: (source.metadata as any) || {},
+          metadata: (source.metadata as unknown) || {},
         },
       });
-      console.log(
-        `[materializeVirtualElement] Successfully materialized ${elementId}`,
-      );
       return created.id;
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error.code === "P2002") {
-        // Concorrência: alguém criou enquanto verificávamos? Busca novamente.
         const retry = await prisma.mapElementTechnicalData.findFirst({
-          where: {
-            projectId: source.projectId,
-            externalId: source.towerId,
-          },
+          where: { projectId: source.projectId, externalId: source.towerId },
         });
         return retry?.id || null;
       }

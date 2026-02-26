@@ -19,7 +19,7 @@ export class PrismaTeamRepository implements TeamRepository {
     if (cached) return cached;
 
     const skip = (params.page - 1) * params.limit;
-    const where: any = {};
+    const where: unknown = {};
 
     if (params.companyId) where.companyId = params.companyId;
     if (params.siteId) where.siteId = params.siteId;
@@ -75,7 +75,7 @@ export class PrismaTeamRepository implements TeamRepository {
     });
   }
 
-  async create(data: any): Promise<any> {
+  async create(data: unknown): Promise<unknown> {
     const result = await prisma.team.create({
       data,
       include: {
@@ -86,7 +86,7 @@ export class PrismaTeamRepository implements TeamRepository {
     return result;
   }
 
-  async update(id: string, data: any): Promise<any> {
+  async update(id: string, data: unknown): Promise<unknown> {
     const result = await prisma.team.update({
       where: { id },
       data,
@@ -95,7 +95,7 @@ export class PrismaTeamRepository implements TeamRepository {
     return result;
   }
 
-  async delete(id: string): Promise<any> {
+  async delete(id: string): Promise<unknown> {
     const result = await prisma.team.delete({
       where: { id },
     });
@@ -106,7 +106,7 @@ export class PrismaTeamRepository implements TeamRepository {
   async setSupervisorAtomic(
     teamId: string,
     supervisorId: string,
-  ): Promise<any> {
+  ): Promise<unknown> {
     const result = await prisma.$transaction(async (tx) => {
       // 1. Remove employee from all memberships (Líder não é membro)
       await tx.teamMember.deleteMany({
@@ -138,7 +138,7 @@ export class PrismaTeamRepository implements TeamRepository {
   async moveMemberAtomic(
     employeeId: string,
     toTeamId: string | null,
-  ): Promise<any> {
+  ): Promise<unknown> {
     const result = await prisma.$transaction(async (tx) => {
       // 1. Remove from all memberships
       await tx.teamMember.deleteMany({ where: { userId: employeeId } });
@@ -154,7 +154,7 @@ export class PrismaTeamRepository implements TeamRepository {
         return await this.validateAndCreateMember(
           employeeId,
           toTeamId,
-          tx as any,
+          tx as unknown,
         );
       }
       return null;
@@ -164,9 +164,9 @@ export class PrismaTeamRepository implements TeamRepository {
     return result;
   }
 
-  async listMembers(params: any): Promise<any> {
+  async listMembers(params: unknown): Promise<unknown> {
     const skip = (params.page - 1) * params.limit;
-    const where: any = {};
+    const where: unknown = {};
     if (params.teamId) where.teamId = params.teamId;
     if (params.userId) where.userId = params.userId;
 
@@ -181,7 +181,7 @@ export class PrismaTeamRepository implements TeamRepository {
               id: true,
               name: true,
               image: true,
-              registrationNumber: true,
+              affiliation: { select: { registrationNumber: true } },
             },
           },
           team: { select: { id: true, name: true } },
@@ -193,7 +193,7 @@ export class PrismaTeamRepository implements TeamRepository {
     return { items, total };
   }
 
-  async removeMember(teamId: string, userId: string): Promise<any> {
+  async removeMember(teamId: string, userId: string): Promise<unknown> {
     const member = await prisma.teamMember.findFirst({
       where: { teamId, userId },
     });
@@ -206,7 +206,7 @@ export class PrismaTeamRepository implements TeamRepository {
     return result;
   }
 
-  async removeAllMembers(teamId: string): Promise<any> {
+  async removeAllMembers(teamId: string): Promise<unknown> {
     const result = await prisma.teamMember.deleteMany({
       where: { teamId },
     });
@@ -217,13 +217,13 @@ export class PrismaTeamRepository implements TeamRepository {
   async addMembersBatch(
     items: { teamId: string; userId: string }[],
   ): Promise<any[]> {
-    const results: any[] = [];
+    const results: unknown[] = [];
     await prisma.$transaction(async (tx) => {
-      for (const item of items) {
+      for (const element of items) {
         const member = await this.validateAndCreateMember(
-          item.userId,
-          item.teamId,
-          tx as any,
+          element.userId,
+          element.teamId,
+          tx as unknown,
         );
         if (member) results.push(member);
       }
@@ -235,7 +235,7 @@ export class PrismaTeamRepository implements TeamRepository {
   private async validateAndCreateMember(
     userId: string,
     teamId: string,
-    tx: any,
+    tx: unknown,
   ) {
     const team = await tx.team.findUnique({ where: { id: teamId } });
     if (!team) throw new Error(`Equipe com ID ${teamId} não encontrada`);
@@ -276,7 +276,7 @@ export class PrismaTeamRepository implements TeamRepository {
     await this.cache.delByPattern(`${this.CACHE_PREFIX}*`);
   }
 
-  async count(where: any): Promise<number> {
+  async count(where: unknown): Promise<number> {
     return prisma.team.count({ where });
   }
 }

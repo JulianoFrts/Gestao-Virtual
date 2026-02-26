@@ -20,7 +20,7 @@ const auditRepository = new PrismaSystemAuditRepository();
 const userService = new UserService(userRepository, auditRepository);
 const authService = new AuthService(userService, new PrismaAuthCredentialRepository());
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const body = await request.json();
 
@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
       return ApiResponse.validationError(validationResult.errors);
     }
 
+    const data = validationResult.data as unknown;
     const {
       email,
       name,
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
       siteId,
       registrationNumber,
       ...otherFields
-    } = validationResult.data as any;
+    } = data;
 
     const user = await authService.register({
       email,
@@ -57,8 +58,8 @@ export async function POST(request: NextRequest) {
 
     // Frontend expects { user: ... } structure
     return ApiResponse.created({ user }, MESSAGES.SUCCESS.CREATED);
-  } catch (error: any) {
-    if (error.message === "Email already exists") {
+  } catch (error: unknown) {
+    if (error?.message === "Email already exists") {
       return ApiResponse.conflict("Email já está em uso");
     }
     return handleApiError(error, "src/app/api/v1/auth/register/route.ts#POST");

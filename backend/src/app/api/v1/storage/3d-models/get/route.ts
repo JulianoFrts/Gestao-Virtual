@@ -7,7 +7,7 @@ import path from "path";
 
 const STORAGE_ROOT = path.join(process.cwd(), "storage", "3d-models");
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const { searchParams } = new URL(req.url);
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return handleApiError(err, "src/app/api/v1/storage/3d-models/get/route.ts#GET");
   }
 }

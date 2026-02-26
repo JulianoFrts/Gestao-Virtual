@@ -9,7 +9,7 @@ interface RouteParams {
   }>;
 }
 
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(request: NextRequest, { params }: RouteParams): Promise<Response> {
   const { id } = await params;
   try {
     await requireAuth();

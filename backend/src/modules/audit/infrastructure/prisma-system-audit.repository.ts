@@ -29,7 +29,7 @@ export class PrismaSystemAuditRepository implements SystemAuditRepository {
   }
 
   // Helper to ensure JSON compatibility or clean strict structures if needed
-  private static cleanValues(values: any): any {
+  private static cleanValues(values: unknown): any {
     if (!values) return undefined;
     return values;
   }

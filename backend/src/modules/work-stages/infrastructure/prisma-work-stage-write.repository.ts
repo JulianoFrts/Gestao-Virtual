@@ -51,7 +51,7 @@ export class PrismaWorkStageWriteRepository implements WorkStageWriteRepository 
     data: Partial<CreateWorkStageDTO>,
   ): Promise<WorkStage> {
     // Map DTO to Prisma Update Input
-    const prismaData: any = { ...data };
+    const prismaData: unknown = { ...data };
 
     // Explicitly handle relationship removals or updates if needed
     if (data.projectId === null) prismaData.projectId = null;
@@ -103,7 +103,7 @@ export class PrismaWorkStageWriteRepository implements WorkStageWriteRepository 
     await this.cacheService.delByPattern("work_stages:list:*");
   }
 
-  private mapToWorkStage(data: any): WorkStage {
+  private mapToWorkStage(data: unknown): WorkStage {
     return {
       id: data.id,
       name: data.name,

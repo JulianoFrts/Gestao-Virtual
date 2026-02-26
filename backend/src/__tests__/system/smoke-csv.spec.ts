@@ -5,7 +5,7 @@
 
 import request from "supertest";
 
-const appUrl = process.env.APP_URL || "http://localhost:3000";
+const appUrl = process.env.APP_URL || "http://localhost: 3000 /* literal */";
 const apiPrefix = "/api/v1";
 
 describe("Smoke Test - CSV Flow", () => {

@@ -15,7 +15,7 @@ const queueService = new QueueService(taskRepository);
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
-) {
+): Promise<Response> {
   try {
     await requireAuth();
 
@@ -40,7 +40,7 @@ export async function GET(
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
-) {
+): Promise<Response> {
   try {
     await requireAuth();
 

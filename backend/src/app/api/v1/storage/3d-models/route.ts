@@ -11,7 +11,7 @@ if (!fs.existsSync(STORAGE_ROOT)) {
   fs.mkdirSync(STORAGE_ROOT, { recursive: true });
 }
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const { searchParams } = new URL(req.url);
@@ -49,12 +49,12 @@ export async function GET(req: NextRequest) {
     } else {
       return ApiResponse.badRequest("O caminho não é um diretório");
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     return handleApiError(err, "src/app/api/v1/storage/3d-models/route.ts#GET");
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const formData = await req.formData();
@@ -81,12 +81,12 @@ export async function POST(req: NextRequest) {
     fs.writeFileSync(fullPath, buffer);
 
     return ApiResponse.json({ data: { path: relPath }, error: null });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return handleApiError(err, "src/app/api/v1/storage/3d-models/route.ts#POST");
   }
 }
 
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const { searchParams } = new URL(req.url);
@@ -109,7 +109,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     return ApiResponse.notFound("Arquivo não encontrado");
-  } catch (err: any) {
+  } catch (err: unknown) {
     return handleApiError(err, "src/app/api/v1/storage/3d-models/route.ts#DELETE");
   }
 }

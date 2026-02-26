@@ -2,14 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { HTTP_STATUS, API } from "@/lib/constants";
+import { requireAuth } from "@/lib/auth/session";
 
 const STORAGE_ROOT = path.join(process.cwd(), "storage", "3d-models");
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
-) {
-  const { path: pathSegments } = await params;
+): Promise<Response> {
+  try {
+    await requireAuth();
+    const { path: pathSegments } = await params;
   const filePath = pathSegments.join("/");
 
   // Proteção contra caminhos maliciosos
@@ -42,7 +45,7 @@ export async function GET(
         "Cache-Control": `public, max-age=${API.CACHE.TTL_EXTREME}, immutable`,
       },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return new NextResponse(err.message, { status: HTTP_STATUS.INTERNAL_ERROR });
   }
 }

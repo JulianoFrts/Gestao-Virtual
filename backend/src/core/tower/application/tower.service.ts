@@ -8,12 +8,12 @@ export class TowerService {
     return this.towerRepository.findByProject(projectId);
   }
 
-  async saveTowers(data: any): Promise<Tower[]> {
+  async saveTowers(data: unknown): Promise<Tower[]> {
     const items = Array.isArray(data) ? data : [data];
     const towersToSave: Tower[] = [];
 
-    for (const item of items) {
-      const parseResult = towerSchema.safeParse(item);
+    for (const element of items) {
+      const parseResult = towerSchema.safeParse(element);
       if (!parseResult.success) {
         throw new Error(
           "Falha na validação dos dados da torre: " +

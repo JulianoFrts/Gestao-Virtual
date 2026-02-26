@@ -3,7 +3,7 @@ import { DatabaseDiagramRepository } from "../domain/database-diagram.repository
 export class DatabaseDiagramService {
   constructor(private readonly repository: DatabaseDiagramRepository) {}
 
-  async listDiagrams() {
+  async listDiagrams(): Promise<unknown> {
     return this.repository.findAll({ updatedAt: "desc" });
   }
 
@@ -13,7 +13,7 @@ export class DatabaseDiagramService {
     return diagram;
   }
 
-  async createDiagram(data: any) {
+  async createDiagram(data: unknown) {
     return this.repository.create({
       name: data.name || "Novo Diagrama",
       description: data.description,
@@ -21,7 +21,7 @@ export class DatabaseDiagramService {
     });
   }
 
-  async updateDiagram(id: string, data: any) {
+  async updateDiagram(id: string, data: unknown) {
     return this.repository.update(id, {
       name: data.name,
       description: data.description,

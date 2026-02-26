@@ -13,7 +13,7 @@ const userService = new UserService(userRepository, auditRepository);
 
 import { adminUpdateEmailSchema } from "@/lib/utils/validators/route-schemas";
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const admin = await requireAdmin();
     const body = await request.json();
@@ -23,14 +23,14 @@ export async function POST(request: NextRequest) {
     logger.debug("[RPC Update Email] Raw Body:", { keys: Object.keys(body) });
 
     const p = body.params || body;
-    const input = {
+    const schemaInput = {
       userId: p.userId || p.user_id || p.id,
       newEmail: p.email || p.new_email || p.newEmail,
     };
 
     logger.debug("[RPC Update Email] Parsed Input:", { userId: input.userId });
 
-    const result = adminUpdateEmailSchema.safeParse(input);
+    const result = adminUpdateEmailSchema.safeParse(schemaInput);
 
     if (!result.success) {
       return ApiResponse.badRequest(

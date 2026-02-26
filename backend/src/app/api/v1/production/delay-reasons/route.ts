@@ -24,7 +24,7 @@ const delayReasonSchema = z.object({
 /**
  * GET - Listar motivos de atraso do projeto
  */
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const { searchParams } = request.nextUrl;
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 /**
  * POST - Criar novo motivo de atraso
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
     const { searchParams } = request.nextUrl;
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     });
 
     return ApiResponse.json(reason, "Motivo de atraso criado com sucesso");
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message.includes("Não é possível criar um motivo")) {
       return ApiResponse.badRequest(error.message);
     }
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
 /**
  * DELETE - Remover motivo
  */
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const { searchParams } = request.nextUrl;

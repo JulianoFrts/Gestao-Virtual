@@ -4,10 +4,19 @@ import { TowerProductionService } from "@/modules/tower/application/tower-produc
 import { requireAuth } from "@/lib/auth/session";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 
+import { z } from "zod";
+
 const repository = new PrismaTowerProductionRepository();
 const service = new TowerProductionService(repository);
 
-export async function GET(req: NextRequest) {
+const importTowersSchema = z.object({
+  projectId: z.string().min(1, "projectId is required"),
+  companyId: z.string().min(1, "companyId is required"),
+  siteId: z.string().optional().nullable(),
+  data: z.array(z.record(z.unknown())).min(1, "data must be a non-empty array"),
+});
+
+export async function GET(req: NextRequest): Promise<Response> {
   try {
     await requireAuth(req);
     const { searchParams } = new URL(req.url);
@@ -19,7 +28,7 @@ export async function GET(req: NextRequest) {
 
     const towers = await service.getTowers(projectId);
     return ApiResponse.json(towers);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(
       error,
       "src/app/api/v1/tower-production/route.ts#GET",
@@ -27,24 +36,26 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const body = await req.json();
-    const { projectId, companyId, siteId, data } = body;
-
-    if (!projectId || !companyId || !Array.isArray(data)) {
-      return ApiResponse.badRequest("Missing required fields");
+    
+    const validation = importTowersSchema.safeParse(body);
+    if (!validation.success) {
+      return ApiResponse.validationError(validation.error.issues.map(i => i.message));
     }
+
+    const { projectId, companyId, siteId, data } = validation.data;
 
     const result = await service.importTowers(
       projectId,
       companyId,
-      siteId,
+      siteId || undefined,
       data,
     );
     return ApiResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(
       error,
       "src/app/api/v1/tower-production/route.ts#POST",
@@ -52,7 +63,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const { searchParams } = new URL(req.url);
@@ -64,7 +75,7 @@ export async function DELETE(req: NextRequest) {
 
     await service.deleteTower(id);
     return ApiResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(
       error,
       "src/app/api/v1/tower-production/route.ts#DELETE",

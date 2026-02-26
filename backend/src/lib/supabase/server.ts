@@ -10,11 +10,11 @@ export const createClient = (cookieStore: ReturnType<typeof cookies>) => {
         supabaseKey!,
         {
             cookies: {
-                async getAll() {
+                async getAll(): Promise<unknown> {
                     const store = await cookieStore;
                     return store.getAll()
                 },
-                async setAll(cookiesToSet) {
+                async setAll(cookiesToSet): Promise<unknown> {
                     try {
                         const store = await cookieStore;
                         cookiesToSet.forEach(({ name, value, options }) => store.set(name, value, options))

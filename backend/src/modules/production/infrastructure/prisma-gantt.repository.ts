@@ -10,7 +10,7 @@ export class PrismaGanttRepository implements GanttRepository {
       include: {
         stageProgress: {
           orderBy: { recordedDate: "desc" },
-          take: 1,
+          take: 1 /* literal */,
         },
         activity: {
           include: {

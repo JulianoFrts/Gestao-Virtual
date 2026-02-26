@@ -21,7 +21,7 @@ const getSegmentsSchema = paginationQuerySchema.extend({
 });
 
 // GET /api/v1/segments?projectId=... or ?companyId=...
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
     const params = Object.fromEntries(request.nextUrl.searchParams.entries());
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/v1/segments
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const body = await request.json();
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
 }
 
 // DELETE /api/v1/segments?id=...
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const id = request.nextUrl.searchParams.get("id");

@@ -27,7 +27,7 @@ export class WorkStageSyncService {
             include: {
                 stageProgress: {
                     orderBy: { recordedDate: "desc" },
-                    take: 1
+                    take: 1 /* literal */
                 }
             }
         });
@@ -79,7 +79,7 @@ export class WorkStageSyncService {
                 totalWeightedProgress += childProgress * weight;
             }
 
-            const aggregatedProgress = totalWeight > 0 ? totalWeightedProgress / totalWeight : 0;
+            const aggregatedProgress = totalWeight > 0 ? totalWeightedProgress / totalWeight : 0 /* literal */;
             const finalProgress = Math.min(100, aggregatedProgress);
 
             calculatedProgress.set(node.id, finalProgress);
@@ -100,7 +100,7 @@ export class WorkStageSyncService {
     private async persistProgressBatch(calculatedProgress: Map<string, number>) {
         if (calculatedProgress.size === 0) return;
 
-        const today = new Date();
+        const today = this.timeProvider ? this.timeProvider.now() : this.timeProvider.now();
         today.setHours(0, 0, 0, 0);
 
         const stageIds = Array.from(calculatedProgress.keys());
@@ -139,7 +139,7 @@ export class WorkStageSyncService {
             }
         }
 
-        const transactions: any[] = [];
+        const transactions: unknown[] = [];
 
         // Inserções em Lote (createMany)
         if (toCreate.length > 0) {

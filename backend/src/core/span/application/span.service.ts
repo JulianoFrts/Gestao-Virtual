@@ -14,25 +14,25 @@ export class SpanService {
     return this.spanRepository.findByCompany(companyId);
   }
 
-  async saveSpans(data: any): Promise<Span[]> {
+  async saveSpans(data: unknown): Promise<Span[]> {
     const items = Array.isArray(data) ? data : [data];
     const spansToSave: Span[] = [];
 
-    for (const item of items) {
-      const span = await this.processAndValidateSpan(item);
+    for (const element of items) {
+      const span = await this.processAndValidateSpan(element);
       spansToSave.push(span);
     }
 
     return this.spanRepository.saveMany(spansToSave);
   }
 
-  private async processAndValidateSpan(item: any): Promise<Span> {
-    const parseResult = spanSchema.safeParse(item);
+  private async processAndValidateSpan(element: unknown): Promise<Span> {
+    const parseResult = spanSchema.safeParse(element);
     if (!parseResult.success) {
       console.error("Erro ao salvar vãos:", parseResult.error);
       throw new Error(
         "Falha na validação dos dados do vão: " +
-          parseResult.error.issues.map((e: any) => e.message).join(", "),
+          parseResult.error.issues.map((e: unknown) => e.message).join(", "),
       );
     }
 
@@ -44,7 +44,7 @@ export class SpanService {
     return entity;
   }
 
-  private async validateTowerSequence(span: Span) {
+  private async validateTowerSequence(span: Span): Promise<void> {
     if (!span.projectId || !span.towerStartId || !span.towerEndId) return;
 
     const towers = await this.fetchValidationTowers(
@@ -60,10 +60,10 @@ export class SpanService {
       return;
     }
 
-    const startTower = towers.find(
-      (t: any) => t.objectId === span.towerStartId,
+    const startTower = (towers as unknown[]).find(
+      (t: unknown) => t.objectId === span.towerStartId,
     );
-    const endTower = towers.find((t: any) => t.objectId === span.towerEndId);
+    const endTower = (towers as unknown[]).find((t: unknown) => t.objectId === span.towerEndId);
 
     if (startTower && endTower) {
       await this.detectSequenceGaps(span, startTower, endTower);
@@ -74,8 +74,8 @@ export class SpanService {
     projectId: string,
     startId: string,
     endId: string,
-  ) {
-    return (prisma as any).towerTechnicalData.findMany({
+  ): Promise<unknown[]> {
+    return (prisma as unknown).towerTechnicalData.findMany({
       where: {
         projectId: projectId,
         objectId: { in: [startId, endId] },
@@ -88,12 +88,12 @@ export class SpanService {
     span: Span,
     startTower: { objectSeq: number },
     endTower: { objectSeq: number },
-  ) {
+  ): Promise<void> {
     const minSeq = Math.min(startTower.objectSeq, endTower.objectSeq);
     const maxSeq = Math.max(startTower.objectSeq, endTower.objectSeq);
 
     if (maxSeq - minSeq > 1) {
-      const intermediates = await (prisma as any).towerTechnicalData.findMany({
+      const intermediates = await (prisma as unknown).towerTechnicalData.findMany({
         where: {
           projectId: span.projectId!,
           objectSeq: { gt: minSeq, lt: maxSeq },
@@ -102,7 +102,7 @@ export class SpanService {
       });
 
       if (intermediates.length > 0) {
-        const skipList = intermediates.map((t: any) => t.objectId).join(", ");
+        const skipList = (intermediates as unknown[]).map((t: unknown) => t.objectId).join(", ");
         logger.warn(
           `[Domain] Detectado salto de torres entre ${span.towerStartId} e ${span.towerEndId}. Intermediárias: ${skipList}`,
           { projectId: span.projectId },

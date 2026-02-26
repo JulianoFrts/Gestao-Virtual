@@ -23,7 +23,7 @@ const createActivitySchema = z.object({
 /**
  * GET - Lista atividades de produção (opcionalmente filtradas por categoria)
  */
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const { searchParams } = request.nextUrl;
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 /**
  * POST - Cria uma nova atividade de produção
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
     const body = await request.json();

@@ -8,7 +8,7 @@ export class WorkStageProgressService {
 
   async upsert(
     data: Partial<WorkStageProgress>,
-    securityContext?: any,
+    securityContext?: unknown,
   ): Promise<WorkStageProgress> {
     // Basic validation
     if (!data.stageId && !data.id) {

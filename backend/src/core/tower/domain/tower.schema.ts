@@ -59,111 +59,11 @@ export const towerSchema = z.object({
 export type TowerDTO = z.infer<typeof towerSchema>;
 
 export function mapDtoToEntity(dto: TowerDTO): any {
-  const data: any = {
-    id: dto.id || undefined,
-    projectId: dto.projectId || dto.project_id || undefined,
-    companyId: dto.companyId || dto.company_id || undefined,
-    objectId: dto.objectId || dto.object_id || undefined,
-    objectSeq:
-      dto.objectSeq !== undefined && dto.objectSeq !== null
-        ? dto.objectSeq
-        : dto.object_seq !== null
-          ? dto.object_seq
-          : undefined,
-    towerType: dto.towerType || dto.tower_type || undefined,
-    objectHeight:
-      dto.objectHeight !== undefined && dto.objectHeight !== null
-        ? dto.objectHeight
-        : dto.object_height !== null
-          ? dto.object_height
-          : undefined,
-    objectElevation:
-      dto.objectElevation !== undefined && dto.objectElevation !== null
-        ? dto.objectElevation
-        : dto.object_elevation !== null
-          ? dto.object_elevation
-          : undefined,
-    xCoordinate:
-      dto.xCoordinate !== undefined && dto.xCoordinate !== null
-        ? dto.xCoordinate
-        : dto.x_coordinate !== undefined && dto.x_coordinate !== null
-          ? dto.x_coordinate
-          : dto.x_cord_object !== null
-            ? dto.x_cord_object
-            : undefined,
-    yCoordinate:
-      dto.yCoordinate !== undefined && dto.yCoordinate !== null
-        ? dto.yCoordinate
-        : dto.y_coordinate !== undefined && dto.y_coordinate !== null
-          ? dto.y_coordinate
-          : dto.y_cord_object !== null
-            ? dto.y_cord_object
-            : undefined,
-    deflection: dto.deflection || undefined,
-    goForward:
-      dto.goForward !== undefined && dto.goForward !== null
-        ? dto.goForward
-        : dto.go_forward !== null
-          ? dto.go_forward
-          : undefined,
-    fusoObject: dto.fusoObject || dto.fuso_object || undefined,
-    fixConductor: String(
-      dto.fixConductor !== undefined && dto.fixConductor !== null
-        ? dto.fixConductor
-        : dto.fix_conductor !== undefined && dto.fix_conductor !== null
-          ? dto.fix_conductor
-          : "",
-    ),
-    trecho: dto.trecho || undefined,
-    totalConcreto:
-      dto.totalConcreto !== undefined && dto.totalConcreto !== null
-        ? dto.totalConcreto
-        : dto.total_concreto !== undefined
-          ? dto.total_concreto
-          : undefined,
-    pesoArmacao:
-      dto.pesoArmacao !== undefined && dto.pesoArmacao !== null
-        ? dto.pesoArmacao
-        : dto.peso_armacao !== undefined
-          ? dto.peso_armacao
-          : undefined,
-    pesoEstrutura:
-      dto.pesoEstrutura !== undefined && dto.pesoEstrutura !== null
-        ? dto.pesoEstrutura
-        : dto.peso_estrutura !== undefined
-          ? dto.peso_estrutura
-          : undefined,
-    tramoLancamento: dto.tramoLancamento || dto.tramo_lancamento || undefined,
-    tipificacaoEstrutura:
-      dto.tipificacaoEstrutura || dto.tipificacao_estrutura || undefined,
-    tipoFundacao: dto.tipoFundacao || dto.tipo_fundacao || undefined,
-    // Map New Fields
-    isHidden:
-      dto.isHidden !== undefined
-        ? dto.isHidden
-        : dto.is_hidden !== undefined
-          ? dto.is_hidden
-          : undefined,
-    distance:
-      dto.distance !== undefined && dto.distance !== null
-        ? dto.distance
-        : undefined,
-    weight:
-      dto.weight !== undefined && dto.weight !== null ? dto.weight : undefined,
-    technicalKm:
-      dto.technicalKm !== undefined
-        ? dto.technicalKm
-        : dto.technical_km !== undefined
-          ? dto.technical_km
-          : undefined,
-    technicalIndex:
-      dto.technicalIndex !== undefined
-        ? dto.technicalIndex
-        : dto.technical_index !== undefined
-          ? dto.technical_index
-          : undefined,
-    circuitId: dto.circuitId || dto.circuit_id || undefined,
-
+  const data: Record<string, unknown> = {
+    ...mapIdentification(dto),
+    ...mapGeospatial(dto),
+    ...mapTechnicalSpecs(dto),
+    ...mapLegacyAndNewFields(dto),
     metadata: dto.metadata || {},
   };
 
@@ -173,4 +73,51 @@ export function mapDtoToEntity(dto: TowerDTO): any {
   );
 
   return data;
+}
+
+function mapIdentification(dto: TowerDTO) {
+  return {
+    id: dto.id || undefined,
+    projectId: dto.projectId || dto.project_id || undefined,
+    companyId: dto.companyId || dto.company_id || undefined,
+    objectId: dto.objectId || dto.object_id || undefined,
+    objectSeq: dto.objectSeq ?? dto.object_seq ?? undefined,
+  };
+}
+
+function mapGeospatial(dto: TowerDTO) {
+  return {
+    xCoordinate: dto.xCoordinate ?? dto.x_coordinate ?? dto.x_cord_object ?? undefined,
+    yCoordinate: dto.yCoordinate ?? dto.y_coordinate ?? dto.y_cord_object ?? undefined,
+    objectElevation: dto.objectElevation ?? dto.object_elevation ?? undefined,
+    fusoObject: dto.fusoObject || dto.fuso_object || undefined,
+  };
+}
+
+function mapTechnicalSpecs(dto: TowerDTO) {
+  return {
+    towerType: dto.towerType || dto.tower_type || undefined,
+    objectHeight: dto.objectHeight ?? dto.object_height ?? undefined,
+    deflection: dto.deflection || undefined,
+    goForward: dto.goForward ?? dto.go_forward ?? undefined,
+    trecho: dto.trecho || undefined,
+    tipoFundacao: dto.tipoFundacao || dto.tipo_fundacao || undefined,
+    tipificacaoEstrutura: dto.tipificacaoEstrutura || dto.tipificacao_estrutura || undefined,
+  };
+}
+
+function mapLegacyAndNewFields(dto: TowerDTO) {
+  return {
+    fixConductor: String(dto.fixConductor ?? dto.fix_conductor ?? ""),
+    totalConcreto: dto.totalConcreto ?? dto.total_concreto ?? undefined,
+    pesoArmacao: dto.pesoArmacao ?? dto.peso_armacao ?? undefined,
+    pesoEstrutura: dto.pesoEstrutura ?? dto.peso_estrutura ?? undefined,
+    tramoLancamento: dto.tramoLancamento || dto.tramo_lancamento || undefined,
+    isHidden: dto.isHidden ?? dto.is_hidden ?? undefined,
+    distance: dto.distance ?? undefined,
+    weight: dto.weight ?? undefined,
+    technicalKm: dto.technicalKm ?? dto.technical_km ?? undefined,
+    technicalIndex: dto.technicalIndex ?? dto.technical_index ?? undefined,
+    circuitId: dto.circuitId || dto.circuit_id || undefined,
+  };
 }

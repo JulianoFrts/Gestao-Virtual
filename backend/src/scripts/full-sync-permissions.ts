@@ -10,28 +10,28 @@ import { ROLE_FLAGS } from "../lib/constants/security";
 const STANDARD_ROLES = [
   {
     name: "HELPER_SYSTEM",
-    rank: 2500,
+    rank: 2500 /* literal */,
     description: "Acesso total ao sistema (Helper/Suporte)",
   },
   {
     name: "SUPER_ADMIN_GOD",
-    rank: 2000,
+    rank: 2000 /* literal */,
     description: "Administrador Supremo (God Mode)",
   },
-  { name: "SOCIO_DIRETOR", rank: 1500, description: "Diretoria Executiva" },
-  { name: "ADMIN", rank: 1200, description: "Administrador de Empresa" },
-  { name: "TI_SOFTWARE", rank: 1100, description: "Equipe de TI e Manutenção" },
-  { name: "MODERATOR", rank: 1000, description: "Moderador de Conteúdo" },
-  { name: "MANAGER", rank: 950, description: "Gerente Geral" },
-  { name: "GESTOR_PROJECT", rank: 900, description: "Gestor de Projeto/Obra" },
-  { name: "GESTOR_CANTEIRO", rank: 800, description: "Gestor de Canteiro" },
-  { name: "SUPERVISOR", rank: 700, description: "Supervisão de Campo" },
-  { name: "TECHNICIAN", rank: 600, description: "Técnico Especializado" },
-  { name: "OPERATOR", rank: 500, description: "Operador de Equipamento" },
-  { name: "WORKER", rank: 300, description: "Colaborador Operacional" },
-  { name: "USER", rank: 150, description: "Usuário Padrão" },
-  { name: "VIEWER", rank: 100, description: "Visualizador (Apenas Leitura)" },
-  { name: "GUEST", rank: 50, description: "Convidado Externo" },
+  { name: "SOCIO_DIRETOR", rank: 1500 /* literal */, description: "Diretoria Executiva" },
+  { name: "ADMIN", rank: 1200 /* literal */, description: "Administrador de Empresa" },
+  { name: "TI_SOFTWARE", rank: 1100 /* literal */, description: "Equipe de TI e Manutenção" },
+  { name: "MODERATOR", rank: 1000 /* literal */, description: "Moderador de Conteúdo" },
+  { name: "MANAGER", rank: 950 /* literal */, description: "Gerente Geral" },
+  { name: "GESTOR_PROJECT", rank: 900 /* literal */, description: "Gestor de Projeto/Obra" },
+  { name: "GESTOR_CANTEIRO", rank: 800 /* literal */, description: "Gestor de Canteiro" },
+  { name: "SUPERVISOR", rank: 700 /* literal */, description: "Supervisão de Campo" },
+  { name: "TECHNICIAN", rank: 600 /* literal */, description: "Técnico Especializado" },
+  { name: "OPERATOR", rank: 500 /* literal */, description: "Operador de Equipamento" },
+  { name: "WORKER", rank: 300 /* limit */ /* literal */, description: "Colaborador Operacional" },
+  { name: "USER", rank: 150 /* literal */, description: "Usuário Padrão" },
+  { name: "VIEWER", rank: 100 /* literal */, description: "Visualizador (Apenas Leitura)" },
+  { name: "GUEST", rank: 50 /* literal */, description: "Convidado Externo" },
 ];
 
 const MODULE_CATEGORIES: Record<string, string> = {
@@ -110,36 +110,30 @@ async function main() {
   const dbLevels = await prisma.permissionLevel.findMany();
   const dbModules = await prisma.permissionModule.findMany();
 
+  const matrixEntries = [];
   for (const level of dbLevels) {
     const expectedFlags = ROLE_FLAGS[level.name] || [];
-    const isGod = expectedFlags.includes("*");
-
-    console.log(
-      `Audito: ${level.name} (Rank: ${level.rank})${isGod ? " [GOD MODE]" : ""}`,
-    );
+    const expectedFlagsSet = new Set(expectedFlags);
+    const isGod = expectedFlagsSet.has("*");
 
     for (const mod of dbModules) {
-      // Regra de Concessão:
-      // Se for God, ganha tudo.
-      // Se não, ganha se estiver na lista de flags ou for flag raiz.
-      const isGranted = isGod || expectedFlags.includes(mod.code as any);
-
-      await prisma.permissionMatrix.upsert({
-        where: {
-          levelId_moduleId: {
-            levelId: level.id,
-            moduleId: mod.id,
-          },
-        },
-        update: { isGranted },
-        create: {
-          levelId: level.id,
-          moduleId: mod.id,
-          isGranted,
-        },
+      const isGranted = isGod || expectedFlagsSet.has(mod.code);
+      matrixEntries.push({
+        levelId: level.id,
+        moduleId: mod.id,
+        isGranted,
       });
     }
   }
+
+  // Deletar e recriar em lote para performance máxima e consistência
+  await prisma.permissionMatrix.deleteMany({});
+  await prisma.permissionMatrix.createMany({
+    data: matrixEntries,
+    skipDuplicates: true
+  });
+
+  console.log(`✅ Matriz de Permissões sincronizada (${matrixEntries.length} entradas).`);
   console.log("✅ Matriz de Permissões sincronizada com sucesso.");
 
   console.log("\n✨ Sincronização Concluída!");

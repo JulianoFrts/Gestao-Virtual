@@ -1,5 +1,5 @@
 import { prisma, ExtendedPrismaClient } from "@/lib/prisma/client";
-import { Prisma } from "@prisma/client";
+// Prisma type is not directly used here, removing to fix lint
 
 export abstract class PrismaBaseRepository<
   TEntity,
@@ -8,7 +8,7 @@ export abstract class PrismaBaseRepository<
   TFiltersDTO,
 > {
   protected prisma: ExtendedPrismaClient;
-  protected abstract model: any;
+  protected abstract model: unknown;
 
   constructor(prismaInstance?: ExtendedPrismaClient) {
     this.prisma = (prismaInstance || prisma) as ExtendedPrismaClient;
@@ -38,46 +38,77 @@ export abstract class PrismaBaseRepository<
 
   async findById(
     id: string,
-    options?: {
-      select?: Record<string, unknown>;
-      include?: Record<string, unknown>;
-    },
+    options?:
+      | {
+          select?: Record<string, unknown>;
+          include?: Record<string, unknown>;
+        }
+      | Record<string, unknown>,
   ): Promise<TEntity | null> {
-    return this.model.findUnique({
-      where: { id },
-      select: options?.select,
-      include: options?.include,
-    }) as Promise<TEntity | null>;
+    const finalOptions: Record<string, unknown> = { where: { id } };
+
+    if (options) {
+      if ("select" in options || "include" in options) {
+        // Standard Options Object
+        if (options.select) finalOptions.select = options.select;
+        if (options.include) finalOptions.include = options.include;
+      } else {
+        // Direct Select Object
+        finalOptions.select = options;
+      }
+    }
+
+    return this.model.findUnique(finalOptions) as Promise<TEntity | null>;
   }
 
   async create(
     data: TCreateDTO,
-    options?: {
-      select?: Record<string, unknown>;
-      include?: Record<string, unknown>;
-    },
+    options?:
+      | {
+          select?: Record<string, unknown>;
+          include?: Record<string, unknown>;
+        }
+      | Record<string, unknown>,
   ): Promise<TEntity> {
-    return this.model.create({
-      data: data as any,
-      select: options?.select,
-      include: options?.include,
-    }) as Promise<TEntity>;
+    const finalOptions: Record<string, unknown> = { data: data as unknown };
+
+    if (options) {
+      if ("select" in options || "include" in options) {
+        if (options.select) finalOptions.select = options.select;
+        if (options.include) finalOptions.include = options.include;
+      } else {
+        finalOptions.select = options;
+      }
+    }
+
+    return this.model.create(finalOptions) as Promise<TEntity>;
   }
 
   async update(
     id: string,
     data: TUpdateDTO,
-    options?: {
-      select?: Record<string, unknown>;
-      include?: Record<string, unknown>;
-    },
+    options?:
+      | {
+          select?: Record<string, unknown>;
+          include?: Record<string, unknown>;
+        }
+      | Record<string, unknown>,
   ): Promise<TEntity> {
-    return this.model.update({
+    const finalOptions: Record<string, unknown> = {
       where: { id },
-      data: data as any,
-      select: options?.select,
-      include: options?.include,
-    }) as Promise<TEntity>;
+      data: data as unknown,
+    };
+
+    if (options) {
+      if ("select" in options || "include" in options) {
+        if (options.select) finalOptions.select = options.select;
+        if (options.include) finalOptions.include = options.include;
+      } else {
+        finalOptions.select = options;
+      }
+    }
+
+    return this.model.update(finalOptions) as Promise<TEntity>;
   }
 
   async delete(id: string): Promise<void> {

@@ -10,16 +10,16 @@ export class PrismaTowerConstructionRepository implements TowerConstructionRepos
     if (id) {
       return (await prisma.towerConstruction.update({
         where: { id },
-        data: rest as any,
-      })) as unknown as TowerConstructionData;
+        data: rest as unknown,
+      })) as TowerConstructionData;
     }
     return (await prisma.towerConstruction.upsert({
       where: {
         projectId_towerId: { projectId: data.projectId, towerId: data.towerId },
       },
-      update: rest as any,
-      create: rest as any,
-    })) as unknown as TowerConstructionData;
+      update: rest as unknown,
+      create: rest as unknown,
+    })) as TowerConstructionData;
   }
 
   async saveMany(
@@ -33,7 +33,7 @@ export class PrismaTowerConstructionRepository implements TowerConstructionRepos
   async findById(id: string): Promise<TowerConstructionData | null> {
     return (await prisma.towerConstruction.findUnique({
       where: { id },
-    })) as unknown as TowerConstructionData | null;
+    })) as TowerConstructionData | null;
   }
 
   async findByTowerId(
@@ -42,14 +42,14 @@ export class PrismaTowerConstructionRepository implements TowerConstructionRepos
   ): Promise<TowerConstructionData | null> {
     return (await prisma.towerConstruction.findUnique({
       where: { projectId_towerId: { projectId, towerId } },
-    })) as unknown as TowerConstructionData | null;
+    })) as TowerConstructionData | null;
   }
 
   async findByProject(projectId: string): Promise<TowerConstructionData[]> {
     return (await prisma.towerConstruction.findMany({
       where: { projectId },
       orderBy: { sequencia: "asc" },
-    })) as unknown as TowerConstructionData[];
+    })) as TowerConstructionData[];
   }
 
   async delete(id: string): Promise<boolean> {

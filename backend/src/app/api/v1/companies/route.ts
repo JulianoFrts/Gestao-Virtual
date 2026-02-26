@@ -50,7 +50,7 @@ const querySchema = paginationQuerySchema.extend({
 // GET - Listar Empresas
 // =============================================
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     await requireAuth();
 
@@ -60,12 +60,12 @@ export async function GET(request: NextRequest) {
     );
     if (!validation.success) return validation.response;
 
-    const {
+    const { 
       page = API.PAGINATION.DEFAULT_PAGE,
       limit = API.PAGINATION.DEFAULT_LIMIT,
       search,
       isActive,
-    } = validation.data as any;
+     } = validation.data;
 
     const result = await companyService.listCompanies({
       page,
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
 // POST - Criar Empresa
 // =============================================
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     await requireAdmin();
 
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
 
     logger.info("Empresa criada", { companyId: company.id });
     return ApiResponse.created(company, "Empresa criada com sucesso");
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error.message === "CNPJ/CPF já cadastrado") {
       return ApiResponse.conflict(error.message);
     }

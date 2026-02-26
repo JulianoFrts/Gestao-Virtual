@@ -18,12 +18,12 @@ export class PrismaProductionCatalogueRepository implements ProductionCatalogueR
       },
     });
 
-    return results.map((cat: any) => ({
+    return results.map((cat: unknown) => ({
       id: cat.id,
       name: cat.name,
       description: cat.description,
       order: cat.order,
-      activities: cat.productionActivities.map((act: any) => ({
+      activities: cat.productionActivities.map((act: unknown) => ({
         id: act.id,
         categoryId: act.categoryId,
         name: act.name,
@@ -38,13 +38,13 @@ export class PrismaProductionCatalogueRepository implements ProductionCatalogueR
     data: Partial<ProductionCategory>,
   ): Promise<ProductionCategory> {
     const result = await prisma.productionCategory.create({
-      data: data as any,
+      data: data as unknown,
     });
-    return result as unknown as ProductionCategory;
+    return result as ProductionCategory;
   }
 
   async listActivities(categoryId?: string): Promise<ProductionActivity[]> {
-    const where: any = {};
+    const where: unknown = {};
     if (categoryId) where.categoryId = categoryId;
     const results = await prisma.productionActivity.findMany({
       where,
@@ -52,7 +52,7 @@ export class PrismaProductionCatalogueRepository implements ProductionCatalogueR
       include: { productionCategory: true },
     });
 
-    return results.map((act: any) => ({
+    return results.map((act: unknown) => ({
       id: act.id,
       categoryId: act.categoryId,
       name: act.name,
@@ -67,7 +67,7 @@ export class PrismaProductionCatalogueRepository implements ProductionCatalogueR
     data: Partial<ProductionActivity>,
   ): Promise<ProductionActivity> {
     const result = await prisma.productionActivity.create({
-      data: data as any,
+      data: data as unknown,
     });
     return {
       ...result,
@@ -80,7 +80,7 @@ export class PrismaProductionCatalogueRepository implements ProductionCatalogueR
       orderBy: { iap: "asc" },
     });
 
-    return results.map((iap: any) => ({
+    return results.map((iap: unknown) => ({
       id: iap.id,
       setor: iap.setor,
       peso: Number(iap.peso),
@@ -96,7 +96,7 @@ export class PrismaProductionCatalogueRepository implements ProductionCatalogueR
       include: { productionActivity: true },
     });
 
-    return results.map((cost: any) => ({
+    return results.map((cost: unknown) => ({
       id: cost.id,
       projectId: cost.projectId,
       activityId: cost.activityId,

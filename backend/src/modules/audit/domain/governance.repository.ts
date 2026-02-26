@@ -42,14 +42,14 @@ export interface GovernanceRepository {
   ): Promise<RouteHealthHistory[]>;
 
   // For Auditor
-  findOpenViolation(file: string, violation: string): Promise<any>;
-  createViolation(data: any): Promise<any>;
-  updateViolation(id: string, data: any): Promise<any>;
-  findOpenViolations(): Promise<any[]>;
+  findOpenViolation(file: string, violation: string): Promise<GovernanceAuditHistory | null>;
+  createViolation(data: Partial<GovernanceAuditHistory>): Promise<GovernanceAuditHistory>;
+  updateViolation(id: string, data: Partial<GovernanceAuditHistory>): Promise<GovernanceAuditHistory>;
+  findOpenViolations(): Promise<GovernanceAuditHistory[]>;
   findViolationsWithFilters(
-    filters: any,
+    filters: Record<string, unknown>,
     take?: number,
     skip?: number,
   ): Promise<GovernanceAuditHistory[]>;
-  countViolations(filters: any): Promise<number>;
+  countViolations(filters: Record<string, unknown>): Promise<number>;
 }

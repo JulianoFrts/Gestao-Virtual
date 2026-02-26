@@ -5,6 +5,7 @@ import { ProductionProgressService } from "./production-progress.service";
 import { UpdateProductionProgressDTO } from "./dtos/production-progress.dto";
 import { logger } from "@/lib/utils/logger";
 import { QueueService } from "@/modules/common/application/queue.service";
+import { TimeProvider, SystemTimeProvider } from "@/lib/utils/time-provider";
 import {
   DailyReportFiltersDTO,
   CreateDailyReportDTO,
@@ -38,6 +39,7 @@ export class DailyReportService {
     private readonly repository: DailyReportRepository,
     private readonly progressService: ProductionProgressService,
     private readonly queueService?: QueueService,
+    private readonly timeProvider: TimeProvider = new SystemTimeProvider(),
   ) {}
 
   async listReports(params: DailyReportFiltersDTO): Promise<{
@@ -126,7 +128,7 @@ export class DailyReportService {
 
       const result = await this.repository.create({
         ...(sanitizedData as CreateDailyReportDTO),
-        reportDate: new Date(data.reportDate || new Date()),
+        reportDate: data.reportDate ? new Date(data.reportDate) : this.timeProvider.now(),
       });
       return result;
     } catch (error: unknown) {
@@ -188,7 +190,7 @@ export class DailyReportService {
       return this.queueService.enqueue("daily_report_bulk_approve", {
         ids,
         userId,
-      }) as unknown as Promise<{
+      }) as Promise<{
         success: boolean;
         queueId?: string;
         items?: unknown[];
@@ -208,7 +210,7 @@ export class DailyReportService {
       return this.queueService.enqueue("daily_report_bulk_reject", {
         ids,
         reason,
-      }) as unknown as Promise<{
+      }) as Promise<{
         success: boolean;
         queueId?: string;
         items?: unknown[];
@@ -253,50 +255,51 @@ export class DailyReportService {
 
     for (const report of pendingReports) {
       try {
-        // Extração robusta do ProjectId
         const metadata = (report.metadata || {}) as ReportMetadata;
         const projectId =
           report.projectId ||
           metadata.projectId ||
-          (report as unknown as Record<string, string>)["project_id"] ||
+          (report as Record<string, string>)["project_id"] ||
           report.team?.site?.projectId;
+        
         const activities = metadata.selectedActivities || [];
 
-        for (const act of activities) {
-          if (!act.details || !Array.isArray(act.details)) continue;
+        // Otimização: Flatten das atividades para evitar aninhamento profundo
+        const reportProgressItems = activities.flatMap(act => 
+          (act.details || [])
+            .filter(detail => detail.status !== PRODUCTION_STATUS.BLOCKED)
+            .map(detail => ({
+              act,
+              detail
+            }))
+        );
 
-          for (const detail of act.details) {
-            if (detail.status === PRODUCTION_STATUS.BLOCKED) continue;
+        for (const { act, detail } of reportProgressItems) {
+          progressDtos.push({
+            elementId: detail.id,
+            activityId: act.stageId,
+            status: detail.status as ActivityStatus,
+            progress: Number(detail.progress),
+            projectId: projectId,
+            userId: approvedById,
+            skipSync: true,
+            metadata: {
+              reportId: report.id,
+              startTime: detail.startTime,
+              endTime: detail.endTime,
+              comment: detail.comment,
+              leadName: report.user?.name,
+              supervisorName:
+                report.team?.supervisor?.name || report.team?.name,
+            },
+            dates: {
+              start: detail.startTime,
+              end: detail.status === PRODUCTION_STATUS.FINISHED ? detail.endTime : null,
+            },
+          });
 
-            progressDtos.push({
-              elementId: detail.id,
-              activityId: act.stageId,
-              status: detail.status as ActivityStatus,
-              progress: Number(detail.progress),
-              projectId: projectId,
-              userId: approvedById,
-              skipSync: true, // Sempre skip aqui, faremos ao final se necessário
-              metadata: {
-                reportId: report.id,
-                startTime: detail.startTime,
-                endTime: detail.endTime,
-                comment: detail.comment,
-                leadName: report.user?.name,
-                supervisorName:
-                  report.team?.supervisor?.name || report.team?.name,
-              },
-              dates: {
-                start: detail.startTime,
-                end:
-                  detail.status === PRODUCTION_STATUS.FINISHED
-                    ? detail.endTime
-                    : null,
-              },
-            });
-
-            if (projectId && act.stageId) {
-              syncTasks.add(`${projectId}:${act.stageId}:${detail.id}`);
-            }
+          if (projectId && act.stageId) {
+            syncTasks.add(`${projectId}:${act.stageId}:${detail.id}`);
           }
         }
         results.push({ id: report.id, success: true });
@@ -376,44 +379,44 @@ export class DailyReportService {
         return;
       }
 
-      for (const act of activities) {
-        if (!act.details || !Array.isArray(act.details)) continue;
+      const flatProgressItems = activities.flatMap(act => 
+        (act.details || [])
+          .filter(detail => detail.status !== PRODUCTION_STATUS.BLOCKED)
+          .map(detail => ({ act, detail }))
+      );
 
-        for (const detail of act.details) {
-          if (detail.status === PRODUCTION_STATUS.BLOCKED) continue; // Não pontua progresso se bloqueado
-
-          await this.progressService.updateProgress({
-            elementId: detail.id,
-            activityId: act.stageId,
-            status: detail.status as ActivityStatus,
-            progress: Number(detail.progress),
-            projectId:
-              projectId ||
-              report.projectId ||
-              metadata.projectId ||
-              (report as unknown as Record<string, string>)["project_id"] ||
-              report.team?.site?.projectId ||
-              "",
-            userId,
-            skipSync, // PERFORMANCE: Suprime o AVG pesado para cada detalhe
-            metadata: {
-              reportId: report.id,
-              startTime: detail.startTime,
-              endTime: detail.endTime,
-              comment: detail.comment,
-              leadName: report.user?.name,
-              supervisorName:
-                report.team?.supervisor?.name || report.team?.name,
-            },
-            dates: {
-              start: detail.startTime,
-              end:
-                detail.status === PRODUCTION_STATUS.FINISHED
-                  ? detail.endTime
-                  : null,
-            },
-          });
-        }
+      for (const { act, detail } of flatProgressItems) {
+        await this.progressService.updateProgress({
+          elementId: detail.id,
+          activityId: act.stageId,
+          status: detail.status as ActivityStatus,
+          progress: Number(detail.progress),
+          projectId:
+            projectId ||
+            report.projectId ||
+            metadata.projectId ||
+            (report as Record<string, string>)["project_id"] ||
+            report.team?.site?.projectId ||
+            "",
+          userId,
+          skipSync,
+          metadata: {
+            reportId: report.id,
+            startTime: detail.startTime,
+            endTime: detail.endTime,
+            comment: detail.comment,
+            leadName: report.user?.name,
+            supervisorName:
+              report.team?.supervisor?.name || report.team?.name,
+          },
+          dates: {
+            start: detail.startTime,
+            end:
+              detail.status === PRODUCTION_STATUS.FINISHED
+                ? detail.endTime
+                : null,
+          },
+        });
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);

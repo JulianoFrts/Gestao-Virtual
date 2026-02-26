@@ -41,7 +41,7 @@ export class SecurityInsightService {
   async generateInsights(companyId?: string): Promise<SecurityInsight> {
     const where: any = {};
     if (companyId) {
-      where.user = { companyId };
+      where.user = { affiliation: { companyId } };
     }
 
     // Buscar últimos 500 logs para análise
@@ -56,7 +56,7 @@ export class SecurityInsightService {
     const unknownDevices: SecurityInsight["unknownDevices"] = [];
 
     for (const log of logs) {
-      const meta = log.metadata as any;
+      const meta = log.metadata as unknown;
       if (!meta) continue;
 
       // HWID Analysis
@@ -69,7 +69,7 @@ export class SecurityInsightService {
       // IP Analysis
       const ip = log.ipAddress || meta.ip;
       if (ip && ip !== "CAPTURING_BY_BACKEND") {
-        const existing = ipMap.get(ip) || { count: 0, lastSeen: "" };
+        const existing = ipMap.get(ip) || { count: 0 /* literal */, lastSeen: "" };
         existing.count++;
         existing.lastSeen = log.createdAt?.toISOString() || existing.lastSeen;
         ipMap.set(ip, existing);
@@ -111,7 +111,7 @@ export class SecurityInsightService {
       .slice(0, 10);
 
     // Access Timeline
-    const accessTimeline = Array.from({ length: 24 }, (_, i) => ({
+    const accessTimeline = Array.from({ length: 24 /* literal */ }, (_, i) => ({
       hour: i,
       count: hourMap.get(i) || 0,
     }));

@@ -4,11 +4,19 @@ import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { PrismaWorkStageRepository } from "@/modules/work-stages/infrastructure/prisma-work-stage.repository";
 import { WorkStageService } from "@/modules/work-stages/application/work-stage.service";
 
+import { z } from "zod";
+
 const repository = new PrismaWorkStageRepository();
 const service = new WorkStageService(repository);
 
+const createBulkSchema = z.object({
+  projectId: z.string().min(1, "ID do Projeto (projectId) é obrigatório"),
+  siteId: z.string().optional().nullable(),
+  data: z.array(z.record(z.unknown())).min(1, "Os dados de criação (data) devem ser um array não vazio"),
+});
+
 // DELETE: Delete all stages for a site
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
     const { searchParams } = new URL(req.url);
@@ -21,17 +29,18 @@ export async function DELETE(req: NextRequest) {
     await service.deleteBySite(siteId, {
       role: user.role,
       companyId: user.companyId,
-      hierarchyLevel: (user as any).hierarchyLevel,
-      permissions: (user as any).permissions,
+      hierarchyLevel: user.hierarchyLevel,
+      permissions: (user.permissions as Record<string, boolean>),
     });
 
     return ApiResponse.json(
       { success: true },
       "Todas as etapas do canteiro foram removidas",
     );
-  } catch (error: any) {
-    if (error.message.includes("Forbidden")) {
-      return ApiResponse.forbidden(error.message);
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message && err.message.includes("Forbidden")) {
+      return ApiResponse.forbidden(err.message);
     }
     return handleApiError(
       error,
@@ -41,33 +50,30 @@ export async function DELETE(req: NextRequest) {
 }
 
 // POST: Create multiple stages recursively
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<Response> {
   try {
     const user = await requireAuth();
     const body = await req.json();
-    const { projectId, siteId, data } = body;
-
-    if (!projectId) {
-      return ApiResponse.badRequest("ID do Projeto (projectId) é obrigatório");
+    
+    const validation = createBulkSchema.safeParse(body);
+    if (!validation.success) {
+      return ApiResponse.validationError(validation.error.issues.map(i => i.message));
     }
 
-    if (!data || !Array.isArray(data)) {
-      return ApiResponse.badRequest(
-        "Os dados de criação (data) devem ser um array",
-      );
-    }
+    const { projectId, siteId, data } = validation.data;
 
-    const result = await service.createBulk(projectId, siteId, data, {
+    const result = await service.createBulk(projectId, siteId || undefined, data as unknown, {
       role: user.role,
       companyId: user.companyId,
-      hierarchyLevel: (user as any).hierarchyLevel,
-      permissions: (user as any).permissions,
+      hierarchyLevel: user.hierarchyLevel,
+      permissions: (user.permissions as Record<string, boolean>),
     });
 
     return ApiResponse.json(result, "Etapas criadas com sucesso");
-  } catch (error: any) {
-    if (error.message.includes("Forbidden")) {
-      return ApiResponse.forbidden(error.message);
+  } catch (error: unknown) {
+    const err = error as Error;
+    if (err.message && err.message.includes("Forbidden")) {
+      return ApiResponse.forbidden(err.message);
     }
     return handleApiError(
       error,

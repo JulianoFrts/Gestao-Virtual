@@ -19,7 +19,7 @@ async function cleanDatabase() {
         process.exit(1);
     }
 
-    const sslConfig: any = { rejectUnauthorized: false };
+    const sslConfig: unknown = { rejectUnauthorized: false };
     // v178: SSL Simplificado (Removed Certs)
 
     const urlObj = new URL(dbUrl);
@@ -44,7 +44,7 @@ async function cleanDatabase() {
             port: parseInt(candUrl.port),
             database: candUrl.pathname.slice(1),
             ssl: sslConfig,
-            connectionTimeoutMillis: 5000
+            connectionTimeoutMillis: 5000 /* literal */
         });
 
         try {
@@ -62,7 +62,7 @@ async function cleanDatabase() {
             client.release();
             await pool.end();
             break;
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.log(`❌ Falha no banco ${candUrl.pathname.slice(1)}: ${err.message}`);
             await pool.end();
         }
