@@ -69,7 +69,7 @@ export function TowerTypeConfigModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl overflow-hidden rounded-[2rem] border-white/10 bg-neutral-950 p-0">
+      <DialogContent className="max-w-3xl overflow-hidden rounded-4xl border-white/10 bg-neutral-950 p-0">
         <DialogHeader className="p-8 pb-4">
           <DialogTitle className="flex items-center gap-3 text-2xl font-black tracking-tighter text-white uppercase italic">
             <Settings2 className="h-6 w-6 text-emerald-500" />

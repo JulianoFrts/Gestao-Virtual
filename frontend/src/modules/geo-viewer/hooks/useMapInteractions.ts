@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { MapRef } from 'react-map-gl/mapbox'
 import { Tower } from '../types/geo-viewer'
 import { useToast } from '@/hooks/use-toast'
@@ -33,8 +33,13 @@ export function useMapInteractions({
   const [selectedStartTower, setSelectedStartTower] = useState<number | null>(
     null
   )
+  const [isSwapMode, setIsSwapMode] = useState(false)
+  const [selectedSwapTower, setSelectedSwapTower] = useState<number | null>(
+    null
+  )
   const [isDebugMode] = useState(false)
   const [debugPoints, setDebugPoints] = useState<any[]>([])
+  const [isAutoConnecting, setIsAutoConnecting] = useState(false)
 
   const lastSnapTime = useRef<number>(0)
 
@@ -179,6 +184,51 @@ export function useMapInteractions({
         return
       }
 
+      if (isSwapMode) {
+        if (selectedSwapTower === null) {
+          setSelectedSwapTower(index)
+          showToast({
+            title: 'Torre 1 Selecionada 📍',
+            description: `Selecione a próxima torre para trocar a posição com ${towers[index].name}.`,
+          })
+        } else {
+          if (selectedSwapTower === index) {
+            setSelectedSwapTower(null)
+            return
+          }
+
+          const newTowers = [...towers]
+          const tower1 = { ...newTowers[selectedSwapTower] }
+          const tower2 = { ...newTowers[index] }
+
+          // Trocar coordenadas (Lat/Lng) e altitude original
+          const tempCoords = { ...tower1.coordinates }
+          tower1.coordinates = { ...tower2.coordinates }
+          tower2.coordinates = tempCoords
+
+          // E também trocar as elevações individuais no terreno
+          const newAlts = { ...individualAltitudes }
+          const alt1 = newAlts[tower1.name]
+          const alt2 = newAlts[tower2.name]
+          if (alt1 !== undefined && alt2 !== undefined) {
+            newAlts[tower1.name] = alt2
+            newAlts[tower2.name] = alt1
+            setIndividualAltitudes(newAlts)
+          }
+
+          newTowers[selectedSwapTower] = tower1
+          newTowers[index] = tower2
+
+          setTowers(newTowers)
+          showToast({
+            title: 'Posições Trocadas! 🔄',
+            description: `${tower1.name} e ${tower2.name} trocaram de lugar.`,
+          })
+          setSelectedSwapTower(null)
+        }
+        return
+      }
+
       if (!isConnectMode) {
         // Selection mode logic (usually handled by showing a modal)
         return
@@ -209,14 +259,40 @@ export function useMapInteractions({
     },
     [
       isDebugMode,
+      isSwapMode,
+      selectedSwapTower,
       isConnectMode,
       selectedStartTower,
       towers,
+      setTowers,
       setConnections,
       connections,
       showToast,
+      individualAltitudes,
+      setIndividualAltitudes,
     ]
   )
+
+  // Sequential Auto-Connect Logic
+  useEffect(() => {
+    if (isAutoConnecting && towers.length >= 2) {
+      const newConnections = []
+      for (let i = 0; i < towers.length - 1; i++) {
+        newConnections.push({
+          from: towers[i].name,
+          to: towers[i + 1].name,
+        })
+      }
+
+      // Only update if connections changed to avoid infinite loop
+      const currentConnStr = JSON.stringify(connections)
+      const newConnStr = JSON.stringify(newConnections)
+
+      if (currentConnStr !== newConnStr) {
+        setConnections(newConnections)
+      }
+    }
+  }, [isAutoConnecting, towers, connections, setConnections])
 
   return {
     isConnectMode,
@@ -228,5 +304,11 @@ export function useMapInteractions({
     handleSnapToTerrain,
     handleAutoRotateTowers,
     handleTowerClick,
+    isAutoConnecting,
+    setIsAutoConnecting,
+    isSwapMode,
+    setIsSwapMode,
+    selectedSwapTower,
+    setSelectedSwapTower,
   }
 }

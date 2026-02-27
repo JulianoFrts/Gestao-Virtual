@@ -51,6 +51,7 @@ import {
   List,
   Zap,
   Settings2,
+  ArrowLeftRight,
 } from 'lucide-react'
 import {
   Select,
@@ -97,7 +98,7 @@ export default function GeoViewerPage() {
   const mapRef = useRef<MapRef | null>(null)
 
   const [viewState, setViewState] = useState(INITIAL_VIEW_STATE)
-  const [isFullScreen, setIsFullScreen] = useState(false)
+  const [isFullScreen, setIsFullScreen] = useState(true)
   const [showTowerMenu, setShowTowerMenu] = useState(false)
   const [showCableMenu, setShowCableMenu] = useState(false)
   const [towerSearch, setTowerSearch] = useState('')
@@ -114,8 +115,8 @@ export default function GeoViewerPage() {
   const [isExecutionHistoryModalOpen, setIsExecutionHistoryModalOpen] =
     useState(false)
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false)
-  const [isExecutivePanelOpen, setIsExecutivePanelOpen] = useState(false)
-  const [isTowerTypeModalOpen, setIsTowerTypeModalOpen] = useState(false)
+  const [isExecutivePanelOpen, setIsExecutivePanelOpen] = useState(true)
+  const [isTowerTypeModalOpen, setIsTowerTypeModalOpen] = useState(true)
   const [hiddenTowers] = useState<Set<number>>(new Set())
 
   const {
@@ -157,6 +158,11 @@ export default function GeoViewerPage() {
     handleSnapToTerrain,
     handleAutoRotateTowers,
     handleTowerClick,
+    isAutoConnecting,
+    setIsAutoConnecting,
+    isSwapMode,
+    setIsSwapMode,
+    selectedSwapTower,
   } = useMapInteractions({
     towers,
     setTowers,
@@ -186,6 +192,7 @@ export default function GeoViewerPage() {
     setContextMenu,
     debugPoints,
     towerTypeConfigs,
+    selectedSwapTower,
   })
 
   // KM-LT Calculation
@@ -351,7 +358,32 @@ export default function GeoViewerPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => canEdit && setIsConnectMode(!isConnectMode)}
+              onClick={() => {
+                if (canEdit) {
+                  setIsSwapMode(!isSwapMode)
+                  if (!isSwapMode) {
+                    setIsConnectMode(false)
+                    setIsAutoConnecting(false)
+                  }
+                }
+              }}
+              className={cn(
+                'h-11 gap-2.5 rounded-2xl text-[10px] font-black text-purple-400 uppercase',
+                isSwapMode && 'bg-white/10'
+              )}
+            >
+              <ArrowLeftRight className="h-4 w-4" />
+              <span>Swap</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (canEdit) {
+                  setIsConnectMode(!isConnectMode)
+                  if (!isConnectMode) setIsSwapMode(false)
+                }
+              }}
               className={cn(
                 'h-11 gap-2.5 rounded-2xl text-[10px] font-black text-orange-500 uppercase',
                 isConnectMode && 'bg-white/10'
@@ -359,6 +391,26 @@ export default function GeoViewerPage() {
             >
               <Link2 className="h-4 w-4" />
               <span>Connect</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                if (canEdit) {
+                  setIsAutoConnecting(!isAutoConnecting)
+                  if (!isAutoConnecting) setIsSwapMode(false)
+                }
+              }}
+              className={cn(
+                'h-11 gap-2.5 rounded-2xl text-[10px] font-black text-rose-500 uppercase',
+                isAutoConnecting &&
+                  'bg-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
+              )}
+            >
+              <Zap
+                className={cn('h-4 w-4', isAutoConnecting && 'animate-pulse')}
+              />
+              <span>Auto-Conn</span>
             </Button>
           </div>
         </div>

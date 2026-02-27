@@ -15,6 +15,7 @@ interface UseMapLayersProps {
   hiddenTowers: Set<number>
   hiddenTowerIds: Set<string>
   selectedStartTower: number | null
+  selectedSwapTower?: number | null
   viewState: { zoom: number }
   TOWER_MODEL_URL: string
   handleTowerClick: (info: any, index: number) => void
@@ -33,6 +34,7 @@ export function useMapLayers({
   hiddenTowers,
   hiddenTowerIds,
   selectedStartTower,
+  selectedSwapTower,
   viewState,
   TOWER_MODEL_URL,
   handleTowerClick,
@@ -338,9 +340,16 @@ export function useMapLayers({
                 getColor: (d: Tower) => {
                   if (
                     selectedStartTower !== null &&
-                    towers[selectedStartTower].name === d.name
+                    towers[selectedStartTower]?.name === d.name
                   ) {
-                    return [0, 255, 255, 255]
+                    return [0, 255, 255, 255] // Cyan for connect mode
+                  }
+                  if (
+                    selectedSwapTower !== null &&
+                    selectedSwapTower !== undefined &&
+                    towers[selectedSwapTower]?.name === d.name
+                  ) {
+                    return [168, 85, 247, 255] // Purple for swap mode
                   }
                   return [255, 255, 255]
                 },
@@ -409,6 +418,7 @@ export function useMapLayers({
     setContextMenu,
     TOWER_MODEL_URL,
     towerTypeConfigs,
+    selectedSwapTower,
   ])
 
   return { layers }
