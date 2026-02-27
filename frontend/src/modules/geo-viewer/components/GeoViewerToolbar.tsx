@@ -20,7 +20,6 @@ interface GeoViewerToolbarProps {
   canSeeExecutivePanel: boolean;
   selectedProjectId: string | null;
   handleSelectTowerFromModal: (id: string) => void;
-  setIsExecutivePanelOpen: (open: boolean) => void;
   hiddenTowerIds: Set<string>;
   setHiddenTowerIds: (ids: Set<string>) => void;
   handleSnapToTerrain: (a: boolean, b: boolean) => void;
@@ -43,7 +42,6 @@ export const GeoViewerToolbar: React.FC<GeoViewerToolbarProps> = ({
   canSeeExecutivePanel,
   selectedProjectId,
   handleSelectTowerFromModal,
-  setIsExecutivePanelOpen,
   hiddenTowerIds,
   setHiddenTowerIds,
   handleSnapToTerrain,
@@ -91,16 +89,6 @@ export const GeoViewerToolbar: React.FC<GeoViewerToolbarProps> = ({
           </Button>
 
           <div className="w-px h-8 bg-white/10 mx-1" />
-
-          {canSeeExecutivePanel && (
-            <CompletedWorkModal
-              projectId={selectedProjectId || undefined}
-              onSelectTower={handleSelectTowerFromModal}
-              onOpenChange={setIsExecutivePanelOpen}
-              hiddenTowerIds={hiddenTowerIds}
-              onHiddenTowerIdsChange={setHiddenTowerIds}
-            />
-          )}
         </div>
 
         <div className="w-px h-8 bg-white/10 mx-1" />

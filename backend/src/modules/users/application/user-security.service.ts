@@ -71,6 +71,17 @@ export class UserSecurityService {
   ): Promise<void> {
     if (performerId === targetId) return;
 
+    // 1. Validar Imunidade Mestre (System Admin é intocável)
+    const target = await this.repository.findById(targetId, {
+      authCredential: { select: { isSystemAdmin: true, role: true } },
+    });
+
+    if (target?.authCredential?.isSystemAdmin) {
+      throw new Error(
+        "ACESSO MESTRE: Este usuário possui privilégios de Administrador do Sistema e não pode ser modificado por outros usuários.",
+      );
+    }
+
     const performer = await this.repository.findById(performerId, {
       affiliation: { select: { hierarchyLevel: true } },
       authCredential: { select: { role: true } },

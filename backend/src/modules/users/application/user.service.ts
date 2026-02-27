@@ -192,10 +192,27 @@ export class UserService {
       );
     }
 
-    // 4. Persistência Granular
+    // 4. Persistência de Segurança e Administração (Campos Críticos)
+    const securityFields: (keyof UpdateUserDTO)[] = ["email", "password", "role", "status", "isSystemAdmin", "permissions"];
+    const securityUpdate: UpdateUserDTO = {};
+    let hasSecurityUpdate = false;
+
+    for (const key of securityFields) {
+      if (updateData[key] !== undefined) {
+        (securityUpdate as any)[key] = updateData[key];
+        hasSecurityUpdate = true;
+        delete updateData[key]; // Remover para não processar no granular
+      }
+    }
+
+    if (hasSecurityUpdate) {
+      await this.repository.update(id, securityUpdate);
+    }
+
+    // 5. Persistência Granular (Demais campos: endereço, afiliação, etc)
     const report = await this.addressService.processGranularUpdates(id, existing, updateData);
 
-    // 5. AuditLog e Retorno
+    // 6. AuditLog e Retorno
     const finalUser = await this.repository.findById(id, select);
     await this.logAudit({
       action: "UPDATE",
@@ -246,9 +263,15 @@ export class UserService {
     const existing = await this.getUserById(id, {
       id: true,
       name: true,
-      hierarchyLevel: true,
-      authCredential: { select: { role: true, email: true } },
+      authCredential: { select: { role: true, email: true, isSystemAdmin: true } },
+      affiliation: { select: { hierarchyLevel: true } },
     });
+
+    if (existing.authCredential?.isSystemAdmin && performerId !== id) {
+      throw new Error(
+        "ACESSO MESTRE: Não é possível excluir um Administrador do Sistema.",
+      );
+    }
 
     const existingRole = existing.authCredential?.role || "WORKER";
     const existingEmail = existing.authCredential?.email || "";

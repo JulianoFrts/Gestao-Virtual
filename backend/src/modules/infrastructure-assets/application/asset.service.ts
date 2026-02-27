@@ -1,9 +1,9 @@
 import { PrismaAssetRepository } from "../infrastructure/prisma-asset.repository";
-import { 
-  AssetEntity, 
-  CreateAssetDTO, 
-  UpdateAssetDTO, 
-  AssetFiltersDTO 
+import {
+  AssetEntity,
+  CreateAssetDTO,
+  UpdateAssetDTO,
+  AssetFiltersDTO,
 } from "./dtos/asset.dtos";
 import { logger } from "@/lib/utils/logger";
 
@@ -18,14 +18,20 @@ export class AssetService {
     return this.repository.findById(id);
   }
 
-  async syncAssetsFromImport(companyId: string, projectId: string, assets: CreateAssetDTO[]): Promise<number> {
-    logger.info(`[AssetService] Sincronizando ${assets.length} ativos para projeto ${projectId}`);
-    
+  async syncAssetsFromImport(
+    companyId: string,
+    projectId: string,
+    assets: CreateAssetDTO[],
+  ): Promise<number> {
+    logger.info(
+      `[AssetService] Sincronizando ${assets.length} ativos para projeto ${projectId}`,
+    );
+
     // Adiciona IDs contextuais se faltarem
-    const preparedAssets = assets.map(a => ({
+    const preparedAssets = assets.map((a) => ({
       ...a,
       companyId,
-      projectId
+      projectId,
     }));
 
     return this.repository.bulkUpsert(preparedAssets);
@@ -43,7 +49,31 @@ export class AssetService {
     return this.repository.getConstructionData(projectId);
   }
 
-  async provisionConstruction(projectId: string, companyId: string, towerIds: string[]) {
-    return this.repository.provisionConstruction(projectId, companyId, towerIds);
+  async provisionConstruction(
+    projectId: string,
+    companyId: string,
+    towerIds: string[],
+  ) {
+    return this.repository.provisionConstruction(
+      projectId,
+      companyId,
+      towerIds,
+    );
+  }
+
+  async provisionConstructionWithData(
+    projectId: string,
+    companyId: string,
+    items: Array<{
+      towerId: string;
+      sequencia: number;
+      metadata: Record<string, unknown>;
+    }>,
+  ) {
+    return this.repository.provisionConstructionWithData(
+      projectId,
+      companyId,
+      items,
+    );
   }
 }

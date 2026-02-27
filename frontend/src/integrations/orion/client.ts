@@ -30,6 +30,7 @@ interface QueryBuilder<T = any> {
   in: (column: string, values: any[]) => QueryBuilder<T>;
   order: (column: string, options?: { ascending?: boolean }) => QueryBuilder<T>;
   limit: (count: number) => QueryBuilder<T>;
+  range: (from: number, to: number) => QueryBuilder<T>;
   single: () => Promise<ApiResponse<T>>;
   maybeSingle: () => Promise<ApiResponse<T | null>>;
   or: (query: string) => QueryBuilder<T>;
@@ -337,6 +338,7 @@ export class OrionApiClient {
     let selectedColumns = "*";
     let orderBy: { column: string; ascending: boolean } | null = null;
     let limitCount: number | null = null;
+    let offsetCount: number | null = null;
 
     const getIdFromFilters = () => {
       const idFilter = filters.find((f) => f.column === "id" && f.op === "eq");
@@ -353,6 +355,11 @@ export class OrionApiClient {
         }
       });
       if (limitCount) p["limit"] = String(limitCount);
+      if (offsetCount !== null) {
+          // Converter offset para página: page = (offset / limit) + 1
+          const page = Math.floor(offsetCount / (limitCount || 50)) + 1;
+          p["page"] = String(page);
+      }
       return p;
     };
 
@@ -417,6 +424,11 @@ export class OrionApiClient {
       or: (query: string) => { filters.push({ column: 'or', op: 'or', value: query }); return builder; },
       order: (column, options = { ascending: true }) => { orderBy = { column, ascending: options.ascending ?? true }; return builder; },
       limit: (count) => { limitCount = count; return builder; },
+      range: (from, to) => {
+        offsetCount = from;
+        limitCount = to - from + 1;
+        return builder;
+      },
       single: async () => {
         const result = await execute();
         if (result.error) return result;

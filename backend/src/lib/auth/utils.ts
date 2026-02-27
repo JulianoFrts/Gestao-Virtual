@@ -1,8 +1,4 @@
-import {
-  isGodRole,
-  isSystemOwner,
-  SECURITY_RANKS,
-} from "@/lib/constants/security";
+import { isSystemOwner, SECURITY_RANKS } from "@/lib/constants/security";
 
 /**
  * Verifica se o usuário é administrador com base no cargo ou nível de hierarquia
@@ -32,8 +28,8 @@ export function isGlobalAdmin(
   if (hierarchyLevel !== undefined && hierarchyLevel >= SECURITY_RANKS.GLOBAL)
     return true;
 
-  if (permissions?.["*"]) return true;
+  if (permissions?.["*"] || permissions?.["system.full_access"]) return true;
 
-  // SYSTEM_OWNERS (HELPER_SYSTEM, SUPER_ADMIN_GOD, etc)
-  return isGodRole(role || "");
+  // SYSTEM_OWNERS (HELPER_SYSTEM, ADMIN, TI_SOFTWARE, etc)
+  return isSystemOwner(role || "");
 }

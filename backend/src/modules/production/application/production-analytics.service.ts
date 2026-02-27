@@ -63,7 +63,7 @@ export class ProductionAnalyticsService {
 
     if (towers.length === 0) return [];
 
-    const relevantActivities = this.extractRelevantActivities(towers, activityId);
+    const relevantActivities = this.extractRelevantActivities(towers as any[], activityId);
     if (relevantActivities.length === 0) return [];
 
     const allDates = this.collectAllDates(relevantActivities);
@@ -84,9 +84,9 @@ export class ProductionAnalyticsService {
         acc + (i.plannedEnd && isBefore(i.plannedEnd, periodEnd) ? 1 : 0), 0);
 
       const actualSum = relevantActivities.reduce((acc, i) => {
-        const historyBefore = i.history.filter((h) => isBefore(h.date, periodEnd));
+        const historyBefore = i.history.filter((h: any) => isBefore(h.date, periodEnd));
         if (historyBefore.length === 0) return acc;
-        const maxProgress = Math.max(...historyBefore.map((h) => h.percent));
+        const maxProgress = Math.max(...historyBefore.map((h: any) => h.percent));
         return acc + maxProgress / 100;
       }, 0);
 
@@ -102,54 +102,46 @@ export class ProductionAnalyticsService {
     });
   }
 
-  private extractRelevantActivities(towers: unknown[], activityId?: string) {
-    const activities: unknown[] = [];
-    
-    for (const tower of towers) {
-      const filteredSchedules = this.filterSchedules(tower.activitySchedules, activityId);
-      const filteredProgress = this.filterProgress(tower.mapElementProductionProgress, activityId);
+  private extractRelevantActivities(towers: any[], activityId?: string) {
+    const activities: any[] = [];
+    towers.forEach((t) => {
+      const schedules = activityId && activityId !== "all"
+        ? t.activitySchedules.filter((s: any) => s.activityId === activityId)
+        : t.activitySchedules;
 
-      for (const schedule of filteredSchedules) {
-        const progress = filteredProgress.find((p: unknown) => p.activityId === schedule.activityId);
+      const progresses = activityId && activityId !== "all"
+        ? t.mapElementProductionProgress.filter((p: any) => p.activityId === activityId)
+        : t.mapElementProductionProgress;
+
+      schedules.forEach((sched: any) => {
+        const status = progresses.find((p: any) => p.activityId === sched.activityId);
+        const history: any[] = [];
+
+        if (status?.history && Array.isArray(status.history)) {
+          status.history.forEach((h: any) => {
+            const date = h.changedAt || h.timestamp;
+            if (date) history.push({ date: new Date(date), percent: Number(h.progressPercent || h.progress || 0) });
+          });
+        } else if (status?.currentStatus === "FINISHED" && status.endDate) {
+          history.push({ date: new Date(status.endDate), percent: 100 });
+        }
+
         activities.push({
-          plannedEnd: schedule.plannedEnd ? new Date(schedule.plannedEnd) : undefined,
-          history: this.mapProgressHistory(progress),
+          plannedEnd: sched.plannedEnd ? new Date(sched.plannedEnd) : undefined,
+          history,
         });
-      }
-    }
+      });
+    });
     return activities;
   }
 
-  private filterSchedules(schedules: unknown[], activityId?: string) {
-    if (!activityId || activityId === "all") return schedules;
-    return schedules.filter((s: unknown) => s.activityId === activityId);
-  }
-
-  private filterProgress(progresses: unknown[], activityId?: string) {
-    if (!activityId || activityId === "all") return progresses;
-    return progresses.filter((p: unknown) => p.activityId === activityId);
-  }
-
-  private mapProgressHistory(status: unknown) {
-    const history: unknown[] = [];
-    if (!status) return history;
-
-    if (status.history && Array.isArray(status.history)) {
-      status.history.forEach((h: unknown) => {
-        const date = h.changedAt || h.timestamp;
-        if (date) history.push({ date: new Date(date), percent: Number(h.progressPercent || h.progress || 0) });
-      });
-    } else if (status.currentStatus === "FINISHED" && status.endDate) {
-      history.push({ date: new Date(status.endDate), percent: 100 });
-    }
-    return history;
-  }
-
-  private collectAllDates(activities: unknown[]): Date[] {
-    return [
-      ...activities.map((i) => i.plannedEnd),
-      ...activities.flatMap((i) => i.history.map((h: unknown) => h.date)),
-    ].filter((d): d is Date => d !== undefined);
+  private collectAllDates(activities: any[]): Date[] {
+    const dates: Date[] = [];
+    activities.forEach(i => {
+        if (i.plannedEnd) dates.push(i.plannedEnd);
+        i.history.forEach((h: any) => dates.push(h.date));
+    });
+    return dates;
   }
 
   private generateTimeline(start: Date, end: Date, granularity: string): Date[] {
@@ -187,7 +179,7 @@ export class ProductionAnalyticsService {
     ]);
 
     const costMap = new Map(unitCosts.map(uc => [uc.activityId, Number(uc.unitPrice || 0)]));
-    const items = this.extractFinancialItems(towers, categories, costMap);
+    const items = this.extractFinancialItems(towers as any[], categories as any[], costMap);
 
     if (items.length === 0) {
       return { curve: [], stats: { budget: 0, earned: 0 }, pareto: [] };
@@ -211,43 +203,33 @@ export class ProductionAnalyticsService {
     return { curve, stats: stats.totals, pareto: stats.pareto };
   }
 
-  private extractFinancialItems(towers: unknown[], categories: unknown[], costMap: Map<string, number>) {
-    const items: unknown[] = [];
-    this.processSubList(tower, categories, (category) => {
-        items.push(...this.processCategoryActivities(tower, category, costMap));
-      }
-    }
+  private extractFinancialItems(towers: any[], categories: any[], costMap: Map<string, number>) {
+    const items: any[] = [];
+    towers.forEach(t => {
+      categories.forEach(cat => {
+        cat.productionActivities.forEach((act: any) => {
+          const price = costMap.get(act.id) || 0;
+          if (price <= 0) return;
+
+          const schedule = t.activitySchedules?.find((s: any) => s.activityId === act.id);
+          const status = t.mapElementProductionProgress?.find((s: any) => s.activityId === act.id);
+
+          if (schedule?.plannedEnd) {
+            items.push({
+              name: act.name,
+              plannedEnd: startOfDay(new Date(schedule.plannedEnd)),
+              actualEnd: status?.endDate ? startOfDay(new Date(status.endDate)) : undefined,
+              cost: Number(schedule.plannedQuantity || 1) * price,
+              isFinished: status?.currentStatus === "FINISHED",
+            });
+          }
+        });
+      });
+    });
     return items;
   }
 
-  private processCategoryActivities(tower: unknown, category: unknown, costMap: Map<string, number>) {
-    const items: unknown[] = [];
-    for (const activity of category.productionActivities) {
-      const price = costMap.get(activity.id);
-      if (!price || price <= 0) continue;
-
-      const financialItem = this.buildFinancialItem(tower, activity, price);
-      if (financialItem) items.push(financialItem);
-    }
-    return items;
-  }
-
-  private buildFinancialItem(tower: unknown, activity: unknown, price: number) {
-    const schedule = tower.activitySchedules?.find((s: unknown) => s.activityId === activity.id);
-    if (!schedule?.plannedEnd) return null;
-
-    const status = tower.mapElementProductionProgress?.find((s: unknown) => s.activityId === activity.id);
-
-    return {
-      name: activity.name,
-      plannedEnd: startOfDay(new Date(schedule.plannedEnd)),
-      actualEnd: status?.endDate ? startOfDay(new Date(status.endDate)) : undefined,
-      cost: Number(schedule.plannedQuantity || 1) * price,
-      isFinished: status?.currentStatus === "FINISHED",
-    };
-  }
-
-  private calculateFinancialStats(items: unknown[], start: Date, end: Date) {
+  private calculateFinancialStats(items: any[], start: Date, end: Date) {
     let budget = 0;
     let earned = 0;
     const activityCosts: Record<string, number> = {};
@@ -318,7 +300,7 @@ export class ProductionAnalyticsService {
     let totalPV = 0;
     let totalPlannedHH = 0;
 
-    schedules.forEach((sched: unknown) => {
+    schedules.forEach((sched: any) => {
       const unitPrice = costMap.get(sched.activityId) || 0;
       const plannedQty = Number(sched.plannedQuantity || 0);
       const plannedHH = Number(sched.plannedHhh || 0);
@@ -340,7 +322,7 @@ export class ProductionAnalyticsService {
     const progressMap = new Map(productionProgress.map(pp => [`${pp.elementId}-${pp.activityId}`, Number(pp.progressPercent || 0) / 100]));
     let totalEV = 0;
 
-    schedules.forEach((sched: unknown) => {
+    schedules.forEach((sched: any) => {
       const progress = progressMap.get(`${sched.elementId}-${sched.activityId}`) || 0;
       const unitPrice = costMap.get(sched.activityId) || 0;
       const plannedQty = Number(sched.plannedQuantity || 0);
@@ -376,8 +358,8 @@ export class ProductionAnalyticsService {
       prisma.mapElementProductionProgress.findMany({ where: { projectId } }),
     ]);
 
-    return (teams as unknown[]).map(team => {
-      const executedQty = production.filter((p: unknown) => {
+    return (teams as any[]).map(team => {
+      const executedQty = production.filter((p: any) => {
         const history = p.history as ProgressHistoryEntry[];
         return Array.isArray(history) && history.some(h => h.teamId === team.id);
       }).length;
@@ -401,7 +383,7 @@ export class ProductionAnalyticsService {
 
     const categoryMap = { "Mão de Obra": 0, "Materiais": 0, "Equipamentos": 0, "Indiretos": 0 };
 
-    unitCosts.forEach((uc: unknown) => {
+    unitCosts.forEach((uc: any) => {
       const price = Number(uc.unitPrice || 0);
       categoryMap["Mão de Obra"] += price * 0.45;
       categoryMap["Materiais"] += price * 0.3;

@@ -24,17 +24,14 @@ export function DevTopBanner() {
 
     const roles = [
         { id: 'HELPER_SYSTEM', label: 'Suporte Especializado', pts: '2000 PTS', icon: Shield },
-        { id: 'SUPER_ADMIN_GOD', label: 'Super Admin God', pts: '1500 PTS', icon: Shield },
-        { id: 'SOCIO_DIRETOR', label: 'Sócio Diretor', pts: '1000 PTS', icon: Shield },
-        { id: 'ADMIN', label: 'Admin', pts: '950 PTS', icon: Shield },
-        { id: 'TI_SOFTWARE', label: 'Ti-Software', pts: '900 PTS', icon: Shield },
-        { id: 'MODERATOR', label: 'Moderador', pts: '850 PTS', icon: Shield },
-        { id: 'MANAGER', label: 'Gerente', pts: '850 PTS', icon: Shield },
-        { id: 'GESTOR_PROJECT', label: 'Gestor de Obra', pts: '800 PTS', icon: Shield },
-        { id: 'GESTOR_CANTEIRO', label: 'Gestor de Canteiro', pts: '750 PTS', icon: Shield },
-        { id: 'SUPERVISOR', label: 'Supervisor', pts: '500 PTS', icon: Shield },
-        { id: 'WORKER', label: 'Colaborador', pts: '200 PTS', icon: Shield },
-        { id: 'VIEWER', label: 'Visualizador', pts: '100 PTS', icon: Shield },
+        { id: 'ADMIN', label: 'Administrador Global', pts: '1500 PTS', icon: Shield },
+        { id: 'TI_SOFTWARE', label: 'Gestão de Software', pts: '1200 PTS', icon: Shield },
+        { id: 'COMPANY_ADMIN', label: 'Gestor Principal', pts: '1000 PTS', icon: Shield },
+        { id: 'PROJECT_MANAGER', label: 'Gestor de Obra', pts: '800 PTS', icon: Shield },
+        { id: 'SITE_MANAGER', label: 'Gestor de Canteiro', pts: '700 PTS', icon: Shield },
+        { id: 'SUPERVISOR', label: 'Supervisor', pts: '600 PTS', icon: Shield },
+        { id: 'OPERATIONAL', label: 'Usuário de Campo', pts: '100 PTS', icon: Shield },
+        { id: 'VIEWER', label: 'Visualizador', pts: '50 PTS', icon: Shield },
     ];
 
     const isMapperActive = isMapperModeActiveSignal.value;

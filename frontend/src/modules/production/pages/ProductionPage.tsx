@@ -26,7 +26,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, HardHat, Edit2, Trash2, Loader2, Info, Activity, Upload, Plus, ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Database, Filter, AlertCircle, Link2 } from "lucide-react";
+import { Search, HardHat, Edit2, Trash2, Loader2, Info, Activity, Upload, Plus, ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Database, Filter, AlertCircle, Link2, ChevronLeft, ChevronRight } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { orionApi } from "@/integrations/orion/client";
 import { TowerProductionData, ProductionCategory, TowerActivityStatus } from "../types";
@@ -85,7 +85,9 @@ const ProductionTableRow = React.memo(({
     isPending,
     isSelected,
     onToggleSelect,
-    onContextMenuCell
+    onContextMenuCell,
+    showTechnicalCols = true,
+    collapsedCategories = new Set<string>()
 }: {
     tower: TowerProductionData;
     idx: number;
@@ -111,6 +113,8 @@ const ProductionTableRow = React.memo(({
         activityName: string;
         status?: TowerActivityStatus;
     }) => void;
+    showTechnicalCols?: boolean;
+    collapsedCategories?: Set<string>;
 }) => {
     return (
         <TableRow key={tower.id} className={cn(
@@ -163,7 +167,7 @@ const ProductionTableRow = React.memo(({
                 {tower.trecho || "-"}
             </TableCell>
 
-            <TableCell className="sticky left-[400px] w-[100px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-center transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
+            <TableCell className={cn("sticky w-[100px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-center transition-colors opacity-100", showTechnicalCols ? "left-[400px] shadow-[2px_0_8px_rgba(0,0,0,0.5)]" : "left-[400px] shadow-[4px_0_15px_rgba(0,0,0,0.7)]")}>
                 <div className="flex flex-col items-center gap-1">
                     <Badge variant="outline" className="px-2 py-0.5 text-[8px] font-black uppercase tracking-widest border-amber-900/30 text-amber-600/50">
                         {tower.towerType || tower.metadata?.towerType || "Autoportante"}
@@ -176,24 +180,76 @@ const ProductionTableRow = React.memo(({
                 </div>
             </TableCell>
 
-            <TableCell className="sticky left-[500px] w-[100px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] text-center font-bold text-amber-100/20 italic transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
-                {tower.goForward || "-"}
-            </TableCell>
+            {showTechnicalCols && (
+                <>
+                    <TableCell className="sticky left-[500px] w-[100px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] text-center font-bold text-amber-100/20 italic transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
+                        {tower.goForward || "-"}
+                    </TableCell>
 
-            <TableCell className="sticky left-[600px] w-[100px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] text-center font-bold text-amber-100/20 italic transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
-                {tower.totalConcreto || "-"}
-            </TableCell>
+                    <TableCell className="sticky left-[600px] w-[100px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] text-center font-bold text-amber-100/20 italic transition-colors shadow-[1px_0_3px_rgba(0,0,0,0.2)] opacity-100">
+                        {tower.totalConcreto || "-"}
+                    </TableCell>
 
-            <TableCell className="sticky left-[700px] w-[100px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] text-center font-bold text-amber-100/20 italic transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.3)] opacity-100">
-                {tower.pesoArmacao || "-"}
-            </TableCell>
+                    <TableCell className="sticky left-[700px] w-[100px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] text-center font-bold text-amber-100/20 italic transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.3)] opacity-100">
+                        {tower.pesoArmacao || "-"}
+                    </TableCell>
 
-            <TableCell className="sticky left-[800px] w-[100px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] text-center font-bold text-primary italic transition-colors shadow-[4px_0_15px_rgba(0,0,0,0.7)] opacity-100">
-                {tower.pesoEstrutura || "-"}
-            </TableCell>
+                    <TableCell className="sticky left-[800px] w-[100px] bg-[#0a0806] group-hover/row:bg-[#1a1612] z-30 border-r border-amber-900/20 text-[10px] text-center font-bold text-primary italic transition-colors shadow-[4px_0_15px_rgba(0,0,0,0.7)] opacity-100">
+                        {tower.pesoEstrutura || "-"}
+                    </TableCell>
+                </>
+            )}
 
             {/* SCROLLING CELLS */}
-            {categories?.map(cat => (
+            {categories?.map(cat => {
+                const isCatCollapsed = collapsedCategories.has(cat.id);
+                if (isCatCollapsed) {
+                    // Collapsed: render a single cell showing overall category progress %
+                    const totalActivities = cat.activities?.length || 0;
+                    let totalProgress = 0;
+                    let finishedCount = 0;
+                    cat.activities?.forEach(act => {
+                        const status = tower.activityStatuses?.find(s => s.activityId === act.id);
+                        if (status) {
+                            if (status.status === 'FINISHED') {
+                                totalProgress += 100;
+                                finishedCount++;
+                            } else {
+                                totalProgress += (status.progressPercent || 0);
+                            }
+                        }
+                    });
+                    const avgProgress = totalActivities > 0 ? Math.round(totalProgress / totalActivities) : 0;
+                    return (
+                        <TableCell key={cat.id} className="min-w-[100px] w-[100px] p-1 text-center border-r border-amber-900/20 bg-[#0e0c0a] group-hover/row:bg-[#1a1612] transition-colors">
+                            <div className="flex flex-col items-center justify-center gap-1 py-1">
+                                <span className={cn(
+                                    "text-[11px] font-black tabular-nums",
+                                    avgProgress === 100 ? "text-emerald-400" :
+                                    avgProgress > 0 ? "text-amber-400" :
+                                    "text-white/30"
+                                )}>
+                                    {avgProgress}%
+                                </span>
+                                <div className="w-full h-1 rounded-full bg-white/5 overflow-hidden">
+                                    <div
+                                        className={cn(
+                                            "h-full rounded-full transition-all duration-500",
+                                            avgProgress === 100 ? "bg-emerald-500" :
+                                            avgProgress > 0 ? "bg-amber-500/80" :
+                                            "bg-white/10"
+                                        )}
+                                        style={{ width: `${avgProgress}%` }}
+                                    />
+                                </div>
+                                <span className="text-[7px] text-amber-600/40 font-bold uppercase tracking-wider">
+                                    {finishedCount}/{totalActivities}
+                                </span>
+                            </div>
+                        </TableCell>
+                    );
+                }
+                return (
                 <React.Fragment key={cat.id}>
                     {cat.activities?.map(act => {
                         const status = tower.activityStatuses?.find(s => s.activityId === act.id);
@@ -205,19 +261,16 @@ const ProductionTableRow = React.memo(({
                             const now = new Date();
 
                             if (status && status.status === 'FINISHED' && status.endDate) {
-                                // Se terminou, verifica se terminou depois do planejado
                                 if (new Date(status.endDate) > plannedEnd) {
                                     isDelayed = true;
                                 }
                             } else {
-                                // Se não terminou, verifica se já passou da data limite
                                 if (now > plannedEnd) {
                                     isDelayed = true;
                                 }
                             }
                         }
 
-                        // Helper to format short date
                         const formatShortDate = (dateStr?: string) => {
                             if (!dateStr) return "";
                             try {
@@ -254,12 +307,10 @@ const ProductionTableRow = React.memo(({
                                             <div className="badge-verificar animate-verificar">VERIFICAR</div>
                                         )}
 
-                                        {/* Delay Indicator */}
                                         {isDelayed && (
                                             <div className="absolute top-0 right-0 w-2 h-2 rounded-full bg-red-600 shadow-[0_0_5px_rgba(220,38,38,0.8)] z-20" title="Atividade Atrasada" />
                                         )}
 
-                                        {/* Blue Progress Bar */}
                                         <div
                                             className={cn(
                                                 "absolute bottom-0 left-0 h-0.5 transition-all duration-500 z-10",
@@ -293,7 +344,6 @@ const ProductionTableRow = React.memo(({
                                             </div>
                                         )}
 
-                                        {/* Seção Fundiária Separada */}
                                         {status?.landStatus && status.landStatus !== 'FREE' && (
                                             <div className={cn(
                                                 "w-full px-1 py-0.5 rounded-sm text-[10px] font-black uppercase tracking-tighter z-10 border",
@@ -314,7 +364,6 @@ const ProductionTableRow = React.memo(({
                                     </div>
                                 ) : (
                                     <div className="py-4 flex items-center justify-center opacity-10 relative">
-                                        {/* Handle case where no status but schedule exists and is delayed (not started but late) */}
                                         {isDelayed && (
                                             <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-600 shadow-[0_0_5px_rgba(220,38,38,0.8)] z-20" title="Não Iniciado - Atrasado" />
                                         )}
@@ -325,7 +374,8 @@ const ProductionTableRow = React.memo(({
                         );
                     })}
                 </React.Fragment>
-            ))}
+                );
+            })}
         </TableRow>
     );
 });
@@ -392,6 +442,17 @@ const ProductionPage = () => {
 
     const [sortConfig, setSortConfig] = useState<{ key: keyof TowerProductionData; direction: "asc" | "desc" } | null>({ key: "objectSeq", direction: "asc" });
     const [selectedMetaMae, setSelectedMetaMae] = useState<string>("all");
+    const [showTechnicalCols, setShowTechnicalCols] = useState(true);
+    const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+
+    const toggleCategoryCollapse = React.useCallback((catId: string) => {
+        setCollapsedCategories(prev => {
+            const next = new Set(prev);
+            if (next.has(catId)) next.delete(catId);
+            else next.add(catId);
+            return next;
+        });
+    }, []);
 
     // Hooks
     const { companies, isLoading: isLoadingCompanies } = useCompanies();
@@ -600,47 +661,105 @@ const ProductionPage = () => {
             const categories = productionCategories;
             const normalize = (s: string) => (s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ");
             
+            // Flatten all activities from categories for faster lookup
+            const allActivities: Array<{ id: string; name: string; normalizedName: string; categoryName: string }> = [];
+            for (const cat of categories) {
+                if (cat.activities) {
+                    for (const act of cat.activities) {
+                        allActivities.push({
+                            id: act.id,
+                            name: act.name,
+                            normalizedName: normalize(act.name),
+                            categoryName: cat.name
+                        });
+                    }
+                }
+            }
+
+            // Also collect activities from the hierarchy if available
+            const collectFromHierarchy = (nodes: any[]): Array<{ name: string; normalizedName: string }> => {
+                const result: Array<{ name: string; normalizedName: string }> = [];
+                if (!Array.isArray(nodes)) return result;
+                for (const node of nodes) {
+                    if (node.name) result.push({ name: node.name, normalizedName: normalize(node.name) });
+                    if (node.children) result.push(...collectFromHierarchy(node.children));
+                }
+                return result;
+            };
+
+            // Helper: calculate word overlap score between two strings
+            const wordOverlapScore = (a: string, b: string): number => {
+                const wordsA = new Set(a.split(' ').filter(w => w.length > 2));
+                const wordsB = new Set(b.split(' ').filter(w => w.length > 2));
+                if (wordsA.size === 0 || wordsB.size === 0) return 0;
+                let matches = 0;
+                for (const w of wordsA) {
+                    if (wordsB.has(w)) matches++;
+                }
+                return matches / Math.max(wordsA.size, wordsB.size);
+            };
+
             let matchCount = 0;
             for (const stage of stages) {
+                // Skip already linked stages
+                if (stage.productionActivityId) continue;
+
                 let matchId = '';
                 const targetName = normalize(stage.name);
 
-                for (const cat of categories) {
-                    // 1. Tenta achar match na lista de sub-atividades (Prioridade)
-                    if (cat.activities) {
-                        const match = cat.activities.find(a => normalize(a.name) === targetName);
-                        if (match) {
-                            matchId = match.id;
-                            break;
+                // Pass 1: Exact match
+                const exactMatch = allActivities.find(a => a.normalizedName === targetName);
+                if (exactMatch) {
+                    matchId = exactMatch.id;
+                }
+
+                // Pass 2: Includes/StartsWith match
+                if (!matchId) {
+                    const includesMatch = allActivities.find(a => 
+                        a.normalizedName.includes(targetName) || targetName.includes(a.normalizedName)
+                    );
+                    if (includesMatch) {
+                        matchId = includesMatch.id;
+                    }
+                }
+
+                // Pass 3: StartsWith match (one direction)
+                if (!matchId) {
+                    const startsMatch = allActivities.find(a => 
+                        a.normalizedName.startsWith(targetName.substring(0, Math.min(targetName.length, 8))) ||
+                        targetName.startsWith(a.normalizedName.substring(0, Math.min(a.normalizedName.length, 8)))
+                    );
+                    if (startsMatch) {
+                        matchId = startsMatch.id;
+                    }
+                }
+
+                // Pass 4: Word overlap similarity (threshold > 0.6)
+                if (!matchId) {
+                    let bestScore = 0;
+                    let bestMatch = '';
+                    for (const act of allActivities) {
+                        const score = wordOverlapScore(targetName, act.normalizedName);
+                        if (score > bestScore && score > 0.6) {
+                            bestScore = score;
+                            bestMatch = act.id;
                         }
                     }
-
-                    // 2. Se o nome da etapa bate com a CATEGORIA, procura uma atividade idêntica dentro dela
-                    if (normalize(cat.name) === targetName) {
-                        const directMatch = cat.activities?.find(a => normalize(a.name) === targetName);
-                        if (directMatch) {
-                            matchId = directMatch.id;
-                        } else if (cat.activities?.length === 1) {
-                            // Heurística: se a categoria só tem UMA atividade, podemos sugerir o vínculo?
-                            // Por enquanto, vamos ser conservadores e não vincular se os nomes não baterem.
-                            // matchId = cat.activities[0].id; 
-                        }
-                        if (matchId) break;
+                    if (bestMatch) {
+                        matchId = bestMatch;
                     }
                 }
                 
                 if (matchId && matchId !== 'none') {
-                   const needsUpdate = stage.productionActivityId !== matchId || stage.metadata?.mapEnabled !== true;
-                   
-                   if (needsUpdate) {
-                       console.log(`[BulkLink] Vinculando "${stage.name}" -> ID ${matchId}`);
-                       matchCount++;
-                       await updateStage(stage.id, { 
-                           productionActivityId: matchId,
-                           metadata: { ...stage.metadata, mapEnabled: true }
-                       });
-                       await new Promise(resolve => setTimeout(resolve, 150));
-                   }
+                   console.log(`[BulkLink] Vinculando "${stage.name}" -> ID ${matchId}`);
+                   matchCount++;
+                   await updateStage(stage.id, { 
+                       productionActivityId: matchId,
+                       metadata: { ...stage.metadata, mapEnabled: true }
+                   });
+                   await new Promise(resolve => setTimeout(resolve, 100));
+                } else {
+                   console.warn(`[BulkLink] Sem match para "${stage.name}"`);
                 }
             }
 
@@ -658,7 +777,7 @@ const ProductionPage = () => {
     };
 
     const unlinkedStagesCount = React.useMemo(() => 
-        stages?.filter(s => !s.productionActivityId).length && 0   , [stages]);
+        stages?.filter(s => !s.productionActivityId).length || 0, [stages]);
 
     // Transform WorkStages into the structure expected by the Grid
     const stageColumns = React.useMemo<ProductionCategory[] | undefined>(() => {
@@ -1077,10 +1196,83 @@ const ProductionPage = () => {
                                 >
                                     <Table className="border-separate border-spacing-0 w-full min-w-max">
                                         <TableHeader className="sticky top-0 z-50 shadow-2xl">
+                                            {/* SUPER HEADER ROW - Category names */}
+                                            <TableRow className="bg-[#0e0c0a] hover:bg-[#0e0c0a] border-b border-amber-900/20">
+                                                {/* Empty cells for frozen columns */}
+                                                <TableHead className="sticky left-0 top-0 bg-[#0e0c0a] z-50 border-r border-amber-900/20 p-0 h-8" />
+                                                <TableHead className="sticky left-[40px] top-0 bg-[#0e0c0a] z-50 border-r border-amber-900/20 p-0 h-8" />
+                                                <TableHead className="sticky left-[120px] top-0 bg-[#0e0c0a] z-50 border-r border-amber-900/20 p-0 h-8 shadow-[2px_0_8px_rgba(0,0,0,0.5)]" />
+                                                <TableHead className="sticky left-[180px] top-0 bg-[#0e0c0a] z-50 border-r border-amber-900/20 p-0 h-8" />
+                                                <TableHead className="sticky left-[280px] top-0 bg-[#0e0c0a] z-50 border-r border-amber-900/20 p-0 h-8" />
+                                                <TableHead
+                                                    className={cn(
+                                                        "sticky left-[400px] top-0 bg-[#0e0c0a] z-50 border-r border-amber-900/20 p-0 h-8 cursor-pointer hover:bg-[#1a1612] transition-colors",
+                                                        showTechnicalCols ? "shadow-[2px_0_8px_rgba(0,0,0,0.5)]" : "shadow-[4px_0_15px_rgba(0,0,0,0.7)]"
+                                                    )}
+                                                    onClick={() => setShowTechnicalCols(prev => !prev)}
+                                                >
+                                                    <div className="w-full h-full flex items-center justify-center gap-1 px-1">
+                                                        {showTechnicalCols ? (
+                                                            <ChevronLeft className="h-3 w-3 text-amber-600/30 hover:text-amber-500 shrink-0 hidden" />
+                                                        ) : (
+                                                            <ChevronRight className="h-3 w-3 text-amber-500 shrink-0" />
+                                                        )}
+                                                        <span className={cn(
+                                                            "text-[8px] font-black uppercase tracking-[0.15em] leading-none truncate",
+                                                            showTechnicalCols ? "text-amber-600/40 hidden" : "text-amber-500/80"
+                                                        )}>
+                                                            Dados Técnicos
+                                                        </span>
+                                                    </div>
+                                                </TableHead>
+                                                {showTechnicalCols && (
+                                                    <TableHead
+                                                        colSpan={4}
+                                                        className="sticky left-[500px] top-0 bg-[#0e0c0a] z-50 border-r border-amber-900/20 p-0 h-8 shadow-[4px_0_15px_rgba(0,0,0,0.7)] cursor-pointer hover:bg-[#1a1612] transition-colors"
+                                                        onClick={() => setShowTechnicalCols(false)}
+                                                    >
+                                                        <div className="w-full h-full flex items-center justify-center gap-1.5 px-2">
+                                                            <ChevronLeft className="h-3 w-3 text-amber-600/30 hover:text-amber-500 shrink-0" />
+                                                            <span className="text-[8px] font-black uppercase tracking-[0.15em] leading-none text-amber-600/40">DADOS TÉCNICOS</span>
+                                                        </div>
+                                                    </TableHead>
+                                                )}
+                                                {/* Category super headers */}
+                                                {stageColumns?.map(cat => {
+                                                    const isCatCollapsed = collapsedCategories.has(cat.id);
+                                                    const actCount = cat.activities?.length || 1;
+                                                    return (
+                                                        <TableHead
+                                                            key={cat.id}
+                                                            colSpan={isCatCollapsed ? 1 : actCount}
+                                                            className={cn(
+                                                                "h-8 bg-[#0e0c0a] z-40 top-0 border-r border-amber-900/20 p-0 cursor-pointer hover:bg-[#1a1612] transition-colors",
+                                                                isCatCollapsed ? "min-w-[100px] w-[100px]" : ""
+                                                            )}
+                                                            onClick={() => toggleCategoryCollapse(cat.id)}
+                                                        >
+                                                            <div className="w-full h-full flex items-center justify-center gap-1.5 px-2">
+                                                                {isCatCollapsed ? (
+                                                                    <ChevronRight className="h-3 w-3 text-amber-500 shrink-0" />
+                                                                ) : (
+                                                                    <ChevronLeft className="h-3 w-3 text-amber-600/30 hover:text-amber-500 shrink-0" />
+                                                                )}
+                                                                <span className={cn(
+                                                                    "text-[8px] font-black uppercase tracking-[0.15em] leading-none truncate",
+                                                                    isCatCollapsed ? "text-amber-500/80" : "text-amber-600/40"
+                                                                )}>
+                                                                    {(cat.name || '').toUpperCase()}
+                                                                </span>
+                                                            </div>
+                                                        </TableHead>
+                                                    );
+                                                })}
+                                            </TableRow>
+                                            {/* MAIN HEADER ROW - Column titles */}
                                             <TableRow className="bg-[#0a0806] hover:bg-[#0a0806] border-b border-amber-900/30">
                                                 {/* FROZEN HEADERS */}
                                                 {/* FROZEN HEADERS - SHIFTED FOR CHECKBOX */}
-                                                <TableHead className="w-[40px] h-14 sticky left-0 top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 text-center font-black uppercase text-[10px] tracking-widest text-foreground p-0">
+                                                <TableHead className="w-[40px] h-14 sticky left-0 top-8 bg-[#0a0806] z-50 border-r border-amber-900/20 text-center font-black uppercase text-[10px] tracking-widest text-foreground p-0">
                                                      <div className="flex items-center justify-center w-full h-full">
                                                         <Checkbox
                                                             checked={filteredTowers && filteredTowers.length > 0 && selectedTowers.length === filteredTowers.length}
@@ -1090,13 +1282,13 @@ const ProductionPage = () => {
                                                      </div>
                                                 </TableHead>
 
-                                                <TableHead className="w-[80px] h-14 sticky left-[40px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 text-center font-black uppercase text-[10px] tracking-widest text-foreground">
+                                                <TableHead className="w-[80px] h-14 sticky left-[40px] top-8 bg-[#0a0806] z-50 border-r border-amber-900/20 text-center font-black uppercase text-[10px] tracking-widest text-foreground">
                                                     MENU
                                                 </TableHead>
 
                                                 <TableHead
                                                     className={cn(
-                                                        "w-[60px] h-14 sticky left-[120px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
+                                                        "w-[60px] h-14 sticky left-[120px] top-8 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
                                                         sortConfig?.key === 'objectSeq' && "text-primary"
                                                     )}
                                                     onClick={() => requestSort('objectSeq')}
@@ -1117,7 +1309,7 @@ const ProductionPage = () => {
 
                                                 <TableHead
                                                     className={cn(
-                                                        "w-[100px] h-14 sticky left-[180px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
+                                                        "w-[100px] h-14 sticky left-[180px] top-8 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
                                                         sortConfig?.key === 'objectId' && "text-primary"
                                                     )}
                                                     onClick={() => requestSort('objectId')}
@@ -1138,7 +1330,7 @@ const ProductionPage = () => {
 
                                                 <TableHead
                                                     className={cn(
-                                                        "w-[120px] h-14 sticky left-[280px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
+                                                        "w-[120px] h-14 sticky left-[280px] top-8 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
                                                         sortConfig?.key === 'trecho' && "text-primary"
                                                     )}
                                                     onClick={() => requestSort('trecho')}
@@ -1159,7 +1351,8 @@ const ProductionPage = () => {
 
                                                 <TableHead
                                                     className={cn(
-                                                        "w-[100px] h-14 sticky left-[400px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
+                                                        "w-[100px] h-14 sticky left-[400px] top-8 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center opacity-100",
+                                                        showTechnicalCols ? "shadow-[2px_0_8px_rgba(0,0,0,0.5)]" : "shadow-[4px_0_15px_rgba(0,0,0,0.7)]",
                                                         sortConfig?.key === 'towerType' && "text-primary"
                                                     )}
                                                     onClick={() => requestSort('towerType')}
@@ -1178,122 +1371,132 @@ const ProductionPage = () => {
                                                     )} />
                                                 </TableHead>
 
-                                                <TableHead
-                                                    className={cn(
-                                                        "w-[100px] h-14 sticky left-[500px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
-                                                        sortConfig?.key === 'goForward' && "text-primary"
-                                                    )}
-                                                    onClick={() => requestSort('goForward')}
-                                                >
-                                                    <div className="flex items-center justify-center gap-1 h-full">
-                                                        <span className="font-black uppercase text-[10px] tracking-widest group-hover:text-primary transition-colors">VÃO (M)</span>
-                                                        {sortConfig?.key === 'goForward' ? (
-                                                            sortConfig.direction === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                                                        ) : (
-                                                            <ArrowUpDown className="h-3 w-3 opacity-30 group-hover:opacity-100 transition-opacity" />
-                                                        )}
-                                                    </div>
-                                                    <div className={cn(
-                                                        "absolute bottom-0 left-0 w-full h-0.5 bg-primary transition-transform origin-left",
-                                                        sortConfig?.key === 'goForward' ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
-                                                    )} />
-                                                </TableHead>
+                                                {showTechnicalCols && (
+                                                    <>
+                                                        <TableHead
+                                                            className={cn(
+                                                                "w-[100px] h-14 sticky left-[500px] top-8 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
+                                                                sortConfig?.key === 'goForward' && "text-primary"
+                                                            )}
+                                                            onClick={() => requestSort('goForward')}
+                                                        >
+                                                            <div className="flex items-center justify-center gap-1 h-full">
+                                                                <span className="font-black uppercase text-[10px] tracking-widest group-hover:text-primary transition-colors">VÃO (M)</span>
+                                                                {sortConfig?.key === 'goForward' ? (
+                                                                    sortConfig.direction === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                                                ) : (
+                                                                    <ArrowUpDown className="h-3 w-3 opacity-30 group-hover:opacity-100 transition-opacity" />
+                                                                )}
+                                                            </div>
+                                                            <div className={cn(
+                                                                "absolute bottom-0 left-0 w-full h-0.5 bg-primary transition-transform origin-left",
+                                                                sortConfig?.key === 'goForward' ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+                                                            )} />
+                                                        </TableHead>
 
-                                                <TableHead
-                                                    className={cn(
-                                                        "w-[100px] h-14 sticky left-[600px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
-                                                        sortConfig?.key === 'totalConcreto' && "text-primary"
-                                                    )}
-                                                    onClick={() => requestSort('totalConcreto')}
-                                                >
-                                                    <div className="flex items-center justify-center gap-1 h-full">
-                                                        <span className="font-black uppercase text-[10px] tracking-widest group-hover:text-primary transition-colors">VOL (M³)</span>
-                                                        {sortConfig?.key === 'totalConcreto' ? (
-                                                            sortConfig.direction === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                                                        ) : (
-                                                            <ArrowUpDown className="h-3 w-3 opacity-30 group-hover:opacity-100 transition-opacity" />
-                                                        )}
-                                                    </div>
-                                                    <div className={cn(
-                                                        "absolute bottom-0 left-0 w-full h-0.5 bg-primary transition-transform origin-left",
-                                                        sortConfig?.key === 'totalConcreto' ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
-                                                    )} />
-                                                </TableHead>
+                                                        <TableHead
+                                                            className={cn(
+                                                                "w-[100px] h-14 sticky left-[600px] top-8 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
+                                                                sortConfig?.key === 'totalConcreto' && "text-primary"
+                                                            )}
+                                                            onClick={() => requestSort('totalConcreto')}
+                                                        >
+                                                            <div className="flex items-center justify-center gap-1 h-full">
+                                                                <span className="font-black uppercase text-[10px] tracking-widest group-hover:text-primary transition-colors">VOL (M³)</span>
+                                                                {sortConfig?.key === 'totalConcreto' ? (
+                                                                    sortConfig.direction === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                                                ) : (
+                                                                    <ArrowUpDown className="h-3 w-3 opacity-30 group-hover:opacity-100 transition-opacity" />
+                                                                )}
+                                                            </div>
+                                                            <div className={cn(
+                                                                "absolute bottom-0 left-0 w-full h-0.5 bg-primary transition-transform origin-left",
+                                                                sortConfig?.key === 'totalConcreto' ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+                                                            )} />
+                                                        </TableHead>
 
-                                                <TableHead
-                                                    className={cn(
-                                                        "w-[100px] h-14 sticky left-[700px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
-                                                        sortConfig?.key === 'pesoArmacao' && "text-primary"
-                                                    )}
-                                                    onClick={() => requestSort('pesoArmacao')}
-                                                >
-                                                    <div className="flex items-center justify-center gap-1 h-full">
-                                                        <span className="font-black uppercase text-[10px] tracking-widest group-hover:text-primary transition-colors">AÇO (KG)</span>
-                                                        {sortConfig?.key === 'pesoArmacao' ? (
-                                                            sortConfig.direction === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                                                        ) : (
-                                                            <ArrowUpDown className="h-3 w-3 opacity-30 group-hover:opacity-100 transition-opacity" />
-                                                        )}
-                                                    </div>
-                                                    <div className={cn(
-                                                        "absolute bottom-0 left-0 w-full h-0.5 bg-primary transition-transform origin-left",
-                                                        sortConfig?.key === 'pesoArmacao' ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
-                                                    )} />
-                                                </TableHead>
+                                                        <TableHead
+                                                            className={cn(
+                                                                "w-[100px] h-14 sticky left-[700px] top-8 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[2px_0_8px_rgba(0,0,0,0.5)] opacity-100",
+                                                                sortConfig?.key === 'pesoArmacao' && "text-primary"
+                                                            )}
+                                                            onClick={() => requestSort('pesoArmacao')}
+                                                        >
+                                                            <div className="flex items-center justify-center gap-1 h-full">
+                                                                <span className="font-black uppercase text-[10px] tracking-widest group-hover:text-primary transition-colors">AÇO (KG)</span>
+                                                                {sortConfig?.key === 'pesoArmacao' ? (
+                                                                    sortConfig.direction === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                                                ) : (
+                                                                    <ArrowUpDown className="h-3 w-3 opacity-30 group-hover:opacity-100 transition-opacity" />
+                                                                )}
+                                                            </div>
+                                                            <div className={cn(
+                                                                "absolute bottom-0 left-0 w-full h-0.5 bg-primary transition-transform origin-left",
+                                                                sortConfig?.key === 'pesoArmacao' ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+                                                            )} />
+                                                        </TableHead>
 
-                                                <TableHead
-                                                    className={cn(
-                                                        "w-[100px] h-14 sticky left-[800px] top-0 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[4px_0_15px_rgba(0,0,0,0.7)] opacity-100",
-                                                        sortConfig?.key === 'pesoEstrutura' && "text-primary"
-                                                    )}
-                                                    onClick={() => requestSort('pesoEstrutura')}
-                                                >
-                                                    <div className="flex items-center justify-center gap-1 h-full">
-                                                        <span className="font-black uppercase text-[10px] tracking-widest group-hover:text-primary transition-colors">ESTRUTURA (T)</span>
-                                                        {sortConfig?.key === 'pesoEstrutura' ? (
-                                                            sortConfig.direction === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
-                                                        ) : (
-                                                            <ArrowUpDown className="h-3 w-3 opacity-30 group-hover:opacity-100 transition-opacity" />
-                                                        )}
-                                                    </div>
-                                                    <div className={cn(
-                                                        "absolute bottom-0 left-0 w-full h-0.5 bg-primary transition-transform origin-left",
-                                                        sortConfig?.key === 'pesoEstrutura' ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
-                                                    )} />
-                                                </TableHead>
+                                                        <TableHead
+                                                            className={cn(
+                                                                "w-[100px] h-14 sticky left-[800px] top-8 bg-[#0a0806] z-50 border-r border-amber-900/20 cursor-pointer hover:bg-[#1a1612] transition-colors group text-center shadow-[4px_0_15px_rgba(0,0,0,0.7)] opacity-100",
+                                                                sortConfig?.key === 'pesoEstrutura' && "text-primary"
+                                                            )}
+                                                            onClick={() => requestSort('pesoEstrutura')}
+                                                        >
+                                                            <div className="flex items-center justify-center gap-1 h-full">
+                                                                <span className="font-black uppercase text-[10px] tracking-widest group-hover:text-primary transition-colors">ESTRUTURA (T)</span>
+                                                                {sortConfig?.key === 'pesoEstrutura' ? (
+                                                                    sortConfig.direction === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />
+                                                                ) : (
+                                                                    <ArrowUpDown className="h-3 w-3 opacity-30 group-hover:opacity-100 transition-opacity" />
+                                                                )}
+                                                            </div>
+                                                            <div className={cn(
+                                                                "absolute bottom-0 left-0 w-full h-0.5 bg-primary transition-transform origin-left",
+                                                                sortConfig?.key === 'pesoEstrutura' ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+                                                            )} />
+                                                        </TableHead>
+                                                    </>
+                                                )}
 
                                                 {/* SCROLLING HEADERS */}
-                                                {stageColumns?.map(cat => (
+                                                {stageColumns?.map(cat => {
+                                                    const isCatCollapsed = collapsedCategories.has(cat.id);
+                                                    if (isCatCollapsed) {
+                                                        // Collapsed: single column header for progress
+                                                        return (
+                                                            <TableHead
+                                                                key={cat.id}
+                                                                className="min-w-[100px] w-[100px] h-14 bg-[#0a0806] z-40 sticky top-8 text-center border-r border-amber-900/20 font-black text-[9px] uppercase tracking-widest text-amber-500/60 p-0"
+                                                            >
+                                                                <div className="w-full h-full flex items-center justify-center">
+                                                                    <span className="text-[9px] font-black text-amber-500/50 uppercase tracking-wider">% GERAL</span>
+                                                                </div>
+                                                            </TableHead>
+                                                        );
+                                                    }
+                                                    return (
                                                     <React.Fragment key={cat.id}>
                                                         {cat.activities?.map(act => (
-                                                            <TableHead key={act.id} className="min-w-[160px] h-14 bg-[#0a0806] z-40 sticky top-0 text-center border-r border-amber-900/10 font-black text-[10px] uppercase tracking-widest text-[#d4af37]/80 group hover:bg-[#1a1612] transition-colors opacity-100 p-0">
+                                                            <TableHead key={act.id} className="min-w-[160px] h-14 bg-[#0a0806] z-40 sticky top-8 text-center border-r border-amber-900/10 font-black text-[10px] uppercase tracking-widest text-[#d4af37]/80 group hover:bg-[#1a1612] transition-colors opacity-100 p-0">
                                                                 <div className="w-full h-full flex flex-col justify-center">
-                                                                    <div className="w-full text-center py-1 bg-[#1a1612]/50 border-b border-white/5">
-                                                                        <span className="text-amber-600/40 text-[8px] font-bold tracking-[0.2em] leading-none">{(cat.name || '').toUpperCase()}</span>
-                                                                    </div>
                                                                     <StageHeaderSelector
                                                                         stage={{
-                                                                            id: act.stageId || act.id, // Use correct Stage ID
+                                                                            id: act.stageId || act.id,
                                                                             name: act.name,
-                                                                            // Mocking missing props since `act` is a subset of WorkStage in this transform
                                                                             siteId: selectedSiteId || '',
                                                                             parentId: cat.id,
                                                                             description: null,
                                                                             weight: act.weight,
                                                                             displayOrder: 0,
-                                                                            createdAt: new Date().toISOString() as any, // Cast to any or string to avoid type conflict if strict
-                                                                            // This is the CRITICAL part: we need to pass the productionActivityId if it exists
-                                                                            productionActivityId: act.productionActivityId, // Assuming logic below adds this
+                                                                            createdAt: new Date().toISOString() as any,
+                                                                            productionActivityId: act.productionActivityId,
                                                                             metadata: act.metadata
                                                                         }}
                                                                         onUpdate={async (stageId, payload) => {
-                                                                            // Payload can be { productionActivityId } or { metadata } or both
                                                                             await updateStage(stageId, payload);
-                                                                            // Invalidate queries to refresh columns
                                                                         }}
                                                                         onEdit={() => {
-                                                                            // We need to construct a full WorkStage object or at least enough for specific edit
-                                                                            // Ideally we find the real object from "stages" array using ID
                                                                             const realStage = stages?.find(s => s.id === (act.stageId || act.id));
                                                                             if (realStage) {
                                                                                 setEditingStage(realStage);
@@ -1312,7 +1515,8 @@ const ProductionPage = () => {
                                                             </TableHead>
                                                         ))}
                                                     </React.Fragment>
-                                                ))}
+                                                    );
+                                                })}
                                             </TableRow>
                                         </TableHeader>
 
@@ -1330,6 +1534,8 @@ const ProductionPage = () => {
                                                     isSelected={selectedTowers.includes(tower.id)}
                                                     onToggleSelect={handleToggleSelect}
                                                     onContextMenuCell={handleContextMenuCell}
+                                                    showTechnicalCols={showTechnicalCols}
+                                                    collapsedCategories={collapsedCategories}
                                                 />
                                             ))}
                                         </TableBody>

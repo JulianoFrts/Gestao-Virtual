@@ -25,6 +25,38 @@ export class PrismaUserRepository
     super(prismaInstance);
   }
 
+  /**
+   * Sobrescrever findMany para aplicar ordenação SOBERANA padrão:
+   * 1. Nível de Hierarquia (Empresa) - Menor valor primeiro
+   * 2. Nome Alfabético
+   */
+  async findMany(filters: UserFiltersDTO, take?: number, skip?: number, select?: Record<string, unknown>): Promise<UserEntity[]> {
+    const { sortBy, sortOrder, ...where } = filters;
+    
+    // Construção de ordenação prioritária:
+    // 1. Role (Ordem de definição no Enum: HELPER > ADMIN > TI...)
+    // 2. hierarchyLevel (Menor valor = Maior cargo na empresa)
+    // 3. Nome Alfabético
+    const orderBy: any[] = [
+      { authCredential: { role: 'asc' } },
+      { affiliation: { hierarchyLevel: 'asc' } },
+      { name: 'asc' }
+    ];
+
+    // Se houver um sortBy explícito, inserimos no topo da pilha
+    if (sortBy) {
+      orderBy.unshift({ [sortBy]: sortOrder || 'asc' });
+    }
+
+    return this.prisma.user.findMany({
+      where: where as any,
+      take,
+      skip,
+      select: select as Prisma.UserSelect,
+      orderBy
+    }) as unknown as UserEntity[];
+  }
+
   async findByEmail(email: string): Promise<UserEntity | null> {
     const authCredential = await this.prisma.authCredential.findUnique({
       where: { email: email.toLowerCase().trim() },
@@ -41,6 +73,7 @@ export class PrismaUserRepository
     const validRoles: Prisma.Role[] = [
       "HELPER_SYSTEM",
       "ADMIN",
+      "TI_SOFTWARE",
       "COMPANY_ADMIN",
       "PROJECT_MANAGER",
       "SITE_MANAGER",
@@ -56,6 +89,7 @@ export class PrismaUserRepository
     // 2. Mapeamento de Compatibilidade Legada
     if (r === "SUPER_ADMIN_GOD") return "HELPER_SYSTEM";
     if (r === "SYSTEM_ADMIN") return "ADMIN";
+    if (r === "TI" || r === "SUPPORT" || r === "SOFTWARE") return "TI_SOFTWARE";
     if (r === "MODERATOR") return "COMPANY_ADMIN";
     if (r === "MANAGER") return "PROJECT_MANAGER";
     if (r === "GESTOR_PROJECT") return "PROJECT_MANAGER";
@@ -173,13 +207,23 @@ export class PrismaUserRepository
     // 1. Atualizar Setor de Segurança
     if (email || password || role || status || isSystemAdmin !== undefined || permissions) {
       updateData.authCredential = {
-        update: {
-          ...(email && { email }),
-          ...(password && { password }),
-          ...(role && { role: this.mapRole(role as string) }),
-          ...(status && { status: status as Prisma.AccountStatus }),
-          ...(isSystemAdmin !== undefined && { isSystemAdmin }),
-          ...(permissions && { permissions: permissions as Prisma.InputJsonValue }),
+        upsert: {
+          update: {
+            ...(email && { email }),
+            ...(password && { password }),
+            ...(role && { role: this.mapRole(role as string) }),
+            ...(status && { status: status as Prisma.AccountStatus }),
+            ...(isSystemAdmin !== undefined && { isSystemAdmin }),
+            ...(permissions && { permissions: permissions as Prisma.InputJsonValue }),
+          },
+          create: {
+            email: email || "",
+            password: password || "",
+            role: this.mapRole(role as string),
+            status: (status as Prisma.AccountStatus) || "ACTIVE",
+            isSystemAdmin: !!isSystemAdmin,
+            permissions: (permissions as Prisma.InputJsonValue) || {},
+          }
         },
       };
     }

@@ -3,9 +3,8 @@ import { PrismaTowerActivityRepository } from "@/modules/tower/infrastructure/pr
 import { TowerActivityService } from "@/modules/tower/application/tower-activity.service";
 import { requireAuth } from "@/lib/auth/session";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-
+import { HTTP_STATUS } from "@/lib/constants";
 import { PrismaWorkStageRepository } from "@/modules/work-stages/infrastructure/prisma-work-stage.repository";
-
 import { z } from "zod";
 
 const repository = new PrismaTowerActivityRepository();
@@ -37,7 +36,7 @@ export async function GET(req: NextRequest): Promise<Response> {
 
     const hierarchy = await service.getHierarchy(projectId);
     return ApiResponse.json(hierarchy);
-  } catch (error: unknown) {
+  } catch (error: any) {
     return handleApiError(
       error,
       "src/app/api/v1/tower-activity-goals/route.ts#GET",
@@ -59,24 +58,22 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     // Support single save or bulk import
     if (single) {
-      // Destructure only the 'single' flag to avoid passing it to Prisma
       const { single: _, ...cleanData } = validation.data;
-      const result = await service.saveGoal(cleanData as unknown);
+      const result = await service.saveGoal(cleanData as any);
       return NextResponse.json(result);
     }
 
     if (!projectId || !companyId || !Array.isArray(data)) {
       return NextResponse.json(
         { error: "Missing required fields" },
-        { status: HTTP_STATUS.BAD_REQUEST /* BAD_REQUEST */ },
+        { status: HTTP_STATUS.BAD_REQUEST },
       );
     }
 
     const result = await service.importGoals(projectId, companyId, data);
     return NextResponse.json(result);
-  } catch (error: unknown) {
-    const err = error as Error;
-    return NextResponse.json({ error: err.message }, { status: HTTP_STATUS.INTERNAL_ERROR /* INTERNAL_SERVER_ERROR */ });
+  } catch (error: any) {
+    return NextResponse.json({ error: error?.message || "Internal Error" }, { status: HTTP_STATUS.INTERNAL_ERROR });
   }
 }
 
@@ -94,9 +91,8 @@ export async function PATCH(req: NextRequest): Promise<Response> {
 
     const result = await service.moveGoal(id, parentId || undefined, order);
     return NextResponse.json(result);
-  } catch (error: unknown) {
-    const err = error as Error;
-    return NextResponse.json({ error: err.message }, { status: HTTP_STATUS.INTERNAL_ERROR /* INTERNAL_SERVER_ERROR */ });
+  } catch (error: any) {
+    return NextResponse.json({ error: error?.message || "Internal Error" }, { status: HTTP_STATUS.INTERNAL_ERROR });
   }
 }
 
@@ -107,12 +103,11 @@ export async function DELETE(req: NextRequest): Promise<Response> {
     const id = searchParams.get("id");
 
     if (!id)
-      return NextResponse.json({ error: "id is required" }, { status: HTTP_STATUS.BAD_REQUEST /* BAD_REQUEST */ });
+      return NextResponse.json({ error: "id is required" }, { status: HTTP_STATUS.BAD_REQUEST });
 
     await service.deleteGoal(id);
     return NextResponse.json({ success: true });
-  } catch (error: unknown) {
-    const err = error as Error;
-    return NextResponse.json({ error: err.message }, { status: HTTP_STATUS.INTERNAL_ERROR /* INTERNAL_SERVER_ERROR */ });
+  } catch (error: any) {
+    return NextResponse.json({ error: error?.message || "Internal Error" }, { status: HTTP_STATUS.INTERNAL_ERROR });
   }
 }

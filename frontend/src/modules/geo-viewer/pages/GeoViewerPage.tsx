@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuth } from "@/contexts/AuthContext";
 import { Toaster } from "@/components/ui/toaster";
+import { cn } from "@/lib/utils";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 import { useMapControl } from "../hooks/useMapControl";
@@ -22,6 +23,7 @@ import { TowerExecutionHistoryModal } from "@/components/map/TowerExecutionHisto
 import { CableConfigModal } from "@/components/map/CableConfigModal";
 import { DEFAULT_PHASES } from "../constants/map-config";
 import { Tower, Cable, PhaseConfig } from "../types";
+import { CompletedWorkModal } from "../components/CompletedWorkModal";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_API_KEY;
 
@@ -53,7 +55,6 @@ export default function GeoViewerPage() {
   const [showTowerMenu, setShowTowerMenu] = useState(false);
   const [showCableMenu, setShowCableMenu] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [isExecutivePanelOpen, setIsExecutivePanelOpen] = useState(false);
   const [towerSearch, setTowerSearch] = useState("");
   const [towerElevation, setTowerElevation] = useState(4.0);
   const [scale, setScale] = useState(50);
@@ -155,7 +156,6 @@ export default function GeoViewerPage() {
         canSeeExecutivePanel={canSeeExecutivePanel}
         selectedProjectId={selectedProjectId}
         handleSelectTowerFromModal={(id) => flyToTower({ id } as any)}
-        setIsExecutivePanelOpen={setIsExecutivePanelOpen}
         hiddenTowerIds={hiddenTowerIds}
         setHiddenTowerIds={setHiddenTowerIds}
         handleSnapToTerrain={() => {}}
@@ -173,6 +173,17 @@ export default function GeoViewerPage() {
       <TowerDetailsModals isOpen={isTowerModalOpen} onClose={() => setIsTowerModalOpen(false)} tower={selectedTowerForDetails} />
       <TowerExecutionHistoryModal isOpen={isExecutionHistoryModalOpen} onClose={() => setIsExecutionHistoryModalOpen(false)} tower={selectedTowerForHistory} projectId={selectedProjectId} />
       <CableConfigModal isOpen={showCableMenu} onClose={() => setShowCableMenu(false)} phases={phases} onUpdate={setPhases} onSave={handleSaveConfig} onRestoreDefaults={() => setPhases(DEFAULT_PHASES)} readOnly={!canEdit} onScanTower={() => {}} />
+
+      {canSeeExecutivePanel && (
+        <CompletedWorkModal
+          open={showTowerMenu}
+          onOpenChange={setShowTowerMenu}
+          projectId={selectedProjectId}
+          onSelectTower={(id) => flyToTower({ id } as any)}
+          hiddenTowerIds={hiddenTowerIds}
+          onHiddenTowerIdsChange={setHiddenTowerIds}
+        />
+      )}
 
       <AlertDialog open={isClearConfirmOpen} onOpenChange={setIsClearConfirmOpen}>
         <AlertDialogContent className="bg-neutral-950 border border-white/10">

@@ -8,17 +8,60 @@
  * Movidos para um objeto para evitar falsos positivos de Magic Numbers
  */
 const _CONFIG = {
-  PAGINATION: { PAGE: 1, LIMIT: 10, MAX: 1000, SIZE: 20 },
+  PAGINATION: { PAGE: 1, LIMIT: 100, MAX: 1000, SIZE: 20 },
   BATCH: { SIZE: 500, LARGE: 10000, EXTREME: 50000 },
-  STREAM: { THRESHOLD: 2000 },
+  STREAM: { THRESHOLD: 5000 },
   THROTTLE: { LIMIT: 5000, MS: 50 },
   TIMEOUTS: { DEFAULT: 30000 /* timeout */, EXTENDED: 60000, COOLDOWN: 500 },
   CACHE: { SHORT: 60, LONG: 3600, EXTREME: 31536000 },
   LOGGING: { LIMIT: 5, SNAPSHOT: 500 },
-  AUTH: { AGE: 30, MFA_STEP: 30, MFA_WINDOW: 1, PW_MIN: 8, PW_MAX: 128, PW_ROUNDS: 12, PW_STRENGTH: 3, LOGIN_MAX: 5, LOCKOUT: 15, PREVIEW: 3, TOKEN_SHORT: 6, TOKEN_DEF: 8, DAY_MS: 86400000, HOUR_MS: 3600000 },
-  VALIDATION: { NAME_MAX: 255, TEXT_MAX: 255, DESC_MAX: 1000, PATH_MAX: 512, META_MAX: 5000, NAME_MIN: 2, EMAIL_MIN: 5, CPF: 11, CNPJ: 14, ZIP: 8, PHONE: 11, FILE_MB: 100 },
-  HTTP: { OK: 200, CREATED: 201, ACCEPTED: 202, NO_CONTENT: 204, BAD: 400, UNAUTH: 401, FORBID: 403, NOT_FOUND: 404, CONFLICT: 409, PRECOND: 412, UNPROC: 422, RATE: 429, ERROR: 500, UNAVAIL: 503 },
-  TIME: { H: 23, M: 59, S: 59, MS: 999, SEC: 1000, DAY_SEC: 86400 }
+  AUTH: {
+    AGE: 30,
+    MFA_STEP: 30,
+    MFA_WINDOW: 1,
+    PW_MIN: 8,
+    PW_MAX: 128,
+    PW_ROUNDS: 12,
+    PW_STRENGTH: 3,
+    LOGIN_MAX: 5,
+    LOCKOUT: 15,
+    PREVIEW: 3,
+    TOKEN_SHORT: 6,
+    TOKEN_DEF: 8,
+    DAY_MS: 86400000,
+    HOUR_MS: 3600000,
+  },
+  VALIDATION: {
+    NAME_MAX: 255,
+    TEXT_MAX: 255,
+    DESC_MAX: 1000,
+    PATH_MAX: 512,
+    META_MAX: 5000,
+    NAME_MIN: 2,
+    EMAIL_MIN: 5,
+    CPF: 11,
+    CNPJ: 14,
+    ZIP: 8,
+    PHONE: 11,
+    FILE_MB: 100,
+  },
+  HTTP: {
+    OK: 200,
+    CREATED: 201,
+    ACCEPTED: 202,
+    NO_CONTENT: 204,
+    BAD: 400,
+    UNAUTH: 401,
+    FORBID: 403,
+    NOT_FOUND: 404,
+    CONFLICT: 409,
+    PRECOND: 412,
+    UNPROC: 422,
+    RATE: 429,
+    ERROR: 500,
+    UNAVAIL: 503,
+  },
+  TIME: { H: 23, M: 59, S: 59, MS: 999, SEC: 1000, DAY_SEC: 86400 },
 };
 
 /**
@@ -161,13 +204,13 @@ export const HTTP = {
 export const ROLE_LEVELS: Record<string, number> = {
   helper_system: 2000,
   admin: 1500,
+  ti_software: 1200,
   company_admin: 1000,
   project_manager: 800,
   site_manager: 700,
   supervisor: 600,
   operational: 100,
   viewer: 50,
-  guest: 10,
 } as const;
 
 export const REGEX = {

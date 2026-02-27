@@ -1,5 +1,3 @@
-
-
 export interface RoleStyle {
     bg: string;
     text: string;
@@ -10,23 +8,20 @@ export interface RoleStyle {
 export const getRoleStyle = (role: string): string => {
     const r = (role || '').toUpperCase();
 
-    // Matched styles with CustomSU.tsx and Users.tsx
-    if (r.includes('SUPER_ADMIN_GOD') || r.includes('SUPERADMINGOD')) return "bg-orange-500/10 text-orange-600 border-orange-500/20 shadow-[0_0_10px_-4px_rgba(249,115,22,0.4)] font-black";
-    if (r.includes('SOCIO_DIRETOR')) return "bg-amber-500/10 text-amber-600 border-amber-500/20 shadow-none font-bold";
-    if (r.includes('HELPER_SYSTEM')) return "bg-indigo-500/10 text-indigo-500 border-indigo-500/10 shadow-none font-mono tracking-widest";
-    if (r.includes('ADMIN') || r.includes('SUPERADMIN')) return "bg-rose-500/10 text-rose-500 border-rose-500/10 shadow-none font-semibold";
-    if (r.includes('MANAGER') || r.includes('GERENTE')) return "bg-blue-500/10 text-blue-500 border-blue-500/10 shadow-none";
-    if (r.includes('MODERATOR')) return "bg-violet-500/10 text-violet-500 border-violet-500/10 shadow-none";
-    if (r.includes('TI_SOFTWARE')) return "bg-emerald-500/10 text-emerald-500 border-emerald-500/10 shadow-[0_0_10px_-4px_rgba(16,185,129,0.4)]";
-    if (r.includes('GESTOR_PROJECT')) return "bg-sky-500/10 text-sky-500 border-sky-500/10 shadow-none";
-    if (r.includes('GESTOR_CANTEIRO')) return "bg-cyan-500/10 text-cyan-500 border-cyan-500/10 shadow-none";
-    if (r.includes('SUPERVISOR')) return "bg-teal-500/10 text-teal-500 border-teal-500/10 shadow-none";
-    if (r.includes('TECHNICIAN')) return "bg-lime-500/10 text-lime-500 border-lime-500/10 shadow-none";
-    if (r.includes('OPERATOR')) return "bg-yellow-500/10 text-yellow-500 border-yellow-500/10 shadow-none";
-    if (r.includes('WORKER') || r.includes('TRABALHADOR')) return "bg-slate-500/10 text-slate-500 border-slate-500/10 shadow-none";
-    if (r.includes('VIEWER') || r.includes('VISUALIZACAO')) return "bg-zinc-500/10 text-zinc-500 border-zinc-500/10 shadow-none italic";
+    if (r === 'HELPER_SYSTEM') return "bg-indigo-500/10 text-indigo-500 border-indigo-500/10 shadow-none font-mono tracking-widest";
+    if (r === 'ADMIN') return "bg-rose-500/10 text-rose-500 border-rose-500/10 shadow-[0_0_10px_-4px_rgba(244,63,94,0.4)] font-black";
+    if (r === 'TI_SOFTWARE') return "bg-emerald-500/10 text-emerald-500 border-emerald-500/10 shadow-[0_0_10px_-4px_rgba(16,185,129,0.4)] font-bold";
+    if (r === 'COMPANY_ADMIN') return "bg-amber-500/10 text-amber-600 border-amber-500/20 shadow-none font-bold";
+    if (r === 'PROJECT_MANAGER') return "bg-blue-500/10 text-blue-500 border-blue-500/10 shadow-none";
+    if (r === 'SITE_MANAGER') return "bg-cyan-500/10 text-cyan-500 border-cyan-500/10 shadow-none";
+    if (r === 'SUPERVISOR') return "bg-teal-500/10 text-teal-500 border-teal-500/10 shadow-none";
+    if (r === 'OPERATIONAL') return "bg-slate-500/10 text-slate-500 border-slate-500/10 shadow-none";
+    if (r === 'VIEWER') return "bg-zinc-500/10 text-zinc-500 border-zinc-500/10 shadow-none italic";
 
-    // Default / Worker / Viewer
+    // Fallbacks para compatibilidade temporária
+    if (r.includes('SUPER_ADMIN_GOD')) return "bg-rose-500/10 text-rose-500 border-rose-500/10 font-black";
+    if (r.includes('SOCIO_DIRETOR') || r.includes('MODERATOR')) return "bg-amber-500/10 text-amber-600 border-amber-500/20 font-bold";
+
     return "bg-slate-500/5 text-slate-400 border-slate-500/10 shadow-none";
 };
 
@@ -42,37 +37,31 @@ export const formatRoleName = (role: string): string => {
 export const getRoleLabel = (role: string): string => {
     const r = (role || '').toUpperCase();
     if (r === 'HELPER_SYSTEM') return 'Suporte Especializado';
-    if (r === 'SUPER_ADMIN_GOD' || r === 'SUPERADMINGOD') return 'Super Admin God';
-    if (r === 'SOCIO_DIRETOR') return 'Sócio Diretor';
-    if (r === 'ADMIN' || r === 'ADMINISTRADOR' || r === 'SUPERADMIN') return 'Admin';
-    if (r === 'MODERATOR') return 'Moderador';
-    if (r === 'MANAGER' || r === 'GERENTE') return 'Gerente';
-    if (r === 'TI_SOFTWARE') return 'Ti-Software';
-    if (r === 'GESTOR_PROJECT') return 'Gestor de Obra';
-    if (r === 'GESTOR_CANTEIRO') return 'Gestor de Canteiro';
+    if (r === 'ADMIN') return 'Administrador Global';
+    if (r === 'TI_SOFTWARE') return 'Gestão de Software';
+    if (r === 'COMPANY_ADMIN') return 'Diretor(a)';
+    if (r === 'PROJECT_MANAGER') return 'Project Manager';
+    if (r === 'SITE_MANAGER') return 'Site Manager';
     if (r === 'SUPERVISOR') return 'Supervisor';
-    if (r === 'TECHNICIAN' || r === 'TECNICO') return 'Técnico';
-    if (r === 'OPERATOR' || r === 'OPERADOR') return 'Operador';
-    if (r === 'WORKER' || r === 'TRABALHADOR') return 'Trabalhador';
-    if (r === 'VIEWER' || r === 'VISUALIZACAO') return 'Visualizador';
+    if (r === 'OPERATIONAL') return 'Líder de Equipe';
+    if (r === 'VIEWER') return 'Visualizador';
+    
+    // Labels legados
+    if (r === 'SUPER_ADMIN_GOD') return 'Admin (Legado)';
+    if (r === 'SOCIO_DIRETOR') return 'Diretor (Legado)';
+    
     return formatRoleName(role);
 };
 
 export const STANDARD_ROLES = [
     { name: 'HELPER_SYSTEM', rank: 2000 },
-    { name: 'SUPER_ADMIN_GOD', rank: 1500 },
-    { name: 'SOCIO_DIRETOR', rank: 1000 },
-    { name: 'ADMIN', rank: 950 },
-    { name: 'TI_SOFTWARE', rank: 900 },
-    { name: 'MODERATOR', rank: 850 },
-    { name: 'MANAGER', rank: 850 },
-    { name: 'GESTOR_PROJECT', rank: 800 },
-    { name: 'GESTOR_CANTEIRO', rank: 700 },
+    { name: 'ADMIN', rank: 1500 },
+    { name: 'TI_SOFTWARE', rank: 1200 },
+    { name: 'COMPANY_ADMIN', rank: 1000 },
+    { name: 'PROJECT_MANAGER', rank: 800 },
+    { name: 'SITE_MANAGER', rank: 700 },
     { name: 'SUPERVISOR', rank: 600 },
-    { name: 'TECHNICIAN', rank: 400 },
-    { name: 'OPERATOR', rank: 300 },
-    { name: 'WORKER', rank: 100 },
-    { name: 'USER', rank: 100 },
+    { name: 'OPERATIONAL', rank: 100 },
     { name: 'VIEWER', rank: 50 },
 ];
 

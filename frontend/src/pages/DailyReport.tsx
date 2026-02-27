@@ -897,24 +897,58 @@ export default function DailyReport() {
       // SERVIÇOS PRELIMINARES
       "CROQUI DE ACESSO": "SERVIÇOS PRELIMINARES",
       "SONDAGEM": "SERVIÇOS PRELIMINARES",
+      "PASSIVO AMBIENTAL": "SERVIÇOS PRELIMINARES",
       "CONFERÊNCIA DE PERFIL": "SERVIÇOS PRELIMINARES",
+      "MARCAÇÃO DE CAVAS": "SERVIÇOS PRELIMINARES",
+      "SEÇÃO DIAGONAL": "SERVIÇOS PRELIMINARES",
       "SUPRESSÃO VEGETAL (ÁREA)": "SERVIÇOS PRELIMINARES",
+      "SUPRESSÃO VEGETAL (FAIXA)": "SERVIÇOS PRELIMINARES",
+      "SUPRESSÃO VEGETAL (CORTE)": "SERVIÇOS PRELIMINARES",
       "ABERTURA DE ACESSOS": "SERVIÇOS PRELIMINARES",
-      // FUNDAÇÃO
-      "ESCAVAÇÃO": "FUNDAÇÃO",
-      "ARMAÇÃO": "FUNDAÇÃO",
-      "CONCRETAGEM": "FUNDAÇÃO",
-      "REATERRO": "FUNDAÇÃO",
-      // MONTAGEM
-      "PRÉ-MONTAGEM": "MONTAGEM",
-      "IÇAMENTO": "MONTAGEM",
-      "REVISÃO": "MONTAGEM",
-      "TORQUEAMENTO": "MONTAGEM",
-      // CABOS
-      "LANÇAMENTO CABO GUIA": "CABOS",
-      "LANÇAMENTO CONDUTOR": "CABOS",
-      "GRAMPEAÇÃO": "CABOS",
-      "REGULAÇÃO": "CABOS"
+      "RECUPERAÇÃO DE ACESSO": "SERVIÇOS PRELIMINARES",
+      // FUNDAÇÕES
+      "ESCAVAÇÃO": "FUNDAÇÕES",
+      "ESCAVAÇÃO (MASTRO/PÉ)": "FUNDAÇÕES",
+      "CRAVAÇÃO DE ESTACAS": "FUNDAÇÕES",
+      "ARMAÇÃO": "FUNDAÇÕES",
+      "ARMAÇÃO (MASTRO/PÉ)": "FUNDAÇÕES",
+      "NIVELAMENTO / PREPARAÇÃO": "FUNDAÇÕES",
+      "PREPARAÇÃO / NIVELAMENTO": "FUNDAÇÕES",
+      "CONCRETAGEM": "FUNDAÇÕES",
+      "CONCRETAGEM (MASTRO/PÉ)": "FUNDAÇÕES",
+      "REATERRO": "FUNDAÇÕES",
+      "REATERRO (MASTRO/PÉ)": "FUNDAÇÕES",
+      "ENSAIO DE ARRANCAMENTO": "FUNDAÇÕES",
+      "FUNDAÇÃO 100%": "FUNDAÇÕES",
+      // MONTAGEM DE TORRES
+      "DISTRIBUIÇÃO / TRANSPORTE": "MONTAGEM DE TORRES",
+      "PRÉ-MONTAGEM EM SOLO": "MONTAGEM DE TORRES",
+      "PRÉ-MONTAGEM": "MONTAGEM DE TORRES",
+      "MONTAGEM / IÇAMENTO": "MONTAGEM DE TORRES",
+      "IÇAMENTO": "MONTAGEM DE TORRES",
+      "REVISÃO FINAL / FLAMBAGEM": "MONTAGEM DE TORRES",
+      "REVISÃO": "MONTAGEM DE TORRES",
+      "GIRO E PRUMO": "MONTAGEM DE TORRES",
+      "TORQUEAMENTO": "MONTAGEM DE TORRES",
+      // SISTEMAS DE ATERRAMENTO
+      "INSTALAÇÃO CABO CONTRAPESO": "SISTEMAS DE ATERRAMENTO",
+      "MEDIÇÃO DE RESISTÊNCIA": "SISTEMAS DE ATERRAMENTO",
+      "ATERRAMENTO DE CERCAS": "SISTEMAS DE ATERRAMENTO",
+      // LANÇAMENTO DE CABOS
+      "INSTALAÇÃO DE CAVALETES": "LANÇAMENTO DE CABOS",
+      "LANÇAMENTO DE CABO PILOTO": "LANÇAMENTO DE CABOS",
+      "LANÇAMENTO CABO GUIA": "LANÇAMENTO DE CABOS",
+      "LANÇAMENTO DE PARA-RAIOS": "LANÇAMENTO DE CABOS",
+      "CADEIAS E BANDOLAS": "LANÇAMENTO DE CABOS",
+      "LANÇAMENTO DE CONDUTORES": "LANÇAMENTO DE CABOS",
+      "LANÇAMENTO CONDUTOR": "LANÇAMENTO DE CABOS",
+      "NIVELAMENTO E GRAMPEAÇÃO": "LANÇAMENTO DE CABOS",
+      "GRAMPEAÇÃO": "LANÇAMENTO DE CABOS",
+      "JUMPERS / ESPAÇADORES": "LANÇAMENTO DE CABOS",
+      "ESFERAS DE SINALIZAÇÃO": "LANÇAMENTO DE CABOS",
+      "DEFENSAS DE ESTAIS": "LANÇAMENTO DE CABOS",
+      "ENTREGA FINAL / COMISSIONAMENTO": "LANÇAMENTO DE CABOS",
+      "REGULAÇÃO": "LANÇAMENTO DE CABOS",
     };
 
     uniqueStages.forEach(s => {
@@ -937,14 +971,26 @@ export default function DailyReport() {
       // 3. Critérios de busca por palavras-chave
       if (!categoryName) {
         const descUpper = (s.description || "").toUpperCase();
-        const keywords = ["FUNDAÇÃO", "MONTAGEM", "CABOS", "PRELIMINARES", "ESTRUTURA"];
+        const keywords = ["FUNDAÇ", "MONTAGEM", "CABOS", "PRELIMINARES", "ATERRAMENTO", "ESTRUTURA"];
         
         const foundInDesc = keywords.find(k => descUpper.includes(k));
         if (foundInDesc) {
-           categoryName = foundInDesc === "PRELIMINARES" ? "SERVIÇOS PRELIMINARES" : foundInDesc;
+           if (foundInDesc === "PRELIMINARES") categoryName = "SERVIÇOS PRELIMINARES";
+           else if (foundInDesc === "FUNDAÇ") categoryName = "FUNDAÇÕES";
+           else if (foundInDesc === "MONTAGEM") categoryName = "MONTAGEM DE TORRES";
+           else if (foundInDesc === "ATERRAMENTO") categoryName = "SISTEMAS DE ATERRAMENTO";
+           else if (foundInDesc === "CABOS") categoryName = "LANÇAMENTO DE CABOS";
+           else categoryName = foundInDesc;
         } else {
            const foundInName = keywords.find(k => nameUpper.includes(k));
-           if (foundInName) categoryName = foundInName === "PRELIMINARES" ? "SERVIÇOS PRELIMINARES" : foundInName;
+           if (foundInName) {
+             if (foundInName === "PRELIMINARES") categoryName = "SERVIÇOS PRELIMINARES";
+             else if (foundInName === "FUNDAÇ") categoryName = "FUNDAÇÕES";
+             else if (foundInName === "MONTAGEM") categoryName = "MONTAGEM DE TORRES";
+             else if (foundInName === "ATERRAMENTO") categoryName = "SISTEMAS DE ATERRAMENTO";
+             else if (foundInName === "CABOS") categoryName = "LANÇAMENTO DE CABOS";
+             else categoryName = foundInName;
+           }
         }
       }
 
@@ -968,9 +1014,10 @@ export default function DailyReport() {
       .sort((a, b) => {
         const orderPriority: Record<string, number> = {
           "SERVIÇOS PRELIMINARES": 1,
-          "FUNDAÇÃO": 2,
-          "MONTAGEM": 3,
-          "CABOS": 4,
+          "FUNDAÇÕES": 2,
+          "MONTAGEM DE TORRES": 3,
+          "SISTEMAS DE ATERRAMENTO": 4,
+          "LANÇAMENTO DE CABOS": 5,
           "GERAL": 10
         };
         return (orderPriority[a.category] || 50) - (orderPriority[b.category] || 50);

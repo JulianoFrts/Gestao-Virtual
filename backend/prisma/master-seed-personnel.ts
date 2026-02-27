@@ -8,6 +8,7 @@ import { DATA_PART_4 } from "./data-real-4";
 import { DATA_PART_5 } from "./data-real-5";
 import { DATA_PART_6 } from "./data-real-6";
 import { DATA_PART_7 } from "./data-real-7";
+import { DATA_LA_ANONYMIZED } from "./data-la-anonymized";
 import { JOB_HIERARCHY, PASSWORD_HASHES } from "../src/lib/constants/business";
 
 dotenv.config();
@@ -39,6 +40,16 @@ export async function seedPersonnel(prisma: PrismaClient = globalPrisma) {
   ];
 
   console.log(`Iniciando re-carga de ${ALL_DATA.length} funcionários...`);
+
+  // Sobrescrever nomes com dados anonimizados se houver match de matrícula
+  const anonymizedMap = new Map(
+    DATA_LA_ANONYMIZED.map((d) => [d.matricula, d.nome]),
+  );
+  ALL_DATA.forEach((person) => {
+    if (anonymizedMap.has(person.matricula)) {
+      person.nome = anonymizedMap.get(person.matricula)!;
+    }
+  });
 
   // 1. Localizar Projeto "LA TESTE"
   const project = await prisma.project.findFirst({
@@ -153,8 +164,8 @@ export async function seedPersonnel(prisma: PrismaClient = globalPrisma) {
           name: actualNome,
           authCredential: {
             update: {
-              role: person.moe === "MOI" ? "PROJECT_MANAGER" : "OPERATIONAL"
-            }
+              role: person.moe === "MOI" ? "PROJECT_MANAGER" : "OPERATIONAL",
+            },
           },
           affiliation: {
             update: {

@@ -34,7 +34,7 @@ const ActivityPresetsModal = ({
 }: ActivityPresetsModalProps) => {
   const queryClient = useQueryClient();
   const [selectedCategories, setSelectedCategories] = useState<Set<number>>(new Set());
-  const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set([0, 1, 2, 3]));
+  const [expandedCategories, setExpandedCategories] = useState<Set<number>>(new Set([0, 1, 2, 3, 4]));
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const toggleCategory = (index: number) => {

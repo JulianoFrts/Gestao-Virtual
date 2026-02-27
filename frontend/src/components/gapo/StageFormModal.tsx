@@ -38,11 +38,17 @@ const DEFAULT_PRODUCTION_CATEGORIES: ProductionCategory[] = [
         name: 'SERVIÇOS PRELIMINARES',
         order: 1,
         activities: [
-            { id: 'act-croqui', name: 'Croqui de Acesso', weight: 1.0, order: 1 },
-            { id: 'act-sonda', name: 'Sondagem', weight: 1.0, order: 2 },
-            { id: 'act-conf', name: 'Conferência de Perfil', weight: 1.0, order: 3 },
-            { id: 'act-veg', name: 'Supressão Vegetal (Área)', weight: 1.0, order: 4 },
-            { id: 'act-acesso', name: 'Abertura de Acessos', weight: 1.0, order: 5 },
+            { id: 'act-croqui', name: 'Croqui de Acesso', weight: 1, order: 1 },
+            { id: 'act-sonda', name: 'Sondagem', weight: 1, order: 2 },
+            { id: 'act-passivo', name: 'Passivo Ambiental', weight: 1, order: 3 },
+            { id: 'act-conf', name: 'Conferência de Perfil', weight: 1, order: 4 },
+            { id: 'act-marc', name: 'Marcação de Cavas', weight: 1, order: 5 },
+            { id: 'act-secao', name: 'Seção Diagonal', weight: 1, order: 6 },
+            { id: 'act-veg-area', name: 'Supressão Vegetal (Área)', weight: 1, order: 7 },
+            { id: 'act-veg-faixa', name: 'Supressão Vegetal (Faixa)', weight: 1, order: 8 },
+            { id: 'act-veg-corte', name: 'Supressão Vegetal (Corte)', weight: 1, order: 9 },
+            { id: 'act-acesso', name: 'Abertura de Acessos', weight: 2, order: 10 },
+            { id: 'act-recup', name: 'Recuperação de Acesso', weight: 1, order: 11 },
         ]
     },
     {
@@ -50,32 +56,54 @@ const DEFAULT_PRODUCTION_CATEGORIES: ProductionCategory[] = [
         name: 'FUNDAÇÕES',
         order: 2,
         activities: [
-            { id: 'act-esc', name: 'Escavação (Mastro/Pé)', weight: 1.0, order: 1 },
-            { id: 'act-arm', name: 'Armação (Mastro/Pé)', weight: 1.0, order: 2 },
-            { id: 'act-conc', name: 'Concretagem (Mastro/Pé)', weight: 1.0, order: 3 },
-            { id: 'act-niv', name: 'Nivelamento / Preparação', weight: 0.5, order: 4 },
-            { id: 'act-reat', name: 'Reaterro', weight: 0.5, order: 5 },
+            { id: 'act-esc', name: 'Escavação (Mastro/Pé)', weight: 3, order: 1 },
+            { id: 'act-crav', name: 'Cravação de Estacas', weight: 3, order: 2 },
+            { id: 'act-arm', name: 'Armação (Mastro/Pé)', weight: 2, order: 3 },
+            { id: 'act-niv', name: 'Nivelamento / Preparação', weight: 2, order: 4 },
+            { id: 'act-conc', name: 'Concretagem (Mastro/Pé)', weight: 5, order: 5 },
+            { id: 'act-reat', name: 'Reaterro (Mastro/Pé)', weight: 2, order: 6 },
+            { id: 'act-ensaio', name: 'Ensaio de Arrancamento', weight: 1, order: 7 },
+            { id: 'act-fund100', name: 'Fundação 100%', weight: 1, order: 8 },
+        ]
+    },
+    {
+        id: 'cat-aterr',
+        name: 'SISTEMAS DE ATERRAMENTO',
+        order: 3,
+        activities: [
+            { id: 'act-contrap', name: 'Instalação Cabo Contrapeso', weight: 2, order: 1 },
+            { id: 'act-resist', name: 'Medição de Resistência', weight: 1, order: 2 },
+            { id: 'act-aterr-cerca', name: 'Aterramento de Cercas', weight: 1, order: 3 },
         ]
     },
     {
         id: 'cat-mont',
-        name: 'MONTAGEM',
-        order: 3,
+        name: 'MONTAGEM DE TORRES',
+        order: 4,
         activities: [
-            { id: 'act-pre-mont', name: 'Pré-Montagem', weight: 1.0, order: 1 },
-            { id: 'act-icamento', name: 'Içamento', weight: 1.0, order: 2 },
-            { id: 'act-rev', name: 'Revisão / Torque', weight: 0.5, order: 3 },
+            { id: 'act-distrib', name: 'Distribuição / Transporte', weight: 1, order: 1 },
+            { id: 'act-pre-mont', name: 'Pré-montagem em Solo', weight: 3, order: 2 },
+            { id: 'act-icamento', name: 'Montagem / Içamento', weight: 7, order: 3 },
+            { id: 'act-rev', name: 'Revisão Final / Flambagem', weight: 1, order: 4 },
+            { id: 'act-giro', name: 'Giro e Prumo', weight: 1, order: 5 },
         ]
     },
+
     {
         id: 'cat-cabos',
         name: 'LANÇAMENTO DE CABOS',
-        order: 4,
+        order: 5,
         activities: [
-            { id: 'act-lanc-guia', name: 'Lançamento Cabo Guia', weight: 1.0, order: 1 },
-            { id: 'act-lanc-cond', name: 'Lançamento Condutor', weight: 2.0, order: 2 },
-            { id: 'act-gramp', name: 'Grampeação', weight: 1.0, order: 3 },
-            { id: 'act-reg', name: 'Regulação', weight: 1.0, order: 4 },
+            { id: 'act-cavaletes', name: 'Instalação de Cavaletes', weight: 1, order: 1 },
+            { id: 'act-piloto', name: 'Lançamento de Cabo Piloto', weight: 2, order: 2 },
+            { id: 'act-pararaios', name: 'Lançamento de Para-raios', weight: 3, order: 3 },
+            { id: 'act-cadeias', name: 'Cadeias e Bandolas', weight: 2, order: 4 },
+            { id: 'act-condutores', name: 'Lançamento de Condutores', weight: 10, order: 5 },
+            { id: 'act-gramp', name: 'Nivelamento e Grampeação', weight: 3, order: 6 },
+            { id: 'act-jumpers', name: 'Jumpers / Espaçadores', weight: 2, order: 7 },
+            { id: 'act-esferas', name: 'Esferas de Sinalização', weight: 1, order: 8 },
+            { id: 'act-defensas', name: 'Defensas de Estais', weight: 1, order: 9 },
+            { id: 'act-entrega', name: 'Entrega Final / Comissionamento', weight: 1, order: 10 },
         ]
     }
 ];

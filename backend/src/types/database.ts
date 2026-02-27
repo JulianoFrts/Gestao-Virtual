@@ -139,7 +139,15 @@ export function buildUserWhereClause(
 
   // 5. Filtro OR Manual (PostgREST style: col.eq.input,col.is.null)
   if (filters.or) {
-    const ALLOWED_OR_COLS = ["projectId", "siteId", "companyId", "role", "status", "name", "email"];
+    const ALLOWED_OR_COLS = [
+      "projectId",
+      "siteId",
+      "companyId",
+      "role",
+      "status",
+      "name",
+      "email",
+    ];
     const orConditions = filters.or
       .split(",")
       .map((cond): Prisma.UserWhereInput | null => {
@@ -148,31 +156,43 @@ export function buildUserWhereClause(
 
         if (op === "eq") {
           if (["projectId", "siteId", "companyId"].includes(col)) {
-            return { affiliation: { [col]: input } as Prisma.UserAffiliationWhereInput };
+            return {
+              affiliation: { [col]: input } as Prisma.UserAffiliationWhereInput,
+            };
           }
           // Para colunas que pertencem ao User (name)
           if (col === "name") return { name: input };
           // Para colunas que pertencem ao AuthCredential (role, status, email)
-          return { authCredential: { [col]: input } as Prisma.AuthCredentialWhereInput };
+          return {
+            authCredential: { [col]: input } as Prisma.AuthCredentialWhereInput,
+          };
         }
         if (op === "is" && input === "null") {
           if (["projectId", "siteId", "companyId"].includes(col)) {
             return {
               OR: [
-                { affiliation: { [col]: null } as Prisma.UserAffiliationWhereInput },
-                { affiliation: null }
+                {
+                  affiliation: {
+                    [col]: null,
+                  } as Prisma.UserAffiliationWhereInput,
+                },
+                { affiliation: null },
               ],
             };
           }
           if (col === "name") return { name: null };
-          return { authCredential: { [col]: null } as Prisma.AuthCredentialWhereInput };
+          return {
+            authCredential: { [col]: null } as Prisma.AuthCredentialWhereInput,
+          };
         }
         return null;
       })
       .filter((c): c is Prisma.UserWhereInput => c !== null);
 
     if (orConditions.length > 0) {
-      where.OR = ((where.OR as Prisma.UserWhereInput[]) || []).concat(orConditions);
+      where.OR = ((where.OR as Prisma.UserWhereInput[]) || []).concat(
+        orConditions,
+      );
     }
   }
 
@@ -190,7 +210,11 @@ function buildSearchFilter(search?: string | null): Prisma.UserWhereInput {
     OR: [
       { authCredential: { email: { contains: search, mode: "insensitive" } } },
       { name: { contains: search, mode: "insensitive" } },
-      { affiliation: { registrationNumber: { contains: search, mode: "insensitive" } } },
+      {
+        affiliation: {
+          registrationNumber: { contains: search, mode: "insensitive" },
+        },
+      },
       { cpf: { contains: search, mode: "insensitive" } },
     ],
   };
@@ -217,13 +241,19 @@ function buildAccountFilters(filters: UserFilters): Prisma.UserWhereInput {
   // Regras de Corporate (apenas se não houver busca ativa)
   if (!filters.search || filters.search.trim() === "") {
     const corporateRoles: Role[] = [
-      "SUPER_ADMIN_GOD",
-      "SYSTEM_ADMIN",
+      "HELPER_SYSTEM",
+      "ADMIN",
+      "TI_SOFTWARE",
       "COMPANY_ADMIN",
+      "PROJECT_MANAGER",
+      "SITE_MANAGER",
     ];
     if (filters.onlyCorporate) {
       authWhere.role = { in: corporateRoles };
     } else if (filters.excludeCorporate) {
+      // Para Canteiro / Obra, inicialmente excluímos os cargos corporativos
+      // O filtro de "estar registrado" será tratado no buildAffiliationFilter se necessário,
+      // mas aqui garantimos que não mostramos a gestão.
       authWhere.role = { notIn: corporateRoles };
     }
   }
@@ -253,6 +283,18 @@ function buildAffiliationFilter(filters: UserFilters): Prisma.UserWhereInput {
   if (filters.projectId) affWhere.projectId = filters.projectId;
   if (filters.siteId) affWhere.siteId = filters.siteId;
   if (filters.companyId) affWhere.companyId = filters.companyId;
+
+  // Se for solicitado especificamente Canteiro/Obra (excludeCorporate),
+  // filtramos para mostrar apenas quem tem Empresa E (vínculo com obra OU canteiro).
+  if (filters.excludeCorporate) {
+    return {
+      affiliation: {
+        ...affWhere,
+        companyId: { not: null },
+        OR: [{ projectId: { not: null } }, { siteId: { not: null } }],
+      },
+    };
+  }
 
   if (Object.keys(affWhere).length > 0) {
     return { affiliation: affWhere };

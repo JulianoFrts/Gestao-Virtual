@@ -9,47 +9,63 @@ async function main() {
   const categories = PRODUCTION_CONFIG.CATEGORIES;
 
   for (const cat of categories) {
-    const dbCategory = await prisma.productionCategory.upsert({
+    // findFirst + create/update pattern (name is not @unique)
+    let dbCategory = await prisma.productionCategory.findFirst({
       where: { name: cat.name },
-      update: {
-        description: cat.description,
-        displayOrder: cat.order,
-      },
-      create: {
-        name: cat.name,
-        description: cat.description,
-        displayOrder: cat.order,
-      },
     });
 
-    console.log(`📂 Category: ${cat.name}`);
+    if (dbCategory) {
+      dbCategory = await prisma.productionCategory.update({
+        where: { id: dbCategory.id },
+        data: {
+          description: cat.description,
+          order: cat.order,
+        },
+      });
+      console.log(`📂 Updated Category: ${cat.name}`);
+    } else {
+      dbCategory = await prisma.productionCategory.create({
+        data: {
+          name: cat.name,
+          description: cat.description,
+          order: cat.order,
+        },
+      });
+      console.log(`📂 Created Category: ${cat.name}`);
+    }
 
-    // Achatar as atividades para evitar loop aninhado detectável
-    const activitiesData = cat.activities.map(act => ({
-      name: act.name,
-      displayOrder: act.order,
-      weight: act.weight,
-      categoryId: dbCategory.id
-    }));
+    // Seed activities for this category
+    for (const act of cat.activities) {
+      const existing = await prisma.productionActivity.findFirst({
+        where: { name: act.name, categoryId: dbCategory.id },
+      });
 
-    for (const actData of activitiesData) {
-        await prisma.productionActivity.upsert({
-            where: {
-                name_categoryId: {
-                    name: actData.name,
-                    categoryId: actData.categoryId
-                }
-            },
-            update: {
-                displayOrder: actData.displayOrder,
-                weight: actData.weight
-            },
-            create: actData
+      if (existing) {
+        await prisma.productionActivity.update({
+          where: { id: existing.id },
+          data: {
+            order: act.order,
+            weight: act.weight,
+          },
         });
+        console.log(`  ✅ Updated: ${act.name}`);
+      } else {
+        await prisma.productionActivity.create({
+          data: {
+            name: act.name,
+            order: act.order,
+            weight: act.weight,
+            categoryId: dbCategory.id,
+          },
+        });
+        console.log(`  ✨ Created: ${act.name}`);
+      }
     }
   }
 
-  console.log("✨ Production Categories Seed complete!");
+  console.log("\n🎯 Production Categories Seed complete!");
 }
 
-main().catch(console.error).finally(() => prisma.$disconnect());
+main()
+  .catch(console.error)
+  .finally(() => prisma.$disconnect());

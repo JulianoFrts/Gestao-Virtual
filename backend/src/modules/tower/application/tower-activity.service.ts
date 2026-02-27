@@ -38,8 +38,8 @@ export class TowerActivityService {
     );
 
     // Phase 1: Save parent activities (level 1) first
-    const parents = data.filter((entry) => element.level === 1);
-    const children = data.filter((entry) => element.level > 1);
+    const parents = data.filter((entry: any) => entry.level === 1);
+    const children = data.filter((entry: any) => entry.level > 1);
 
     const parentElementsToCreate: TowerActivityGoalData[] = [];
     const parentNameToId = new Map<string, string>();

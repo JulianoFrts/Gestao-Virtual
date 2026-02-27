@@ -46,6 +46,15 @@ async function main() {
   console.log("\n📌 STEP 4: Pessoal e Equipes");
   await seedPersonnel(prisma);
 
+  // 5. Sincronização de Permissões (Strict Mode: Helper & Admin)
+  console.log("\n📌 STEP 5: Sincronização de Permissões");
+  // Como o sync-permissions.ts é um script autônomo com prisma client próprio,
+  // vamos apenas avisar que ele deve ser rodado ou rodar via shell se possível.
+  // Mas para garantir o fluxo unificado, vamos rodar a lógica aqui se possível.
+  console.log(
+    "   (Executar npx ts-node backend/prisma/sync-permissions.ts após este seed)",
+  );
+
   console.log("\n===================================");
   console.log("✅ UNIFIED SEEDING v2 COMPLETE ✅");
 }

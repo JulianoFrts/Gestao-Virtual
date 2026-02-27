@@ -73,19 +73,19 @@ const querySchema = paginationQuerySchema.extend({
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((resultVal) => resultVal || undefined),
+    .transform((input) => input || undefined),
   status: z
     .string()
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((resultVal) => resultVal || undefined),
+    .transform((input) => input || undefined),
   search: z
     .string()
     .optional()
     .nullable()
     .or(z.literal(""))
-    .transform((resultVal) => resultVal || undefined),
+    .transform((input) => input || undefined),
 });
 
 // ===== HEAD (Health Check) =====
@@ -129,6 +129,13 @@ export async function GET(request: NextRequest): Promise<Response> {
       page,
       limit,
       include: {
+        id: true,
+        name: true,
+        status: true,
+        address: true,
+        code: true,
+        startDate: true,
+        endDate: true,
         company: { select: { id: true, name: true } },
         _count: { select: { sites: true, userAffiliations: true } },
       },

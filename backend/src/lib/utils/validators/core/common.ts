@@ -1,34 +1,36 @@
 import { z } from "zod";
 import { CONSTANTS, ROLE_LEVELS, ACCOUNT_STATUS } from "@/lib/constants";
-import { emptyToUndefined, stripOperator } from "./base";
+import { emptyToUndefined } from "./base";
 
 /**
  * Maps legacy ROLE_LEVELS keys → Prisma Role enum values.
- * Keys that already match Prisma (e.g. "operational") are identity-mapped.
+ * The 8 standard roles are identity-mapped (lowercase → UPPERCASE).
+ * Legacy names are mapped to the closest standard equivalent.
  */
 const ROLE_TO_PRISMA: Record<string, string> = {
-  helper_system: "SUPER_ADMIN_GOD",
-  super_admin_god: "SUPER_ADMIN_GOD",
-  super_admin: "SYSTEM_ADMIN",
-  socio_diretor: "COMPANY_ADMIN",
-  admin: "SYSTEM_ADMIN",
-  ti_software: "SYSTEM_ADMIN",
-  moderator: "SYSTEM_ADMIN",
-  manager: "PROJECT_MANAGER",
-  gestor_project: "PROJECT_MANAGER",
-  gestor_canteiro: "SITE_MANAGER",
-  supervisor: "SUPERVISOR",
-  technician: "OPERATIONAL",
-  operator: "OPERATIONAL",
-  operational: "OPERATIONAL",
-  worker: "VIEWER",
-  user: "VIEWER",
-  // Direct Prisma enum names (lowercase) — identity mapping
-  system_admin: "SYSTEM_ADMIN",
+  // Standard 8 roles (identity mapping)
+  helper_system: "HELPER_SYSTEM",
+  admin: "ADMIN",
+  ti_software: "TI_SOFTWARE",
   company_admin: "COMPANY_ADMIN",
   project_manager: "PROJECT_MANAGER",
   site_manager: "SITE_MANAGER",
+  supervisor: "SUPERVISOR",
+  operational: "OPERATIONAL",
   viewer: "VIEWER",
+  // Legacy names → standard mapping
+  super_admin_god: "HELPER_SYSTEM",
+  system_admin: "ADMIN",
+  super_admin: "ADMIN",
+  socio_diretor: "COMPANY_ADMIN",
+  moderator: "ADMIN",
+  manager: "PROJECT_MANAGER",
+  gestor_project: "PROJECT_MANAGER",
+  gestor_canteiro: "SITE_MANAGER",
+  technician: "OPERATIONAL",
+  operator: "OPERATIONAL",
+  worker: "VIEWER",
+  user: "VIEWER",
 };
 
 export const roleSchema = z
@@ -46,9 +48,10 @@ export const roleFilterSchema = z
     (v) => {
       if (!v) return true;
       const roles = v.split(",");
-      return roles.every((r) =>
-        Object.keys(ROLE_LEVELS).includes(r.trim().toLowerCase()),
-      );
+      return roles.every((r) => {
+        const val = r.trim().toLowerCase();
+        return Object.keys(ROLE_LEVELS).includes(val) || !!ROLE_TO_PRISMA[val];
+      });
     },
     {
       message: "Uma ou mais roles são inválidas",

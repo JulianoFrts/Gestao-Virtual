@@ -11,7 +11,7 @@ import { ROLE_LEVELS } from "./index";
 
 export const GOD_ROLES = ["HELPER_SYSTEM", "ADMIN"] as const;
 
-export const SYSTEM_OWNERS = ["HELPER_SYSTEM", "ADMIN"] as const;
+export const SYSTEM_OWNERS = ["HELPER_SYSTEM", "ADMIN", "TI_SOFTWARE"] as const;
 
 export const MANAGEMENT_ROLES = [
   ...SYSTEM_OWNERS,
@@ -34,6 +34,29 @@ export const FIELD_ROLES = [
 export const ROLE_FLAGS: Record<string, readonly string[]> = {
   HELPER_SYSTEM: ["*"],
   ADMIN: ["*"],
+
+  TI_SOFTWARE: [
+    "users.manage",
+    "db_hub.manage",
+    "audit_logs.view",
+    "custom_su.manage",
+    "settings.mfa",
+    "showAdminMenu",
+    "showMaintenance",
+    "functions.manage",
+    "projects.view",
+    "projects.progress",
+    "sites.view",
+    "companies.view",
+    "team_composition",
+    "employees.manage",
+    "viewer_3d.view",
+    "work_progress.view",
+    "clock",
+    "daily_reports",
+    "time_records.view",
+    "settings.profile",
+  ],
 
   COMPANY_ADMIN: [
     "users.manage",
@@ -121,6 +144,7 @@ export const ROLE_FLAGS: Record<string, readonly string[]> = {
 export const SECURITY_RANKS = {
   MASTER: ROLE_LEVELS.helper_system,
   GLOBAL: ROLE_LEVELS.admin,
+  TI: ROLE_LEVELS.ti_software,
   ADMIN: ROLE_LEVELS.company_admin,
   MANAGEMENT: ROLE_LEVELS.project_manager,
   OPERATIONAL: ROLE_LEVELS.operational,

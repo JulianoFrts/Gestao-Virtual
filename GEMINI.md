@@ -37,5 +37,11 @@ O motor de auditoria (`npm run audit:scan`) é a autoridade final sobre a saúde
 - **Modelagem de Usuário:** O modelo `User` é central. Detalhes de vínculo empregatício residem em `Affiliation` e endereços em `UserAddress` (1:1).
 - **Performance:** Evite loops $O(n^2)$ em scripts de seed. Utilize `Maps` para indexação em memória e `createMany`/`upsert` em lote.
 
+## 7. Padrões de Frontend e UI
+- **Componentes Baseados em Permissões:** Sempre que possível, utilize o hook `usePermissions` ou a função `can()` para encapsular a lógica de exibição de elementos. Botões de ação, menus e campos sensíveis devem ser renderizados condicionalmente com base nas flags de autorização do usuário.
+- **Carregamento Assíncrono (Batching):** Para listagens que podem exceder 100 itens, utilize obrigatoriamente carregamento por lotes (Infinite Scroll ou "Carregar Mais") para evitar o congelamento do navegador.
+- **Arquitetura de Componentes:** Páginas complexas devem ser quebradas em sub-componentes especializados (ex: `UserCard`, `UserFormDialog`) para facilitar a manutenção e reutilização.
+- **Hierarchy Awareness:** A interface deve refletir a soberania de hierarquia, desabilitando ações contra usuários de nível superior ou com a flag `isSystemAdmin` ativa.
+
 ---
 *Este documento foi gerado e validado em parceria com a Gemini CLI para assegurar a excelência técnica do sistema Orion.*

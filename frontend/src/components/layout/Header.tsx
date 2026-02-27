@@ -349,23 +349,11 @@ export function Header({ onMenuClick, title: propTitle }: HeaderProps) {
                         className={cn(
                           "text-sm font-medium truncate",
                           // Dynamic Color by Role
-                          (roleUpper === "SUPER_ADMIN_GOD" ||
-                            roleUpper === "SYSTEM_HELPER") &&
+                          (roleUpper === "HELPER_SYSTEM" ||
+                            roleUpper === "ADMIN") &&
                           "text-[#ea580c] font-extrabold drop-shadow-[0_0_8px_rgba(234,88,12,0.4)]",
-                          (roleUpper === "SUPER_ADMIN" ||
-                            roleUpper === "SUPERADMIN") &&
-                          "text-[#f4a261] font-bold",
-                          roleUpper === "ADMIN" && "text-[#4dabf7] font-bold",
                           roleUpper === "TI_SOFTWARE" &&
                           "text-[#00ff9c] font-bold font-mono tracking-tight",
-                          ![
-                            "SUPER_ADMIN_GOD",
-                            "SYSTEM_HELPER",
-                            "SUPER_ADMIN",
-                            "SUPERADMIN",
-                            "ADMIN",
-                            "TI_SOFTWARE",
-                          ].includes(roleUpper) &&
                           isProtectedUser(profile as any) &&
                           "text-orange-400 font-extrabold",
                         )}
@@ -373,8 +361,8 @@ export function Header({ onMenuClick, title: propTitle }: HeaderProps) {
                         {displayName}
                       </p>
                       {isProtectedUser(profile as any) &&
-                        (roleUpper === "SUPER_ADMIN_GOD" ||
-                          roleUpper === "SYSTEM_HELPER") && (
+                        (roleUpper === "HELPER_SYSTEM" ||
+                          roleUpper === "ADMIN") && (
                           <ShieldCheck className="w-3 h-3 text-orange-500 shrink-0" />
                         )}
                     </div>
@@ -383,47 +371,31 @@ export function Header({ onMenuClick, title: propTitle }: HeaderProps) {
                     </p>
                   </div>
                 </div>
-
+ 
                 <div className="mt-2">
                   {/* Premium Badge Logic for Dropdown */}
-                  {roleUpper === "SUPER_ADMIN_GOD" ||
-                    roleUpper === "SYSTEM_HELPER" ? (
+                  {roleUpper === "HELPER_SYSTEM" ? (
                     <div className="role-badge role-super-admin-god shadow-[0_0_20px_-5px_rgba(255,183,3,0.5)] scale-90 origin-left">
-                      <span className="relative z-10">Super Admin God</span>
+                      <span className="relative z-10">Suporte Especializado</span>
                       <span className="orb"></span>
                       <span className="orb"></span>
                       <span className="orb"></span>
-                    </div>
-                  ) : roleUpper === "SUPER_ADMIN" ||
-                    roleUpper === "SUPERADMIN" ? (
-                    <div className="role-badge role-socio-diretor scale-90 origin-left">
-                      <span className="flex items-center gap-1.5">
-                        <ShieldCheck className="w-3 h-3" />
-                        Sócio Diretor
-                      </span>
                     </div>
                   ) : roleUpper === "ADMIN" ? (
-                    <div className="role-badge role-admin scale-90 origin-left">
-                      <span className="flex items-center gap-1.5">
-                        <Shield className="w-3 h-3" />
-                        Admin
-                      </span>
-                    </div>
-                  ) : roleUpper === "TI_SOFTWARE" ? (
-                    <div className="role-badge role-ti-software scale-90 origin-left">
-                      <span className="flex items-center gap-1.5">
-                        <Laptop className="w-3 h-3" />
-                        TI-Software
+                    <div className="role-badge role-admin shadow-[0_0_15px_-5px_rgba(244,63,94,0.5)] scale-90 origin-left">
+                      <span className="flex items-center gap-1.5 font-black">
+                        <ShieldCheck className="w-3 h-3" />
+                        Administrador Global
                       </span>
                     </div>
                   ) : (
                     <span
                       className={cn(
                         "inline-block px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-tight transition-all",
-                        getRoleStyle(profile?.role || "worker"),
+                        getRoleStyle(profile?.role || "viewer"),
                       )}
                     >
-                      {getRoleLabel(profile?.role || "worker")}
+                      {getRoleLabel(profile?.role || "viewer")}
                     </span>
                   )}
                 </div>

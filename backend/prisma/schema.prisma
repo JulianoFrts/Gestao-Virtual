@@ -1127,6 +1127,7 @@ enum RecordType {
 enum Role {
   HELPER_SYSTEM   // Suporte total / Desenvolvedor (Rank 2000)
   ADMIN           // Administrador Global do Software (Rank 1500)
+  TI_SOFTWARE     // Suporte Técnico e Gestão de Software
   COMPANY_ADMIN   // Gestor Principal da Empresa (Dono/Diretor)
   PROJECT_MANAGER // Gestor de Obra (Acesso total ao projeto)
   SITE_MANAGER    // Gestor de Canteiro

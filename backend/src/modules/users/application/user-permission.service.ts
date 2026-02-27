@@ -13,6 +13,7 @@ export class UserPermissionService {
       const map: Record<string, string> = {
         "HELPER_SYSTEM": "helper_system",
         "ADMIN": "admin",
+        "TI_SOFTWARE": "ti_software",
         "COMPANY_ADMIN": "company_admin",
         "PROJECT_MANAGER": "project_manager",
         "SITE_MANAGER": "site_manager",

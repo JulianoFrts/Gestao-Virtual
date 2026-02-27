@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { getCurrentSession, requireAuth } from "@/lib/auth/session";
+import { requireAuth } from "@/lib/auth/session";
 import { updateSession } from "@/lib/auth/auth";
 
 import { z } from "zod";
@@ -25,7 +25,9 @@ export async function POST(request: NextRequest): Promise<Response> {
     const body = await request.json();
     const validation = updateSessionSchema.safeParse(body);
     if (!validation.success) {
-      return ApiResponse.validationError(validation.error.issues.map(i => i.message));
+      return ApiResponse.validationError(
+        validation.error.issues.map((i) => i.message),
+      );
     }
 
     const { companyId, projectId, siteId } = validation.data;

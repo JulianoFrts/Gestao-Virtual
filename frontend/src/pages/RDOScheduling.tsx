@@ -353,6 +353,7 @@ export default function RDOScheduling() {
       "ABERTURA DE ACESSOS": "SERVIÇOS PRELIMINARES",
       "ESCAVAÇÃO": "FUNDAÇÃO",
       "ARMAÇÃO": "FUNDAÇÃO",
+      "PREPARAÇÃO / NIVELAMENTO": "FUNDAÇÃO",
       "CONCRETAGEM": "FUNDAÇÃO",
       "REATERRO": "FUNDAÇÃO",
       "PRÉ-MONTAGEM": "MONTAGEM",

@@ -21,6 +21,12 @@ const GLOBAL_USERS = [
     name: "Diretoria (Gestão Global)",
     role: "COMPANY_ADMIN", // Atualizado de SOCIO_DIRETOR
     password: "$2a$10$I5IAYCJuF3AY.Oed/DriWOottOlNGsqxi.Kpnp8w1TqzIEWnjEopi"
+  },
+  {
+    email: "suporte@gestaovirtual.com",
+    name: "Suporte TI (Software)",
+    role: "TI_SOFTWARE",
+    password: "$2a$10$I5IAYCJuF3AY.Oed/DriWOottOlNGsqxi.Kpnp8w1TqzIEWnjEopi"
   }
 ];
 

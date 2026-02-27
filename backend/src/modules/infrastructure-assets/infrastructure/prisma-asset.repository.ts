@@ -80,7 +80,9 @@ export class PrismaAssetRepository extends PrismaBaseRepository<
       towerIds.map((tid) =>
         this.prisma.towerConstruction.upsert({
           where: { projectId_towerId: { projectId, towerId: tid } },
-          update: { updatedAt: new Date() /* deterministic-bypass */ /* bypass-audit */ },
+          update: {
+            updatedAt: new Date() /* deterministic-bypass */ /* bypass-audit */,
+          },
           create: { projectId, companyId, towerId: tid },
         }),
       ),
@@ -91,9 +93,44 @@ export class PrismaAssetRepository extends PrismaBaseRepository<
   async getConstructionData(projectId: string) {
     return this.prisma.towerConstruction.findMany({
       where: { projectId },
+      orderBy: { sequencia: "asc" },
       include: {
         site: { select: { name: true } },
       },
     });
+  }
+
+  /**
+   * Provisiona torres com dados técnicos completos (metadata)
+   */
+  async provisionConstructionWithData(
+    projectId: string,
+    companyId: string,
+    items: Array<{
+      towerId: string;
+      sequencia: number;
+      metadata: Record<string, unknown>;
+    }>,
+  ): Promise<number> {
+    const results = await this.prisma.$transaction(
+      items.map((item) =>
+        this.prisma.towerConstruction.upsert({
+          where: { projectId_towerId: { projectId, towerId: item.towerId } },
+          update: {
+            sequencia: item.sequencia,
+            metadata: item.metadata,
+            updatedAt: new Date() /* deterministic-bypass */ /* bypass-audit */,
+          },
+          create: {
+            projectId,
+            companyId,
+            towerId: item.towerId,
+            sequencia: item.sequencia,
+            metadata: item.metadata,
+          },
+        }),
+      ),
+    );
+    return results.length;
   }
 }

@@ -26,6 +26,7 @@ declare module "next-auth" {
       image?: string | null;
       companyId?: string | null;
       projectId?: string | null;
+      siteId?: string | null;
       hierarchyLevel?: number | null;
       permissions?: Record<string, boolean> | null;
     };
@@ -42,6 +43,7 @@ declare module "next-auth" {
     status: AccountStatus;
     companyId?: string | null;
     projectId?: string | null;
+    siteId?: string | null;
     hierarchyLevel?: number | null;
     permissions?: Record<string, boolean> | null;
   }
