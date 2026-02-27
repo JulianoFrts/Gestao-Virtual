@@ -83,9 +83,9 @@ export async function handleSingleUserFetch(
         items: [profile],
         pagination: {
           page: CONSTANTS.API.PAGINATION.DEFAULT_PAGE,
-          limit: 1 /* literal */,
-          total: 1 /* literal */,
-          pages: 1 /* literal */,
+          limit: 1,
+          total: 1,
+          pages: 1,
           hasNext: false,
           hasPrev: false,
         },
@@ -96,10 +96,10 @@ export async function handleSingleUserFetch(
         return ApiResponse.json({
           items: [],
           pagination: {
-            total: 0 /* literal */,
-            limit: 1 /* literal */,
+            total: 0,
+            limit: 1,
             page: CONSTANTS.API.PAGINATION.DEFAULT_PAGE,
-            pages: 0 /* literal */,
+            pages: 0,
           },
         });
       }

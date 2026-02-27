@@ -11,7 +11,7 @@ export class TowerService {
   async saveTowers(data: unknown): Promise<Tower[]> {
     const items = Array.isArray(data) ? data : [data];
     const towersToSave: Tower[] = items.map((entry) =>
-      this.validateAndMapTower(element),
+      this.validateAndMapTower(entry),
     );
 
     return this.towerRepository.saveMany(towersToSave);

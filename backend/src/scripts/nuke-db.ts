@@ -44,7 +44,7 @@ async function cleanDatabase() {
             port: parseInt(candUrl.port),
             database: candUrl.pathname.slice(1),
             ssl: sslConfig,
-            connectionTimeoutMillis: 5000 /* literal */
+            connectionTimeoutMillis: 5000
         });
 
         try {

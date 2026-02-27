@@ -173,3 +173,14 @@ export const isSystemOwner = (role: string): boolean => {
   const r = (role || "").toUpperCase();
   return (SYSTEM_OWNERS as readonly string[]).includes(r);
 };
+
+// =============================================
+// 5. BACKWARD COMPATIBILITY
+// =============================================
+
+export const CAPABILITY_FLAGS = {
+  GOD: ["*"],
+  SYSTEM_OWNER: ["users.manage", "db_hub.manage", "audit_logs.view"],
+  MANAGEMENT: ["projects.view", "sites.view", "team_composition"],
+  WORKER: ["clock", "daily_reports", "time_records.view"],
+} as const;

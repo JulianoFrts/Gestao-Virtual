@@ -11,7 +11,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     const tasks = await prisma.taskQueue.findMany({
       where: { type: "TOWER_IMPORT" },
       orderBy: { createdAt: "desc" },
-      take: 10 /* literal */,
+      take: 10,
     });
 
     return ApiResponse.json({

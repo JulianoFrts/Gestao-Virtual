@@ -14,7 +14,7 @@ export class AuditReportService {
         results: AuditResult[],
         totalFiles: number
     ): AuditSummary {
-        const bySeverity = { HIGH: 0 /* literal */, MEDIUM: 0 /* literal */, LOW: 0 /* literal */ };
+        const bySeverity = { HIGH: 0, MEDIUM: 0, LOW: 0 };
         const byCategory: Record<string, number> = {};
 
         results.forEach((r) => {
@@ -49,11 +49,11 @@ export class AuditReportService {
 
     public generateEmptyReport(totalFiles: number): AuditSummary {
         return {
-            healthScore: 100 /* literal */,
+            healthScore: 100,
             totalFiles,
-            violationsCount: 0 /* literal */,
+            violationsCount: 0,
             byCategory: {},
-            bySeverity: { HIGH: 0 /* literal */, MEDIUM: 0 /* literal */, LOW: 0 /* literal */ },
+            bySeverity: { HIGH: 0, MEDIUM: 0, LOW: 0 },
             topIssues: []
         };
     }

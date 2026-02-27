@@ -1,10 +1,10 @@
-import { GovernanceRepository } from "../domain/governance.repository";
+import { GovernanceRepository, GovernanceAuditHistory } from "../domain/governance.repository";
 
 export class GovernanceService {
   constructor(private readonly repository: GovernanceRepository) {}
 
   async getHistory(type: string, limit: number, companyId?: string) {
-    const results: unknown = {};
+    const results: any = {};
 
     if (type === "all" || type === "architectural") {
       results.architectural = await this.repository.findGovernanceHistory(
@@ -24,27 +24,27 @@ export class GovernanceService {
   }
 
   // Methods for Auditor
-  async findOpenViolation(file: string, violation: string) {
+  async findOpenViolation(file: string, violation: string): Promise<GovernanceAuditHistory | null> {
     return this.repository.findOpenViolation(file, violation);
   }
 
-  async createViolation(data: unknown) {
+  async createViolation(data: Partial<GovernanceAuditHistory>): Promise<GovernanceAuditHistory> {
     return this.repository.createViolation(data);
   }
 
-  async updateViolation(id: string, data: unknown) {
+  async updateViolation(id: string, data: Partial<GovernanceAuditHistory>): Promise<GovernanceAuditHistory> {
     return this.repository.updateViolation(id, data);
   }
 
-  async findOpenViolations(): Promise<unknown> {
+  async findOpenViolations(): Promise<GovernanceAuditHistory[]> {
     return this.repository.findOpenViolations();
   }
 
-  async listViolationsWithFilters(filters: unknown, take?: number, skip?: number) {
+  async listViolationsWithFilters(filters: Record<string, any>, take?: number, skip?: number): Promise<GovernanceAuditHistory[]> {
     return this.repository.findViolationsWithFilters(filters, take, skip);
   }
 
-  async countViolations(filters: unknown) {
+  async countViolations(filters: Record<string, any>): Promise<number> {
     return this.repository.countViolations(filters);
   }
 }

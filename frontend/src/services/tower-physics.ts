@@ -153,7 +153,9 @@ export const TowerPhysics = {
         const dx_meters = (rX * Math.cos(radY)) + (rY * Math.sin(radY));
         const dy_meters = (rY * Math.cos(radY)) - (rX * Math.sin(radY));
 
-        const effectiveZ = terrainAlt + rZ + towerVerticalOffset;
+        // Em modo interleaved no Mapbox 3D Terrain, a coordenada Z deve ser absoluta (altitude real).
+        // Adicionamos a altitude do terreno (terrainAlt) ao cálculo.
+        const effectiveZ = rZ + towerVerticalOffset + terrainAlt; 
 
         return {
             lng: towerPos.lng + (dx_meters * mToDegLng),

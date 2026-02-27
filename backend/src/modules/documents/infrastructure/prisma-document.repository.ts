@@ -40,7 +40,7 @@ export class PrismaDocumentRepository implements DocumentRepository {
     // Convert BigInt to Number for JSON serialization
     const items = rawItems.map((element) => ({
       ...element,
-      fileSize: element.fileSize ? Number(element.fileSize) : 0 /* literal */,
+      fileSize: element.fileSize ? Number(element.fileSize) : 0,
     }));
 
     return { items, total };
@@ -58,7 +58,7 @@ export class PrismaDocumentRepository implements DocumentRepository {
     // Convert BigInt to Number for JSON serialization
     return {
       ...result,
-      fileSize: result.fileSize ? Number(result.fileSize) : 0 /* literal */,
+      fileSize: result.fileSize ? Number(result.fileSize) : 0,
     };
   }
 

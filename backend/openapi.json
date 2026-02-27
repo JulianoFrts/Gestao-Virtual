@@ -14,7 +14,7 @@
   },
   "servers": [
     {
-      "url": "http://127.0.0.1: 3000 /* literal */",
+      "url": "http://127.0.0.1: 3000",
       "description": "Servidor atual"
     }
   ],
@@ -628,7 +628,7 @@
         "type": "string",
         "enum": [
           "SUPER_ADMIN_GOD",
-          "SYSTEM_ADMIN",
+          "ADMIN",
           "COMPANY_ADMIN",
           "PROJECT_MANAGER",
           "SITE_MANAGER",

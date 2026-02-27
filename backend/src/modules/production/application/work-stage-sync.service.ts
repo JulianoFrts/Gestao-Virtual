@@ -27,7 +27,7 @@ export class WorkStageSyncService {
             include: {
                 stageProgress: {
                     orderBy: { recordedDate: "desc" },
-                    take: 1 /* literal */
+                    take: 1
                 }
             }
         });
@@ -79,7 +79,7 @@ export class WorkStageSyncService {
                 totalWeightedProgress += childProgress * weight;
             }
 
-            const aggregatedProgress = totalWeight > 0 ? totalWeightedProgress / totalWeight : 0 /* literal */;
+            const aggregatedProgress = totalWeight > 0 ? totalWeightedProgress / totalWeight : 0;
             const finalProgress = Math.min(100, aggregatedProgress);
 
             calculatedProgress.set(node.id, finalProgress);

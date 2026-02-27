@@ -6,19 +6,30 @@ import {
 
 export class PrismaTowerProductionRepository implements TowerProductionRepository {
   async save(data: TowerProductionData): Promise<TowerProductionData> {
-    const { id, ...rest } = data;
+    const { id, createdAt, updatedAt, ...rest } = data as any;
+    
+    // Clean up any relation objects that might have been merged into the data
+    const cleanData: any = {};
+    const allowedFields = ['towerId', 'sequencia', 'companyId', 'projectId', 'siteId', 'metadata'];
+    
+    for (const key of allowedFields) {
+      if (rest[key] !== undefined) {
+        cleanData[key] = rest[key];
+      }
+    }
+
     if (id) {
       return (await prisma.towerProduction.update({
         where: { id },
-        data: rest as unknown,
+        data: cleanData,
       })) as TowerProductionData;
     }
     return (await prisma.towerProduction.upsert({
       where: {
         projectId_towerId: { projectId: data.projectId, towerId: data.towerId },
       },
-      update: rest as unknown,
-      create: rest as unknown,
+      update: cleanData,
+      create: cleanData,
     })) as TowerProductionData;
   }
 
@@ -27,10 +38,42 @@ export class PrismaTowerProductionRepository implements TowerProductionRepositor
   ): Promise<TowerProductionData[]> {
     if (elements.length === 0) return [];
 
-    // Using individual upserts for safety or batching if needed
-    // For now, simple batching with Promise.all for reasonable sizes
-    const results = await Promise.all(elements.map((el) => this.save(el)));
-    return results;
+    // Clean and validate fields for each element
+    const allowedFields = ['towerId', 'sequencia', 'companyId', 'projectId', 'siteId', 'metadata'];
+
+    return await prisma.$transaction(async (tx) => {
+      const results: TowerProductionData[] = [];
+      
+      for (const data of elements) {
+        const { id, createdAt, updatedAt, ...rest } = data as any;
+        const cleanData: any = {};
+        
+        for (const key of allowedFields) {
+          if (rest[key] !== undefined) {
+            cleanData[key] = rest[key];
+          }
+        }
+
+        if (id) {
+          const updated = await tx.towerProduction.update({
+            where: { id },
+            data: cleanData,
+          });
+          results.push(updated as unknown as TowerProductionData);
+        } else {
+          const upserted = await tx.towerProduction.upsert({
+            where: {
+              projectId_towerId: { projectId: data.projectId, towerId: data.towerId },
+            },
+            update: cleanData,
+            create: cleanData,
+          });
+          results.push(upserted as unknown as TowerProductionData);
+        }
+      }
+      
+      return results;
+    });
   }
 
   async findById(id: string): Promise<TowerProductionData | null> {
@@ -66,7 +109,10 @@ export class PrismaTowerProductionRepository implements TowerProductionRepositor
    */
   async syncTechnicalData(
     projectId: string,
-    updates: Array<{ towerId: string; technicalMetadata: Record<string, any> }>,
+    updates: Array<{
+      towerId: string;
+      technicalMetadata: Record<string, unknown>;
+    }>,
   ): Promise<number> {
     if (updates.length === 0) return 0;
 
@@ -82,10 +128,11 @@ export class PrismaTowerProductionRepository implements TowerProductionRepositor
         if (!existing) continue;
 
         // Merge seguro: campos técnicos não sobrescrevem dados de produção
-        const existingMeta = (existing.metadata as Record<string, any>) || {};
+        const existingMeta =
+          (existing.metadata as Record<string, unknown>) || {};
         const mergedMeta = {
           ...existingMeta,
-          // Campos técnicos (só atualiza se valor existe e o campo não foi preenchido manualmente)
+          // Campos técnicos (só atualiza se valor existe)
           goForward:
             update.technicalMetadata.distancia_vao ?? existingMeta.goForward,
           pesoEstrutura:
@@ -96,6 +143,11 @@ export class PrismaTowerProductionRepository implements TowerProductionRepositor
             existingMeta.totalConcreto,
           pesoArmacao:
             update.technicalMetadata.peso_aco_1 ?? existingMeta.pesoArmacao,
+          // Coordenadas e Elevação técnico
+          latitude: update.technicalMetadata.latitude ?? existingMeta.latitude,
+          longitude:
+            update.technicalMetadata.longitude ?? existingMeta.longitude,
+          elevacao: update.technicalMetadata.elevacao ?? existingMeta.elevacao,
           // Manter campos de produção inalterados
           trecho: existingMeta.trecho,
           towerType: existingMeta.towerType,
@@ -103,7 +155,10 @@ export class PrismaTowerProductionRepository implements TowerProductionRepositor
 
         await tx.towerProduction.update({
           where: { id: existing.id },
-          data: { metadata: mergedMeta },
+          data: {
+            metadata: mergedMeta,
+            sequencia: update.technicalMetadata.sequencia ?? existing.sequencia,
+          },
         });
 
         syncedCount++;

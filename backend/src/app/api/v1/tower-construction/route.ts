@@ -1,14 +1,18 @@
 import { NextRequest } from "next/server";
-import { PrismaAssetRepository } from "@/modules/infrastructure-assets/infrastructure/prisma-asset.repository";
-import { AssetService } from "@/modules/infrastructure-assets/application/asset.service";
+import { PrismaTowerConstructionRepository } from "@/modules/tower/infrastructure/prisma-tower-construction.repository";
+import { PrismaTowerProductionRepository } from "@/modules/tower/infrastructure/prisma-tower-production.repository";
+import { TowerConstructionService } from "@/modules/tower/application/tower-construction.service";
 import { requireAuth } from "@/lib/auth/session";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { logger } from "@/lib/utils/logger";
 
 import { z } from "zod";
 
-const repository = new PrismaAssetRepository();
-const assetService = new AssetService(repository);
+const constructionRepo = new PrismaTowerConstructionRepository();
+const productionRepo = new PrismaTowerProductionRepository();
+const constructionService = new TowerConstructionService(
+  constructionRepo,
+  productionRepo,
+);
 
 const constructionItemSchema = z.object({
   towerId: z.string().optional(),
@@ -30,7 +34,7 @@ const constructionItemSchema = z.object({
 });
 
 const provisionConstructionSchema = z.object({
-  projectId: z.string().min(1),
+  projectId: z.string().min(1, "projectId is required"),
   companyId: z.string().optional(),
   data: z.array(constructionItemSchema).min(1),
 });
@@ -42,10 +46,10 @@ export async function GET(req: NextRequest): Promise<Response> {
     const projectId = searchParams.get("projectId");
 
     if (!projectId) {
-      return ApiResponse.badRequest("projectId is required");
+      return ApiResponse.badRequest("projectId is required2");
     }
 
-    const data = await assetService.getConstructionData(projectId);
+    const data = await constructionService.getProjectData(projectId);
     return ApiResponse.json(data);
   } catch (error: unknown) {
     return handleApiError(
@@ -74,34 +78,14 @@ export async function POST(req: NextRequest): Promise<Response> {
       return ApiResponse.badRequest("companyId is required");
     }
 
-    // Mapear dados com metadata completa para persistência
-    const items = data
-      .filter((t) => !!(t.towerId || t.id))
-      .map((t) => ({
-        towerId: (t.towerId || t.id) as string,
-        sequencia: t.sequencia || 0,
-        metadata: {
-          latitude: t.lat || 0,
-          longitude: t.lng || 0,
-          elevacao: t.elevacao || 0,
-          distancia_vao: t.vao || 0,
-          zona: String(t.zona || ""),
-          peso_estrutura: t.pesoEstrutura || 0,
-          peso_concreto: t.pesoConcreto || 0,
-          peso_escavacao: t.pesoEscavacao || 0,
-          aco1: t.aco1 || 0,
-          aco2: t.aco2 || 0,
-          aco3: t.aco3 || 0,
-        },
-      }));
-
-    const result = await assetService.provisionConstructionWithData(
+    // Usar o TowerConstructionService que já possui a lógica de sincronização com Produção
+    const result = await constructionService.importProjectData(
       projectId,
       companyId,
-      items,
+      data as any, // Cast seguro para TowerImportItem[]
     );
 
-    return ApiResponse.json({ count: result });
+    return ApiResponse.json(result);
   } catch (error: unknown) {
     return handleApiError(
       error,

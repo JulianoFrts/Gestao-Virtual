@@ -3,7 +3,7 @@ import { checkRateLimit } from "../../lib/utils/rate-limiter";
 describe("RateLimiter", () => {
     it("should allow requests within limit", () => {
         const identifier = "test-ip-1";
-        const result = checkRateLimit(identifier, { maxRequests: 2 /* literal */ });
+        const result = checkRateLimit(identifier, { maxRequests: 2 });
         expect(result.blocked).toBe(false);
         expect(result.remaining).toBe(1);
     });
@@ -11,9 +11,9 @@ describe("RateLimiter", () => {
     it("should block requests exceeding limit", () => {
         const identifier = "test-ip-2";
         // First request
-        checkRateLimit(identifier, { maxRequests: 1 /* literal */ });
+        checkRateLimit(identifier, { maxRequests: 1 });
         // Second request
-        const result = checkRateLimit(identifier, { maxRequests: 1 /* literal */ });
+        const result = checkRateLimit(identifier, { maxRequests: 1 });
         expect(result.blocked).toBe(true);
         expect(result.message).toContain("Limite de requisições excedido");
     });

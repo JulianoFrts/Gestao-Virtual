@@ -2,21 +2,21 @@ import "dotenv/config";
 import { prisma } from "../lib/prisma/client";
 
 const STANDARD_ROLES = [
-    { name: 'HELPER_SYSTEM', rank: 2000 /* literal */ },
-    { name: 'SUPER_ADMIN_GOD', rank: 1500 /* literal */ },
-    { name: 'SOCIO_DIRETOR', rank: 1000 /* literal */ },
-    { name: 'ADMIN', rank: 950 /* literal */ },
-    { name: 'TI_SOFTWARE', rank: 900 /* literal */ },
-    { name: 'MODERATOR', rank: 850 /* literal */ },
-    { name: 'MANAGER', rank: 850 /* literal */ },
-    { name: 'GESTOR_PROJECT', rank: 800 /* literal */ },
-    { name: 'GESTOR_CANTEIRO', rank: 700 /* literal */ },
-    { name: 'SUPERVISOR', rank: 600 /* literal */ },
-    { name: 'TECHNICIAN', rank: 400 /* literal */ },
-    { name: 'OPERATOR', rank: 300 /* limit */ /* literal */ },
-    { name: 'WORKER', rank: 100 /* literal */ },
-    { name: 'USER', rank: 100 /* literal */ },
-    { name: 'VIEWER', rank: 50 /* literal */ },
+    { name: 'HELPER_SYSTEM', rank: 2000 },
+    { name: 'SUPER_ADMIN_GOD', rank: 1500 },
+    { name: 'SOCIO_DIRETOR', rank: 1000 },
+    { name: 'ADMIN', rank: 950 },
+    { name: 'TI_SOFTWARE', rank: 900 },
+    { name: 'MODERATOR', rank: 850 },
+    { name: 'MANAGER', rank: 850 },
+    { name: 'GESTOR_PROJECT', rank: 800 },
+    { name: 'GESTOR_CANTEIRO', rank: 700 },
+    { name: 'SUPERVISOR', rank: 600 },
+    { name: 'TECHNICIAN', rank: 400 },
+    { name: 'OPERATOR', rank: 300 /* limit */ },
+    { name: 'WORKER', rank: 100 },
+    { name: 'USER', rank: 100 },
+    { name: 'VIEWER', rank: 50 },
 ];
 
 const STANDARD_MODULES = [
@@ -57,6 +57,7 @@ async function main() {
         where: { name: role.name },
         update: { rank: role.rank },
         create: {
+          id: role.name,
           name: role.name,
           rank: role.rank,
           isSystem: true,

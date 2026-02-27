@@ -150,10 +150,10 @@ export class ProductionScheduleService {
       params,
       isAdmin ? undefined : user.companyId,
     );
-    if (candidates.length === 0) return { count: 0 /* literal */ };
+    if (candidates.length === 0) return { count: 0 };
 
     const validIds = await this.filterNonExecutedSchedules(candidates);
-    if (validIds.length === 0) return { count: 0 /* literal */, skipped: candidates.length };
+    if (validIds.length === 0) return { count: 0, skipped: candidates.length };
 
     const count = await this.scheduleRepository.deleteSchedulesBatch(validIds);
     return { count, skipped: candidates.length - count };

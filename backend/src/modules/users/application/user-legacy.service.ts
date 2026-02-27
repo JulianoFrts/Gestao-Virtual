@@ -31,8 +31,8 @@ export class UserLegacyService {
   async listLegacyEmployees(): Promise<Record<string, unknown>[]> {
     const users = await this.repository.findAll({
       where: {},
-      skip: 0 /* literal */,
-      take: 100 /* literal */,
+      skip: 0,
+      take: 100,
       orderBy: { name: "asc" },
       select: {
         id: true,
@@ -134,7 +134,7 @@ export class UserLegacyService {
         hierarchy_level: aff.hierarchyLevel,
         is_blocked: (user.authCredential?.status || "ACTIVE") !== "ACTIVE",
         is_system_admin:
-          (user.authCredential?.role || "OPERATIONAL") === LegacyRole.SYSTEM_ADMIN || user.authCredential?.isSystemAdmin,
+          (user.authCredential?.role || "OPERATIONAL") === LegacyRole.ADMIN || user.authCredential?.isSystemAdmin,
         created_at: user.createdAt,
         updated_at: user.updatedAt,
       };

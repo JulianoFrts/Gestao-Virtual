@@ -45,7 +45,13 @@ export async function GET(
         "Cache-Control": `public, max-age=${API.CACHE.TTL_EXTREME}, immutable`,
       },
     });
-  } catch (err: unknown) {
-    return new NextResponse(err.message, { status: HTTP_STATUS.INTERNAL_ERROR });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Erro desconhecido";
+        return new NextResponse(message, { status: HTTP_STATUS.INTERNAL_ERROR });
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Erro de autenticação ou processamento";
+      return new NextResponse(message, { status: HTTP_STATUS.UNAUTHORIZED });
+    }
   }
-}
+  

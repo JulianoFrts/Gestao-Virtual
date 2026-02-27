@@ -124,7 +124,7 @@ export async function createTestAdmin(data?: {
 }) {
   return createTestUser({
     ...data,
-    role: Role.SYSTEM_ADMIN,
+    role: Role.ADMIN,
   });
 }
 
@@ -133,7 +133,7 @@ export async function createTestAdmin(data?: {
 // =============================================
 
 // Injetar logger global para testes
-(global as unknown).logger = LoggerInstance;
+global.logger = LoggerInstance;
 
 // Mock do console em produção para não poluir output
 if (process.env.NODE_ENV === "test") {

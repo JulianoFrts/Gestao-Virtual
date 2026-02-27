@@ -14,7 +14,7 @@ export class ContextValidationService {
    */
   private readonly GLOBAL_MANAGEMENT_ROLES: Role[] = [
     "SUPER_ADMIN_GOD",
-    "SYSTEM_ADMIN",
+    "ADMIN",
     "COMPANY_ADMIN",
   ];
 

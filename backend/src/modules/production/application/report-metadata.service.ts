@@ -50,7 +50,7 @@ export class ReportMetadataService {
       result = {
         expandedTowers: [],
         finalLabel: subPoint,
-        metrics: { towers: 0 /* literal */, km: "0.00" },
+        metrics: { towers: 0, km: "0.00" },
       };
     }
 
@@ -133,7 +133,7 @@ export class ReportMetadataService {
       return {
         expandedTowers: [],
         finalLabel: start,
-        metrics: { towers: 0 /* literal */, km: "0.00" },
+        metrics: { towers: 0, km: "0.00" },
       };
 
     const uniqueTowers = new Set<string>();
@@ -208,7 +208,7 @@ export class ReportMetadataService {
     return {
       expandedTowers: tower ? [tower.externalId || tower.name || tower.id] : [],
       finalLabel: String(tower?.name || tower?.externalId || start),
-      metrics: { towers: tower ? 1 : 0 /* literal */, km: "0.00" },
+      metrics: { towers: tower ? 1 : 0, km: "0.00" },
     };
   }
 

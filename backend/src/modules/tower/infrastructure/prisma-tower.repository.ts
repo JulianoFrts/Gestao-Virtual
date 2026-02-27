@@ -9,18 +9,22 @@ export class PrismaTowerRepository implements TowerRepository {
       objectId,
       objectSeq,
       towerType,
-      objectHeight,
-      objectElevation,
-      xCoordinate,
-      yCoordinate,
+      height,
+      elevation,
+      latitude,
+      longitude,
       deflection,
       goForward,
-      fusoObject,
+      fuso,
       fixConductor,
       trecho,
       technicalKm,
       technicalIndex,
       circuitId,
+      concreteVolume,
+      steelWeight,
+      structureWeight,
+      foundationType,
       metadata,
     } = tower;
 
@@ -30,28 +34,32 @@ export class PrismaTowerRepository implements TowerRepository {
       elementType: "TOWER",
       externalId: objectId,
       sequence: objectSeq || 0,
-      latitude: xCoordinate ? Number(xCoordinate) : null,
-      longitude: yCoordinate ? Number(yCoordinate) : null,
-      elevation: objectElevation ? Number(objectElevation) : null,
+      latitude: latitude ? Number(latitude) : null,
+      longitude: longitude ? Number(longitude) : null,
+      elevation: elevation ? Number(elevation) : null,
       name: `${towerType || "Tower"} ${objectId}`,
       metadata: {
         towerType,
-        objectHeight,
+        height,
         deflection,
         goForward,
-        fusoObject,
+        fuso,
         fixConductor,
         trecho,
         technicalKm,
         technicalIndex,
         circuitId,
+        concreteVolume,
+        steelWeight,
+        structureWeight,
+        foundationType,
         ...(metadata || {}),
       },
     };
   }
 
-  private mapFromUnified(unified: unknown): Tower {
-    const meta = unified.metadata as unknown;
+  private mapFromUnified(unified: any): Tower {
+    const meta = unified.metadata as any;
     return {
       id: unified.id,
       projectId: unified.projectId,
@@ -59,17 +67,22 @@ export class PrismaTowerRepository implements TowerRepository {
       objectId: unified.externalId,
       objectSeq: unified.sequence,
       towerType: meta?.towerType,
-      objectHeight: meta?.objectHeight,
-      objectElevation: unified.elevation
-        ? Number(unified.elevation)
-        : undefined,
-      xCoordinate: unified.latitude ? Number(unified.latitude) : undefined,
-      yCoordinate: unified.longitude ? Number(unified.longitude) : undefined,
+      height: meta?.height,
+      elevation: unified.elevation ? Number(unified.elevation) : undefined,
+      latitude: unified.latitude ? Number(unified.latitude) : undefined,
+      longitude: unified.longitude ? Number(unified.longitude) : undefined,
       deflection: meta?.deflection,
+      goForward: meta?.goForward,
+      fuso: meta?.fuso,
+      fixConductor: meta?.fixConductor,
       trecho: meta?.trecho,
       technicalKm: meta?.technicalKm,
       technicalIndex: meta?.technicalIndex,
       circuitId: meta?.circuitId,
+      concreteVolume: meta?.concreteVolume,
+      steelWeight: meta?.steelWeight,
+      structureWeight: meta?.structureWeight,
+      foundationType: meta?.foundationType,
       metadata: meta,
       createdAt: unified.createdAt,
       updatedAt: unified.updatedAt,
@@ -86,15 +99,15 @@ export class PrismaTowerRepository implements TowerRepository {
     return this.performUpsert(data);
   }
 
-  private async performUpdate(id: string, data: unknown): Promise<Tower> {
+  private async performUpdate(id: string, data: any): Promise<Tower> {
     const updated = await prisma.mapElementTechnicalData.update({
       where: { id },
-      data: data as unknown,
+      data: data,
     });
     return this.mapFromUnified(updated);
   }
 
-  private async performUpsert(data: unknown): Promise<Tower> {
+  private async performUpsert(data: any): Promise<Tower> {
     const upserted = await prisma.mapElementTechnicalData.upsert({
       where: {
         projectId_externalId: {
@@ -102,15 +115,15 @@ export class PrismaTowerRepository implements TowerRepository {
           externalId: data.externalId,
         },
       },
-      update: data as unknown,
-      create: data as unknown,
+      update: data,
+      create: data,
     });
     return this.mapFromUnified(upserted);
   }
 
   async saveMany(towers: Tower[]): Promise<Tower[]> {
     const results: Tower[] = [];
-    const BATCH_SIZE = 10;
+    const BATCH_SIZE = 50;
 
     for (let i = 0; i < towers.length; i += BATCH_SIZE) {
       const batch = towers.slice(i, i + BATCH_SIZE);
@@ -145,7 +158,7 @@ export class PrismaTowerRepository implements TowerRepository {
       where: { projectId, elementType: "TOWER" },
       orderBy: { sequence: "asc" },
     });
-    return found.map(this.mapFromUnified);
+    return found.map((f) => this.mapFromUnified(f));
   }
 
   async deleteByProject(projectId: string): Promise<number> {

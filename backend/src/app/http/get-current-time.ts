@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 export async function getCurrentTime() {
     const response = await fetch("/", {
         next:{
-            revalidate: 1 /* literal */,
+            revalidate: 1,
         },
     });
 

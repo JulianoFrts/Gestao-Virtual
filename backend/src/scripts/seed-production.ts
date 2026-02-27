@@ -9,11 +9,11 @@ async function main() {
   console.log("Cleaning existing production meta-data...");
   try {
       // Usar nomes de modelos corretos do schema atual
-      await (prisma as unknown).mapElementProductionProgress.deleteMany({});
-      await (prisma as unknown).stageProgress.deleteMany({});
-      await (prisma as unknown).workStage.deleteMany({});
-      await (prisma as unknown).productionActivity.deleteMany({});
-      await (prisma as unknown).productionCategory.deleteMany({});
+      await prisma.mapElementProductionProgress.deleteMany({});
+      await prisma.stageProgress.deleteMany({});
+      await prisma.workStage.deleteMany({});
+      await prisma.productionActivity.deleteMany({});
+      await prisma.productionCategory.deleteMany({});
   } catch (e) {
       console.warn("Error clearing tables (might be empty/migrations pending):", e);
   }
@@ -21,69 +21,69 @@ async function main() {
   const categories = [
     {
       name: "Serviços Preliminares",
-      order: 1 /* literal */,
+      order: 1,
       activities: [
-        { name: "Croqui de Acesso", order: 1 /* literal */, weight: 1 /* literal */ },
-        { name: "Sondagem", order: 2 /* literal */, weight: 1 /* literal */ },
-        { name: "Passivo Ambiental", order: 3 /* literal */, weight: 1 /* literal */ },
-        { name: "Conferência de Perfil", order: 4 /* literal */, weight: 1 /* literal */ },
-        { name: "Marcação de Cavas", order: 5 /* literal */, weight: 1 /* literal */ },
-        { name: "Seção Diagonal", order: 6 /* literal */, weight: 1 /* literal */ },
-        { name: "Supressão Vegetal (Área)", order: 7 /* literal */, weight: 1 /* literal */ },
-        { name: "Supressão Vegetal (Faixa)", order: 8 /* literal */, weight: 1 /* literal */ },
-        { name: "Supressão Vegetal (Corte)", order: 9 /* literal */, weight: 1 /* literal */ },
-        { name: "Abertura de Acessos", order: 10 /* literal */, weight: 2 /* literal */ },
-        { name: "Recuperação de Acesso", order: 11 /* literal */, weight: 1 /* literal */ },
+        { name: "Croqui de Acesso", order: 1, weight: 1 },
+        { name: "Sondagem", order: 2, weight: 1 },
+        { name: "Passivo Ambiental", order: 3, weight: 1 },
+        { name: "Conferência de Perfil", order: 4, weight: 1 },
+        { name: "Marcação de Cavas", order: 5, weight: 1 },
+        { name: "Seção Diagonal", order: 6, weight: 1 },
+        { name: "Supressão Vegetal (Área)", order: 7, weight: 1 },
+        { name: "Supressão Vegetal (Faixa)", order: 8, weight: 1 },
+        { name: "Supressão Vegetal (Corte)", order: 9, weight: 1 },
+        { name: "Abertura de Acessos", order: 10, weight: 2 },
+        { name: "Recuperação de Acesso", order: 11, weight: 1 },
       ],
     },
     {
       name: "Fundações",
-      order: 2 /* literal */,
+      order: 2,
       activities: [
-        { name: "Escavação (Mastro/Pé)", order: 1 /* literal */, weight: 3 /* literal */ },
-        { name: "Cravação de Estacas", order: 2 /* literal */, weight: 3 /* literal */ },
-        { name: "Armação (Mastro/Pé)", order: 3 /* literal */, weight: 2 /* literal */ },
-        { name: "Nivelamento / Preparação", order: 4 /* literal */, weight: 2 /* literal */ },
-        { name: "Concretagem (Mastro/Pé)", order: 5 /* literal */, weight: 5 /* literal */ },
-        { name: "Reaterro (Mastro/Pé)", order: 6 /* literal */, weight: 2 /* literal */ },
-        { name: "Ensaio de Arrancamento", order: 7 /* literal */, weight: 1 /* literal */ },
-        { name: "Fundação 100%", order: 8 /* literal */, weight: 1 /* literal */ },
+        { name: "Escavação (Mastro/Pé)", order: 1, weight: 3 },
+        { name: "Cravação de Estacas", order: 2, weight: 3 },
+        { name: "Armação (Mastro/Pé)", order: 3, weight: 2 },
+        { name: "Nivelamento / Preparação", order: 4, weight: 2 },
+        { name: "Concretagem (Mastro/Pé)", order: 5, weight: 5 },
+        { name: "Reaterro (Mastro/Pé)", order: 6, weight: 2 },
+        { name: "Ensaio de Arrancamento", order: 7, weight: 1 },
+        { name: "Fundação 100%", order: 8, weight: 1 },
       ],
     },
     {
       name: "Montagem de Torres",
-      order: 3 /* literal */,
+      order: 3,
       activities: [
-        { name: "Distribuição / Transporte", order: 1 /* literal */, weight: 1 /* literal */ },
-        { name: "Pré-montagem em Solo", order: 2 /* literal */, weight: 3 /* literal */ },
-        { name: "Montagem / Içamento", order: 3 /* literal */, weight: 7 /* literal */ },
-        { name: "Revisão Final / Flambagem", order: 4 /* literal */, weight: 1 /* literal */ },
-        { name: "Giro e Prumo", order: 5 /* literal */, weight: 1 /* literal */ },
+        { name: "Distribuição / Transporte", order: 1, weight: 1 },
+        { name: "Pré-montagem em Solo", order: 2, weight: 3 },
+        { name: "Montagem / Içamento", order: 3, weight: 7 },
+        { name: "Revisão Final / Flambagem", order: 4, weight: 1 },
+        { name: "Giro e Prumo", order: 5, weight: 1 },
       ],
     },
     {
       name: "Sistemas de Aterramento",
-      order: 4 /* literal */,
+      order: 4,
       activities: [
-        { name: "Instalação Cabo Contrapeso", order: 1 /* literal */, weight: 2 /* literal */ },
-        { name: "Medição de Resistência", order: 2 /* literal */, weight: 1 /* literal */ },
-        { name: "Aterramento de Cercas", order: 3 /* literal */, weight: 1 /* literal */ },
+        { name: "Instalação Cabo Contrapeso", order: 1, weight: 2 },
+        { name: "Medição de Resistência", order: 2, weight: 1 },
+        { name: "Aterramento de Cercas", order: 3, weight: 1 },
       ],
     },
     {
       name: "Lançamento de Cabos",
-      order: 5 /* literal */,
+      order: 5,
       activities: [
-        { name: "Instalação de Cavaletes", order: 1 /* literal */, weight: 1 /* literal */ },
-        { name: "Lançamento de Cabo Piloto", order: 2 /* literal */, weight: 2 /* literal */ },
-        { name: "Lançamento de Para-raios", order: 3 /* literal */, weight: 3 /* literal */ },
-        { name: "Cadeias e Bandolas", order: 4 /* literal */, weight: 2 /* literal */ },
-        { name: "Lançamento de Condutores", order: 5 /* literal */, weight: 10 /* literal */ },
-        { name: "Nivelamento e Grampeação", order: 6 /* literal */, weight: 3 /* literal */ },
-        { name: "Jumpers / Espaçadores", order: 7 /* literal */, weight: 2 /* literal */ },
-        { name: "Esferas de Sinalização", order: 8 /* literal */, weight: 1 /* literal */ },
-        { name: "Defensas de Estais", order: 9 /* literal */, weight: 1 /* literal */ },
-        { name: "Entrega Final / Comissionamento", order: 10 /* literal */, weight: 1 /* literal */ },
+        { name: "Instalação de Cavaletes", order: 1, weight: 1 },
+        { name: "Lançamento de Cabo Piloto", order: 2, weight: 2 },
+        { name: "Lançamento de Para-raios", order: 3, weight: 3 },
+        { name: "Cadeias e Bandolas", order: 4, weight: 2 },
+        { name: "Lançamento de Condutores", order: 5, weight: 10 },
+        { name: "Nivelamento e Grampeação", order: 6, weight: 3 },
+        { name: "Jumpers / Espaçadores", order: 7, weight: 2 },
+        { name: "Esferas de Sinalização", order: 8, weight: 1 },
+        { name: "Defensas de Estais", order: 9, weight: 1 },
+        { name: "Entrega Final / Comissionamento", order: 10, weight: 1 },
       ],
     },
   ];

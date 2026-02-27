@@ -45,7 +45,7 @@ export class AssetService {
     return this.repository.delete(id);
   }
 
-  async getConstructionData(projectId: string) {
+  async getConstructionData(projectId: string): Promise<unknown> {
     return this.repository.getConstructionData(projectId);
   }
 
@@ -53,7 +53,7 @@ export class AssetService {
     projectId: string,
     companyId: string,
     towerIds: string[],
-  ) {
+  ): Promise<unknown> {
     return this.repository.provisionConstruction(
       projectId,
       companyId,
@@ -69,7 +69,7 @@ export class AssetService {
       sequencia: number;
       metadata: Record<string, unknown>;
     }>,
-  ) {
+  ): Promise<unknown> {
     return this.repository.provisionConstructionWithData(
       projectId,
       companyId,

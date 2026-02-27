@@ -69,7 +69,7 @@ export class SecurityInsightService {
       // IP Analysis
       const ip = log.ipAddress || meta.ip;
       if (ip && ip !== "CAPTURING_BY_BACKEND") {
-        const existing = ipMap.get(ip) || { count: 0 /* literal */, lastSeen: "" };
+        const existing = ipMap.get(ip) || { count: 0, lastSeen: "" };
         existing.count++;
         existing.lastSeen = log.createdAt?.toISOString() || existing.lastSeen;
         ipMap.set(ip, existing);
@@ -111,7 +111,7 @@ export class SecurityInsightService {
       .slice(0, 10);
 
     // Access Timeline
-    const accessTimeline = Array.from({ length: 24 /* literal */ }, (_, i) => ({
+    const accessTimeline = Array.from({ length: 24 }, (_, i) => ({
       hour: i,
       count: hourMap.get(i) || 0,
     }));

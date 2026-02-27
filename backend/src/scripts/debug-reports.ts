@@ -6,7 +6,7 @@ async function main() {
     // Buscar os últimos 5 relatórios enviados
     const lastSent = await prisma.dailyReport.findMany({
       where: { status: 'SENT' },
-      take: 5 /* literal */,
+      take: 5,
       orderBy: { createdAt: 'desc' },
       select: {
           id: true,

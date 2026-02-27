@@ -103,7 +103,7 @@ export class PrismaSiteRepository implements SiteRepository {
           include: { supervisor: { select: { id: true, name: true } } },
         },
         userAffiliations: {
-          take: 10 /* literal */,
+          take: 10,
           include: { user: { select: { id: true, name: true } } },
         },
         _count: {

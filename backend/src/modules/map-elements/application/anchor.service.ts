@@ -99,7 +99,7 @@ export class AnchorService {
           projectId,
           companyId,
           elementType: "TOWER",
-          sequence: 0 /* literal */,
+          sequence: 0,
           metadata: {
             technicalKm: techMeta.technicalKm || 0,
             technicalIndex: techMeta.technicalIndex || 0,

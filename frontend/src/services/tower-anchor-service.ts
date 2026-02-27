@@ -11,6 +11,8 @@ export interface TowerAnchorOptions {
     templateAnchors: Record<string, any[]>;
     localModelUrl: string;
     getEffectiveTransform: (individual: ModelTransform | undefined, url: string) => ModelTransform | undefined;
+    globalScale?: number;
+    getTerrainElevation?: (lng: number, lat: number) => number;
 }
 
 export const TowerAnchorService = {
@@ -24,10 +26,17 @@ export const TowerAnchorService = {
             projectAnchors,
             templateAnchors,
             localModelUrl,
-            getEffectiveTransform
+            getEffectiveTransform,
+            globalScale,
+            getTerrainElevation
         } = options;
 
         const t = tower;
+        
+        // Determinar elevação do terreno (Live Mapbox > Banco de Dados > KMZ)
+        const terrainAlt = getTerrainElevation ? getTerrainElevation(t.coordinates.lng, t.coordinates.lat) : 0;
+        const finalTerrainBase = terrainAlt || t.elevation || t.coordinates?.altitude || 0;
+
         const avgLat = t.coordinates.lat;
 
         // Get individual overrides
@@ -41,7 +50,10 @@ export const TowerAnchorService = {
 
         // Calculate effective tower height and scaling
         const baseHeight = override?.height ?? t.towerHeight ?? 30;
-        const scaleZ = (transform?.scale?.[2] ?? 1) * (transform?.baseHeight ?? 1);
+        
+        // Multiplicador Global de Escala (Sincronizado com Scenegraph)
+        const scaleMultiplier = (globalScale ?? 100) / 100;
+        const scaleZ = (transform?.scale?.[2] ?? 1) * (transform?.baseHeight ?? 1) * scaleMultiplier;
 
         const isParaRaio = config.id.toLowerCase().includes('para') || config.id.toLowerCase().includes('opgw');
         const technicalFixHeight = isParaRaio ? (t.fix_pararaio || t.fixParaRaio) : (t.fix_conductor || t.fixConductor);
@@ -50,7 +62,7 @@ export const TowerAnchorService = {
         let effectiveAnchorZ = config.vRatio * visibleHeight;
 
         if (technicalFixHeight && Number(technicalFixHeight) > 0) {
-            effectiveAnchorZ = Number(technicalFixHeight);
+            effectiveAnchorZ = Number(technicalFixHeight) * scaleMultiplier;
         }
 
         const baseRot = (t as any).calculatedHeading || (t as any).heading || (t as any).rotation || 0;
@@ -76,28 +88,28 @@ export const TowerAnchorService = {
         }
 
         const offZ = transform?.offset?.[2] ?? 0;
+        
+        // SYSTEM_Z_SHIFT agora é 0 para corresponder ao getTranslation
+        // do TowerScenegraphService, mantendo a âncora na base solo.
+        const SYSTEM_Z_SHIFT = 0;
 
         // 3D ANCHOR LINKAGE: Prioritize exact 3D points
         const projectList = projectAnchors[t.id] || [];
         const templateList = templateAnchors[t.towerId] || templateAnchors['default'] || [];
         const towerAnchors = [...projectList, ...templateList];
 
-        // Calculate Base Centroid to match TowerScenegraphService shift
+        // SCALING FACTOR: Matches TowerScenegraph uses `scale = d.towerHeight * scaleMultiplier`.
+        const scaleFactor = visibleHeight;
+
+        // Calculate Base Centroid to match TowerScenegraphService shift (using unit model logic)
         const baseAnchors = towerAnchors.filter((a: any) => {
             const name = (a.name || '').toUpperCase();
             return name.includes('BASE') || name.includes('FIXAÇÃO') || name.includes('FIXACAO') || name.includes('PE') || name.includes('PÉ');
         });
 
-        // SCALING FACTOR:
-        // If the model is unit-sized (scale 1 means 1 meter), but visualization scales it to `visibleHeight`,
-        // then anchors (which are relative to unit model) must also be scaled by `visibleHeight`.
-        // However, if the anchors are already in meters relative to an unscaled model, we might just need `scaleZ`.
-        // Given user feedback "minúsculos", we assume anchors are Unit/Normalized and need full scaling.
-        // TowerScenegraph uses `scale = d.towerHeight`. Here `visibleHeight` is roughly `d.towerHeight`.
-        const scaleFactor = visibleHeight;
-
         let avgX = 0, avgY = 0, avgZ = 0;
         if (baseAnchors.length > 0) {
+            // Anchor units are normalized, so we scale by the physical height multiplier
             avgX = baseAnchors.reduce((acc: number, a: any) => acc + ((a.position.x ?? a.position[0] ?? 0) * scaleFactor), 0) / baseAnchors.length;
             avgY = baseAnchors.reduce((acc: number, a: any) => acc + ((a.position.y ?? a.position[1] ?? 0) * scaleFactor), 0) / baseAnchors.length;
             avgZ = baseAnchors.reduce((acc: number, a: any) => acc + ((a.position.z ?? a.position[2] ?? 0) * scaleFactor), 0) / baseAnchors.length;
@@ -134,24 +146,20 @@ export const TowerAnchorService = {
             }
 
             if (anchor) {
-                // Apply Scaling to the anchor point itself before shift
                 const rawX = (anchor.position.x ?? anchor.position[0] ?? 0) * scaleFactor;
                 const rawY = (anchor.position.y ?? anchor.position[1] ?? 0) * scaleFactor;
                 const rawZ = (anchor.position.z ?? anchor.position[2] ?? 0) * scaleFactor;
 
-                // Apply the opposite shift logic: Model was shifted by [-avgX, -avgY, -avgZ].
                 const ax = rawX - avgX;
                 const ay = rawY - avgY;
                 const az = rawZ - avgZ;
 
-                // Now using lOffset (ay), pitch and roll
                 const anchorPos = TowerPhysics.calculateAnchorPosition(
                     towerPos, baseRot, ax, 0, 0, baseHeight,
-                    cableSettings.towerVerticalOffset, t.elevation || 0, rotZ,
+                    cableSettings.towerVerticalOffset, finalTerrainBase, rotZ,
                     ay, pitch, roll
                 );
 
-                // Manual Global Offset from UI Adjustment (Meters)
                 const individualOffset = transform?.anchorOverrides?.[config.id];
                 const phaseOffset = config.phase ? transform?.phaseOverrides?.[config.phase] : null;
 
@@ -159,11 +167,8 @@ export const TowerAnchorService = {
                 const manualDy = individualOffset?.y ?? phaseOffset?.y ?? transform?.anchorGlobalOffset?.y ?? 0;
                 const manualDz = individualOffset?.z ?? phaseOffset?.z ?? transform?.anchorGlobalOffset?.z ?? 0;
 
-                // Sync with Model Translation (Z)
-                // If model has a translation in Z (offZ), we must add it to the anchor too.
-                const effectiveZ = anchorPos.alt + az + offZ + manualDz;
+                const effectiveZ = az + offZ + manualDz + SYSTEM_Z_SHIFT;
 
-                // Convert meters to lat/lng degrees for the final position shift
                 const mToDegLat = 1 / 111320;
                 const mToDegLng = 1 / (111320 * Math.cos(towerPos.lat * Math.PI / 180));
 
@@ -174,7 +179,7 @@ export const TowerAnchorService = {
                 return {
                     x: anchorPos.lng + (manualDxRot * mToDegLng),
                     y: anchorPos.lat + (manualDyRot * mToDegLat),
-                    z: effectiveZ
+                    z: anchorPos.alt + effectiveZ
                 };
             }
         }
@@ -182,11 +187,10 @@ export const TowerAnchorService = {
         // Fallback to central physics
         const anchorPos = TowerPhysics.calculateAnchorPosition(
             towerPos, baseRot, finalH, config.vRatio, config.vOffset || 0, baseHeight,
-            cableSettings.towerVerticalOffset, t.elevation || 0, rotZ,
+            cableSettings.towerVerticalOffset, finalTerrainBase, rotZ,
             0, pitch, roll
         );
 
-        // Manual Global Offset from UI Adjustment (Meters)
         const individualOffset = transform?.anchorOverrides?.[config.id];
         const phaseOffset = config.phase ? transform?.phaseOverrides?.[config.phase] : null;
 
@@ -197,7 +201,6 @@ export const TowerAnchorService = {
         const mToDegLat = 1 / 111320;
         const mToDegLng = 1 / (111320 * Math.cos(towerPos.lat * Math.PI / 180));
 
-        // Relative rotation for manual offsets
         const radY_fb = (baseRot) * (Math.PI / 180);
         const manualDxRot_fb = (manualDx * Math.cos(radY_fb)) + (manualDy * Math.sin(radY_fb));
         const manualDyRot_fb = (manualDy * Math.cos(radY_fb)) - (manualDx * Math.sin(radY_fb));
@@ -205,7 +208,7 @@ export const TowerAnchorService = {
         return {
             x: anchorPos.lng + (manualDxRot_fb * mToDegLng),
             y: anchorPos.lat + (manualDyRot_fb * mToDegLat),
-            z: anchorPos.alt + offZ + manualDz
+            z: anchorPos.alt + offZ + manualDz + SYSTEM_Z_SHIFT
         };
     }
 };

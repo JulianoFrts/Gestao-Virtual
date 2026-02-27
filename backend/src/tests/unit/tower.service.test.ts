@@ -25,11 +25,11 @@ describe("TowerService", () => {
     const inputData = {
       project_id: "proj-1",
       object_id: "tower-1",
-      object_height: 30 /* literal */,
+      object_height: 30,
     };
 
     mockTowerRepository.saveMany.mockResolvedValue([
-      { projectId: "proj-1", objectId: "tower-1", objectHeight: 30 /* literal */ } as Tower,
+      { projectId: "proj-1", objectId: "tower-1", objectHeight: 30 } as Tower,
     ]);
 
     const result = await towerService.saveTowers(inputData);
@@ -38,7 +38,7 @@ describe("TowerService", () => {
       expect.objectContaining({
         projectId: "proj-1",
         objectId: "tower-1",
-        objectHeight: 30 /* literal */,
+        objectHeight: 30,
       }),
     ]);
     expect(result).toHaveLength(1);

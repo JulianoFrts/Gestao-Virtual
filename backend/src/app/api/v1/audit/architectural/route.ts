@@ -117,12 +117,12 @@ export async function GET(request: NextRequest): Promise<Response> {
 function processAuditFilters(
   searchParams: URLSearchParams,
   companyId?: string,
-): Prisma.AuditViolationWhereInput {
+): Prisma.GovernanceAuditHistoryWhereInput {
   const minSeverity = searchParams.get("minSeverity");
   const startDate = searchParams.get("startDate"); // YYYY-MM-DD
   const endDate = searchParams.get("endDate"); // YYYY-MM-DD
 
-  const where: Prisma.AuditViolationWhereInput = { status: "OPEN" };
+  const where: Prisma.GovernanceAuditHistoryWhereInput = { status: "OPEN" };
   if (companyId) where.companyId = companyId;
 
   if (minSeverity === "MEDIUM") {
@@ -134,7 +134,7 @@ function processAuditFilters(
   if (startDate || endDate) {
     where.lastDetectedAt = {};
     if (startDate) {
-      where.lastDetectedAt.gte = new Date(startDate);
+      (where.lastDetectedAt as Prisma.DateTimeFilter).gte = new Date(startDate);
     }
     if (endDate) {
       const end = new Date(endDate);
@@ -144,7 +144,7 @@ function processAuditFilters(
         CONSTANTS.TIME.END_OF_DAY.SECONDS,
         CONSTANTS.TIME.END_OF_DAY.MS,
       );
-      where.lastDetectedAt.lte = end;
+      (where.lastDetectedAt as Prisma.DateTimeFilter).lte = end;
     }
   }
   return where;
@@ -153,11 +153,11 @@ function processAuditFilters(
 /**
  * Função Auxiliar para gerar o Stream de Auditoria (SRP)
  */
-function generateAuditStream(where: Prisma.AuditViolationWhereInput, constants: unknown): ReadableStream {
+function generateAuditStream(where: Prisma.GovernanceAuditHistoryWhereInput, constants: typeof CONSTANTS): ReadableStream {
   const encoder = new TextEncoder();
 
   return new ReadableStream({
-    async start(controller): Promise<unknown> {
+    async start(controller): Promise<void> {
       const sendEvent = (type: string, data: Record<string, unknown>) => {
         try {
           const event = `data: ${JSON.stringify({ type, ...data })}\n\n`;
@@ -176,15 +176,15 @@ function generateAuditStream(where: Prisma.AuditViolationWhereInput, constants: 
 
         while (processed < total) {
           const violations = await governanceService.listViolationsWithFilters(
-            where,
+            where as any,
             BATCH_SIZE,
             processed,
           );
 
           if (violations.length === 0) break;
 
-          const weights = constants.AUDIT.WEIGHTS;
-          violations.sort((a: unknown, b: unknown) => {
+          const weights: Record<string, number> = constants.AUDIT.WEIGHTS as any;
+          violations.sort((a, b) => {
             const weightA = weights[a.severity] ?? 0;
             const weightB = weights[b.severity] ?? 0;
             return weightB - weightA;

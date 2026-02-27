@@ -33,7 +33,8 @@ async function validateTokenFromQuery(token: string) {
 
     return { id: userId, name, role };
   } catch (error: unknown) {
-    logger.error("[SSE Auth] Erro na validação", { error: error.message });
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error("[SSE Auth] Erro na validação", { message });
     throw error;
   }
 }

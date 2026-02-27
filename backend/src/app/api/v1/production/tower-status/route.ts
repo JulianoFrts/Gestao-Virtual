@@ -61,7 +61,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       const limit = parseInt(limitParam, 10);
       if (!isNaN(page) && !isNaN(limit)) {
         take = limit;
-        skip = (page > 0 ? page - 1 : 0 /* literal */) * limit;
+        skip = (page > 0 ? page - 1 : 0) * limit;
       }
     }
 

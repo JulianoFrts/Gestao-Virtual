@@ -22,12 +22,11 @@ async function seed() {
 
   // 1. Garantir Empresa e Projeto
   const company = await prisma.company.upsert({
-    where: { cnpj: "12345678000199" },
+    where: { taxId: "12345678000199" },
     update: {},
     create: {
       name: "Empresa de Engenharia OrioN",
-      cnpj: "12345678000199",
-      email: "contato@orion.eng",
+      taxId: "12345678000199",
     }
   });
 

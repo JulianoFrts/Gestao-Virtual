@@ -173,8 +173,8 @@ describe("Validators", () => {
 
     it("deve aceitar valores customizados", () => {
       const result = paginationSchema.safeParse({
-        page: 5 /* literal */,
-        limit: 50 /* literal */,
+        page: 5,
+        limit: 50,
         sortBy: "createdAt",
         sortOrder: "desc",
       });

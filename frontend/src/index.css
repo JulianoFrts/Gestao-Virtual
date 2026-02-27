@@ -743,9 +743,16 @@ background: radial-gradient(circle,
   filter: invert(1) !important;
 }
 
-/* Hide Mapbox Attribution - Requested by User */
+/* Hide Mapbox Attribution (Right Side) */
 .mapboxgl-ctrl-attrib {
   display: none !important;
+}
+
+/* Ensure Mapbox Logo (Left Side) is visible */
+.mapboxgl-ctrl-logo {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
 /* Hide scrollbars but maintain functionality */

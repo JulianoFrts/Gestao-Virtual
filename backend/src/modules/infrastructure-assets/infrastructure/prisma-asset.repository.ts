@@ -52,18 +52,45 @@ export class PrismaAssetRepository extends PrismaBaseRepository<
    */
   async bulkUpsert(assets: CreateAssetDTO[]): Promise<number> {
     const results = await this.prisma.$transaction(
-      assets.map((asset) =>
-        this.prisma.mapElementTechnicalData.upsert({
+      assets.map((asset) => {
+        const createData: Prisma.MapElementTechnicalDataCreateInput = {
+          name: asset.name,
+          externalId: asset.externalId,
+          elementType: asset.elementType,
+          sequence: asset.sequence || 0,
+          latitude: asset.latitude,
+          longitude: asset.longitude,
+          elevation: asset.elevation,
+          metadata: (asset.metadata as Prisma.InputJsonValue) || {},
+          company: { connect: { id: asset.companyId } },
+          project: asset.projectId
+            ? { connect: { id: asset.projectId } }
+            : undefined,
+          site: asset.siteId ? { connect: { id: asset.siteId } } : undefined,
+        };
+
+        const updateData: Prisma.MapElementTechnicalDataUpdateInput = {
+          name: asset.name,
+          elementType: asset.elementType,
+          sequence: asset.sequence,
+          latitude: asset.latitude,
+          longitude: asset.longitude,
+          elevation: asset.elevation,
+          metadata: (asset.metadata as Prisma.InputJsonValue) || {},
+          site: asset.siteId ? { connect: { id: asset.siteId } } : undefined,
+        };
+
+        return this.prisma.mapElementTechnicalData.upsert({
           where: {
             projectId_externalId: {
-              projectId: asset.projectId!,
+              projectId: asset.projectId || "",
               externalId: asset.externalId,
             },
           },
-          update: asset as unknown,
-          create: asset as unknown,
-        }),
-      ),
+          update: updateData,
+          create: createData,
+        });
+      }),
     );
     return results.length;
   }
@@ -90,7 +117,7 @@ export class PrismaAssetRepository extends PrismaBaseRepository<
     return results.length;
   }
 
-  async getConstructionData(projectId: string) {
+  async getConstructionData(projectId: string): Promise<unknown[]> {
     return this.prisma.towerConstruction.findMany({
       where: { projectId },
       orderBy: { sequencia: "asc" },
@@ -118,7 +145,7 @@ export class PrismaAssetRepository extends PrismaBaseRepository<
           where: { projectId_towerId: { projectId, towerId: item.towerId } },
           update: {
             sequencia: item.sequencia,
-            metadata: item.metadata,
+            metadata: item.metadata as Prisma.InputJsonValue,
             updatedAt: new Date() /* deterministic-bypass */ /* bypass-audit */,
           },
           create: {
@@ -126,7 +153,7 @@ export class PrismaAssetRepository extends PrismaBaseRepository<
             companyId,
             towerId: item.towerId,
             sequencia: item.sequencia,
-            metadata: item.metadata,
+            metadata: item.metadata as Prisma.InputJsonValue,
           },
         }),
       ),

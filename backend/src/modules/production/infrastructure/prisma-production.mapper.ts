@@ -25,7 +25,7 @@ export class ProductionMapper {
       elementId: raw.elementId,
       activityId: raw.activityId,
       currentStatus: raw.currentStatus as ActivityStatus,
-      progressPercent: raw.progressPercent ? Number(raw.progressPercent) : 0 /* literal */,
+      progressPercent: raw.progressPercent ? Number(raw.progressPercent) : 0,
       history: (raw.history as ProgressHistoryEntry[]) || [],
       dailyProduction:
         (raw.dailyProduction as Record<

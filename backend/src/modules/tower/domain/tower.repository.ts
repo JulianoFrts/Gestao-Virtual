@@ -1,4 +1,4 @@
-export interface TowerBase {
+export interface TowerIdentity {
   id?: string;
   projectId?: string;
   companyId?: string;
@@ -6,29 +6,37 @@ export interface TowerBase {
   objectSeq?: number;
   towerType?: string;
   trecho?: string;
-  metadata?: Record<string, unknown>;
-  createdAt?: Date;
-  updatedAt?: Date;
 }
 
 export interface TowerGeography {
-  xCoordinate?: number;
-  yCoordinate?: number;
-  objectElevation?: number;
+  latitude?: number;
+  longitude?: number;
+  elevation?: number;
   deflection?: string;
   goForward?: number;
-  fusoObject?: string;
+  fuso?: string;
   technicalKm?: number;
   technicalIndex?: number;
 }
 
 export interface TowerStructural {
-  objectHeight?: number;
+  height?: number;
+  concreteVolume?: number;
+  steelWeight?: number;
+  structureWeight?: number;
+  foundationType?: string;
   fixConductor?: string;
   circuitId?: string;
 }
 
-export interface Tower extends TowerBase, TowerGeography, TowerStructural {}
+export interface TowerGovernance {
+  isHidden?: boolean;
+  metadata?: Record<string, unknown>;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export interface Tower extends TowerIdentity, TowerGeography, TowerStructural, TowerGovernance {}
 
 export interface TowerRepository {
   save(tower: Tower): Promise<Tower>;

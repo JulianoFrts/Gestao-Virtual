@@ -346,7 +346,7 @@ export class ArchitecturalAuditor {
         { source: "Audit/ArchitecturalAuditor" },
       );
     } else {
-      logger.success("Auditoria (v3.1): 100 /* literal */% de conformidade.", {
+      logger.success("Auditoria (v3.1): 100% de conformidade.", {
         source: "Audit/ArchitecturalAuditor",
       });
     }

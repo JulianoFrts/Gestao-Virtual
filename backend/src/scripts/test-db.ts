@@ -18,7 +18,7 @@ async function diagnose() {
     const config: unknown = {
         connectionString: dbUrl,
         ssl: { rejectUnauthorized: false },
-        connectionTimeoutMillis: 10000 /* literal */
+        connectionTimeoutMillis: 10000
     };
 
     // Tentar carregar mTLS se existirem no Windows (para teste local se possível)

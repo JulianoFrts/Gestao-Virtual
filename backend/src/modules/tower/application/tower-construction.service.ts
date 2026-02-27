@@ -26,10 +26,6 @@ export interface TowerImportItem {
   metadata?: Record<string, unknown>;
 }
 
-export interface SyncableProductionRepository extends TowerProductionRepository {
-  syncTechnicalData(projectId: string, updates: unknown[]): Promise<number>;
-}
-
 export class TowerConstructionService {
   constructor(
     private readonly repository: TowerConstructionRepository,
@@ -61,21 +57,21 @@ export class TowerConstructionService {
     const elements: TowerConstructionData[] = data.map((entry) => ({
       projectId,
       companyId,
-      towerId: String(element.towerId),
-      sequencia: Number(element.sequencia || 0),
+      towerId: String(entry.towerId),
+      sequencia: Number(entry.sequencia || 0),
       metadata: {
-        distancia_vao: Number(element.vao || 0),
-        elevacao: Number(element.elevacao || 0),
-        latitude: Number(element.lat || 0),
-        longitude: Number(element.lng || 0),
-        zona: element.zona || "",
-        peso_estrutura: Number(element.pesoEstrutura || 0),
-        peso_concreto: Number(element.pesoConcreto || 0),
-        peso_escavacao: Number(element.pesoEscavacao || 0),
-        peso_aco_1: Number(element.aco1 || 0),
-        peso_aco_2: Number(element.aco2 || 0),
-        peso_aco_3: Number(element.aco3 || 0),
-        ...element.metadata,
+        distancia_vao: Number(entry.vao || 0),
+        elevacao: Number(entry.elevacao || 0),
+        latitude: Number(entry.lat || 0),
+        longitude: Number(entry.lng || 0),
+        zona: entry.zona || "",
+        peso_estrutura: Number(entry.pesoEstrutura || 0),
+        peso_concreto: Number(entry.pesoConcreto || 0),
+        peso_escavacao: Number(entry.pesoEscavacao || 0),
+        peso_aco_1: Number(entry.aco1 || 0),
+        peso_aco_2: Number(entry.aco2 || 0),
+        peso_aco_3: Number(entry.aco3 || 0),
+        ...entry.metadata,
       },
     }));
 
@@ -96,7 +92,7 @@ export class TowerConstructionService {
       );
 
       const newTowers = data.filter(
-        (element: unknown) => !existingSet.has(String(element.towerId)),
+        (element) => !existingSet.has(String(element.towerId)),
       );
 
       // Etapa 2a: Criar torres NOVAS na Produção
@@ -107,7 +103,7 @@ export class TowerConstructionService {
           );
 
           const productionElements: TowerProductionData[] = newTowers.map(
-            (element: unknown) => ({
+            (element) => ({
               projectId,
               companyId,
               towerId: String(element.towerId),
@@ -120,6 +116,9 @@ export class TowerConstructionService {
                 pesoEstrutura: Number(element.pesoEstrutura || 0),
                 totalConcreto: Number(element.pesoConcreto || 0),
                 pesoArmacao: Number(element.aco1 || 0),
+                latitude: Number(element.lat || 0),
+                longitude: Number(element.lng || 0),
+                elevacao: Number(element.elevacao || 0),
               },
             }),
           );
@@ -144,7 +143,7 @@ export class TowerConstructionService {
       // Etapa 2b: Sincronizar dados técnicos para torres EXISTENTES
       // Isso garante que campos como vão, peso, concreto sejam atualizados na Produção
       const existingTowerItems = data.filter((entry) =>
-        existingSet.has(String(element.towerId)),
+        existingSet.has(String(entry.towerId)),
       );
 
       if (
@@ -157,18 +156,23 @@ export class TowerConstructionService {
           );
 
           const updates = existingTowerItems.map((entry) => ({
-            towerId: String(element.towerId),
+            towerId: String(entry.towerId),
             technicalMetadata: {
-              distancia_vao: Number(element.vao || 0),
-              peso_estrutura: Number(element.pesoEstrutura || 0),
-              peso_concreto: Number(element.pesoConcreto || 0),
-              peso_aco_1: Number(element.aco1 || 0),
+              sequencia: Number(entry.sequencia || 0),
+              distancia_vao: Number(entry.vao || 0),
+              elevacao: Number(entry.elevacao || 0),
+              latitude: Number(entry.lat || 0),
+              longitude: Number(entry.lng || 0),
+              peso_estrutura: Number(entry.pesoEstrutura || 0),
+              peso_concreto: Number(entry.pesoConcreto || 0),
+              peso_aco_1: Number(entry.aco1 || 0),
             },
           }));
 
-          const syncedCount = await (
-            this.productionRepository as SyncableProductionRepository
-          ).syncTechnicalData(projectId, updates);
+          const syncedCount = await this.productionRepository.syncTechnicalData(
+            projectId,
+            updates,
+          );
           logger.info(
             `[TowerConstructionService] Technical data synced for ${syncedCount} towers`,
           );

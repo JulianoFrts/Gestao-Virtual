@@ -44,7 +44,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams): Prom
   const { id } = await params;
   try {
     const currentUser = await requireOwnerOrAdmin(id, request);
-    const isAdmin = currentUser.role === Role.SYSTEM_ADMIN || currentUser.role === Role.COMPANY_ADMIN;
+    const isAdmin = currentUser.role === Role.ADMIN || currentUser.role === Role.COMPANY_ADMIN;
 
     const body = await request.json();
     const mappedBody = mapLegacyToUnified(body);
@@ -101,7 +101,7 @@ function mapToLegacyProfile(user: Record<string, any>) {
     function_id: aff.functionId,
     hierarchy_level: aff.hierarchyLevel,
     is_blocked: user.authCredential?.status !== "ACTIVE",
-    is_system_admin: user.authCredential?.role === Role.SYSTEM_ADMIN || user.authCredential?.isSystemAdmin,
+    is_system_admin: user.authCredential?.role === Role.ADMIN || user.authCredential?.isSystemAdmin,
     created_at: user.createdAt,
     updated_at: user.updatedAt,
   };

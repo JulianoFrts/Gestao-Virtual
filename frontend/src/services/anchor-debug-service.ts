@@ -47,7 +47,8 @@ export const AnchorDebugService = {
                     projectAnchors,
                     templateAnchors,
                     localModelUrl,
-                    getEffectiveTransform
+                    getEffectiveTransform,
+                    getTerrainElevation
                 });
 
                 points.push({

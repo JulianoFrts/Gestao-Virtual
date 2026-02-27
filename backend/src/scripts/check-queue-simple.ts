@@ -30,7 +30,7 @@ async function check() {
     console.log("Status counts:", JSON.stringify(counts, null, 2));
 
     const recent = await prisma.taskQueue.findMany({
-      take: 5 /* literal */,
+      take: 5,
       orderBy: { createdAt: "desc" },
     });
     console.log(

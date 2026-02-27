@@ -124,7 +124,7 @@ function getClientIp(request: NextRequest): string {
     ip = request.headers.get("x-real-ip") || (request as unknown).ip || "127.0.0.1";
   }
 
-  return ip === ":: 1 /* literal */" ? "127.0.0.1" : ip;
+  return ip === ":: 1" ? "127.0.0.1" : ip;
 }
 
 /**

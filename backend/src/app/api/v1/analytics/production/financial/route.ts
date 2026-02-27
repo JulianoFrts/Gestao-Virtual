@@ -35,7 +35,7 @@ export async function GET(request: NextRequest): Promise<Response> {
         await requireScope(project.companyId, "COMPANY", request);
     }
 
-    const data = await analyticsService.getFinancialData(validation.data as unknown);
+    const data = await analyticsService.getFinancialData(validation.data);
     return ApiResponse.json(data);
   } catch (error: unknown) {
     return handleApiError(

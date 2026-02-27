@@ -42,7 +42,7 @@ export class PrismaProductionSyncRepository implements ProductionSyncRepository 
 
     const avgProgress = aggregate._avg.progressPercent
       ? Number(aggregate._avg.progressPercent)
-      : 0 /* literal */;
+      : 0;
 
     const today = new Date() /* deterministic-bypass */ /* bypass-audit */;
     today.setHours(0, 0, 0, 0);
@@ -55,7 +55,7 @@ export class PrismaProductionSyncRepository implements ProductionSyncRepository 
         id,
         stageId: stage.id,
         actualPercentage: avgProgress,
-        plannedPercentage: 0 /* literal */,
+        plannedPercentage: 0,
         recordedDate: today,
         updatedBy: updatedBy,
         notes: "Sincronização Automática (Modelo DDD)",

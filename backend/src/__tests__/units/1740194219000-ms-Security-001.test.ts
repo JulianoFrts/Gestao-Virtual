@@ -1,6 +1,6 @@
 /**
  * *****INICIO*****
- * ** GESTÃO VIRTUAL - SOFTWARE SOLUTIONS - UNIT TEST - 22/02/2026 / 03: 30 /* literal */ **
+ * ** GESTÃO VIRTUAL - SOFTWARE SOLUTIONS - UNIT TEST - 22/02/2026 / 03: 30 **
  * *** QUAL FOI A MELHORIA AO EXECUTAR O TESTE? : Centralização e padronização (Regra de Ouro) no Backend.
  * *** QUAL FOI O MOTIVO DA EXECUÇÃO DO TESTE? : Regularização arquitetural e organização potente do sistema.
  * *** QUAIS AS RECOMENDAÇÕES A SER EXECUTADO CASO OCORRER ALGUM ERRO NO TESTE E PRECISAR SER COLIGIDO: Verificar caminhos de importação e consistência do ambiente de teste Jest/Supertest.
@@ -21,7 +21,7 @@ jest.mock("next/server", () => ({
     // Mock do método next() que indica prosseguimento da requisição
     next: jest.fn(() => ({ headers: { set: jest.fn() } })),
     // Mock do método json() para simular retornos de erro em formato JSON
-    json: jest.fn((data: unknown, init: unknown) => ({
+    json: jest.fn((data: Record<string, unknown>, init?: { status?: number }) => ({
       // Retornando a estrutura básica que o middleware espera manipular
       ...data,
       status: init?.status,
@@ -46,15 +46,15 @@ describe("Security Middleware - Qualidade Total 001", () => {
   // Teste 01: Verificar bloqueio de acesso quando a requisição não vem via Cloudflare ou Proxy Interno
   it("001.1 - deve bloquear acesso se não houver cabeçalho de segurança (Cloudflare/Proxy)", async () => {
     // Criação de um mock de requisição simulada sem os headers obrigatórios
-    const mockRequest: unknown = {
+    const mockRequest = {
       // Definindo a URL da requisição como uma rota de API protegida
       nextUrl: { pathname: "/api/v1/users" },
       // Simulando o objeto de cabeçalhos sem cf-ray or x-internal-proxy-key
       headers: { get: jest.fn(() => null) },
-    };
+    } as any;
 
     // Execução da função de middleware com a requisição mockada
-    const response: unknown = await middleware(mockRequest);
+    const response = await middleware(mockRequest) as any;
 
     // Verificação se o status retornado foi 403 (Forbidden/Acesso Restrito)
     expect(response.status).toBe(403);
@@ -70,7 +70,7 @@ describe("Security Middleware - Qualidade Total 001", () => {
       configurable: true,
     });
     // Mock de requisição para um endpoint de saúde do sistema (público)
-    const mockRequest: unknown = {
+    const mockRequest = {
       // Definindo o caminho da rota como saudável/público
       nextUrl: { pathname: "/api/v1/health" },
       // Simulando presença de cabeçalho Cloudflare para passar no primeiro check
@@ -80,7 +80,7 @@ describe("Security Middleware - Qualidade Total 001", () => {
           return null;
         }),
       },
-    };
+    } as any;
 
     // Chamada do middleware aguardando o processamento da rota pública
     await middleware(mockRequest);
@@ -92,7 +92,7 @@ describe("Security Middleware - Qualidade Total 001", () => {
   // Teste 03: Verificar bloqueio de rotas privadas quando o token de autorização está ausente
   it("001.3 - deve retornar 401 para rotas privadas sem token Bearer", async () => {
     // Mock de requisição para rota de usuários (privada)
-    const mockRequest: unknown = {
+    const mockRequest = {
       // Alvo: lista de usuários (altamente sensível)
       nextUrl: { pathname: "/api/v1/users" },
       // Método GET padrão
@@ -105,10 +105,10 @@ describe("Security Middleware - Qualidade Total 001", () => {
           return null;
         }),
       },
-    };
+    } as any;
 
     // Execução do middleware para validar a falta de credenciais
-    const response: unknown = await middleware(mockRequest);
+    const response = await middleware(mockRequest) as any;
 
     // Validação do status 401 (Unauthorized/Não autenticado)
     expect(response.status).toBe(401);

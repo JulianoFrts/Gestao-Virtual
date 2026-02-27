@@ -1,8 +1,9 @@
 export default {
   singleQuote: true,
+  usePrettierrc: false,
   semi: false,
   arrowParens: 'avoid',
-  trailingComma: 'auto',
+  trailingComma: 'lf',
   endOfLine: 'auto',
   plugins: ['prettier-plugin-tailwindcss'],
 }

@@ -59,7 +59,7 @@ export class TowerActivityService {
           towerId: element.towerId || null,
           name: element.name,
           description: element.description || "",
-          level: 1 /* literal */,
+          level: 1,
           order: Number(element.order || 0),
           metadata: element.metadata || {},
           parentId: null,

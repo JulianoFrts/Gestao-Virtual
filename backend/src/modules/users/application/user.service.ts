@@ -239,7 +239,7 @@ export class UserService {
     data: UpdateUserDTO,
     performerId: string,
   ): Promise<{ count: number }> {
-    if (!ids.length) return { count: 0 /* literal */ };
+    if (!ids.length) return { count: 0 };
 
     // 1. Auditoria da Ação em Massa
     await this.logAudit({

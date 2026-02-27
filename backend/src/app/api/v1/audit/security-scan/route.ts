@@ -19,6 +19,7 @@ export async function POST(): Promise<Response> {
             data: report
         });
     } catch (error: unknown) {
-        return NextResponse.json({ error: error.message }, { status: HTTP_STATUS.INTERNAL_ERROR });
+        const message = error instanceof Error ? error.message : String(error);
+        return NextResponse.json({ error: message }, { status: HTTP_STATUS.INTERNAL_ERROR });
     }
 }

@@ -83,7 +83,7 @@ export class DatabaseManagementService {
             const output = execSync(`npx prisma migrate deploy --schema=prisma/schema.prisma`, {
                 env: { ...process.env, DATABASE_URL: url },
                 encoding: 'utf8',
-                maxBuffer: 10 /* literal */ * 1024 * 1024 // 10MB
+                maxBuffer: 10 * 1024 * 1024 // 10MB
             });
             return { message: "Migrated successfully", output };
         } catch (migrateErr: unknown) {
@@ -103,7 +103,7 @@ export class DatabaseManagementService {
             execSync(`npx prisma db push --accept-data-loss --schema=prisma/schema.prisma`, {
                 env: { ...process.env, DATABASE_URL: url },
                 encoding: 'utf8',
-                maxBuffer: 10 /* literal */ * 1024 * 1024
+                maxBuffer: 10 * 1024 * 1024
             });
         } catch (e) {
             console.warn("Fallback to Diff...");
@@ -114,7 +114,7 @@ export class DatabaseManagementService {
             execSync('npx tsx src/scripts/restore-from-backup.ts', {
                 env: { ...process.env, DATABASE_URL: url },
                 encoding: 'utf8',
-                maxBuffer: 20 /* literal */ * 1024 * 1024 // 20MB
+                maxBuffer: 20 * 1024 * 1024 // 20MB
             });
         } catch (e) {
             console.error("Restore failed.");
@@ -146,9 +146,9 @@ export class DatabaseManagementService {
                 port: parseInt(u.port),
                 database: 'gestaodb',
                 ssl: { rejectUnauthorized: false },
-                connectionTimeoutMillis: 15000 /* literal */,
-                idleTimeoutMillis: 30000 /* timeout */ /* literal */,
-                max: 1 /* literal */
+                connectionTimeoutMillis: 15000,
+                idleTimeoutMillis: 30000 /* timeout */,
+                max: 1
             };
         } catch (e) {
             return { connectionString: url, ssl: { rejectUnauthorized: false } };

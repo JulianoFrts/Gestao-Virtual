@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { PrismaTowerActivityRepository } from "@/modules/tower/infrastructure/prisma-tower-activity.repository";
 import { TowerActivityService } from "@/modules/tower/application/tower-activity.service";
 import { requireAuth } from "@/lib/auth/session";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
-import { HTTP_STATUS } from "@/lib/constants";
+// Removed unused HTTP_STATUS import
 import { PrismaWorkStageRepository } from "@/modules/work-stages/infrastructure/prisma-work-stage.repository";
 import { z } from "zod";
 
@@ -11,12 +11,14 @@ const repository = new PrismaTowerActivityRepository();
 const workStageRepository = new PrismaWorkStageRepository();
 const service = new TowerActivityService(repository, workStageRepository);
 
-const saveGoalSchema = z.object({
-  projectId: z.string().min(1),
-  companyId: z.string().min(1),
-  data: z.array(z.record(z.unknown())).optional(),
-  single: z.boolean().optional(),
-}).passthrough();
+const saveGoalSchema = z
+  .object({
+    projectId: z.string().min(1),
+    companyId: z.string().min(1),
+    data: z.array(z.record(z.unknown())).optional(),
+    single: z.boolean().optional(),
+  })
+  .passthrough();
 
 const moveGoalSchema = z.object({
   id: z.string().min(1),
@@ -36,7 +38,7 @@ export async function GET(req: NextRequest): Promise<Response> {
 
     const hierarchy = await service.getHierarchy(projectId);
     return ApiResponse.json(hierarchy);
-  } catch (error: any) {
+  } catch (error: unknown) {
     return handleApiError(
       error,
       "src/app/api/v1/tower-activity-goals/route.ts#GET",
@@ -48,10 +50,12 @@ export async function POST(req: NextRequest): Promise<Response> {
   try {
     await requireAuth(req);
     const body = await req.json();
-    
+
     const validation = saveGoalSchema.safeParse(body);
     if (!validation.success) {
-      return ApiResponse.validationError(validation.error.issues.map(i => i.message));
+      return ApiResponse.validationError(
+        validation.error.issues.map((i) => i.message),
+      );
     }
 
     const { projectId, companyId, data, single } = validation.data;
@@ -60,20 +64,20 @@ export async function POST(req: NextRequest): Promise<Response> {
     if (single) {
       const { single: _, ...cleanData } = validation.data;
       const result = await service.saveGoal(cleanData as any);
-      return NextResponse.json(result);
+      return ApiResponse.json(result);
     }
 
     if (!projectId || !companyId || !Array.isArray(data)) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: HTTP_STATUS.BAD_REQUEST },
-      );
+      return ApiResponse.badRequest("Missing required fields");
     }
 
     const result = await service.importGoals(projectId, companyId, data);
-    return NextResponse.json(result);
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "Internal Error" }, { status: HTTP_STATUS.INTERNAL_ERROR });
+    return ApiResponse.json(result);
+  } catch (error: unknown) {
+    return handleApiError(
+      error,
+      "src/app/api/v1/tower-activity-goals/route.ts#POST",
+    );
   }
 }
 
@@ -81,18 +85,23 @@ export async function PATCH(req: NextRequest): Promise<Response> {
   try {
     await requireAuth(req);
     const body = await req.json();
-    
+
     const validation = moveGoalSchema.safeParse(body);
     if (!validation.success) {
-      return ApiResponse.validationError(validation.error.issues.map(i => i.message));
+      return ApiResponse.validationError(
+        validation.error.issues.map((i) => i.message),
+      );
     }
 
     const { id, parentId, order } = validation.data;
 
     const result = await service.moveGoal(id, parentId || undefined, order);
-    return NextResponse.json(result);
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "Internal Error" }, { status: HTTP_STATUS.INTERNAL_ERROR });
+    return ApiResponse.json(result);
+  } catch (error: unknown) {
+    return handleApiError(
+      error,
+      "src/app/api/v1/tower-activity-goals/route.ts#PATCH",
+    );
   }
 }
 
@@ -102,12 +111,16 @@ export async function DELETE(req: NextRequest): Promise<Response> {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
 
-    if (!id)
-      return NextResponse.json({ error: "id is required" }, { status: HTTP_STATUS.BAD_REQUEST });
+    if (!id) {
+      return ApiResponse.badRequest("id is required");
+    }
 
     await service.deleteGoal(id);
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error?.message || "Internal Error" }, { status: HTTP_STATUS.INTERNAL_ERROR });
+    return ApiResponse.json({ success: true });
+  } catch (error: unknown) {
+    return handleApiError(
+      error,
+      "src/app/api/v1/tower-activity-goals/route.ts#DELETE",
+    );
   }
 }

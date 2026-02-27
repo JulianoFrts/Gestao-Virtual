@@ -18,6 +18,9 @@ export interface RawTowerImportItem {
   VolumeConcreto?: number;
   PesoArmacao?: number;
   PesoEstrutura?: number;
+  Latitude?: number;
+  Longitude?: number;
+  Elevacao?: number;
   status: ImportStatus;
   errors?: string[];
 }
@@ -95,6 +98,9 @@ export class TowerImportService {
       VolumeConcreto: this.parseNumber(row["VolumeConcreto"] || row["Volume"] || row["Concreto"]),
       PesoArmacao: this.parseNumber(row["PesoArmacao"] || row["Aco"] || row["Armacao"]),
       PesoEstrutura: this.parseNumber(row["PesoEstrutura"] || row["Peso"] || row["EstruturaMontagem"]),
+      Latitude: this.parseNumber(row["Latitude"] || row["Lat"] || row["Y"] || row["COORD_Y"]),
+      Longitude: this.parseNumber(row["Longitude"] || row["Lng"] || row["X"] || row["COORD_X"]),
+      Elevacao: this.parseNumber(row["Elevacao"] || row["Elev"] || row["Z"] || row["ALTITUDE"]),
       status: "valid",
     };
 

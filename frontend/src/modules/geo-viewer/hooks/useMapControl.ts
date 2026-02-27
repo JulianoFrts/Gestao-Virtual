@@ -43,16 +43,28 @@ export function useMapControl() {
     }
   }, []);
 
-  const flyToTower = useCallback((tower: Tower) => {
+  const flyToTower = useCallback((tower: any) => {
     const mapInstance = mapRef.current?.getMap();
-    if (mapInstance) {
+    if (!mapInstance || !tower) return;
+
+    let lng = tower.coordinates?.lng ?? tower.lng ?? tower.longitude;
+    let lat = tower.coordinates?.lat ?? tower.lat ?? tower.latitude;
+
+    if (lng !== undefined && lat !== undefined) {
+      const coords: [number, number] = [Number(lng), Number(lat)];
+      
+      // Zoom 21.5 no Mapbox equivale a aproximadamente 20-30 metros de altitude visual
+      // mantendo o ponto de ancoragem no solo.
       mapInstance.flyTo({
-        center: [tower.coordinates.lng, tower.coordinates.lat],
-        zoom: 18,
-        pitch: 60,
-        duration: 2000,
+        center: coords,
+        zoom: 21.5, 
+        pitch: 75, // Inclinação para ver a torre e o solo
+        bearing: 0,
+        duration: 2500,
         essential: true,
       });
+    } else {
+      console.warn("flyToTower: Coordenadas não encontradas", tower);
     }
   }, []);
 

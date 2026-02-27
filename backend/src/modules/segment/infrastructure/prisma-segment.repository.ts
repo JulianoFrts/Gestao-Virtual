@@ -21,14 +21,17 @@ export class PrismaSegmentRepository implements TowerSegmentRepository {
     data: unknown,
     conductors: unknown[] | undefined,
   ): Promise<Segment> {
+    const towerStartId = data.towerStartId || data.tower_start_id;
+    const towerEndId = data.towerEndId || data.tower_end_id;
+
     await prisma.segment.update({
       where: { id },
       data: {
         projectId: data.projectId,
-        fromTowerId: data.towerStartId,
-        toTowerId: data.towerEndId,
-        length: data.spanLength,
-        groundLevel: data.elevationStart,
+        fromTowerId: towerStartId,
+        toTowerId: towerEndId,
+        length: data.spanLength || data.length,
+        groundLevel: data.elevationStart || data.groundLevel,
       },
       include: { conductors: true },
     });
@@ -43,11 +46,14 @@ export class PrismaSegmentRepository implements TowerSegmentRepository {
     data: unknown,
     conductors: unknown[] | undefined,
   ): Promise<Segment> {
+    const towerStartId = data.towerStartId || data.tower_start_id;
+    const towerEndId = data.towerEndId || data.tower_end_id;
+
     const whereInput = {
       projectId_fromTowerId_toTowerId: {
         projectId: data.projectId,
-        fromTowerId: data.towerStartId,
-        toTowerId: data.towerEndId,
+        fromTowerId: towerStartId,
+        toTowerId: towerEndId,
       },
     };
 
@@ -57,8 +63,8 @@ export class PrismaSegmentRepository implements TowerSegmentRepository {
       await prisma.segment.update({
         where: { id: existing.id },
         data: {
-          length: data.spanLength,
-          groundLevel: data.elevationStart,
+          length: data.spanLength || data.length,
+          groundLevel: data.elevationStart || data.groundLevel,
         },
       });
 
@@ -70,10 +76,10 @@ export class PrismaSegmentRepository implements TowerSegmentRepository {
       const created = await prisma.segment.create({
         data: {
           projectId: data.projectId,
-          fromTowerId: data.towerStartId,
-          toTowerId: data.towerEndId,
-          length: data.spanLength,
-          groundLevel: data.elevationStart || 0,
+          fromTowerId: towerStartId,
+          toTowerId: towerEndId,
+          length: data.spanLength || data.length,
+          groundLevel: data.elevationStart || data.groundLevel || 0,
           conductors: {
             create: this.mapConductorsForCreate(conductors),
           },

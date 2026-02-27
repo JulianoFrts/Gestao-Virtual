@@ -101,7 +101,7 @@ export class PrismaWorkStageReadRepository implements WorkStageReadRepository {
       include: {
         stageProgress: {
           orderBy: { recordedDate: "desc" },
-          take: 1 /* literal */,
+          take: 1,
         },
         site: { include: { project: true } },
       },
@@ -125,7 +125,7 @@ export class PrismaWorkStageReadRepository implements WorkStageReadRepository {
       include: {
         stageProgress: {
           orderBy: { recordedDate: "desc" },
-          take: 1 /* literal */,
+          take: 1,
         },
       },
       orderBy: { displayOrder: "asc" },
@@ -139,7 +139,7 @@ export class PrismaWorkStageReadRepository implements WorkStageReadRepository {
       include: {
         stageProgress: {
           orderBy: { recordedDate: "desc" },
-          take: 1 /* literal */,
+          take: 1,
         },
         site: true,
       },
@@ -172,7 +172,7 @@ export class PrismaWorkStageReadRepository implements WorkStageReadRepository {
       select: { id: true, metadata: true },
     });
 
-    if (elements.length === 0) return { total: 0 /* literal */, executed: 0 /* literal */, sumProgress: 0 /* literal */ };
+    if (elements.length === 0) return { total: 0, executed: 0, sumProgress: 0 };
 
     let targetElements = elements;
     if (siteName) {
@@ -187,7 +187,7 @@ export class PrismaWorkStageReadRepository implements WorkStageReadRepository {
     }
 
     if (targetElements.length === 0)
-      return { total: 0 /* literal */, executed: 0 /* literal */, sumProgress: 0 /* literal */ };
+      return { total: 0, executed: 0, sumProgress: 0 };
 
     const targetElementIds = targetElements.map((e: unknown) => e.id);
 
@@ -200,7 +200,7 @@ export class PrismaWorkStageReadRepository implements WorkStageReadRepository {
         where: {
           activityId,
           elementId: { in: targetElementIds },
-          progressPercent: { gte: 100 /* literal */ },
+          progressPercent: { gte: 100 },
         },
       }),
     ]);
@@ -229,10 +229,10 @@ export class PrismaWorkStageReadRepository implements WorkStageReadRepository {
 
     if (elements.length === 0)
       return {
-        totalWeight: 0 /* literal */,
-        weightedProgress: 0 /* literal */,
-        totalCount: 0 /* literal */,
-        executedCount: 0 /* literal */,
+        totalWeight: 0,
+        weightedProgress: 0,
+        totalCount: 0,
+        executedCount: 0,
       };
 
     let targetElements = elements;
@@ -249,10 +249,10 @@ export class PrismaWorkStageReadRepository implements WorkStageReadRepository {
 
     if (targetElements.length === 0)
       return {
-        totalWeight: 0 /* literal */,
-        weightedProgress: 0 /* literal */,
-        totalCount: 0 /* literal */,
-        executedCount: 0 /* literal */,
+        totalWeight: 0,
+        weightedProgress: 0,
+        totalCount: 0,
+        executedCount: 0,
       };
 
     const targetElementIds = targetElements.map((e: unknown) => e.id);
@@ -305,7 +305,7 @@ export class PrismaWorkStageReadRepository implements WorkStageReadRepository {
       include: {
         stageProgress: {
           orderBy: { recordedDate: "desc" },
-          take: 1 /* literal */,
+          take: 1,
         },
         site: { include: { project: true } },
       },

@@ -85,7 +85,7 @@ export class WorkStageSyncManager {
     useSiteFilter: boolean = true,
   ): Promise<{ progress: number; total: number; executed: number }> {
     if (!stage.productionActivityId)
-      return { progress: 0 /* literal */, total: 0 /* literal */, executed: 0 /* literal */ };
+      return { progress: 0, total: 0, executed: 0 };
 
     const result = await this.repository.findProductionElementsWeighted(
       projectId,
@@ -94,7 +94,7 @@ export class WorkStageSyncManager {
     );
 
     if (!result || result.totalCount === 0)
-      return { progress: 0 /* literal */, total: 0 /* literal */, executed: 0 /* literal */ };
+      return { progress: 0, total: 0, executed: 0 };
 
     const progress = Math.min(
       100,

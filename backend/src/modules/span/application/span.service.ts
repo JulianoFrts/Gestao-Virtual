@@ -75,34 +75,34 @@ export class SpanService {
     startId: string,
     endId: string,
   ) {
-    return (prisma as unknown).towerTechnicalData.findMany({
+    return prisma.mapElementTechnicalData.findMany({
       where: {
         projectId: projectId,
-        objectId: { in: [startId, endId] },
+        externalId: { in: [startId, endId] },
       },
-      select: { objectId: true, objectSeq: true },
+      select: { externalId: true, sequence: true },
     });
   }
 
   private async detectSequenceGaps(
     span: Span,
-    startTower: { objectSeq: number },
-    endTower: { objectSeq: number },
+    startTower: { sequence: number },
+    endTower: { sequence: number },
   ) {
-    const minSeq = Math.min(startTower.objectSeq, endTower.objectSeq);
-    const maxSeq = Math.max(startTower.objectSeq, endTower.objectSeq);
+    const minSeq = Math.min(startTower.sequence, endTower.sequence);
+    const maxSeq = Math.max(startTower.sequence, endTower.sequence);
 
     if (maxSeq - minSeq > 1) {
-      const intermediates = await (prisma as unknown).towerTechnicalData.findMany({
+      const intermediates = await prisma.mapElementTechnicalData.findMany({
         where: {
           projectId: span.projectId!,
-          objectSeq: { gt: minSeq, lt: maxSeq },
+          sequence: { gt: minSeq, lt: maxSeq },
         },
-        select: { objectId: true },
+        select: { externalId: true },
       });
 
       if (intermediates.length > 0) {
-        const skipList = intermediates.map((t: unknown) => t.objectId).join(", ");
+        const skipList = intermediates.map((t) => t.externalId).join(", ");
         logger.warn(
           `[Domain] Detectado salto de torres entre ${span.towerStartId} e ${span.towerEndId}. Intermediárias: ${skipList}`,
           { projectId: span.projectId },

@@ -88,7 +88,7 @@ export class PrismaUserRepository
 
     // 2. Mapeamento de Compatibilidade Legada
     if (r === "SUPER_ADMIN_GOD") return "HELPER_SYSTEM";
-    if (r === "SYSTEM_ADMIN") return "ADMIN";
+    if (r === "ADMIN") return "ADMIN";
     if (r === "TI" || r === "SUPPORT" || r === "SOFTWARE") return "TI_SOFTWARE";
     if (r === "MODERATOR") return "COMPANY_ADMIN";
     if (r === "MANAGER") return "PROJECT_MANAGER";

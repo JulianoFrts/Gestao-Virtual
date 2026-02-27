@@ -162,7 +162,7 @@ function handleBlockedEntry(
     );
     return {
       blocked: true,
-      remaining: 0 /* literal */,
+      remaining: 0,
       resetAt: entry.blockedUntil!,
       message: `Muitas requisições. Tente novamente em ${retryAfter} segundos.`,
     };
@@ -179,7 +179,7 @@ function createNewEntry(
   windowMs: number,
 ): RateLimitResult {
   const entry = {
-    count: 1 /* literal */,
+    count: 1,
     firstRequest: now,
     blocked: false,
   };
@@ -215,7 +215,7 @@ function incrementEntry(params: IncrementParams): RateLimitResult {
     const retryAfter = Math.ceil(blockDurationMs / CONSTANTS.TIME.MS_IN_SECOND);
     return {
       blocked: true,
-      remaining: 0 /* literal */,
+      remaining: 0,
       resetAt: entry.blockedUntil,
       message: `Limite de requisições excedido. Bloqueado por ${retryAfter} segundos.`,
     };

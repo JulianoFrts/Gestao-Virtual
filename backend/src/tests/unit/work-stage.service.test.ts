@@ -55,7 +55,7 @@ describe("WorkStageService", () => {
           siteId: "site-1",
           projectId: "proj-1",
           productionActivityId: null,
-          displayOrder: 1 /* literal */,
+          displayOrder: 1,
         },
       ];
       mockRepo.findAll.mockResolvedValue(stages);
@@ -78,7 +78,7 @@ describe("WorkStageService", () => {
   describe("createStage", () => {
     it("should throw error if name is missing", async () => {
       await expect(
-        service.createStage({ name: "", siteId: "site-1", displayOrder: 0 /* literal */ }),
+        service.createStage({ name: "", siteId: "site-1", displayOrder: 0 }),
       ).rejects.toThrow("Name is required");
     });
 
@@ -88,13 +88,13 @@ describe("WorkStageService", () => {
           name: "Test",
           siteId: "",
           projectId: "",
-          displayOrder: 0 /* literal */,
+          displayOrder: 0,
         }),
       ).rejects.toThrow("Site ID or Project ID is required");
     });
 
     it("should create stage correctly when valid", async () => {
-      const dto = { name: "Test", siteId: "site-1", displayOrder: 1 /* literal */ };
+      const dto = { name: "Test", siteId: "site-1", displayOrder: 1 };
       const created: WorkStage = {
         id: "new-id",
         ...dto,
@@ -119,7 +119,7 @@ describe("WorkStageService", () => {
       const dto = {
         name: "Test",
         siteId: "site-1",
-        displayOrder: 1 /* literal */,
+        displayOrder: 1,
         productionActivityId: "invalid-uuid",
       };
       const created: WorkStage = {
@@ -144,7 +144,7 @@ describe("WorkStageService", () => {
       const dto = {
         name: "Test",
         siteId: "site-1",
-        displayOrder: 1 /* literal */,
+        displayOrder: 1,
         productionActivityId: validUuid,
       };
 

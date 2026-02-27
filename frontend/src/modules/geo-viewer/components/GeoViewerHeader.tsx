@@ -32,6 +32,7 @@ interface GeoViewerHeaderProps {
   setIsClearConfirmOpen: (open: boolean) => void;
   navigate: (path: string) => void;
   viewState: { latitude: number; longitude: number; zoom: number };
+  getTerrainElevation?: (lng: number, lat: number) => number;
 }
 
 export const GeoViewerHeader: React.FC<GeoViewerHeaderProps> = ({
@@ -49,7 +50,10 @@ export const GeoViewerHeader: React.FC<GeoViewerHeaderProps> = ({
   setIsClearConfirmOpen,
   navigate,
   viewState,
+  getTerrainElevation,
 }) => {
+  const currentElevation = getTerrainElevation ? getTerrainElevation(viewState.longitude, viewState.latitude) : 0;
+
   if (isFullScreen) {
     return (
       <div className="fixed top-6 left-1/2 -translate-x-1/2 z-60 animate-in fade-in slide-in-from-top-6 duration-700 w-[95%] max-w-6xl">
@@ -57,13 +61,13 @@ export const GeoViewerHeader: React.FC<GeoViewerHeaderProps> = ({
           <div className="absolute top-0 left-0 w-full h-px bg-linear-to-r from-transparent via-emerald-500/40 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-4 pr-8 border-r border-white/10 shrink-0">
-              <Select value={selectedProjectId || undefined} onValueChange={setSelectedProjectId}>
+              <Select value={selectedProjectId || ""} onValueChange={setSelectedProjectId}>
                 <SelectTrigger className="w-[100px] h-12 bg-white/5 border-white/5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-white/10 transition-all text-white">
                   <SelectValue placeholder="OPERAÇÃO" />
                 </SelectTrigger>
                 <SelectContent className="bg-neutral-900 border-white/10 rounded-2xl shadow-2xl">
-                  {projects.map((p) => (
-                    <SelectItem key={p.id} value={p.id} className="text-xs font-bold font-mono">
+                  {projects.map((p, idx) => (
+                    <SelectItem key={`fs-${p.id}-${idx}`} value={p.id} className="text-xs font-bold font-mono">
                       {p.name}
                     </SelectItem>
                   ))}
@@ -124,13 +128,13 @@ export const GeoViewerHeader: React.FC<GeoViewerHeaderProps> = ({
       <div className="bg-black/90 backdrop-blur-3xl border border-white/10 rounded-full p-2 flex items-center gap-4 shadow-2xl ring-1 ring-white/10 pointer-events-auto max-w-full overflow-x-auto no-scrollbar">
         <div className="flex items-center gap-2 px-2 shrink-0">
           <Layers className="w-3.5 h-3.5 text-emerald-500/50" />
-          <Select value={selectedProjectId || undefined} onValueChange={setSelectedProjectId}>
+          <Select value={selectedProjectId || ""} onValueChange={setSelectedProjectId}>
             <SelectTrigger className="w-[180px] md:w-[240px] h-8 bg-transparent border-none focus:ring-0 rounded-full font-black text-[10px] uppercase tracking-widest hover:text-emerald-400 text-left px-0 shadow-none text-white">
               <SelectValue placeholder="SELECIONE O PROJETO" />
             </SelectTrigger>
             <SelectContent className="bg-black border-white/10 rounded-2xl shadow-2xl min-w-[240px]">
-              {projects.map((p) => (
-                <SelectItem key={p.id} value={p.id} className="text-[10px] font-bold font-mono py-2">
+              {projects.map((p, idx) => (
+                <SelectItem key={`std-${p.id}-${idx}`} value={p.id} className="text-[10px] font-bold font-mono py-2">
                   {p.name}
                 </SelectItem>
               ))}
@@ -170,8 +174,12 @@ export const GeoViewerHeader: React.FC<GeoViewerHeaderProps> = ({
             </div>
             <div className="w-px h-3 bg-white/10" />
             <div className="flex items-center gap-1.5">
-              <span className="text-[7px] font-black text-emerald-400/70 uppercase tracking-widest">ALT</span>
-              <span className="text-[10px] font-mono font-black text-white tabular-nums">{viewState.zoom.toFixed(1)}z</span>
+              <span className="text-[7px] font-black text-emerald-400/70 uppercase tracking-widest">ELEVAÇÃO</span>
+              <span className="text-[10px] font-mono font-black text-white tabular-nums">
+                {currentElevation > 0 
+                  ? `${Math.round(currentElevation)}m` 
+                  : `${viewState.zoom.toFixed(1)}z`}
+              </span>
             </div>
           </div>
         </div>

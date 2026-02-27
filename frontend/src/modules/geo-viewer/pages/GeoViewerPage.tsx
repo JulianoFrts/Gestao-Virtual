@@ -1,204 +1,690 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-import { Map as ReactMap, useControl, Source } from "react-map-gl/mapbox";
-import { MapboxOverlay } from "@deck.gl/mapbox";
-import { AmbientLight, DirectionalLight, LightingEffect } from "@deck.gl/core";
-import "mapbox-gl/dist/mapbox-gl.css";
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Map as ReactMap, MapRef, Source } from 'react-map-gl/mapbox'
+import { AmbientLight, DirectionalLight, LightingEffect } from '@deck.gl/core'
+import { MapboxOverlay } from '@deck.gl/mapbox'
+import { useControl } from 'react-map-gl/mapbox'
+import { usePermissions } from '@/hooks/usePermissions'
+import { useAuth } from '@/contexts/AuthContext'
 
-import { useToast } from "@/hooks/use-toast";
-import { usePermissions } from "@/hooks/usePermissions";
-import { useAuth } from "@/contexts/AuthContext";
-import { Toaster } from "@/components/ui/toaster";
-import { cn } from "@/lib/utils";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { GeoViewerLayout } from '../components/GeoViewerLayout'
+import { useProjectConfig } from '../hooks/useProjectConfig'
+import { useMapLayers } from '../hooks/useMapLayers'
+import { useMapInteractions } from '../hooks/useMapInteractions'
+import { useSceneData } from '../hooks/useSceneData'
+import { TowerTypeConfigModal } from '../components/TowerTypeConfigModal'
+import { Tower } from '../types/geo-viewer'
+import {
+  DEFAULT_PHASES,
+  MAPBOX_TOKEN,
+  TOWER_MODEL_URL,
+  INITIAL_VIEW_STATE,
+} from '../constants/constants'
 
-import { useMapControl } from "../hooks/useMapControl";
-import { useSceneData } from "../hooks/useSceneData";
-import { useProjectData } from "../hooks/useProjectData";
-import { GeoViewerSidebar } from "../components/GeoViewerSidebar";
-import { GeoViewerHeader } from "../components/GeoViewerHeader";
-import { GeoViewerToolbar } from "../components/GeoViewerToolbar";
-import { TowerDetailsModals } from "@/components/map/TowerDetailsModals";
-import { TowerExecutionHistoryModal } from "@/components/map/TowerExecutionHistoryModal";
-import { CableConfigModal } from "@/components/map/CableConfigModal";
-import { DEFAULT_PHASES } from "../constants/map-config";
-import { Tower, Cable, PhaseConfig } from "../types";
-import { CompletedWorkModal } from "../components/CompletedWorkModal";
+import { CableConfigModal } from '@/components/map/CableConfigModal'
+import { TowerDetailsModals } from '@/components/map/TowerDetailsModals'
+import { TowerExecutionHistoryModal } from '@/components/map/TowerExecutionHistoryModal'
+import { CompletedWorkModal } from '@/modules/geo-viewer/components/CompletedWorkModal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Slider } from '@/components/ui/slider'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+  RefreshCw,
+  Maximize2,
+  Link2,
+  Info,
+  Navigation,
+  X,
+  Save,
+  Loader2,
+  Minimize2,
+  List,
+  Zap,
+  Settings2,
+} from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { cn } from '@/lib/utils'
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_API_KEY;
+import 'mapbox-gl/dist/mapbox-gl.css'
 
-// Lighting Setup
-const ambientLight = new AmbientLight({ color: [255, 255, 255], intensity: 2.2 });
-const dirLight = new DirectionalLight({ color: [255, 255, 255], intensity: 2.5, direction: [-1, -2, -3] });
-const rimLight = new DirectionalLight({ color: [200, 220, 255], intensity: 1.5, direction: [1, 2, 1] });
-const lightingEffect = new LightingEffect({ ambientLight, dirLight, rimLight });
+const ambientLight = new AmbientLight({
+  color: [255, 255, 255],
+  intensity: 2.2,
+})
+const dirLight = new DirectionalLight({
+  color: [255, 255, 255],
+  intensity: 2.5,
+  direction: [-1, -2, -3],
+})
+const rimLight = new DirectionalLight({
+  color: [200, 220, 255],
+  intensity: 1.5,
+  direction: [1, 2, 1],
+})
+const lightingEffect = new LightingEffect({ ambientLight, dirLight, rimLight })
 
-function DeckGLOverlay(props: any) {
-  const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay({ ...props, effects: [lightingEffect] }), { interleaved: true });
-  useEffect(() => { if (overlay) overlay.setProps({ ...props, effects: [lightingEffect] }); }, [props, overlay]);
-  return null;
+function DeckGLOverlay(props: any): null {
+  const overlay = useControl<MapboxOverlay>(
+    () => new MapboxOverlay({ ...props, effects: [lightingEffect] }) as any
+  )
+  useEffect(() => {
+    if (overlay) overlay.setProps({ ...props, effects: [lightingEffect] })
+  }, [props, overlay])
+  return null
 }
 
 export default function GeoViewerPage() {
-  const navigate = useNavigate();
-  const { toast } = useToast();
-  const { can } = usePermissions();
-  const { profile } = useAuth();
+  const { can } = usePermissions()
+  const canEdit = can('map.edit')
+  const { profile } = useAuth()
+  const navigate = useNavigate()
+  const mapRef = useRef<MapRef | null>(null)
 
-  // Custom Hooks
-  const { viewState, setViewState, mapRef, handleFitToTowers, flyToTower } = useMapControl();
-  const { towers, setTowers, cables, setCables, signalSpheres, connections } = useSceneData();
-  const { projects, selectedProjectId, handleProjectSelect, isLoading } = useProjectData();
+  const [viewState, setViewState] = useState(INITIAL_VIEW_STATE)
+  const [isFullScreen, setIsFullScreen] = useState(false)
+  const [showTowerMenu, setShowTowerMenu] = useState(false)
+  const [showCableMenu, setShowCableMenu] = useState(false)
+  const [towerSearch, setTowerSearch] = useState('')
+  const [contextMenu, setContextMenu] = useState<{
+    x: number
+    y: number
+    tower: Tower
+  } | null>(null)
 
-  // UI States (to be extracted further)
-  const [isControlsCollapsed, setIsControlsCollapsed] = useState(true);
-  const [showTowerMenu, setShowTowerMenu] = useState(false);
-  const [showCableMenu, setShowCableMenu] = useState(false);
-  const [isFullScreen, setIsFullScreen] = useState(false);
-  const [towerSearch, setTowerSearch] = useState("");
-  const [towerElevation, setTowerElevation] = useState(4.0);
-  const [scale, setScale] = useState(50);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isClearing, setIsClearing] = useState(false);
-  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
-  const [hiddenTowerIds, setHiddenTowerIds] = useState<Set<string>>(new Set());
-  const [isConnectMode, setIsConnectMode] = useState(false);
-  const [isSwapMode, setIsSwapMode] = useState(false);
+  const [selectedTowerForDetails, setSelectedTowerForDetails] =
+    useState<Tower | null>(null)
+  const [isTowerModalOpen, setIsTowerModalOpen] = useState(false)
+  const [selectedTowerForHistory] = useState<Tower | null>(null)
+  const [isExecutionHistoryModalOpen, setIsExecutionHistoryModalOpen] =
+    useState(false)
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false)
+  const [isExecutivePanelOpen, setIsExecutivePanelOpen] = useState(false)
+  const [isTowerTypeModalOpen, setIsTowerTypeModalOpen] = useState(false)
+  const [hiddenTowers] = useState<Set<number>>(new Set())
 
-  // Modals
-  const [selectedTowerForDetails, setSelectedTowerForDetails] = useState<Tower | null>(null);
-  const [isTowerModalOpen, setIsTowerModalOpen] = useState(false);
-  const [selectedTowerForHistory, setSelectedTowerForHistory] = useState<Tower | null>(null);
-  const [isExecutionHistoryModalOpen, setIsExecutionHistoryModalOpen] = useState(false);
+  const {
+    towers,
+    setTowers,
+    towersRef,
+    connections,
+    setConnections,
+    connectionsRef,
+  } = useSceneData()
 
-  const [phases, setPhases] = useState<PhaseConfig[]>(() => {
-    const saved = localStorage.getItem("orion-cable-config");
-    return saved ? JSON.parse(saved) : DEFAULT_PHASES;
-  });
+  const {
+    projects,
+    selectedProjectId,
+    setSelectedProjectId,
+    isLoading,
+    isSaving,
+    towerTypeConfigs,
+    setTowerTypeConfigs,
+    setScale,
+    setTowerElevation,
+    handleSaveConfig,
+    handleClearTowers,
+    scale,
+    towerElevation,
+    phases,
+    setPhases,
+    hiddenTowerIds,
+    setHiddenTowerIds,
+    individualAltitudes,
+    setIndividualAltitudes,
+  } = useProjectConfig(DEFAULT_PHASES)
 
-  const canEdit = can("map.edit");
-  const canManage = can("map.manage");
-  const canSeeExecutivePanel = profile?.isSystemAdmin || (profile?.permissionsMap as any)?.["system.All_Access"] || ["SUPER_ADMIN_GOD", "HELPER_SYSTEM"].includes(profile?.role || "");
+  const {
+    isConnectMode,
+    setIsConnectMode,
+    selectedStartTower,
+    debugPoints,
+    handleSnapToTerrain,
+    handleAutoRotateTowers,
+    handleTowerClick,
+  } = useMapInteractions({
+    towers,
+    setTowers,
+    towersRef,
+    connections,
+    setConnections,
+    connectionsRef,
+    mapRef,
+    towerElevation,
+    individualAltitudes,
+    setIndividualAltitudes,
+  })
 
-  // Placeholder Handlers (logic still in migration)
-  const handleSaveConfig = () => { toast({ title: "Salvando...", description: "Implementando persistência modular." }); };
-  const handleClearTowers = () => { setIsClearing(true); setTimeout(() => { setTowers([]); setIsClearing(false); setIsClearConfirmOpen(false); }, 1000); };
-  const handleTowerClick = useCallback((info: any) => { if (info.object) { setSelectedTowerForDetails(info.object); setIsTowerModalOpen(true); } }, []);
+  const { layers } = useMapLayers({
+    towers,
+    phases,
+    connections,
+    towerElevation,
+    scale,
+    individualAltitudes,
+    hiddenTowers,
+    hiddenTowerIds,
+    selectedStartTower,
+    viewState,
+    TOWER_MODEL_URL,
+    handleTowerClick,
+    setContextMenu,
+    debugPoints,
+    towerTypeConfigs,
+  })
 
-  // Deck.GL Layers (This will be a huge separate hook later)
-  const layers = useMemo(() => [], []);
+  // KM-LT Calculation
+  const totalKm = useMemo(() => {
+    if (towers.length < 2) return 0
+    let dist = 0
+    for (let i = 0; i < towers.length - 1; i++) {
+      const t1 = towers[i]
+      const t2 = towers[i + 1]
+      const lat1 = t1.coordinates.lat
+      const lon1 = t1.coordinates.lng
+      const lat2 = t2.coordinates.lat
+      const lon2 = t2.coordinates.lng
+      const R = 6371 // km
+      const dLat = ((lat2 - lat1) * Math.PI) / 180
+      const dLon = ((lon2 - lon1) * Math.PI) / 180
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((lat1 * Math.PI) / 180) *
+          Math.cos((lat2 * Math.PI) / 180) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2)
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+      dist += R * c
+    }
+    return dist
+  }, [towers])
 
-  if (!MAPBOX_TOKEN) return <div className="flex items-center justify-center h-screen text-red-500 font-black">MAPBOX TOKEN MISSING</div>;
+  // Handlers
+  const handleFitToTowers = useCallback(() => {
+    if (towers.length === 0) return
+    const lngs = towers.map(t => t.coordinates.lng)
+    const lats = towers.map(t => t.coordinates.lat)
+    const minLng = Math.min(...lngs),
+      maxLng = Math.max(...lngs)
+    const minLat = Math.min(...lats),
+      maxLat = Math.max(...lats)
+    mapRef.current?.getMap().fitBounds(
+      [
+        [minLng, minLat],
+        [maxLng, maxLat],
+      ],
+      { padding: 80, duration: 2000 }
+    )
+  }, [towers])
+
+  const handleSelectTowerFromModal = useCallback(
+    (towerId: string) => {
+      const foundTower = towers.find(
+        t => t.id === towerId || t.name === towerId
+      )
+      if (!foundTower) return
+      mapRef.current?.getMap().flyTo({
+        center: [foundTower.coordinates.lng, foundTower.coordinates.lat],
+        zoom: 18,
+        pitch: 60,
+        duration: 2000,
+      })
+      setSelectedTowerForDetails(foundTower)
+      if (!isExecutivePanelOpen) setIsTowerModalOpen(true)
+    },
+    [towers, isExecutivePanelOpen]
+  )
+
+  const canSeeExecutivePanel =
+    profile?.isSystemAdmin ||
+    ['SUPER_ADMIN_GOD', 'HELPER_SYSTEM'].includes(profile?.role || '')
+
+  // Data Loading Trigger
+  const { loadProjectData } = useProjectConfig(DEFAULT_PHASES)
+
+  useEffect(() => {
+    if (selectedProjectId && selectedProjectId !== 'undefined') {
+      loadProjectData(selectedProjectId, setTowers)
+    }
+  }, [selectedProjectId, loadProjectData, setTowers])
+
+  // Close context menu
+  useEffect(() => {
+    const close = () => setContextMenu(null)
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [])
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-black text-white font-sans fixed inset-0" onContextMenu={(e) => e.preventDefault()}>
-      <GeoViewerHeader
-        isFullScreen={isFullScreen}
-        setIsFullScreen={setIsFullScreen}
-        selectedProjectId={selectedProjectId}
-        setSelectedProjectId={handleProjectSelect}
-        projects={projects}
-        isSaving={isSaving}
-        handleSaveConfig={handleSaveConfig}
-        canEdit={canEdit}
-        canManage={canManage}
-        isClearing={isClearing}
-        towersCount={towers.length}
-        setIsClearConfirmOpen={setIsClearConfirmOpen}
-        navigate={navigate}
-        viewState={viewState}
-      />
-
-      <GeoViewerSidebar
-        isControlsCollapsed={isControlsCollapsed}
-        setIsControlsCollapsed={setIsControlsCollapsed}
-        towerSearch={towerSearch}
-        setTowerSearch={setTowerSearch}
-        towerElevation={towerElevation}
-        setTowerElevation={setTowerElevation}
-        scale={scale}
-        setScale={setScale}
-        isConnectMode={isConnectMode}
-        setIsConnectMode={setIsConnectMode}
-        isSwapMode={isSwapMode}
-        setIsSwapMode={setIsSwapMode}
-        isSaving={isSaving}
-        handleSave={handleSaveConfig}
-        isFullScreen={isFullScreen}
-        setIsFullScreen={setIsFullScreen}
-        handleClearTowers={() => setIsClearConfirmOpen(true)}
-        handleFitToTowers={() => handleFitToTowers(towers)}
-        towersCount={towers.length}
-      />
-
-      <main className={cn("fixed inset-0 transition-all duration-700 ease-in-out bg-neutral-950 overflow-hidden flex flex-col", isFullScreen ? "z-1" : "z-0")}>
-        <div className="relative flex-1 group overflow-hidden">
-          <ReactMap
-            ref={mapRef}
-            {...viewState}
-            onMove={(evt) => setViewState(evt.viewState)}
-            mapboxAccessToken={MAPBOX_TOKEN}
-            mapStyle="mapbox://styles/mapbox/satellite-v9"
-            style={{ width: "100%", height: "100%" }}
-            terrain={{ source: "mapbox-dem", exaggeration: 1.5 }}
+    <GeoViewerLayout
+      isLoading={isLoading}
+      isFullScreen={isFullScreen}
+      floatingToolbar={
+        <div className="flex items-center gap-3 rounded-4xl border border-white/10 bg-black/80 p-2.5 shadow-2xl backdrop-blur-3xl">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsTowerTypeModalOpen(true)}
+            className="h-11 w-14 rounded-2xl border border-white/5 bg-white/5 p-0 text-emerald-500 hover:bg-white/10"
           >
-            <Source id="mapbox-dem" type="raster-dem" url="mapbox://mapbox.mapbox-terrain-dem-v1" tileSize={512} maxzoom={14} />
-            <DeckGLOverlay layers={layers} />
-          </ReactMap>
+            <Settings2 className="h-5 w-5" />
+          </Button>
+          <div className="flex items-center gap-2 rounded-3xl border border-white/5 bg-white/5 p-1.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'h-11 gap-3 rounded-2xl px-6 text-[10px] font-black tracking-widest uppercase',
+                showTowerMenu ? 'bg-emerald-500 text-black' : 'text-neutral-400'
+              )}
+              onClick={() => setShowTowerMenu(!showTowerMenu)}
+            >
+              <List className="h-4 w-4" />
+              <span>Torres</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'h-11 gap-3 rounded-2xl px-6 text-[10px] font-black tracking-widest uppercase',
+                showCableMenu ? 'bg-cyan-500 text-black' : 'text-neutral-400'
+              )}
+              onClick={() => setShowCableMenu(!showCableMenu)}
+            >
+              <Zap className="h-4 w-4" />
+              <span>Cabos</span>
+            </Button>
+            {canSeeExecutivePanel && (
+              <CompletedWorkModal
+                projectId={selectedProjectId || undefined}
+                onSelectTower={handleSelectTowerFromModal}
+                onOpenChange={setIsExecutivePanelOpen}
+                hiddenTowerIds={hiddenTowerIds}
+                onHiddenTowerIdsChange={setHiddenTowerIds}
+              />
+            )}
+          </div>
+          <div className="mx-1 h-8 w-px bg-white/10" />
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleSnapToTerrain(false, true)}
+              className="h-11 gap-2.5 rounded-2xl text-[10px] font-black text-orange-400 uppercase"
+            >
+              <RefreshCw className="h-4 w-4" />
+              <span>Snap</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleAutoRotateTowers()}
+              className="h-11 gap-2.5 rounded-2xl text-[10px] font-black text-blue-400 uppercase"
+            >
+              <RefreshCw className="h-4 w-4" />
+              <span>Rotate</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleFitToTowers}
+              className="h-11 gap-2.5 rounded-2xl text-[10px] font-black text-emerald-400 uppercase"
+            >
+              <Maximize2 className="h-4 w-4" />
+              <span>Fit</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => canEdit && setIsConnectMode(!isConnectMode)}
+              className={cn(
+                'h-11 gap-2.5 rounded-2xl text-[10px] font-black text-orange-500 uppercase',
+                isConnectMode && 'bg-white/10'
+              )}
+            >
+              <Link2 className="h-4 w-4" />
+              <span>Connect</span>
+            </Button>
+          </div>
         </div>
-      </main>
+      }
+      premiumHeader={
+        <div className="fixed top-6 left-1/2 z-60 w-[95%] max-w-6xl -translate-x-1/2">
+          <div className="flex items-center justify-between gap-8 rounded-[2.5rem] border border-white/10 bg-black/95 p-4 shadow-2xl backdrop-blur-3xl">
+            <div className="flex items-center gap-6">
+              <Select
+                value={selectedProjectId || undefined}
+                onValueChange={setSelectedProjectId}
+              >
+                <SelectTrigger className="h-12 w-[200px] border-white/5 bg-white/5 text-xs font-black tracking-widest uppercase">
+                  <SelectValue placeholder="SELECIONAR OPERAÇÃO" />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map(p => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                onClick={() => setIsClearConfirmOpen(true)}
+                className="h-10 border-red-900/50 bg-red-950/30 text-[10px] font-black text-red-400 uppercase"
+              >
+                Limpar Torres
+              </Button>
+              <Button
+                onClick={() => setIsFullScreen(false)}
+                variant="ghost"
+                className="h-12 gap-3 text-[10px] font-black text-neutral-400 uppercase"
+              >
+                <Maximize2 className="h-5 w-5 text-emerald-500" />
+                FECHAR COCKPIT
+              </Button>
+            </div>
+            <Button
+              size="lg"
+              className="h-14 gap-5 rounded-4xl bg-emerald-500 font-black tracking-widest text-black hover:bg-emerald-400"
+              onClick={() => handleSaveConfig(towers)}
+            >
+              {isSaving ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Save className="h-5 w-5" />
+              )}
+              <span>PUBLIKAR PROJETO</span>
+            </Button>
+          </div>
+        </div>
+      }
+      navigationPills={
+        <div className="absolute top-6 right-0 left-0 z-50 flex justify-center px-6">
+          <div className="flex items-center gap-4 rounded-full border border-white/10 bg-black/90 p-2 shadow-2xl backdrop-blur-3xl">
+            <Select
+              value={selectedProjectId || undefined}
+              onValueChange={setSelectedProjectId}
+            >
+              <SelectTrigger className="h-8 w-[200px] border-none bg-transparent text-[10px] font-black tracking-widest uppercase">
+                <SelectValue placeholder="PROJETO" />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map(p => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="h-8 w-px bg-white/10" />
+            <Button
+              variant="ghost"
+              className="h-9 text-[9px] font-black text-slate-400 uppercase"
+              onClick={() => navigate('/dashboard')}
+            >
+              <Minimize2 className="mr-2 h-3.5 w-3.5" />
+              FECHAR
+            </Button>
+            <Button
+              className="h-9 bg-emerald-500 text-[9px] font-black text-black uppercase"
+              onClick={() => handleSaveConfig(towers)}
+            >
+              {isSaving ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Save className="h-3.5 w-3.5" />
+              )}
+              SALVAR
+            </Button>
+          </div>
+        </div>
+      }
+      statsOverlay={
+        <div className="pointer-events-none absolute bottom-16 left-10 flex gap-12 text-left">
+          <div>
+            <p className="text-[10px] font-black text-neutral-500 uppercase">
+              Torres
+            </p>
+            <h3 className="flex items-baseline gap-2 text-4xl font-black text-white italic">
+              {towers.length}
+              <span className="text-lg font-black text-emerald-500 not-italic">
+                UNITS / {totalKm.toFixed(2)} KM-LT
+              </span>
+            </h3>
+          </div>
+        </div>
+      }
+      sideMenu={
+        showTowerMenu && (
+          <div className="fixed top-24 right-6 bottom-6 z-40 w-[380px] rounded-[2.5rem] border border-white/10 bg-black/80 p-8 shadow-2xl backdrop-blur-3xl">
+            <div className="mb-8 flex items-center justify-between">
+              <h2 className="text-2xl font-black tracking-tighter text-white uppercase italic">
+                Estruturas
+              </h2>
+              <div className="flex items-center gap-2">
+                <div className="flex gap-0.5">
+                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-500/50" />
+                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                </div>
+              </div>
+            </div>
 
-      <GeoViewerToolbar
-        showTowerMenu={showTowerMenu}
-        toggleTowerMenu={() => setShowTowerMenu(!showTowerMenu)}
-        showCableMenu={showCableMenu}
-        toggleCableMenu={() => setShowCableMenu(!showCableMenu)}
-        canSeeExecutivePanel={canSeeExecutivePanel}
-        selectedProjectId={selectedProjectId}
-        handleSelectTowerFromModal={(id) => flyToTower({ id } as any)}
-        hiddenTowerIds={hiddenTowerIds}
-        setHiddenTowerIds={setHiddenTowerIds}
-        handleSnapToTerrain={() => {}}
-        handleAutoRotateTowers={() => {}}
-        handleFitToTowers={() => handleFitToTowers(towers)}
-        isConnectMode={isConnectMode}
-        setIsConnectMode={setIsConnectMode}
-        isSwapMode={isSwapMode}
-        setIsSwapMode={setIsSwapMode}
-        canEdit={canEdit}
-        handleAutoConnectSequence={() => {}}
-        isFullScreen={isFullScreen}
-      />
+            <div className="relative mb-6">
+              <Input
+                placeholder="BUSCAR..."
+                value={towerSearch}
+                onChange={e => setTowerSearch(e.target.value)}
+                className="h-14 rounded-2xl border-none bg-white/5 px-6 text-[11px] font-black tracking-widest text-white uppercase placeholder:text-neutral-500 focus-visible:ring-emerald-500/20"
+              />
+            </div>
 
-      <TowerDetailsModals isOpen={isTowerModalOpen} onClose={() => setIsTowerModalOpen(false)} tower={selectedTowerForDetails} />
-      <TowerExecutionHistoryModal isOpen={isExecutionHistoryModalOpen} onClose={() => setIsExecutionHistoryModalOpen(false)} tower={selectedTowerForHistory} projectId={selectedProjectId} />
-      <CableConfigModal isOpen={showCableMenu} onClose={() => setShowCableMenu(false)} phases={phases} onUpdate={setPhases} onSave={handleSaveConfig} onRestoreDefaults={() => setPhases(DEFAULT_PHASES)} readOnly={!canEdit} onScanTower={() => {}} />
+            {/* Ajustes Gerais Restaurados */}
+            <div className="mb-8 space-y-6 rounded-3xl border border-white/5 bg-white/5 p-6 shadow-sm">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black tracking-widest text-neutral-500 uppercase">
+                    Elevação Geral
+                  </span>
+                  <span className="text-[11px] font-black text-emerald-500">
+                    {towerElevation}m
+                  </span>
+                </div>
+                <Slider
+                  value={[towerElevation]}
+                  min={0}
+                  max={60}
+                  step={0.5}
+                  onValueChange={([val]) => setTowerElevation(val)}
+                  className="py-2"
+                />
+              </div>
 
-      {canSeeExecutivePanel && (
-        <CompletedWorkModal
-          open={showTowerMenu}
-          onOpenChange={setShowTowerMenu}
-          projectId={selectedProjectId}
-          onSelectTower={(id) => flyToTower({ id } as any)}
-          hiddenTowerIds={hiddenTowerIds}
-          onHiddenTowerIdsChange={setHiddenTowerIds}
-        />
-      )}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black tracking-widest text-neutral-500 uppercase">
+                    Escala Base
+                  </span>
+                  <span className="text-[11px] font-black text-emerald-500">
+                    {scale}%
+                  </span>
+                </div>
+                <Slider
+                  value={[scale]}
+                  min={10}
+                  max={200}
+                  step={1}
+                  onValueChange={([val]) => setScale(val)}
+                  className="py-2"
+                />
+              </div>
+            </div>
 
-      <AlertDialog open={isClearConfirmOpen} onOpenChange={setIsClearConfirmOpen}>
-        <AlertDialogContent className="bg-neutral-950 border border-white/10">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-red-400 font-black text-lg">Confirmar Limpeza</AlertDialogTitle>
-            <AlertDialogDescription className="text-neutral-400">Deseja remover {towers.length} torres?</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="border-white/10 text-neutral-300">Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleClearTowers} disabled={isClearing} className="bg-red-600">Remover</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            <div className="mb-4 flex items-center justify-between px-2">
+              <h3 className="text-[10px] font-black tracking-widest text-neutral-500 uppercase">
+                Lista de Torres (
+                {
+                  towers.filter(t =>
+                    t.name.toLowerCase().includes(towerSearch.toLowerCase())
+                  ).length
+                }
+                )
+              </h3>
+            </div>
 
-      <Toaster />
-    </div>
-  );
+            <div className="custom-scrollbar h-[calc(100%-180px)] space-y-3 overflow-y-auto pr-2">
+              {towers
+                .filter(t =>
+                  t.name.toLowerCase().includes(towerSearch.toLowerCase())
+                )
+                .map((t, i) => (
+                  <div
+                    key={i}
+                    className="group flex cursor-pointer items-center justify-between rounded-3xl bg-neutral-900/60 p-5 transition-all hover:scale-[1.02] hover:bg-neutral-800/80 active:scale-[0.98]"
+                    onClick={() => handleSelectTowerFromModal(t.name)}
+                  >
+                    <span className="text-sm font-black tracking-tight text-emerald-400">
+                      {t.name}
+                    </span>
+                    <Navigation className="h-4 w-4 text-neutral-400 transition-colors group-hover:text-white" />
+                  </div>
+                ))}
+              {towers.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-20 opacity-20">
+                  <List className="mb-4 h-12 w-12" />
+                  <p className="text-[10px] font-black tracking-widest uppercase">
+                    Nenhuma Torre
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      }
+      contextMenu={
+        contextMenu && (
+          <div
+            className="fixed z-100 min-w-[200px] rounded-2xl border border-white/10 bg-black/90 p-2 backdrop-blur-3xl"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-[10px] font-black text-emerald-400 uppercase"
+              onClick={() => {
+                setSelectedTowerForDetails(contextMenu.tower)
+                setIsTowerModalOpen(true)
+              }}
+            >
+              <Info className="mr-2 h-4 w-4" />
+              Detalhes
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full justify-start text-[10px] font-black text-red-400 uppercase"
+              onClick={() => setContextMenu(null)}
+            >
+              <X className="mr-2 h-4 w-4" />
+              Fechar
+            </Button>
+          </div>
+        )
+      }
+      modals={
+        <>
+          <CableConfigModal
+            isOpen={showCableMenu}
+            onClose={() => setShowCableMenu(false)}
+            phases={phases}
+            onUpdate={setPhases}
+            onSave={() => handleSaveConfig(towers, true)}
+            readOnly={!canEdit}
+          />
+          <TowerDetailsModals
+            isOpen={isTowerModalOpen}
+            onClose={() => setIsTowerModalOpen(false)}
+            tower={selectedTowerForDetails}
+          />
+          <TowerExecutionHistoryModal
+            isOpen={isExecutionHistoryModalOpen}
+            onClose={() => setIsExecutionHistoryModalOpen(false)}
+            tower={selectedTowerForHistory}
+            projectId={selectedProjectId}
+          />
+          <TowerTypeConfigModal
+            isOpen={isTowerTypeModalOpen}
+            onClose={() => setIsTowerTypeModalOpen(false)}
+            towers={towers}
+            configs={towerTypeConfigs}
+            onSave={newConfigs => {
+              setTowerTypeConfigs(newConfigs)
+              handleSaveConfig(towers, true)
+            }}
+          />
+          <AlertDialog
+            open={isClearConfirmOpen}
+            onOpenChange={setIsClearConfirmOpen}
+          >
+            <AlertDialogContent className="border-white/10 bg-neutral-950">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="font-black text-red-400">
+                  Limpar Torres?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Deseja remover {towers.length} torres?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Não</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleClearTowers}
+                  className="bg-red-600"
+                >
+                  Sim
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      }
+    >
+      <ReactMap
+        ref={mapRef}
+        {...viewState}
+        onMove={evt => setViewState(evt.viewState)}
+        mapboxAccessToken={MAPBOX_TOKEN}
+        mapStyle="mapbox://styles/mapbox/satellite-v9"
+        style={{ width: '100%', height: '100%' }}
+        terrain={
+          towers.length > 0
+            ? { source: 'mapbox-dem', exaggeration: 1.5 }
+            : undefined
+        }
+      >
+        {towers.length > 0 && (
+          <Source
+            id="mapbox-dem"
+            type="raster-dem"
+            url="mapbox://mapbox.mapbox-terrain-dem-v1"
+            tileSize={512}
+            maxzoom={14}
+          />
+        )}
+        <DeckGLOverlay layers={layers} />
+      </ReactMap>
+    </GeoViewerLayout>
+  )
 }

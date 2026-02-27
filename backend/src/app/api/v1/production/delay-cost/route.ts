@@ -31,7 +31,7 @@ export async function GET(request: NextRequest): Promise<Response> {
 
     const config = await service.getDelayCostConfig(user.companyId!, projectId);
 
-    return ApiResponse.json(config || { dailyCost: 0 /* literal */, currency: "BRL" });
+    return ApiResponse.json(config || { dailyCost: 0, currency: "BRL" });
   } catch (error) {
     return handleApiError(
       error,

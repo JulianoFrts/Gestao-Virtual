@@ -48,7 +48,7 @@ export interface CableSettings {
 export const DEFAULT_CABLE_SETTINGS: CableSettings = {
     tension: 1200,
     globalOpacity: 0.9,
-    towerVerticalOffset: 30, // Reset to near-ground to avoid flying towers
+    towerVerticalOffset: 0, // Definido como 0 para setar na base solo
     alignmentMethod: 'bisector',
     anchors: [
         // ============== PARA-RAIOS (TOPO) ==============

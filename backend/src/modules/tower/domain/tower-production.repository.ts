@@ -5,7 +5,7 @@ export interface TowerProductionData {
   companyId: string;
   projectId: string;
   siteId?: string | null;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -20,4 +20,11 @@ export interface TowerProductionRepository {
   ): Promise<TowerProductionData | null>;
   findByProject(projectId: string): Promise<TowerProductionData[]>;
   delete(id: string): Promise<boolean>;
+  syncTechnicalData(
+    projectId: string,
+    updates: Array<{
+      towerId: string;
+      technicalMetadata: Record<string, unknown>;
+    }>,
+  ): Promise<number>;
 }

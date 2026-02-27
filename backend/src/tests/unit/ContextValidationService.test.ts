@@ -48,7 +48,7 @@ describe("ContextValidationService", () => {
     it("should allow access for GLOBAL management roles (e.g., SYSTEM_ADMIN)", async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
         id: userId,
-        authCredential: { role: "SYSTEM_ADMIN" as Role },
+        authCredential: { role: "ADMIN" as Role },
         affiliation: null,
       });
 

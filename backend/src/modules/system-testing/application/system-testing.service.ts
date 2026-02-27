@@ -14,10 +14,10 @@ export class SystemTestingService {
     private async checkSingleRoute(route: string, userId: string): Promise<RouteHealthResult> {
         const start = this.timeProvider ? this.timeProvider.now().getTime() : this.timeProvider.now().getTime();
         try {
-            const baseUrl = process.env.NEXTAUTH_URL || "http://127.0.0.1: 3000 /* literal */";
+            const baseUrl = process.env.NEXTAUTH_URL || "http://127.0.0.1: 3000";
             const controller = new AbortController();
 
-            // Magic Number original: 2000 /* literal */ms. Vou usar uma constante local ou expandir index.ts
+            // Magic Number original: 2000ms. Vou usar uma constante local ou expandir index.ts
             const timeoutToken = setTimeout(() => controller.abort(), 2000);
 
             const response = await fetch(`${baseUrl}${route}`, {

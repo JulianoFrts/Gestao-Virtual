@@ -424,21 +424,6 @@ export const CompletedWorkModal: React.FC<CompletedWorkModalProps> = ({
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            {(!externalOpen && externalOpen !== false) && (
-              <DialogTrigger asChild>
-                  <Button 
-                      variant="outline"
-                      className="bg-black/80 backdrop-blur-md border border-white/10 hover:bg-emerald-500 hover:text-black text-white rounded-full w-12 h-12 p-0 flex items-center justify-center shadow-2xl transition-all group relative"
-                  >
-                      <ListFilter className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                      {displayedStages.length > 0 && (
-                          <span className="absolute -top-1 -right-1 bg-emerald-500 text-black text-[9px] font-black w-5 h-5 flex items-center justify-center rounded-full border-2 border-black">
-                              {displayedStages.length}
-                          </span>
-                      )}
-                  </Button>
-              </DialogTrigger>
-            )}
                         <DialogContent className="max-w-[95vw] w-[1200px] h-[90vh] p-0 bg-slate-950 border-white/10 overflow-hidden flex flex-col glass-card border-warning/10 shadow-[0_0_50px_rgba(var(--warning),0.05)]">
                     <DialogHeader className="p-4 border-b border-white/5 bg-slate-900/50 flex flex-row items-center justify-between space-y-0 shrink-0">
                         <div className="flex items-center gap-4">

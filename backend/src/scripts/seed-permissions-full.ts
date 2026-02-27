@@ -26,7 +26,7 @@ async function main() {
 
   // 3. Achatando a Matriz para evitar loop aninhado estrutural
   console.log("🔗 Gerando Matriz de Permissões...");
-  const matrixEntries: unknown[] = [];
+  const matrixEntries: { levelId: string; moduleId: string; isGranted: boolean }[] = [];
 
   dbLevels.forEach(level => {
     const expectedFlags = new Set(ROLE_FLAGS[level.name] || []);
