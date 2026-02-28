@@ -61,6 +61,7 @@ export class PrismaAssetRepository extends PrismaBaseRepository<
           latitude: asset.latitude,
           longitude: asset.longitude,
           elevation: asset.elevation,
+          displaySettings: (asset.displaySettings as Prisma.InputJsonValue) || {},
           metadata: (asset.metadata as Prisma.InputJsonValue) || {},
           company: { connect: { id: asset.companyId } },
           project: asset.projectId
@@ -76,6 +77,7 @@ export class PrismaAssetRepository extends PrismaBaseRepository<
           latitude: asset.latitude,
           longitude: asset.longitude,
           elevation: asset.elevation,
+          displaySettings: (asset.displaySettings as Prisma.InputJsonValue) || {},
           metadata: (asset.metadata as Prisma.InputJsonValue) || {},
           site: asset.siteId ? { connect: { id: asset.siteId } } : undefined,
         };

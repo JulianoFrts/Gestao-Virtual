@@ -87,25 +87,31 @@ export async function POST(request: NextRequest): Promise<Response> {
     const user = await requireAuth();
     const body = await request.json();
     const params = Object.fromEntries(request.nextUrl.searchParams.entries());
-    const urlProjectId = params.projectId || params.project_id;
+    
+    // Tenta obter IDs da URL ou do primeiro item do corpo (caso seja array) ou do próprio corpo
+    const items = Array.isArray(body) ? body : [body];
+    const firstItem = items[0] || {};
+    
+    const targetProjectId = params.projectId || params.project_id || firstItem.projectId || firstItem.project_id;
+    const targetCompanyId = params.companyId || params.company_id || firstItem.companyId || firstItem.company_id || user.companyId;
 
-    if (!urlProjectId && !user.companyId) {
+    if (!targetProjectId && !targetCompanyId) {
       return ApiResponse.badRequest(
         "Contexto de projeto ou empresa não identificado.",
       );
     }
 
     const count = await assetService.syncAssetsFromImport(
-      user.companyId || "",
-      urlProjectId || "",
-      Array.isArray(body) ? body : [body],
+      targetCompanyId || "",
+      targetProjectId || "",
+      items,
     );
 
     return ApiResponse.json(
       { success: true, count },
       `${count} ativos processados com sucesso.`,
     );
-  } catch (error: unknown) {
+  } catch (error: any) {
     logger.error("Erro ao salvar ativos", { message: error.message });
     return handleApiError(error, "src/app/api/v1/map_elements/route.ts#POST");
   }

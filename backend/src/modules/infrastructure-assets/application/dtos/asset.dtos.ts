@@ -13,6 +13,7 @@ export interface AssetEntity {
   longitude?: number | null;
   elevation?: number | null;
   geometry?: unknown;
+  displaySettings?: Record<string, any>;
   metadata?: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;
@@ -30,6 +31,7 @@ export interface CreateAssetDTO {
   longitude?: number;
   elevation?: number;
   geometry?: unknown;
+  displaySettings?: Record<string, any>;
   metadata?: Record<string, any>;
 }
 

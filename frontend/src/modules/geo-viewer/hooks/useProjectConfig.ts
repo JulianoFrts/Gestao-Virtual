@@ -3,12 +3,15 @@ import { orionApi } from '@/integrations/orion/client'
 import { useToast } from '@/hooks/use-toast'
 import { PhaseConfig } from '@/components/map/CableConfigModal'
 import { Tower } from '../types/geo-viewer'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 export interface TowerTypeConfig {
   type: string
   scale: number
   elevation: number
   modelUrl?: string
+  structure?: 'portico' | 'suspension' | 'anchor' | ''
+  category?: 'estaiada' | 'autoportante' | ''
 }
 
 export interface ProjectConfig {
@@ -18,11 +21,13 @@ export interface ProjectConfig {
   connections: { from: string; to: string }[]
   hiddenTowerIds: string[]
   towerTypeConfigs?: TowerTypeConfig[]
+  individualAltitudes?: Record<string, number>
 }
 
 export function useProjectConfig(DEFAULT_PHASES: PhaseConfig[]) {
   const { toast: showToast } = useToast()
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([])
+  const queryClient = useQueryClient()
+  
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     () => {
       const saved = localStorage.getItem('gapo_project_id')
@@ -31,48 +36,41 @@ export function useProjectConfig(DEFAULT_PHASES: PhaseConfig[]) {
   )
 
   const [isLoading, setIsLoading] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
   const [isClearing, setIsClearing] = useState(false)
+  const [isDataLoaded, setIsDataLoaded] = useState(false)
 
   // Configuration State
   const [scale, setScale] = useState<number>(50)
   const [towerElevation, setTowerElevation] = useState<number>(30)
-  const [phases, setPhases] = useState<PhaseConfig[]>(() => {
-    const saved = localStorage.getItem('orion-cable-config')
-    return saved ? JSON.parse(saved) : DEFAULT_PHASES
-  })
-  const [connections, setConnections] = useState<
-    { from: string; to: string }[]
-  >([])
+  const [phases, setPhases] = useState<PhaseConfig[]>(DEFAULT_PHASES)
+  const [connections, setConnections] = useState<{ from: string; to: string }[]>([])
   const [hiddenTowerIds, setHiddenTowerIds] = useState<Set<string>>(new Set())
-  const [individualAltitudes, setIndividualAltitudes] = useState<
-    Record<string, number>
-  >({})
-  const [towerTypeConfigs, setTowerTypeConfigs] = useState<TowerTypeConfig[]>(
-    []
-  )
+  const [individualAltitudes, setIndividualAltitudes] = useState<Record<string, number>>({})
+  const [towerTypeConfigs, setTowerTypeConfigs] = useState<TowerTypeConfig[]>([])
 
-  // Fetch projects on mount
-  useEffect(() => {
-    let isMounted = true
-    const fetchProjects = async () => {
+  // 1. QUERY: Buscar lista de projetos (Monitorado pelo Devtools)
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects-list'],
+    queryFn: async () => {
       const { data, error } = await orionApi
         .from('projects')
-        .select('id, name')
+        .select('id, name, company_id')
         .order('name')
-      if (!error && data && isMounted) {
-        const sortedProjects = data as { id: string; name: string }[]
-        setProjects(sortedProjects)
-        if (!selectedProjectId && sortedProjects.length > 0) {
-          setSelectedProjectId(sortedProjects[0].id)
-        }
-      }
+      if (error) throw error
+      
+      return (data as any[]).map(p => ({
+        id: p.id,
+        name: p.name,
+        companyId: p.company_id
+      }))
     }
-    fetchProjects()
-    return () => {
-      isMounted = false
+  })
+
+  useEffect(() => {
+    if (!selectedProjectId && projects.length > 0) {
+      setSelectedProjectId(projects[0].id)
     }
-  }, [selectedProjectId])
+  }, [projects, selectedProjectId])
 
   useEffect(() => {
     if (selectedProjectId) {
@@ -80,223 +78,178 @@ export function useProjectConfig(DEFAULT_PHASES: PhaseConfig[]) {
     }
   }, [selectedProjectId])
 
+  // 2. MUTATION: Salvamento de Configurações (Monitorado pelo Devtools)
+  const saveMutation = useMutation({
+    mutationFn: async ({ towers, overrides }: { towers: Tower[], overrides?: Partial<ProjectConfig> }) => {
+      if (!selectedProjectId) return
+
+      const finalScale = overrides?.scale ?? scale
+      const finalTowerElevation = overrides?.towerElevation ?? towerElevation
+      const finalTowerTypeConfigs = overrides?.towerTypeConfigs ?? towerTypeConfigs
+      const finalPhases = overrides?.phases ?? phases
+      const finalConnections = overrides?.connections ?? connections
+      const finalHiddenTowerIds = overrides?.hiddenTowerIds ? Array.from(overrides.hiddenTowerIds) : Array.from(hiddenTowerIds)
+      const finalIndividualAltitudes = overrides?.individualAltitudes ?? individualAltitudes
+
+      const settingsPayload = {
+        projectId: selectedProjectId,
+        settings: {
+          scale: finalScale,
+          towerElevation: finalTowerElevation,
+          phases: finalPhases,
+          connections: finalConnections,
+          hiddenTowerIds: finalHiddenTowerIds,
+          towerTypeConfigs: finalTowerTypeConfigs,
+          updatedAt: new Date().toISOString(),
+        }
+      }
+
+      // Salvar Settings
+      await orionApi.post('project_3d_cable_settings', settingsPayload)
+
+      // Salvar Torres
+      const currentProject = projects.find(p => p.id === selectedProjectId)
+      const companyId = currentProject?.companyId || towers[0]?.companyId
+
+      if (companyId && towers.length > 0) {
+        const towersToUpdate = towers.map((t, index) => ({
+          projectId: selectedProjectId,
+          project_id: selectedProjectId,
+          companyId: companyId,
+          company_id: companyId,
+          externalId: String(t.name),
+          external_id: String(t.name),
+          name: t.name,
+          elementType: t.elementType || 'TOWER',
+          element_type: t.elementType || 'TOWER',
+          type: t.type,
+          latitude: t.coordinates.lat,
+          longitude: t.coordinates.lng,
+          elevation: t.coordinates.altitude,
+          sequence: index,
+          displaySettings: {
+            ...t.displaySettings,
+            groundElevation: finalIndividualAltitudes[t.name],
+          },
+          metadata: { ...t.properties, ...t.metadata },
+        }))
+
+        const CHUNK_SIZE = 50
+        for (let i = 0; i < towersToUpdate.length; i += CHUNK_SIZE) {
+          await orionApi.post('map_elements', towersToUpdate.slice(i, i + CHUNK_SIZE))
+        }
+      }
+      return { success: true }
+    },
+    onSuccess: () => {
+      // Opcional: invalidar cache se necessário
+    }
+  })
+
   const loadProjectData = useCallback(
-    async (projectId: string, setTowers: (t: Tower[]) => void) => {
+    async (
+      projectId: string, 
+      setTowers: (t: Tower[]) => void,
+      setConnections: (c: { from: string; to: string }[]) => void
+    ) => {
       if (!projectId || projectId === 'undefined') return
 
       setIsLoading(true)
-      setTowers([])
-      setConnections([])
-      setIndividualAltitudes({})
-      setHiddenTowerIds(new Set())
-      setPhases(DEFAULT_PHASES)
-      setScale(50)
-      setTowerElevation(4.0)
-      setTowerTypeConfigs([])
-
+      setIsDataLoaded(false)
+      
       try {
-        // 1. Load Towers from Production API
-        const { data: towerData, error: towerError } = await orionApi.get<
-          Record<string, unknown>[]
-        >('/production/tower-status', { projectId })
+        // A. Carregar map_elements
+        const { data: mapData } = await orionApi
+          .from('map_elements')
+          .select('*')
+          .eq('projectId', projectId)
+          .order('sequence', { ascending: true })
 
-        console.log('[DEBUG Cockpit3D API]', {
-          projectId,
-          towerData,
-          towerError,
+        let towerData: any[] = mapData || []
+
+        if (towerData.length === 0) {
+          const { data: prodData } = await orionApi.get<any[]>('/production/tower-status', { projectId })
+          towerData = (prodData as any)?.preview || (prodData as any)?.data || prodData || []
+        }
+
+        const uniqueTowersMap = new Map<string, Tower>()
+        const restoredAlts: Record<string, number> = {}
+
+        towerData.forEach((t: any, idx: number) => {
+          const name = String(t.name || t.externalId || t.objectId || `T-${idx + 1}`).trim()
+          if (uniqueTowersMap.has(name)) return
+
+          uniqueTowersMap.set(name, {
+            ...t,
+            id: String(t.id || t.elementId || `virtual-${name}`),
+            name,
+            coordinates: {
+              lat: Number(t.latitude ?? t.lat ?? 0),
+              lng: Number(t.longitude ?? t.lng ?? 0),
+              altitude: Number(t.elevation ?? t.altitude ?? 0),
+            },
+            type: String(t.towerType || t.type || (t.metadata as any)?.type || 'ESTAIADA'),
+            elementType: String(t.elementType || t.element_type || 'TOWER'),
+            metadata: t.metadata || t,
+            activityStatuses: (t.activityStatuses || (t.metadata as any)?.activityStatuses || []) as any[],
+          } as Tower)
+
+          const displaySettings = t.displaySettings || {}
+          if (displaySettings.groundElevation !== undefined) {
+            restoredAlts[name] = displaySettings.groundElevation
+          }
         })
 
-        if (!towerError && towerData) {
-          const tryUnwrap = (obj: any): any[] | null => {
-            if (!obj) return null
-            if (Array.isArray(obj)) return obj
-            if (obj.preview && Array.isArray(obj.preview)) return obj.preview
-            if (obj.data) return tryUnwrap(obj.data)
-            return null
-          }
+        const finalTowers = Array.from(uniqueTowersMap.values())
+        setTowers(finalTowers)
+        setIndividualAltitudes(restoredAlts)
 
-          const unwrapped = tryUnwrap(towerData)
-          if (unwrapped) {
-            const mappedTowers = unwrapped.map((t: any, idx: number) => {
-              const name = String(
-                t.name || t.externalId || t.objectId || `T-${idx + 1}`
-              )
-              let rawLat = Number(t.latitude ?? t.lat ?? 0)
-              let rawLng = Number(t.longitude ?? t.lng ?? 0)
-
-              if (rawLat < -35 && rawLng > -35 && rawLng < 0) {
-                const temp = rawLat
-                rawLat = rawLng
-                rawLng = temp
-              }
-
-              return {
-                ...t,
-                id: String(t.id || t.elementId || `virtual-${name}`),
-                name,
-                coordinates: {
-                  lat: rawLat,
-                  lng: rawLng,
-                  altitude: Number(t.elevation ?? t.altitude ?? 0),
-                },
-                type: String(t.towerType || t.type || 'ESTAIADA'),
-                elementType: String(t.elementType || 'TOWER'),
-                metadata: t,
-                activityStatuses: (t.activityStatuses ||
-                  t.productionProgress ||
-                  []) as any[],
-              } as Tower
-            })
-
-            setTowers(mappedTowers)
-
-            // Restore individual altitudes
-            const restoredAlts: Record<string, number> = {}
-            unwrapped.forEach((t: any) => {
-              const displaySettings =
-                (t.displaySettings as Record<string, any>) || {}
-              if (displaySettings?.groundElevation) {
-                restoredAlts[String(t.name || t.externalId)] =
-                  displaySettings.groundElevation
-              }
-            })
-            setIndividualAltitudes(restoredAlts)
-          }
-        }
-
-        // 2. Load Global Settings
-        const { data: settingsData } = await orionApi
-          .from('project_3d_cable_settings')
-          .select('settings')
-          .eq('projectId', projectId)
-          .maybeSingle()
-
-        if (settingsData?.settings) {
-          const s = settingsData.settings as Record<string, any>
-          if (s.scale) setScale(s.scale)
-          if (s.towerElevation) setTowerElevation(s.towerElevation)
+        // B. Carregar Settings (via orionApi direto para manter compatibilidade)
+        const settingsResp = await orionApi.from('project_3d_cable_settings').select('settings').eq('projectId', projectId).maybeSingle()
+        
+        if (settingsResp.data?.settings) {
+          const s = settingsResp.data.settings as any
+          if (s.scale !== undefined) setScale(Number(s.scale))
+          if (s.towerElevation !== undefined) setTowerElevation(Number(s.towerElevation))
           if (s.hiddenTowerIds) setHiddenTowerIds(new Set(s.hiddenTowerIds))
-          if (s.phases) {
-            const mergedPhases = DEFAULT_PHASES.map(def => {
-              const loaded = s.phases.find((p: any) => p.id === def.id)
-              return loaded ? { ...def, ...loaded } : def
-            })
-            setPhases(mergedPhases)
-          }
           if (s.connections) setConnections(s.connections)
           if (s.towerTypeConfigs) setTowerTypeConfigs(s.towerTypeConfigs)
+          if (s.phases) setPhases(s.phases)
         }
+
       } catch (error) {
         console.error('Error loading project data:', error)
       } finally {
         setIsLoading(false)
+        setIsDataLoaded(true)
       }
     },
     [DEFAULT_PHASES]
   )
 
   const handleSaveConfig = useCallback(
-    async (towers: Tower[], isAuto = false) => {
+    async (towers: Tower[], isAuto = false, overrides?: Partial<ProjectConfig>) => {
       if (!selectedProjectId || selectedProjectId === 'undefined') return
-      setIsSaving(true)
-      try {
-        await orionApi.from('project_3d_cable_settings').upsert({
-          projectId: selectedProjectId,
-          settings: {
-            scale,
-            towerElevation,
-            phases,
-            connections,
-            hiddenTowerIds: Array.from(hiddenTowerIds),
-            towerTypeConfigs,
-            updatedAt: new Date().toISOString(),
-          },
-        })
-
-        const towersMap = new Map()
-        towers.forEach((t, index) => {
-          if (!t.name) return
-          const entry = {
-            projectId: selectedProjectId,
-            externalId: String(t.name),
-            name: t.name,
-            elementType: t.elementType || 'TOWER',
-            type: t.type,
-            latitude: t.coordinates.lat,
-            longitude: t.coordinates.lng,
-            elevation: t.coordinates.altitude,
-            sequence: index,
-            displaySettings: {
-              ...t.displaySettings,
-              groundElevation: individualAltitudes[t.name],
-            },
-            metadata: { ...t.properties, ...t.metadata },
-          }
-          towersMap.set(entry.externalId, entry)
-        })
-
-        const towersToUpdate = Array.from(towersMap.values())
-        if (towersToUpdate.length > 0) {
-          const CHUNK_SIZE = 50
-          for (let i = 0; i < towersToUpdate.length; i += CHUNK_SIZE) {
-            await orionApi
-              .from('map_elements')
-              .insert(towersToUpdate.slice(i, i + CHUNK_SIZE))
-          }
-        }
-
-        if (!isAuto) {
-          showToast({
-            title: 'Sucesso! 💾',
-            description: 'Configurações da obra foram salvas.',
-          })
-        }
-      } catch (error) {
-        console.error('Save error:', error)
-        if (!isAuto)
-          showToast({
-            title: 'Erro ao salvar',
-            description: 'Não foi possível persistir os dados.',
-            variant: 'destructive',
-          })
-      } finally {
-        setIsSaving(false)
-      }
+      if (isAuto && (!isDataLoaded || isLoading)) return
+      
+      // Disparar mutação monitorada pelo React Query Devtools
+      saveMutation.mutate({ towers, overrides })
     },
-    [
-      selectedProjectId,
-      scale,
-      towerElevation,
-      phases,
-      connections,
-      hiddenTowerIds,
-      individualAltitudes,
-      showToast,
-    ]
+    [selectedProjectId, isDataLoaded, isLoading, saveMutation]
   )
 
   const handleClearTowers = async () => {
     if (!selectedProjectId) return
     setIsClearing(true)
     try {
-      await orionApi
-        .from('tower_technical_data')
-        .delete()
-        .eq('project_id', selectedProjectId)
+      await orionApi.from('tower_technical_data').delete().eq('project_id', selectedProjectId)
       setConnections([])
       setHiddenTowerIds(new Set())
       setIndividualAltitudes({})
-      showToast({
-        title: 'Torres Removidas',
-        description: 'Todas as torres da obra foram removidas com sucesso.',
-      })
+      showToast({ title: 'Torres Removidas', description: 'Todas as torres foram removidas.' })
       return true
     } catch (error) {
-      showToast({
-        title: 'Erro ao remover torres',
-        description: 'Não foi possível remover as torres.',
-        variant: 'destructive',
-      })
+      showToast({ title: 'Erro', description: 'Falha ao remover.', variant: 'destructive' })
       return false
     } finally {
       setIsClearing(false)
@@ -308,9 +261,9 @@ export function useProjectConfig(DEFAULT_PHASES: PhaseConfig[]) {
     selectedProjectId,
     setSelectedProjectId,
     isLoading,
-    setIsLoading,
-    isSaving,
+    isSaving: saveMutation.isPending, 
     isClearing,
+    isDataLoaded,
     scale,
     setScale,
     towerElevation,

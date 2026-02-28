@@ -1,0 +1,13 @@
+// O arquivo introspected.prisma foi limpo para remover conflitos de definição com o schema principal.
+// O conteúdo original foi utilizado para corrigir os desvios no arquivo schema.prisma principal.
+// Este arquivo agora serve apenas como referência histórica temporária.
+
+/**
+ * As tabelas introspectadas incluíam:
+ * - activity_unit_costs
+ * - audit_logs
+ * - delay_cost_config
+ * - project_delay_reasons
+ * - user_addresses
+ * - e outras...
+ */

@@ -77,9 +77,11 @@ export function GeoViewerLayout({
           {contextMenu}
         </div>
 
-        {statsOverlay}
         {sideMenu}
       </main>
+
+      {/* Stats Overlay (Coordenadas) - Agora fora do Main para flutuar sobre tudo */}
+      {statsOverlay}
 
       {modals}
       <Toaster />

@@ -83,10 +83,23 @@ export class PrismaProjectRepository implements ProjectRepository {
     projectId: string,
     settings: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
-    const result = await prisma.project3dCableSettings.upsert({
+    // Tenta encontrar o registro primeiro
+    const existing = await prisma.project3dCableSettings.findUnique({
       where: { projectId },
-      update: { settings: settings as Prisma.InputJsonValue },
-      create: {
+    });
+
+    if (existing) {
+      // Se existe, atualiza apenas o campo settings
+      const result = await prisma.project3dCableSettings.update({
+        where: { id: existing.id },
+        data: { settings: settings as Prisma.InputJsonValue },
+      });
+      return result as Record<string, unknown>;
+    }
+
+    // Se não existe, cria um novo
+    const result = await prisma.project3dCableSettings.create({
+      data: {
         id: randomUUID(),
         projectId,
         settings: settings as Prisma.InputJsonValue,

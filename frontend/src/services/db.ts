@@ -69,9 +69,24 @@ export class TeamTrackDB extends Dexie {
 export const db = new TeamTrackDB();
 
 // Garantir que o banco esteja aberto com tratamento de erro de permissão
-db.open().catch((err) => {
-    console.error('Failed to open IndexedDB:', err);
-    if (err.name === 'SecurityError' || err.name === 'UnknownError') {
-        console.warn('[ORION DB] Acesso ao banco negado pelo navegador. Verifique se cookies de terceiros estão bloqueados ou se está em modo incógnito restritivo.');
+const openDB = async () => {
+    try {
+        if (!db.isOpen()) {
+            await db.open();
+            console.log('[ORION DB] Banco de dados conectado com sucesso.');
+        }
+    } catch (err: any) {
+        console.error('Failed to open IndexedDB:', err);
+        if (err.name === 'SecurityError' || err.name === 'UnknownError') {
+            console.warn('[ORION DB] Acesso ao banco negado pelo navegador. Verifique se cookies de terceiros estão bloqueados ou se está em modo incógnito restritivo.');
+        }
     }
+};
+
+openDB();
+
+// Interceptor global para erros do Dexie para tentar reabrir o banco se fechar
+db.on('close', () => {
+    console.warn('[ORION DB] Conexão com IndexedDB fechada. Tentando reconectar...');
+    setTimeout(() => openDB(), 1000);
 });

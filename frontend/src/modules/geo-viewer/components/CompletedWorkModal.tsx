@@ -144,10 +144,10 @@ export const CompletedWorkModal: React.FC<CompletedWorkModalProps> = ({
 
   // Sync visibility with outside
   const toggleTowerVisibility = useCallback(
-    (towerId: string) => {
+    (towerName: string) => {
       const next = new Set(hiddenTowerIds)
-      if (next.has(towerId)) next.delete(towerId)
-      else next.add(towerId)
+      if (next.has(towerName)) next.delete(towerName)
+      else next.add(towerName)
 
       onHiddenTowerIdsChange?.(next)
     },

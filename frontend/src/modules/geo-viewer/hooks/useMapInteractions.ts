@@ -14,6 +14,7 @@ interface UseMapInteractionsProps {
   towerElevation: number
   individualAltitudes: Record<string, number>
   setIndividualAltitudes: (alts: Record<string, number>) => void
+  onSave?: (towers: Tower[], isAuto?: boolean) => Promise<void>
 }
 
 export function useMapInteractions({
@@ -27,6 +28,7 @@ export function useMapInteractions({
   towerElevation,
   individualAltitudes,
   setIndividualAltitudes,
+  onSave,
 }: UseMapInteractionsProps) {
   const { toast: showToast } = useToast()
   const [isConnectMode, setIsConnectMode] = useState(false)
@@ -80,6 +82,7 @@ export function useMapInteractions({
 
       if (changed) {
         setIndividualAltitudes(newAlts)
+        
         if (!silent) {
           showToast({
             title: 'Auto-Alinhamento Concluído 🛰️',
@@ -165,6 +168,7 @@ export function useMapInteractions({
 
       if (changed) {
         setTowers(newTowers)
+        
         if (!silent) {
           showToast({
             title: 'Ângulos Ajustados! 📐',
@@ -220,6 +224,7 @@ export function useMapInteractions({
           newTowers[index] = tower2
 
           setTowers(newTowers)
+          
           showToast({
             title: 'Posições Trocadas! 🔄',
             description: `${tower1.name} e ${tower2.name} trocaram de lugar.`,
@@ -246,10 +251,13 @@ export function useMapInteractions({
         const endTower = towers[index]
         const newConn = { from: startTower.name, to: endTower.name }
 
-        setConnections([
+        const updatedConnections = [
           ...connections.filter(c => c.from !== startTower.name),
           newConn,
-        ])
+        ]
+        
+        setConnections(updatedConnections)
+
         showToast({
           title: 'Conexão Atualizada! 🔗',
           description: `${startTower.name} ➡️ ${endTower.name}`,

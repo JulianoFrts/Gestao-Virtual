@@ -8,8 +8,14 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { useAuth } from '@/contexts/AuthContext'
 
 import { GeoViewerLayout } from '../components/GeoViewerLayout'
+import { GeoViewerFilters } from '../components/GeoViewerFilters'
+import { GeoViewerCacheCleaner } from '../components/GeoViewerCacheCleaner'
+import { GeoViewerCoords } from '../components/GeoViewerCoords'
 import { useProjectConfig } from '../hooks/useProjectConfig'
 import { useMapLayers } from '../hooks/useMapLayers'
+import { useProgressLayers } from '../hooks/useProgressLayers'
+import { useModelScanner } from '../hooks/useModelScanner'
+import { useBoundingBox } from '../hooks/useBoundingBox'
 import { useMapInteractions } from '../hooks/useMapInteractions'
 import { useSceneData } from '../hooks/useSceneData'
 import { TowerTypeConfigModal } from '../components/TowerTypeConfigModal'
@@ -52,6 +58,8 @@ import {
   Zap,
   Settings2,
   ArrowLeftRight,
+  Filter,
+  Activity,
 } from 'lucide-react'
 import {
   Select,
@@ -110,14 +118,27 @@ export default function GeoViewerPage() {
 
   const [selectedTowerForDetails, setSelectedTowerForDetails] =
     useState<Tower | null>(null)
+  const [isExecutivePanelOpen, setIsExecutivePanelOpen] = useState(false)
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false)
+  const [selectedStages, setSelectedStages] = useState<string[]>([])
   const [isTowerModalOpen, setIsTowerModalOpen] = useState(false)
   const [selectedTowerForHistory] = useState<Tower | null>(null)
   const [isExecutionHistoryModalOpen, setIsExecutionHistoryModalOpen] =
     useState(false)
-  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false)
-  const [isExecutivePanelOpen, setIsExecutivePanelOpen] = useState(true)
-  const [isTowerTypeModalOpen, setIsTowerTypeModalOpen] = useState(true)
-  const [hiddenTowers] = useState<Set<number>>(new Set())
+  const [isTowerTypeModalOpen, setIsTowerTypeModalOpen] = useState(false)
+  const [isAutoSyncing, setIsAutoSyncing] = useState(false)
+
+  const handleStageToggle = (stageName: string) => {
+    setSelectedStages((prev) =>
+      prev.includes(stageName)
+        ? prev.filter((s) => s !== stageName)
+        : [...prev, stageName]
+    )
+  }
+
+  const handleClearFilters = () => {
+    setSelectedStages([])
+  }
 
   const {
     towers,
@@ -127,6 +148,9 @@ export default function GeoViewerPage() {
     setConnections,
     connectionsRef,
   } = useSceneData()
+
+  const { scanModelNodes } = useModelScanner()
+  const { activeBox, calculateBox } = useBoundingBox()
 
   const {
     projects,
@@ -148,6 +172,8 @@ export default function GeoViewerPage() {
     setHiddenTowerIds,
     individualAltitudes,
     setIndividualAltitudes,
+    isDataLoaded,
+    loadProjectData,
   } = useProjectConfig(DEFAULT_PHASES)
 
   const {
@@ -174,6 +200,7 @@ export default function GeoViewerPage() {
     towerElevation,
     individualAltitudes,
     setIndividualAltitudes,
+    onSave: handleSaveConfig,
   })
 
   const { layers } = useMapLayers({
@@ -183,7 +210,7 @@ export default function GeoViewerPage() {
     towerElevation,
     scale,
     individualAltitudes,
-    hiddenTowers,
+    hiddenTowers: new Set(),
     hiddenTowerIds,
     selectedStartTower,
     viewState,
@@ -193,7 +220,28 @@ export default function GeoViewerPage() {
     debugPoints,
     towerTypeConfigs,
     selectedSwapTower,
+    selectedStages,
+    onScanModel: (tower, info) => {
+      scanModelNodes(tower, info)
+      calculateBox(info)
+    },
+    selectedBox: activeBox,
   })
+
+  const { progressLayers } = useProgressLayers({
+    towers,
+    towerTypeConfigs,
+    scale,
+    towerElevation,
+    individualAltitudes,
+    visible: true
+  })
+
+  const allLayers = useMemo(() => {
+    // Se estiver carregando ou sem torres, limpa o mapa completamente
+    if (isLoading || towers.length === 0) return []
+    return [...layers, ...progressLayers]
+  }, [layers, progressLayers, isLoading, towers.length])
 
   // KM-LT Calculation
   const totalKm = useMemo(() => {
@@ -261,14 +309,11 @@ export default function GeoViewerPage() {
     profile?.isSystemAdmin ||
     ['SUPER_ADMIN_GOD', 'HELPER_SYSTEM'].includes(profile?.role || '')
 
-  // Data Loading Trigger
-  const { loadProjectData } = useProjectConfig(DEFAULT_PHASES)
-
   useEffect(() => {
     if (selectedProjectId && selectedProjectId !== 'undefined') {
-      loadProjectData(selectedProjectId, setTowers)
+      loadProjectData(selectedProjectId, setTowers, setConnections)
     }
-  }, [selectedProjectId, loadProjectData, setTowers])
+  }, [selectedProjectId, loadProjectData, setTowers, setConnections])
 
   // Close context menu
   useEffect(() => {
@@ -277,10 +322,53 @@ export default function GeoViewerPage() {
     return () => window.removeEventListener('click', close)
   }, [])
 
+  // Auto-Initialization Sequence
+  useEffect(() => {
+    if (!isLoading && towers.length > 0 && !isAutoSyncing) {
+      const runInitialization = async () => {
+        setIsAutoSyncing(true)
+        
+        // 1. Fly to first tower
+        const firstTower = towers[0]
+        if (mapRef.current) {
+          mapRef.current.getMap().flyTo({
+            center: [firstTower.coordinates.lng, firstTower.coordinates.lat],
+            zoom: 18,
+            pitch: 60,
+            duration: 3000,
+          })
+          
+          // Wait for fly animation
+          await new Promise(resolve => setTimeout(resolve, 3500))
+          
+          // 2. Snap to Terrain & Auto Rotate
+          handleSnapToTerrain(true, true) // Silent, Force All
+          handleAutoRotateTowers(true)    // Silent
+          
+          setIsAutoSyncing(false)
+        }
+      }
+      
+      // Só executa uma vez por carregamento de projeto
+      const hasInitialized = (window as any)._gv_init_proj === selectedProjectId
+      if (!hasInitialized) {
+        (window as any)._gv_init_proj = selectedProjectId
+        runInitialization()
+      }
+    }
+  }, [isLoading, towers, isAutoSyncing, handleSnapToTerrain, handleAutoRotateTowers, selectedProjectId])
+
   return (
     <GeoViewerLayout
-      isLoading={isLoading}
+      isLoading={isLoading || isAutoSyncing}
       isFullScreen={isFullScreen}
+      statsOverlay={
+        <GeoViewerCoords 
+          lat={viewState.latitude} 
+          lng={viewState.longitude} 
+          zoom={viewState.zoom} 
+        />
+      }
       floatingToolbar={
         <div className="flex items-center gap-3 rounded-4xl border border-white/10 bg-black/80 p-2.5 shadow-2xl backdrop-blur-3xl">
           <Button
@@ -292,6 +380,31 @@ export default function GeoViewerPage() {
             <Settings2 className="h-5 w-5" />
           </Button>
           <div className="flex items-center gap-2 rounded-3xl border border-white/5 bg-white/5 p-1.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'h-11 gap-3 rounded-2xl px-6 text-[10px] font-black tracking-widest uppercase',
+                isExecutivePanelOpen ? 'bg-amber-500 text-black shadow-[0_0_20px_rgba(245,158,11,0.3)]' : 'text-neutral-400'
+              )}
+              onClick={() => setIsExecutivePanelOpen(!isExecutivePanelOpen)}
+            >
+              <Activity className="h-4 w-4" />
+              <span>Executivo</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                'h-11 gap-3 rounded-2xl px-6 text-[10px] font-black tracking-widest uppercase',
+                isFiltersOpen ? 'bg-emerald-500 text-black' : 'text-neutral-400'
+              )}
+              onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+            >
+              <Filter className="h-4 w-4" />
+              <span>Filtros</span>
+            </Button>
+            <div className="mx-1 h-6 w-px bg-white/10" />
             <Button
               variant="ghost"
               size="sm"
@@ -320,9 +433,12 @@ export default function GeoViewerPage() {
               <CompletedWorkModal
                 projectId={selectedProjectId || undefined}
                 onSelectTower={handleSelectTowerFromModal}
+                open={isExecutivePanelOpen}
                 onOpenChange={setIsExecutivePanelOpen}
                 hiddenTowerIds={hiddenTowerIds}
-                onHiddenTowerIdsChange={setHiddenTowerIds}
+                onHiddenTowerIdsChange={newHiddenIds => {
+                  setHiddenTowerIds(newHiddenIds)
+                }}
               />
             )}
           </div>
@@ -412,6 +528,11 @@ export default function GeoViewerPage() {
               />
               <span>Auto-Conn</span>
             </Button>
+            <div className="mx-1 h-6 w-px bg-white/10" />
+            <GeoViewerCacheCleaner 
+              projectId={selectedProjectId}
+              onRefresh={() => loadProjectData(selectedProjectId!, setTowers, setConnections)}
+            />
           </div>
         </div>
       }
@@ -460,7 +581,7 @@ export default function GeoViewerPage() {
               ) : (
                 <Save className="h-5 w-5" />
               )}
-              <span>PUBLIKAR PROJETO</span>
+              <span>Salvar</span>
             </Button>
           </div>
         </div>
@@ -507,22 +628,37 @@ export default function GeoViewerPage() {
         </div>
       }
       statsOverlay={
-        <div className="pointer-events-none absolute bottom-16 left-10 flex gap-12 text-left">
-          <div>
-            <p className="text-[10px] font-black text-neutral-500 uppercase">
-              Torres
-            </p>
-            <h3 className="flex items-baseline gap-2 text-4xl font-black text-white italic">
-              {towers.length}
-              <span className="text-lg font-black text-emerald-500 not-italic">
-                UNITS / {totalKm.toFixed(2)} KM-LT
-              </span>
-            </h3>
+        <>
+          <div className="pointer-events-none absolute bottom-16 left-10 flex gap-12 text-left z-40">
+            <div>
+              <p className="text-[10px] font-black text-neutral-500 uppercase">
+                Torres
+              </p>
+              <h3 className="flex items-baseline gap-2 text-4xl font-black text-white italic">
+                {towers.length}
+                <span className="text-lg font-black text-emerald-500 not-italic">
+                  UNITS / {totalKm.toFixed(2)} KM-LT
+                </span>
+              </h3>
+            </div>
           </div>
-        </div>
+          <GeoViewerCoords 
+            lat={viewState.latitude} 
+            lng={viewState.longitude} 
+            zoom={viewState.zoom} 
+          />
+        </>
       }
       sideMenu={
-        showTowerMenu && (
+        <>
+          <GeoViewerFilters
+            isOpen={isFiltersOpen}
+            onClose={() => setIsFiltersOpen(false)}
+            selectedStages={selectedStages}
+            onStageToggle={handleStageToggle}
+            onClearFilters={handleClearFilters}
+          />
+          {showTowerMenu && (
           <div className="fixed top-24 right-6 bottom-6 z-40 w-[380px] rounded-[2.5rem] border border-white/10 bg-black/80 p-8 shadow-2xl backdrop-blur-3xl">
             <div className="mb-8 flex items-center justify-between">
               <h2 className="text-2xl font-black tracking-tighter text-white uppercase italic">
@@ -627,7 +763,9 @@ export default function GeoViewerPage() {
           </div>
         )
       }
-      contextMenu={
+    </>
+  }
+  contextMenu={
         contextMenu && (
           <div
             className="fixed z-100 min-w-[200px] rounded-2xl border border-white/10 bg-black/90 p-2 backdrop-blur-3xl"
@@ -661,8 +799,10 @@ export default function GeoViewerPage() {
             isOpen={showCableMenu}
             onClose={() => setShowCableMenu(false)}
             phases={phases}
-            onUpdate={setPhases}
-            onSave={() => handleSaveConfig(towers, true)}
+            onUpdate={newPhases => {
+              setPhases(newPhases)
+              handleSaveConfig(towers, true, { phases: newPhases })
+            }}
             readOnly={!canEdit}
           />
           <TowerDetailsModals
@@ -682,34 +822,12 @@ export default function GeoViewerPage() {
             towers={towers}
             configs={towerTypeConfigs}
             onSave={newConfigs => {
+              // Primeiro atualizamos o estado local
               setTowerTypeConfigs(newConfigs)
-              handleSaveConfig(towers, true)
+              // Depois forçamos o salvamento no banco com os dados novos explicitamente
+              handleSaveConfig(towers, true, { towerTypeConfigs: newConfigs })
             }}
           />
-          <AlertDialog
-            open={isClearConfirmOpen}
-            onOpenChange={setIsClearConfirmOpen}
-          >
-            <AlertDialogContent className="border-white/10 bg-neutral-950">
-              <AlertDialogHeader>
-                <AlertDialogTitle className="font-black text-red-400">
-                  Limpar Torres?
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  Deseja remover {towers.length} torres?
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Não</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleClearTowers}
-                  className="bg-red-600"
-                >
-                  Sim
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </>
       }
     >
@@ -726,16 +844,14 @@ export default function GeoViewerPage() {
             : undefined
         }
       >
-        {towers.length > 0 && (
-          <Source
-            id="mapbox-dem"
-            type="raster-dem"
-            url="mapbox://mapbox.mapbox-terrain-dem-v1"
-            tileSize={512}
-            maxzoom={14}
-          />
-        )}
-        <DeckGLOverlay layers={layers} />
+        <Source
+          id="mapbox-dem"
+          type="raster-dem"
+          url="mapbox://mapbox.mapbox-terrain-dem-v1"
+          tileSize={512}
+          maxzoom={14}
+        />
+        <DeckGLOverlay layers={allLayers} />
       </ReactMap>
     </GeoViewerLayout>
   )

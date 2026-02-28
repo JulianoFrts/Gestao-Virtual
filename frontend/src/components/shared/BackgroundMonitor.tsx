@@ -24,7 +24,9 @@ export function BackgroundMonitor() {
                     console.debug('Background Location Sync (Watch):', loc);
                 },
                 (error: GeolocationPositionError) => {
-                    console.warn('Background Location Error:', error.message);
+                    if (error.code !== 1) { // 1 = Permission Denied
+                        console.warn('Background Location Error:', error.message);
+                    }
                 },
                 {
                     enableHighAccuracy: false, // Modo econômico

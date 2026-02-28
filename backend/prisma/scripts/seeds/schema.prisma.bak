@@ -1,0 +1,1133 @@
+// ============================================
+// PRISMA SCHEMA - SISTEMA DE CONSTRUÇÃO CIVIL
+// Versão: 1.1.0 (Unified User + Profile)
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+  engineType = "library"
+  binaryTargets = ["native", "windows"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// 1. TABELAS DE AUTENTICAÇÃO E PERFIL (Unified)
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?   // Nome completo (antigo fullName)
+  password      String?
+  emailVerified DateTime?
+  image         String?   // URL da foto
+  role          Role      @default(USER)
+  status        AccountStatus @default(PENDING_VERIFICATION)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Campos herdados de Employee (Perfil)
+  companyId          String?   @map("company_id")
+  registrationNumber String?   @map("registration_number")
+  cpf                String?   @unique
+  phone              String?
+  functionId         String?   @map("function_id")
+  projectId          String?   @map("project_id")
+  siteId             String?   @map("site_id")
+  faceDescriptor     Json?     @map("face_descriptor")
+  hierarchyLevel     Int       @default(0) @map("hierarchy_level")
+  mfaEnabled         Boolean   @default(false) @map("mfa_enabled")
+  mfaSecret          String?   @map("mfa_secret")
+
+  // Relações NextAuth
+  accounts      Account[]
+  sessions      Session[]
+
+  // Relações de Sistema
+  company               Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  jobFunction           JobFunction?   @relation(fields: [functionId], references: [id], onDelete: SetNull)
+  project               Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  site                  Site?          @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  
+  supervisedTeams       Team[]         @relation("TeamSupervisor")
+  teamMemberships       TeamMember[]
+  createdDocuments      ConstructionDocument[]
+  stageProgressUpdates  StageProgress[]
+  timeRecords           TimeRecord[]   @relation("UserTimeRecords")
+  timeRecordsCreated    TimeRecord[]   @relation("TimeRecordCreator")
+  dailyReports          DailyReport[]
+  receivedMessages      SystemMessage[] @relation("MessageRecipient")
+  auditLogs             AuditLog[]
+  userRole              UserRole?
+  
+  // Relations for Production Upgrade
+  towerActivityUpdates  TowerActivityStatus[] @relation("StatusUpdater")
+  activityLogsCreated   TowerActivityLog[]     @relation("LogCreator")
+  activityLogsApproved  TowerActivityLog[]     @relation("LogApprover")
+  scheduledActivities   ActivitySchedule[]
+  ledActivityTeams      TowerActivityTeam[]   @relation("TeamLeader")
+  activityTeamMemberships TowerActivityTeamMember[]
+  delayReasonUpdates    ProjectDelayReason[]
+  delayCostConfigsUpdated DelayCostConfig[]
+
+  @@index([companyId])
+  @@index([registrationNumber])
+  @@index([cpf])
+  @@index([status])
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  entity    String
+  entityId  String?
+  oldValues Json?
+  newValues Json?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}
+
+enum Role {
+  USER
+  Admin
+  Moderator
+  Manager
+  Supervisor
+  Technician
+  Operator
+  SuperAdmin
+  SuperAdminGod
+  WORKER
+  TI_SOFTWARE
+  GESTOR_PROJECT
+  GESTOR_CANTEIRO
+  VIEWER
+}
+
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String   @unique @map("user_id")
+  role      AppRole  @default(worker)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("user_roles")
+}
+
+enum AppRole {
+  admin
+  moderator
+  worker
+  super_admin
+  superadmingod
+}
+
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+// ============================================
+// 2. EMPRESAS E EQUIPES
+// ============================================
+
+model Company {
+  id        String   @id @default(uuid())
+  name      String
+  taxId     String?  @unique @map("tax_id")
+  address   String?
+  phone     String?
+  logoUrl   String?  @map("logo_url")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relações
+  jobFunctions          JobFunction[]
+  projects              Project[]
+  users                 User[]
+  teams                 Team[]
+  constructionDocuments ConstructionDocument[]
+  mapElements           MapElement[]
+  towerTechnicalData    TowerTechnicalData[]
+  spanTechnicalData     SpanTechnicalData[]
+  projectMonthlyTargets ProjectMonthlyTarget[]
+  timeRecords           TimeRecord[]
+  dailyReports          DailyReport[]
+  systemMessages        SystemMessage[]
+  model3DAnchors        Model3DAnchor[]
+  delayCostConfigs      DelayCostConfig[]
+
+
+  @@index([taxId])
+  @@index([isActive])
+  @@map("companies")
+}
+
+model JobFunction {
+  id             String   @id @default(uuid())
+  companyId      String   @map("company_id")
+  name           String
+  description    String?
+  canLeadTeam    Boolean  @default(false) @map("can_lead_team")
+  hierarchyLevel Int      @default(0) @map("hierarchy_level")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  users     User[]
+  activityTeamMemberships TowerActivityTeamMember[]
+
+  @@unique([companyId, name])
+  @@map("job_functions")
+}
+
+// ============================================
+// 3. PROJETOS E OBRAS
+// ============================================
+
+model Project {
+  id            String   @id @default(uuid())
+  companyId     String   @map("company_id")
+  name          String
+  code          String?
+  description   String?
+  address       String?
+  status        String   @default("active")
+  startDate     DateTime? @map("start_date")
+  endDate       DateTime? @map("end_date")
+  plannedHours  Decimal  @default(0) @map("planned_hours") @db.Decimal(10, 2)
+  estimatedCost Decimal  @default(0) @map("estimated_cost") @db.Decimal(15, 2)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  company               Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sites                 Site[]
+  users                 User[]
+  constructionDocuments ConstructionDocument[]
+  mapElements           MapElement[]
+  towerTechnicalData    TowerTechnicalData[]
+  spanTechnicalData     SpanTechnicalData[]
+  cable3dSettings       Project3dCableSettings?
+  projectMonthlyTargets ProjectMonthlyTarget[]
+  mapElementVisibility  MapElementVisibility[]
+  systemMessages        SystemMessage[]
+  model3DAnchors        Model3DAnchor[]
+  delayReasons          ProjectDelayReason[]
+  delayCostConfig       DelayCostConfig?
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@index([status])
+  @@index([code])
+  @@map("projects")
+}
+
+model Site {
+  id              String   @id @default(uuid())
+  projectId       String   @map("project_id")
+  name            String
+  code            String?
+  locationDetails String?  @map("location_details")
+  plannedHours    Decimal  @default(0) @map("planned_hours") @db.Decimal(10, 2)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project               Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  users                 User[]
+  teams                 Team[]
+  constructionDocuments ConstructionDocument[]
+  workStages            WorkStage[]
+  projectMonthlyTargets ProjectMonthlyTarget[]
+  systemMessages        SystemMessage[]
+
+  @@unique([projectId, code])
+  @@index([projectId])
+  @@map("sites")
+}
+
+// ============================================
+// 4. PERMISSÕES
+// ============================================
+
+model PermissionLevel {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  rank        Int      @unique
+  description String?
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  permissionMatrix PermissionMatrix[]
+
+  @@map("permission_levels")
+}
+
+model PermissionModule {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  category    String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  permissionMatrix PermissionMatrix[]
+
+  @@map("permission_modules")
+}
+
+model PermissionMatrix {
+  levelId   String  @map("level_id")
+  moduleId  String  @map("module_id")
+  canCreate Boolean @default(false) @map("can_create")
+  canRead   Boolean @default(false) @map("can_read")
+  canUpdate Boolean @default(false) @map("can_update")
+  canDelete Boolean @default(false) @map("can_delete")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  level  PermissionLevel  @relation(fields: [levelId], references: [id], onDelete: Cascade)
+  module PermissionModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@id([levelId, moduleId])
+  @@map("permission_matrix")
+}
+
+// ============================================
+// 5. EQUIPES
+// ============================================
+
+model Team {
+  id           String   @id @default(uuid())
+  companyId    String?  @map("company_id")
+  siteId       String?  @map("site_id")
+  name         String
+  supervisorId String?  @map("supervisor_id")
+  isActive     Boolean  @default(true) @map("is_active")
+  displayOrder Int      @default(0) @map("display_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  company     Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  site        Site?        @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  supervisor  User?        @relation("TeamSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
+  members     TeamMember[]
+  timeRecords TimeRecord[]
+  dailyReports DailyReport[]
+  activityAssignments ActivityAssignment[]
+  dailyProductions    TowerDailyProduction[]
+
+  @@index([companyId])
+  @@index([siteId])
+  @@index([supervisorId])
+  @@map("teams")
+}
+
+model TeamMember {
+  id         String   @id @default(uuid())
+  teamId     String   @map("team_id")
+  userId     String   @map("user_id")
+  joinedAt   DateTime @default(now()) @map("joined_at")
+
+  team     Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@map("team_members")
+}
+
+// ============================================
+// 6. DOCUMENTAÇÃO TÉCNICA
+// ============================================
+
+model ConstructionDocument {
+  id           String   @id @default(uuid())
+  companyId    String?  @map("company_id")
+  projectId    String?  @map("project_id")
+  siteId       String?  @map("site_id")
+  name         String
+  documentType String   @map("document_type")
+  version      Int      @default(1)
+  fileUrl      String   @map("file_url")
+  fileSize     BigInt   @default(0) @map("file_size")
+  folderPath   String   @default("/") @map("folder_path")
+  status       String   @default("valid")
+  createdById  String?  @map("created_by")
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  company   Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project   Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  site      Site?     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  mapElements          MapElement[]
+  mapElementVisibility MapElementVisibility[]
+
+  @@index([projectId])
+  @@index([siteId])
+  @@index([documentType])
+  @@map("construction_documents")
+}
+
+model MapElement {
+  id           String   @id @default(uuid())
+  projectId    String?  @map("project_id")
+  companyId    String?  @map("company_id")
+  documentId   String?  @map("document_id")
+  name         String
+  elementType  String   @map("element_type")
+  coordinates  Json
+  path         Json?
+  description  String?
+  extendedData Json     @default("{}") @map("extended_data")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  project  Project?              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company  Company?              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  document ConstructionDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@map("map_elements")
+}
+
+model MapElementVisibility {
+  id                   String   @id @default(uuid())
+  userId               String   @map("user_id")
+  projectId            String?  @map("project_id")
+  documentId           String?  @map("document_id")
+  elementId            String   @map("element_id")
+  elementName          String?  @map("element_name")
+  isHidden             Boolean  @default(false) @map("is_hidden")
+  elementColor         String?  @map("element_color")
+  elementHeight        Decimal? @map("element_height") @db.Decimal(10, 2)
+  elementElevation     Decimal? @map("element_elevation") @db.Decimal(10, 2)
+  elementAngle         Decimal? @map("element_angle") @db.Decimal(5, 2)
+  customModelUrl       String?  @map("custom_model_url")
+  customModelTransform Json?    @map("custom_model_transform")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  project  Project?              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document ConstructionDocument? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId, elementId, documentId])
+  @@map("map_element_visibility")
+}
+
+// ============================================
+// 7. DADOS TÉCNICOS
+// ============================================
+
+model TowerTechnicalData {
+  id              String   @id @default(uuid())
+  projectId       String?  @map("project_id")
+  companyId       String?  @map("company_id")
+  objectId        String   @map("object_id")
+  objectSeq       Int      @default(autoincrement()) @map("object_seq")
+  towerType       String?  @map("tower_type")
+  objectHeight    Decimal? @map("object_height") @db.Decimal(10, 2)
+  objectElevation Decimal? @map("object_elevation") @db.Decimal(10, 2)
+  xCoordinate     Decimal? @map("x_coordinate") @db.Decimal(15, 6)
+  yCoordinate     Decimal? @map("y_coordinate") @db.Decimal(15, 6)
+  deflection      String?
+  goForward       Decimal? @map("go_forward") @db.Decimal(10, 2)
+  fusoObject      String?  @map("fuso_object")
+  fixConductor    String?  @map("fix_conductor")
+  
+  // New Production Technical Fields
+  trecho              String?
+  tipoFundacao        String?  @map("tipo_fundacao")
+  totalConcreto       Decimal? @map("total_concreto") @db.Decimal(10, 2)
+  pesoArmacao         Decimal? @map("peso_armacao") @db.Decimal(10, 2)
+  pesoEstrutura       Decimal? @map("peso_estrutura") @db.Decimal(10, 2)
+  tramoLancamento     String?  @map("tramo_lancamento")
+  tipificacaoEstrutura String?  @map("tipificacao_estrutura")
+  
+  // Professional LT Sequencing
+  technicalKm     Int?     @map("technical_km")
+  technicalIndex  Int?     @map("technical_index")
+  circuitId       String?  @map("circuit_id") @default("C1")
+
+  metadata        Json     @default("{}")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  activityStatuses TowerActivityStatus[]
+  dailyProductions TowerDailyProduction[]
+  activitySchedules ActivitySchedule[]
+  activityLogs      TowerActivityLog[]
+
+  @@unique([projectId, objectId])
+  @@index([projectId])
+  @@index([objectId])
+  @@map("tower_technical_data")
+}
+
+model SpanTechnicalData {
+  id               String   @id @default(uuid())
+  projectId        String?  @map("project_id")
+  companyId        String?  @map("company_id")
+  spanName         String?  @map("span_name")
+  towerStartId     String   @map("tower_start_id")
+  towerEndId       String   @map("tower_end_id")
+  spanLength       Decimal? @map("span_length") @db.Decimal(10, 2)
+  heightStart      Decimal? @map("height_start") @db.Decimal(10, 2)
+  heightEnd        Decimal? @map("height_end") @db.Decimal(10, 2)
+  elevationStart   Decimal? @map("elevation_start") @db.Decimal(10, 2)
+  elevationEnd     Decimal? @map("elevation_end") @db.Decimal(10, 2)
+  sag              Decimal? @db.Decimal(10, 2)
+  tension          Decimal? @db.Decimal(10, 2)
+  weightPerMeter   Decimal? @map("weight_per_meter") @db.Decimal(10, 4)
+  catenaryConstant Decimal? @map("catenary_constant") @db.Decimal(10, 4)
+  arcLength        Decimal? @map("arc_length") @db.Decimal(10, 2)
+  horizontalAngle  Decimal? @map("horizontal_angle") @db.Decimal(5, 2)
+  verticalAngle    Decimal? @map("vertical_angle") @db.Decimal(5, 2)
+  radiusOfCurvature Decimal? @map("radius_of_curvature") @db.Decimal(10, 2)
+  cableType        String?  @map("cable_type")
+  voltageKv        Decimal? @map("voltage_kv") @db.Decimal(10, 2)
+  cableColor       String   @default("#0ea5e9") @map("cable_color")
+  cablePhases      Int      @default(3) @map("cable_phases")
+  cableSpacing     Decimal  @default(0.5) @map("cable_spacing") @db.Decimal(5, 3)
+  geometryData     Json?    @map("geometry_data")
+  metadata         Json     @default("{}")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, towerStartId, towerEndId])
+  @@index([projectId])
+  @@map("span_technical_data")
+}
+
+model Project3dCableSettings {
+  id        String   @id @default(uuid())
+  projectId String   @unique @map("project_id")
+  settings  Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_3d_cable_settings")
+}
+
+// ============================================
+// 8. CONTROLE DE PROGRESSO
+// ============================================
+
+model WorkStage {
+  id           String   @id @default(uuid())
+  siteId       String?  @map("site_id")
+  parentId     String?  @map("parent_id")
+  name         String
+  description  String?
+  weight       Decimal  @default(1.0) @db.Decimal(5, 2)
+  displayOrder Int      @default(0) @map("display_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  site     Site?       @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  parent   WorkStage?  @relation("WorkStageHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children WorkStage[] @relation("WorkStageHierarchy")
+  progress StageProgress[]
+
+  @@map("work_stages")
+}
+
+model StageProgress {
+  id                 String   @id @default(uuid())
+  stageId            String   @map("stage_id")
+  plannedPercentage  Decimal  @default(0.0) @map("planned_percentage") @db.Decimal(5, 2)
+  actualPercentage   Decimal  @default(0.0) @map("actual_percentage") @db.Decimal(5, 2)
+  recordedDate       DateTime @default(now()) @map("recorded_date") @db.Date
+  updatedById        String?  @map("updated_by")
+  notes              String?
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  stage     WorkStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  updatedBy User?      @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("stage_progress")
+}
+
+model ProjectMonthlyTarget {
+  id                        String   @id @default(uuid())
+  projectId                 String?  @map("project_id")
+  siteId                    String?  @map("site_id")
+  companyId                 String?  @map("company_id")
+  targetMonth               DateTime @map("target_month") @db.Date
+  plannedHours              Decimal  @default(0) @map("planned_hours") @db.Decimal(10, 2)
+  plannedProgressPercentage Decimal  @default(0) @map("planned_progress_percentage") @db.Decimal(5, 2)
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  site    Site?    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, siteId, targetMonth])
+  @@map("project_monthly_targets")
+}
+
+// ============================================
+// 9. REGISTROS OPERACIONAIS
+// ============================================
+
+model TimeRecord {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  teamId      String?  @map("team_id")
+  companyId   String?  @map("company_id")
+  recordType  RecordType @map("record_type")
+  recordedAt  DateTime @map("recorded_at")
+  photoUrl    String?  @map("photo_url")
+  latitude    Decimal? @db.Decimal(10, 8)
+  longitude   Decimal? @db.Decimal(11, 8)
+  createdById String?  @map("created_by")
+  localId     String?  @map("local_id")
+  syncedAt    DateTime? @map("synced_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user      User      @relation("UserTimeRecords", fields: [userId], references: [id], onDelete: Cascade)
+  team      Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  company   Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy User?      @relation("TimeRecordCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([recordedAt])
+  @@index([companyId])
+  @@map("time_records")
+}
+
+enum RecordType {
+  entry
+  exit
+}
+
+model DailyReport {
+  id           String    @id @default(uuid())
+  teamId       String?   @map("team_id")
+  userId       String?   @map("user_id")
+  companyId    String?   @map("company_id")
+  reportDate   DateTime  @map("report_date") @db.Date
+  activities   String
+  observations String?
+  createdBy    String?   @map("created_by")
+  localId      String?   @map("local_id")
+  syncedAt     DateTime? @map("synced_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  team     Team?     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company  Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+  @@index([reportDate])
+  @@map("daily_reports")
+}
+
+// ============================================
+// 10. COMUNICAÇÃO E TICKETS
+// ============================================
+
+model SystemMessage {
+  id                  String        @id @default(uuid())
+  senderId            String?       @map("sender_id")
+  senderEmail         String?       @map("sender_email")
+  recipientId         String?       @map("recipient_id")
+  recipientUserId     String?       @map("recipient_user_id")
+  recipientRole       String?       @map("recipient_role")
+  companyId           String?       @map("company_id")
+  projectId           String?       @map("project_id")
+  siteId              String?       @map("site_id")
+  messageType         MessageType   @map("message_type")
+  subject             String
+  content             String
+  attachmentUrl       String?       @map("attachment_url")
+  status              MessageStatus @default(PENDING)
+  metadata            Json          @default("{}")
+  resolvedBy          String?       @map("resolved_by")
+  resolvedAt          DateTime?     @map("resolved_at")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  recipientUser     User?           @relation("MessageRecipient", fields: [recipientUserId], references: [id], onDelete: SetNull)
+  company           Company?        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project           Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  site              Site?           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  ticketHistory     TicketHistory[]
+  temporaryPermissions TemporaryPermission[]
+
+  @@index([recipientUserId])
+  @@index([status])
+  @@index([messageType])
+  @@map("system_messages")
+}
+
+enum MessageType {
+  PASSWORD_RESET
+  ADMINISTRATIVE
+  HR
+  OPERATIONAL
+  DIRECT
+  OTHER
+}
+
+enum MessageStatus {
+  PENDING
+  IN_ANALYSIS
+  AWAITING_RESPONSE
+  APPROVED
+  REJECTED
+  CLOSED
+  CLOSED_CANCELLED
+}
+
+model TicketHistory {
+  id          String   @id @default(uuid())
+  ticketId    String   @map("ticket_id")
+  action      String
+  oldStatus   String?  @map("old_status")
+  newStatus   String?  @map("new_status")
+  performedBy String?  @map("performed_by")
+  comment     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  ticket SystemMessage @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@map("ticket_history")
+}
+
+// ============================================
+// 11. SINCRONIZAÇÃO E AUTENTICAÇÃO
+// ============================================
+
+model SyncQueue {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  operation SyncOperation
+  tableName String    @map("table_name")
+  recordId  String    @map("record_id")
+  data      Json
+  createdAt DateTime  @default(now()) @map("created_at")
+  syncedAt  DateTime? @map("synced_at")
+
+  @@map("sync_queue")
+}
+
+enum SyncOperation {
+  insert
+  update
+  delete
+}
+
+model QrSession {
+  id           String          @id @default(uuid())
+  sessionToken String          @unique @map("session_token")
+  status       QrSessionStatus @default(pending)
+  authPayload  Json?           @map("auth_payload")
+  expiresAt    DateTime        @default(dbgenerated("NOW() + INTERVAL '2 minutes'")) @map("expires_at")
+  createdAt    DateTime        @default(now()) @map("created_at")
+
+  @@map("qr_sessions")
+}
+
+enum QrSessionStatus {
+  pending
+  approved
+  expired
+  completed
+}
+
+// ============================================
+// 12. PERMISSÕES TEMPORÁRIAS E AUDITORIA
+// ============================================
+
+model TemporaryPermission {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  permissionType String    @map("permission_type")
+  grantedBy      String?   @map("granted_by")
+  ticketId       String?   @map("ticket_id")
+  expiresAt      DateTime  @map("expires_at")
+  usedAt         DateTime? @map("used_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  ticket SystemMessage? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@map("temporary_permissions")
+}
+
+model PermissionAuditLog {
+  id        String   @id @default(uuid())
+  adminId   String   @map("admin_id")
+  action    String
+  targetId  String?  @map("target_id")
+  oldValue  Json?    @map("old_value")
+  newValue  Json?    @map("new_value")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("permission_audit_logs")
+}
+
+// ============================================
+// 13. DATABASE HUB (SQL & DIAGRAMAS)
+// ============================================
+
+model DatabaseDiagram {
+  id        String   @id @default(cuid())
+  name      String
+  description String?
+  data      Json     // Armazena nós (nodes) e conexões (edges) do ReactFlow
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("database_diagrams")
+}
+
+// ============================================
+// 14. SISTEMA DE FILA (QUEUE)
+// ============================================
+
+model TaskQueue {
+  id        String     @id @default(uuid())
+  type      String     // ex: 'permission_matrix_update'
+  payload   Json       // dados da tarefa
+  status    TaskStatus @default(pending)
+  error     String?
+  attempts  Int        @default(0)
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  @@map("task_queue")
+}
+
+enum TaskStatus {
+  pending
+  processing
+  completed
+  failed
+}
+model ModelAnchor {
+  id        String   @id @default(cuid())
+  modelUrl  String   @map("model_url")
+  meshName  String?  @map("mesh_name")
+  position  Json     // {x, y, z}
+  normal    Json?    // {x, y, z}
+  faceIndex Int?     @map("face_index")
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([modelUrl])
+  @@map("model_anchors")
+}
+
+model Model3DAnchor {
+  id        String   @id @default(uuid())
+  companyId String   @map("company_id")
+  projectId String   @map("project_id")
+  towerId   String?  @map("tower_id")
+  anchors   Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, projectId, towerId])
+  @@map("model_3d_anchors")
+}
+
+// ============================================
+// 15. SISTEMA DE PRODUÇÃO, PLANEJAMENTO E CUSTO
+// ============================================
+
+model ProductionCategory {
+  id          String   @id @default(uuid())
+  name        String   // Ex: "Serviços Preliminares", "Fundação", "Montagem"
+  description String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  activities  ProductionActivity[]
+
+  @@map("production_categories")
+}
+
+model ProductionActivity {
+  id          String   @id @default(uuid())
+  categoryId  String   @map("category_id")
+  name        String   // Ex: "Sondagem", "Escavação"
+  description String?
+  weight      Decimal  @default(1.0) @db.Decimal(5, 2)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  category    ProductionCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  towerStatuses TowerActivityStatus[]
+  dailyProductions TowerDailyProduction[]
+  activitySchedules ActivitySchedule[]
+  logs              TowerActivityLog[]
+
+  @@map("production_activities")
+}
+
+model TowerActivityStatus {
+  id              String         @id @default(uuid())
+  towerId         String         @map("tower_id")
+  activityId      String         @map("activity_id")
+  status          ActivityStatus @default(PENDING)
+  landStatus      LandStatus     @default(FREE) @map("land_status")
+  impedimentType  ImpedimentType @default(NONE) @map("impediment_type")
+  progressPercent Decimal?       @default(0.0) @map("progress_percent") @db.Decimal(5, 2)
+  startDate       DateTime?      @map("start_date")
+  endDate         DateTime?      @map("end_date")
+  updatedById     String?        @map("updated_by")
+  notes           String?
+  requiresApproval Boolean        @default(false) @map("requires_approval")
+  approvalReason   String?        @map("approval_reason")
+  metadata        Json?          @default("{}")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  tower       TowerTechnicalData @relation(fields: [towerId], references: [id], onDelete: Cascade)
+  activity    ProductionActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  updatedBy   User?              @relation("StatusUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  assignments ActivityAssignment[]
+  logs        TowerActivityLog[]
+
+  @@unique([towerId, activityId])
+  @@map("tower_activity_status")
+}
+
+model TowerActivityLog {
+  id               String         @id @default(uuid())
+  towerId          String         @map("tower_id")
+  activityId       String         @map("activity_id")
+  status           ActivityStatus
+  landStatus       LandStatus     @default(FREE) @map("land_status")
+  impedimentType   ImpedimentType @default(NONE) @map("impediment_type")
+  foremanName      String?        @map("foreman_name")
+  progressPercent  Decimal?       @map("progress_percent") @db.Decimal(5, 2)
+  startDate        DateTime?      @map("start_date")
+  endDate          DateTime?      @map("end_date")
+  comment          String?
+  requiresApproval Boolean        @default(false) @map("requires_approval")
+  approvalStatus   String         @default("APPROVED") @map("approval_status")
+  approvalReason   String?        @map("approval_reason")
+  changedById      String         @map("changed_by")
+  approvedById     String?        @map("approved_by")
+  approvedAt       DateTime?      @map("approved_at")
+  metadata         Json?          @default("{}")
+  createdAt        DateTime       @default(now()) @map("created_at")
+
+  statusRef  TowerActivityStatus @relation(fields: [towerId, activityId], references: [towerId, activityId])
+  tower      TowerTechnicalData  @relation(fields: [towerId], references: [id])
+  activity   ProductionActivity  @relation(fields: [activityId], references: [id])
+  changedBy  User                @relation("LogCreator", fields: [changedById], references: [id])
+  approvedBy User?               @relation("LogApprover", fields: [approvedById], references: [id])
+  activityTeams TowerActivityTeam[]
+
+  @@map("tower_activity_logs")
+}
+
+model TowerActivityTeam {
+  id              String   @id @default(uuid())
+  activityLogId   String   @map("activity_log_id")
+  teamLeaderId    String   @map("team_leader_id")
+  workDate        DateTime @map("work_date") @db.Date
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  log             TowerActivityLog @relation(fields: [activityLogId], references: [id], onDelete: Cascade)
+  leader          User             @relation("TeamLeader", fields: [teamLeaderId], references: [id])
+  members         TowerActivityTeamMember[]
+
+  @@map("tower_activity_teams")
+}
+
+model TowerActivityTeamMember {
+  id            String   @id @default(uuid())
+  teamId        String   @map("team_id")
+  userId        String   @map("user_id")
+  jobFunctionId String   @map("job_function_id")
+
+  team        TowerActivityTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user        User              @relation(fields: [userId], references: [id])
+  jobFunction JobFunction       @relation(fields: [jobFunctionId], references: [id])
+
+  @@map("tower_activity_team_members")
+}
+
+model TowerDailyProduction {
+  id               String   @id @default(uuid())
+  towerId          String   @map("tower_id")
+  activityId       String   @map("activity_id")
+  workDate         DateTime @map("work_date") @db.Date
+  teamId           String?  @map("team_id")
+  workersCount     Int      @default(0) @map("workers_count")
+  hoursWorked      Decimal  @default(0) @map("hours_worked") @db.Decimal(5, 2)
+  producedQuantity Decimal? @map("produced_quantity") @db.Decimal(10, 2)
+  plannedQuantity  Decimal? @map("planned_quantity") @db.Decimal(10, 2)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  tower    TowerTechnicalData @relation(fields: [towerId], references: [id], onDelete: Cascade)
+  activity ProductionActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  team     Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@map("tower_daily_production")
+}
+
+model ActivitySchedule {
+  id              String   @id @default(uuid())
+  towerId         String   @map("tower_id")
+  activityId      String   @map("activity_id")
+  plannedStart    DateTime @map("planned_start") @db.Date
+  plannedEnd      DateTime @map("planned_end") @db.Date
+  plannedQuantity Decimal? @map("planned_quantity") @db.Decimal(10, 2)
+  plannedHHH      Decimal? @map("planned_hhh") @db.Decimal(10, 2)
+  createdById     String   @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  tower     TowerTechnicalData @relation(fields: [towerId], references: [id], onDelete: Cascade)
+  activity  ProductionActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  createdBy User               @relation(fields: [createdById], references: [id])
+
+  @@map("activity_schedule")
+}
+
+model ActivityAssignment {
+  id               String   @id @default(uuid())
+  towerStatusId    String   @map("tower_status_id")
+  teamId           String?  @map("team_id")
+  userId           String?  @map("user_id")
+  assignedAt       DateTime @default(now()) @map("assigned_at")
+
+  towerStatus      TowerActivityStatus @relation(fields: [towerStatusId], references: [id], onDelete: Cascade)
+  team             Team?               @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  @@map("activity_assignments")
+}
+
+enum ActivityStatus {
+  PENDING
+  IN_PROGRESS
+  FINISHED
+}
+
+enum LandStatus {
+  FREE
+  EMBARGO
+  IMPEDIMENT
+}
+
+enum ImpedimentType {
+  NONE
+  OWNER
+  CONTRACTOR
+  PROJECT
+  WORK
+}
+
+
+model ProjectDelayReason {
+  id          String         @id @default(uuid())
+  projectId   String         @map("project_id")
+  code        String
+  description String
+  dailyCost   Decimal        @map("daily_cost") @db.Decimal(10, 2)
+  category    ImpedimentType
+  
+  updatedById String?        @map("updated_by")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  updatedBy   User?          @relation(fields: [updatedById], references: [id])
+
+  @@map("project_delay_reasons")
+}
+
+model DelayCostConfig {
+  id          String   @id @default(uuid())
+  companyId   String   @map("company_id")
+  projectId   String   @unique @map("project_id")
+  dailyCost   Decimal  @default(0) @map("daily_cost") @db.Decimal(15, 2)
+  currency    String   @default("BRL")
+  description String?
+  updatedById String?  @map("updated_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  updatedBy User?   @relation(fields: [updatedById], references: [id])
+
+  @@unique([companyId, projectId])
+  @@map("delay_cost_config")
+}
+

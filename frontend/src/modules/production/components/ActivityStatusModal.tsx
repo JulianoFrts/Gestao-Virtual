@@ -42,6 +42,7 @@ import { toast } from "sonner";
 import { useEmployees } from "@/hooks/useEmployees";
 import { show, isSystemAdminSignal } from "@/signals/authSignals";
 import { useAuth } from "@/contexts/AuthContext";
+import { syncTowerMetadata } from "@/modules/geo-viewer/utils/metadataSync";
 
 // Sub-componentes Refatorados (SRP)
 import { StatusTab } from "@/modules/production/components/ActivityStatusModal/StatusTab";
@@ -284,6 +285,17 @@ const ActivityStatusModal = React.memo(({
             return response.data;
         },
         onSuccess: () => {
+            // 3D Visual Sync: Update tower metadata in real-time if project context is available
+            if (projectId && elementId) {
+                syncTowerMetadata(
+                    projectId,
+                    elementId,
+                    activityName,
+                    progressPercent,
+                    status
+                );
+            }
+
             ["production-towers", "production-schedule", "production-logs"].forEach(k =>
                 queryClient.invalidateQueries({ queryKey: [k] })
             );

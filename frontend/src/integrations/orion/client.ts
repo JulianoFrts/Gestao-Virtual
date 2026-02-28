@@ -134,6 +134,11 @@ export class OrionApiClient {
     this.notifyAuthChange("SIGNED_OUT", null);
   }
 
+  public clearCache() {
+    this.renderCache.clear();
+    console.log('[ORION API] Cache de renderização limpo manualmente.');
+  }
+
   private async request<T>(
     endpoint: string,
     method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" = "GET",
@@ -142,13 +147,19 @@ export class OrionApiClient {
   ): Promise<ApiResponse<T>> {
     const cacheKey = `${method}:${endpoint}:${JSON.stringify(params || {})}`;
 
-    // 0. Global Render Cache (Somente para GET)
+    // 0. Global Render Cache (Desabilitado temporariamente para depuração)
     if (method === "GET") {
+      /* 
       const cached = this.renderCache.get(cacheKey);
       if (cached && (Date.now() - cached.timestamp) < this.RENDER_CACHE_TTL) {
-        // console.log(`[ORION CACHE] Hit: ${endpoint}`);
         return { data: cached.data, error: null };
       }
+      */
+    }
+
+    // Se for uma mutação, limpamos o cache para garantir que o próximo GET seja fresco
+    if (method !== "GET") {
+      this.renderCache.clear();
     }
 
     try {
@@ -227,6 +238,9 @@ export class OrionApiClient {
         options.body = body instanceof FormData ? body : JSON.stringify(body);
       }
 
+      // Log da Requisição
+      console.log(`%c[ORION API] ${method} ${url.toString()}`, 'color: #3b82f6; font-weight: bold', body || '');
+
       let response = await fetch(url.toString(), options);
 
       // Retry logic for 429
@@ -250,6 +264,7 @@ export class OrionApiClient {
       if (contentType && contentType.includes("application/json")) {
         try { json = await response.json(); } catch (err) { /* ignore */ }
       } else if (!response.ok) {
+        console.error(`%c[ORION API] Erro ${response.status} em ${endpoint}`, 'color: #ef4444; font-weight: bold', json);
         return {
           data: null,
           error: {
@@ -258,6 +273,9 @@ export class OrionApiClient {
           },
         };
       }
+
+      // Log do Sucesso
+      console.log(`%c[ORION API] Resposta ${response.status}`, 'color: #10b981; font-weight: bold', json.data || json);
 
       if (!response.ok) {
         if (response.status === 401) {

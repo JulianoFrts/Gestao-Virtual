@@ -11,17 +11,10 @@ import { NextRequest } from "next/server";
 import { ApiResponse, handleApiError } from "@/lib/utils/api/response";
 import { requireAuth } from "@/lib/auth/session";
 import { logger } from "@/lib/utils/logger";
-import { z } from "zod";
 import { ProjectService } from "@/modules/projects/application/project.service";
 import { PrismaProjectRepository } from "@/modules/projects/infrastructure/prisma-project.repository";
 
 const service = new ProjectService(new PrismaProjectRepository());
-
-const settingsSchema = z.object({
-  projectId: z.string().optional(),
-  project_id: z.string().optional(),
-  settings: z.any(),
-});
 
 export async function GET(request: NextRequest): Promise<Response> {
   try {
@@ -42,7 +35,10 @@ export async function GET(request: NextRequest): Promise<Response> {
 
     return ApiResponse.json(settings);
   } catch (error) {
-    return handleApiError(error, "src/app/api/v1/project_3d_cable_settings/route.ts#GET");
+    return handleApiError(
+      error,
+      "src/app/api/v1/project_3d_cable_settings/route.ts#GET",
+    );
   }
 }
 
@@ -51,31 +47,40 @@ export async function POST(request: NextRequest): Promise<Response> {
     await requireAuth();
     const body = await request.json();
 
-    const parseResult = settingsSchema.safeParse(body);
-    if (!parseResult.success) {
-      return ApiResponse.badRequest(
-        "Configurações inválidas",
-        parseResult.error.issues.map((e) => e.message),
-      );
-    }
+    // Tenta extrair projectId e settings de múltiplas formas para garantir compatibilidade
+    const projectId =
+      body.projectId || body.project_id || body.settings?.projectId;
+    const settings = body.settings !== undefined ? body.settings : body;
 
-    const { projectId, project_id, settings } = parseResult.data;
-    const targetProjectId = projectId || project_id;
-
-    if (!targetProjectId) {
+    if (!projectId) {
+      logger.error("Falha ao salvar configurações 3D: projectId ausente", {
+        body,
+      });
       return ApiResponse.badRequest("projectId é obrigatório");
     }
 
+    // Se o settings for o objeto raiz que contém o projectId, removemos ele para limpar o JSON de settings
+    const cleanSettings = { ...settings };
+    if (cleanSettings.projectId) delete cleanSettings.projectId;
+    if (cleanSettings.project_id) delete cleanSettings.project_id;
+
     const result = await service.upsert3dCableSettings(
-      targetProjectId,
-      settings,
+      projectId,
+      cleanSettings,
     );
 
-    logger.info("Configurações de cabo 3D salvas", {
-      projectId: targetProjectId,
+    logger.info("Configurações de cabo 3D salvas com sucesso", {
+      projectId,
     });
     return ApiResponse.json(result, "Configurações salvas com sucesso");
-  } catch (error) {
-    return handleApiError(error, "src/app/api/v1/project_3d_cable_settings/route.ts#POST");
+  } catch (error: any) {
+    logger.error("Erro fatal ao salvar configurações 3D", {
+      message: error.message,
+      stack: error.stack,
+    });
+    return handleApiError(
+      error,
+      "src/app/api/v1/project_3d_cable_settings/route.ts#POST",
+    );
   }
 }
